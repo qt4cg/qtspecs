@@ -387,6 +387,42 @@ a.env:visited, a.env:link               { color: black;
         <xsl:value-of select="'SER31'"/>
         <xsl:message>specdoc is SER31</xsl:message>
       </xsl:when>
+      
+      <xsl:when test="contains(/spec/header/title, 'Data Model') and
+        contains(/spec/header/title, '4.0')">
+        <xsl:value-of select="'DM40'"/>
+        <xsl:message>specdoc is DM40</xsl:message>
+      </xsl:when>
+      
+      <xsl:when test="contains(/spec/header/title, 'Functions and Operators') and
+        contains(/spec/header/title, '4.0')">
+        <xsl:value-of select="'FO40'"/>
+        <xsl:message>specdoc is FO40</xsl:message>
+      </xsl:when>
+      
+      <xsl:when test="contains(/spec/header/title, 'XPath') and
+        contains(/spec/header/title, '4.0')">
+        <xsl:value-of select="'XP40'"/>
+        <xsl:message>specdoc is XP40</xsl:message>
+      </xsl:when>
+      
+      <xsl:when test="contains(/spec/header/title, 'XQuery') and
+        contains(/spec/header/title, '4.0')">
+        <xsl:value-of select="'XQ40'"/>
+        <xsl:message>specdoc is XQ40</xsl:message>
+      </xsl:when>
+      
+      <xsl:when test="contains(/spec/header/title, 'XQueryX') and
+        contains(/spec/header/title, '4.0')">
+        <xsl:value-of select="'XQX40'"/>
+        <xsl:message>specdoc is XQX40</xsl:message>
+      </xsl:when>
+      
+      <xsl:when test="contains(/spec/header/title, 'Serialization') and
+        contains(/spec/header/title, '4.0')">
+        <xsl:value-of select="'SER40'"/>
+        <xsl:message>specdoc is SER40</xsl:message>
+      </xsl:when>
 
       <xsl:when test="contains(/spec/header/title, 'XML Query') and
                       contains(/spec/header/title, 'Requirements') and
@@ -1038,6 +1074,24 @@ th.issue-toc-head { border-bottom-color: black;
         <xsl:value-of select="$nt"/>
       </xsl:otherwise>
     </xsl:choose>
+  </xsl:template>
+  
+  <xsl:template match="termref">
+    <a title="{key('ids', @def)/@term}" class="termref">
+      <xsl:attribute name="href">
+        <xsl:call-template name="href.target">
+          <xsl:with-param name="target" select="key('ids', @def)"/>
+        </xsl:call-template>
+      </xsl:attribute>
+      <xsl:choose>
+        <xsl:when test=". = ''">
+          <xsl:value-of select="key('ids', @def)/@term"/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:apply-templates/>
+        </xsl:otherwise>
+      </xsl:choose>
+    </a>
   </xsl:template>
 
   <xsl:template match="xtermref">
