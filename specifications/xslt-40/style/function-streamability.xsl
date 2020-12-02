@@ -13,10 +13,11 @@
 	<!-- The output is in xmlspec format and is transcluded into the main spec
 		using a processing instruction -->
 
-	<!--<xsl:variable name="fos30doc" select="doc('../../xpath-functions-30/src/function-catalog.xml')"/>-->
-	<xsl:variable name="fos31doc" select="doc('../../xpath-functions-31/src/function-catalog.xml')"/>
+	<xsl:variable name="fos40doc"
+                      select="doc('../../xpath-functions-40/src/function-catalog.xml')"/>
 	
-	<xsl:variable name="functions" as="element(fos:function)*" select="/*/fos:function, $fos31doc/*/fos:function"/>
+	<xsl:variable name="functions" as="element(fos:function)*"
+                      select="/*/fos:function, $fos40doc/*/fos:function"/>
 
 	<xsl:template match="/">
 		<xsl:for-each select="1 to 20">

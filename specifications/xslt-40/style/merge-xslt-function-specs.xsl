@@ -4,7 +4,7 @@
     exclude-result-prefixes="xs"
     version="2.0">
     
-    <xsl:import href="../../xpath-functions-31/style/merge-function-specs.xsl"/>
+    <xsl:import href="../../xpath-functions-40/style/merge-function-specs.xsl"/>
     
     <xsl:template match="/">
         <xsl:message>Transforming <xsl:value-of select="document-uri(.)"/> with <xsl:value-of select="static-base-uri()"/></xsl:message>
