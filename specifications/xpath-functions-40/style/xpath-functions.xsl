@@ -175,7 +175,7 @@ table.data table.index {
 </xsl:param>
 
 <xsl:param name="toc.level" select="3"/>
-  
+
   <xsl:template name="finder" xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace" exclude-result-prefixes="fos">
     <xsl:variable name="catalog" select="doc('../src/function-catalog.xml')"/>
     <xsl:variable name="prefixes" select="('fn', 'array', 'map', 'math', 'op')"/>

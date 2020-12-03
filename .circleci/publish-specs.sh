@@ -52,34 +52,38 @@ cd ../..
 # available HTML files. (I plan to use this later to generate a pretty
 # index page.)
 BRANCHTEMP=/tmp/lspec.b.$$.txt
-SPECTEMP=/tmp/lspec.b.$$.txt
+SPECTEMP=/tmp/lspec.s.$$.txt
 rm -f $BRANCHTEMP $SPECTEMP
 
 # This is a crude hack. It assumes branch/$branch/$spec is all there is.
-for overview in `find branch -type f -name Overview.html -print`; do
-    path=`dirname $overview`
-    path=`dirname $path`
-    echo `basename $path` >> $BRANCHTEMP
+for path in `find branch -type d -print`; do
+    hfiles=`find $path -maxdepth 1 -name "*.html" -print -quit | wc -l`
+    if [ $hfiles != 0 ]; then
+        branch=`dirname $path`
+        echo `basename $branch` >> $BRANCHTEMP
+    fi
 done
 
 echo "<specifications xml:base='branch/'>" > index.xml
 for branch in `cat $BRANCHTEMP | sort | uniq`; do
-    for overview in `find branch/$branch -type f -name Overview.html -print`; do
-        path=`dirname $overview`
-        echo `basename $path` >> $SPECTEMP
+    for path in `find branch/$branch -type d -print`; do 
+        hfiles=`find $path -maxdepth 1 -name "*.html" -print -quit | wc -l`
+        if [ $hfiles != 0 ]; then
+            echo `basename $path` >> $SPECTEMP
+        fi
     done
-    echo "  <branch name='$branch'>" >> index.xml
+    echo "  <branch xml:base='$branch/' name='$branch'>" >> index.xml
     for spec in `cat $SPECTEMP | sort | uniq`; do
         if [ -d "branch/$branch/$spec" ]; then
-            echo "    <specification name='$spec'>" >> index.xml
-            for file in `ls -1 branch/$branch/$spec/*.html`; do
+            echo "    <specification xml:base='$spec/' name='$spec'>" >> index.xml
+            for file in `ls -1 branch/$branch/$spec`; do 
                 echo "      <html>`basename $file`</html>" >> index.xml
             done
             echo "    </specification>" >> index.xml
         fi
     done
     echo "  </branch>" >> index.xml
-done
+done    
 echo "</specifications>" >> index.xml
 
 # Push the changes back to the repo
