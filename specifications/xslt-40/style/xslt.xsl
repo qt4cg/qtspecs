@@ -25,7 +25,7 @@
 
 <!-- publication date in yyyy-mm-dd format -->
 <xsl:param name="date" select="'2000-01-01'"/>
-  <xsl:variable name="pubdate" as="xs:date" select="if ($date='2000-01-01') then current-date() else xs:date($date)"/>
+<xsl:variable name="pubdate" as="xs:date" select="if ($date='2000-01-01') then current-date() else xs:date($date)"/>
 
 <!-- cutoff date for closed issues -->
 <xsl:param name="cutoff-date" select="'2005-04-04'"/>

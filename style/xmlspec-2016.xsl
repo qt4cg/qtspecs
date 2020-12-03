@@ -984,13 +984,7 @@
 
         <xsl:apply-templates select="w3c-doctype"/>
         <xsl:text> </xsl:text>
-        <xsl:if test="pubdate/day">
-          <xsl:apply-templates select="pubdate/day"/>
-          <xsl:text> </xsl:text>
-        </xsl:if>
-        <xsl:apply-templates select="pubdate/month"/>
-        <xsl:text> </xsl:text>
-        <xsl:apply-templates select="pubdate/year"/>
+        <xsl:apply-templates select="pubdate"/>
       </h2>
       <dl>
         <xsl:apply-templates select="publoc"/>
@@ -1053,6 +1047,23 @@
     <xsl:apply-templates select="abstract"/>
     <xsl:apply-templates select="status"/>
     <xsl:apply-templates select="revisiondesc"/>
+  </xsl:template>
+
+  <xsl:template match="pubdate">
+    <xsl:choose>
+      <xsl:when test="empty(*) or (day='01' and month='January' and year='2000')">
+        <xsl:sequence select="format-dateTime(current-dateTime(), '[D1] [MNn] [Y0000]')"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:if test="day">
+          <xsl:apply-templates select="day"/>
+          <xsl:text> </xsl:text>
+        </xsl:if>
+        <xsl:apply-templates select="month"/>
+        <xsl:text> </xsl:text>
+        <xsl:apply-templates select="year"/>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
 
   <xsl:template match="revisiondesc">
