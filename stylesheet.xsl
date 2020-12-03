@@ -26,10 +26,12 @@
                >XQuery 4.0: An XML Query Language</a></li>
       </ul>
       <p>are updated automatically when changes are made to the repository.</p>
-      <p>Additional drafts are available on alternate branches:</p>
-      <ul>
-        <xsl:apply-templates select="branch[@name != 'master']"/>
-      </ul>
+      <xsl:if test="branch[@name != 'master']">
+        <p>Additional drafts are available on alternate branches:</p>
+        <ul>
+          <xsl:apply-templates select="branch[@name != 'master']"/>
+        </ul>
+      </xsl:if>
     </xsl:result-document>
   </xsl:if>
 </xsl:template>
