@@ -12,29 +12,26 @@
 <xsl:output method="html" html-version="5" encoding="utf-8" indent="no"/>
 
 <xsl:template match="/specifications[branch]">
-  <xsl:message>hello</xsl:message>
-  <xsl:result-document href="#speclist" method="ixsl:replace-content">
-    <xsl:choose>
-      <xsl:when test="count(branch[@name='master']/specification) = 1
-                      and branch[@name='master']/specification[@name='xslt-40']">
-        <p>The <a href="branch/master/xslt-40/Overview.html">latest draft</a> of
-        <cite>XSL Transformations (XSLT) Version 4.0</cite> is updated
-        automatically when changes are made to the repository.</p>
-        <xsl:if test="branch[@name != 'master']">
-          <p>Additional drafts are available on alternate branches:</p>
-          <ul>
-            <xsl:apply-templates select="branch[@name != 'master']"/>
-          </ul>
-        </xsl:if>
-      </xsl:when>
-      <xsl:otherwise>
-        <p>The following drafts are available:</p>
-        <ul>
-          <xsl:apply-templates select="branch"/>
-        </ul>
-      </xsl:otherwise>
-    </xsl:choose>
-  </xsl:result-document>
+  <xsl:if test="not(contains(ixsl:get(ixsl:window(), 'location.href'), '?nojs'))">
+    <xsl:result-document href="#speclist" method="ixsl:replace-content">
+      <p>The latest drafts of</p>
+      <ul>
+        <li><a href="branch/master/xslt-40/Overview.html"
+               >XSLT Transformations (XSLT) Version 4.0</a></li>
+        <li><a href="branch/master/xpath-functions-40/Overview.html"
+               >XPath and XQuery Functions and Operators 4.0</a></li>
+        <li><a href="branch/master/xquery-40/xpath-40.html"
+               >XML Path Language (XPath) 4.0</a>, and</li>
+        <li><a href="branch/master/xquery-40/xquery-40.html"
+               >XQuery 4.0: An XML Query Language</a></li>
+      </ul>
+      <p>are updated automatically when changes are made to the repository.</p>
+      <p>Additional drafts are available on alternate branches:</p>
+      <ul>
+        <xsl:apply-templates select="branch[@name != 'master']"/>
+      </ul>
+    </xsl:result-document>
+  </xsl:if>
 </xsl:template>
 
 <xsl:template match="branch">
@@ -47,11 +44,46 @@
 </xsl:template>
 
 <xsl:template match="specification">
+
+  <xsl:choose>
+    <xsl:when test="html[. = 'Overview.html']">
+      <li>
+        <a href="/branch/{../@name}/{@name}/Overview.html">
+          <xsl:sequence select="string(@name)"/>
+        </a>
+      </li>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:for-each select="html[ends-with(., '.html')]">
+        <li>
+          <a href="/branch/{../@name}/{@name}/{.}">
+            <xsl:sequence select="string(.)"/>
+          </a>
+        </li>
+      </xsl:for-each>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
+
+<xsl:template match="specification[@name='xslt-40']">
   <li>
-    <a href="/branch/{../@name}/{@name}/Overview.html">
-      <xsl:sequence select="string(@name)"/>
-    </a>
+    <a href="/branch/{../@name}/{@name}/Overview.html"
+       >XSLT Transformations (XSLT) Version 4.0</a>
   </li>
+</xsl:template>
+
+<xsl:template match="specification[@name='xpath-functions-40']">
+  <li>
+    <a href="/branch/{../@name}/{@name}/Overview.html"
+       >XPath and XQuery Functions and Operators 4.0</a>
+  </li>
+</xsl:template>
+
+<xsl:template match="specification[@name='xquery-40']">
+  <li><a href="/branch/{../@name}/{@name}/xpath-40.html"
+         >XML Path Language (XPath) 4.0</a></li>
+  <li><a href="/branch/{../@name}/{@name}/xquery-40.html"
+         >XQuery 4.0: An XML Query Language</a></li>
 </xsl:template>
 
 </xsl:stylesheet>
