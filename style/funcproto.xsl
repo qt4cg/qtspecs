@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-                version="1.0">
+                version="3.0">
                 
 <xsl:template name="get-prefix">
     <!-- overridden in F+O specification -->
@@ -23,7 +23,7 @@
   <xsl:variable name="stringvalue">
     <xsl:apply-templates select="." mode="stringify"/>
   </xsl:variable>
-
+  
   <!-- If the prototype is going to be "too long", use a tabular presentation -->
 
   <div class="proto">

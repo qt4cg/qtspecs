@@ -16,8 +16,9 @@
                 xmlns:local="http://www.w3.org/xpath-functions/build/functions"
                 xmlns:xs="http://www.w3.org/2001/XMLSchema"
                 xmlns:f="http://www.w3.org/2016/local-functions"
-                exclude-result-prefixes="local f xs"
-                version="2.0">
+                xmlns:array="http://www.w3.org/2005/xpath-functions/array"
+                exclude-result-prefixes="#all"
+                version="3.0">
 
 <xsl:import href="xpath-functions-base.xsl"/>
 
@@ -420,6 +421,7 @@ table.data table.index {
   <!-- If the prototype is going to be "too long", use a tabular presentation -->
 
   <div class="proto">
+    <xsl:message>*** PROTO <xsl:value-of select='@name'/> §§ <xsl:value-of select='$stringvalue'/></xsl:message>
     <xsl:variable name="small" select="if (string-length(@name) gt 30) then 'small ' else ''"/>
     <xsl:choose>
       <xsl:when test="string-length($stringvalue) &gt; 70">
@@ -520,10 +522,8 @@ table.data table.index {
     <xsl:otherwise>
       <xsl:apply-templates select="@name"/>
       <code class="as">&#160;as&#160;</code>
-      <code class="type">
-        <xsl:value-of select="@type"/>
-        <xsl:if test="@emptyOk='yes'">?</xsl:if>
-      </code>
+      <xsl:message>Processing arg <xsl:value-of select="../@name, @name, @type"/> in xpath-functions.xsl#523</xsl:message>
+      <xsl:apply-templates select="@type"/>  
     </xsl:otherwise>
   </xsl:choose>
 </xsl:template>
@@ -536,6 +536,35 @@ table.data table.index {
   <xsl:template match="arg/@name" priority="8">
     <xsl:param name="small" tunnel="yes" as="xs:string" select="''"/>
     <code class="{$small}arg">$<xsl:value-of select="."/></code>
+  </xsl:template>
+  
+  <xsl:template match="@type">
+    <code class="type">
+      <xsl:value-of select="."/>
+      <xsl:if test="../@emptyOk='yes'">?</xsl:if>
+    </code>
+  </xsl:template>
+  
+  <xsl:template match="@type[starts-with(., '[')]">
+    <!-- @type uses a microsyntax representing a record type -->
+    <xsl:variable name="structure" select="parse-json(.)?*"/>
+    <code>record(</code>
+    <br/>
+    <xsl:for-each select="$structure[exists(?name)]">
+      <xsl:text>&#xa0;&#xa0;&#xa0;</xsl:text>
+      <code>
+        <xsl:value-of select="?name"/>
+        <xsl:if test="not(?required)">?</xsl:if>
+        <xsl:text> as </xsl:text>
+        <xsl:value-of select="?type"/>
+        <xsl:if test="not(position()=last())">,</xsl:if>
+      </code>
+      <br/>
+    </xsl:for-each>
+    <xsl:if test="$structure[?extensible]">
+      <xsl:text>&#xa0;&#xa0;&#xa0;*</xsl:text>  
+    </xsl:if>
+    <xsl:text>)</xsl:text>
   </xsl:template>
 
 <xsl:template match="arg" mode="tabular">
@@ -554,10 +583,12 @@ table.data table.index {
   <td style="vertical-align:baseline">
     <xsl:if test="@name != '...'">
       <code class="{$small}as">&#160;as&#160;</code>
-      <code class="{$small}type">
+      <!--<code class="{$small}type">
         <xsl:value-of select="@type"/>
         <xsl:if test="@emptyOk='yes'">?</xsl:if>
-      </code>
+      </code>-->
+      <xsl:message>Processing arg <xsl:value-of select="../@name, @name, @type"/> in xpath-functions.xsl#523</xsl:message>
+      <xsl:apply-templates select="@type"/>
     </xsl:if>
 
     <xsl:choose>

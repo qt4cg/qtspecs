@@ -1,5 +1,5 @@
 <?xml version='1.0'?>
-<xsl:stylesheet version="2.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+<xsl:stylesheet version="3.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
 	xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
 	xmlns:xs="http://www.w3.org/2001/XMLSchema" exclude-result-prefixes="fos xs">
 
@@ -190,6 +190,21 @@
 
 	<xsl:template match="fos:arg">
 		<arg name="{@name}" type="{@type}"/>
+	</xsl:template>
+	
+	<xsl:template match="fos:arg[@type='record']">
+		<!-- Capture the details of the record into a JSON structure which we squeeze into the @type attribute -->
+		<arg name="{@name}" role="record">
+			<xsl:attribute name="type">
+				<xsl:variable name="fields" as="map(*)*">
+					<xsl:for-each select="fos:record/fos:field">
+						<xsl:sequence select="map{'name':string(@name), 'type':string(@type), 'required':xs:boolean(@required)}"/>
+					</xsl:for-each>
+					<xsl:sequence select="map{'extensible':xs:boolean(fos:record/@extensible)}"/>
+				</xsl:variable>
+				<xsl:value-of select="serialize(array{$fields}, map{'method':'json'})"/>
+			</xsl:attribute>
+		</arg>
 	</xsl:template>
 
 	<xsl:template match="fos:example">

@@ -12,8 +12,8 @@
 <xsl:param name="specdoc" select="'ERRNS'"/>
 
 <xsl:variable name="fando" select="document('xpath-functions.xml',.)"/>
-<xsl:variable name="xslt" select="document('../../xslt-30/src/xslt.xml',.)"/>
-<xsl:variable name="lang" select="document('../../xquery-31/src/errors.xml',.)"/>
+<xsl:variable name="xslt" select="document('../../xslt-40/src/xslt.xml',.)"/>
+<xsl:variable name="lang" select="document('../../xquery-40/src/errors.xml',.)"/>
 <xsl:variable name="ser" select="document('../../xslt-xquery-serialization-31/src/errors.xml',.)"/>
 
 <!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
