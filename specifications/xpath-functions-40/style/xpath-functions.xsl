@@ -421,7 +421,6 @@ table.data table.index {
   <!-- If the prototype is going to be "too long", use a tabular presentation -->
 
   <div class="proto">
-    <xsl:message>*** PROTO <xsl:value-of select='@name'/> §§ <xsl:value-of select='$stringvalue'/></xsl:message>
     <xsl:variable name="small" select="if (string-length(@name) gt 30) then 'small ' else ''"/>
     <xsl:choose>
       <xsl:when test="string-length($stringvalue) &gt; 70">
@@ -522,7 +521,6 @@ table.data table.index {
     <xsl:otherwise>
       <xsl:apply-templates select="@name"/>
       <code class="as">&#160;as&#160;</code>
-      <xsl:message>Processing arg <xsl:value-of select="../@name, @name, @type"/> in xpath-functions.xsl#523</xsl:message>
       <xsl:apply-templates select="@type"/>  
     </xsl:otherwise>
   </xsl:choose>
@@ -587,7 +585,6 @@ table.data table.index {
         <xsl:value-of select="@type"/>
         <xsl:if test="@emptyOk='yes'">?</xsl:if>
       </code>-->
-      <xsl:message>Processing arg <xsl:value-of select="../@name, @name, @type"/> in xpath-functions.xsl#523</xsl:message>
       <xsl:apply-templates select="@type"/>
     </xsl:if>
 
