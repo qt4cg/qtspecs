@@ -20,8 +20,8 @@
 
   <xsl:variable name="fando" select="document('xpath-functions-expanded.xml',.)"/>
   <xsl:variable name="fando-functions" select="document('function-catalog.xml',.)"/>
-  <xsl:variable name="xslt" select="document('../../xslt-30/src/xslt.xml',.)"/>
-  <xsl:variable name="xslt-functions" select="document('../../xslt-30/src/function-catalog.xml',.)"/>
+  <xsl:variable name="xslt" select="document('../../xslt-40/src/xslt.xml',.)"/>
+  <xsl:variable name="xslt-functions" select="document('../../xslt-40/src/function-catalog.xml',.)"/>
   <xsl:variable name="protos"
     select="$fando//proto[not(@role)
 				                  or @role != 'example']"/>
