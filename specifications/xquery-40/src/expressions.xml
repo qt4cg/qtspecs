@@ -5001,6 +5001,7 @@ name.</p>
                   <prodrecap id="RecordTest" ref="RecordTest"/>
                   <prodrecap id="FieldDeclaration" ref="FieldDeclaration"/>
                   <prodrecap id="FieldName" ref="FieldName"/>
+                  <prodrecap id="SelfReference" ref="SelfReference"/>    
                   <prodrecap id="ExtensibleFlag" ref="ExtensibleFlag"/>    
                </scrap>
 
@@ -5035,7 +5036,7 @@ name.</p>
 		             the map entry may have any type.</p>
 
                <p>If the field name is followed by a question mark,
-		             then the v malueust have the specified type if it is present, but it may also be absent. For example,
+		             then the value must have the specified type if it is present, but it may also be absent. For example,
 		             the <code>RecordTest</code>
                   <code>record(first as xs:string, middle? as xs:string, last as xs:string, *)</code>
 		                requires the map to have string-valued entries with keys <code>"first"</code> and <code>"last"</code>;
@@ -5044,31 +5045,49 @@ name.</p>
 		                <code>record(first as xs:string, middle? as xs:string?, last as xs:string, *)</code> also allows
 		             the entry with key <code>"middle"</code> to be present but empty.</p>
                
-               <p>If a field is declared with the special item type <code>map:another</code> (optionally followed
-               by an occurrence indicator) this indicates that the record type is recursive: the value
+               <p>If a field is declared using <code>..</code> (optionally followed
+               by an occurrence indicator) in place of a <code>SequenceType</code>,
+                  this indicates that the record type is recursive: the value
                of this field, if present, must be an instance of the record type being declared. For example, a record
                designed to hold error information might be declared as:</p>
                
-               <eg>record(error-code as xs:QName, message as xs:string, cause? as map:another)</eg>
+               <eg>record(error-code as xs:QName, message as xs:string, cause? as ..)</eg>
                
                <p>A map conforms to this type if it has entries with keys <code>error-code</code> and <code>message</code>
                of the correct types, and if the <code>cause</code> entry is either absent, or is a map that itself conforms
                to this type.</p>
                
-               <p>A <code>FieldDeclaration</code> that uses the special item type <code>map:another</code> must either
+               <p>A <code>FieldDeclaration</code> that a <code>SelfReference</code> to identify its type must either
                be optional (marked with a question mark after the name), or must allow the empty sequence as a permitted
                value (marked by using the occurrence indicator <code>?</code> or <code>*</code> after the item type).
-               This rule ensures that finite instances of the type can be constructed. [ERROR CODE TBA].</p>
+                  If the field is not optional and does not allow an empty sequence, a 
+                  <termref def="dt-static-error">static error</termref> 
+                  is raised <errorref class="ST" code="0140"/>.   
+               This rule ensures that finite instances of the type can be constructed.</p>
                
+              
                <example id="e-binary-tree">
                   <p>A record used to represent a node in a binary tree might be represented as:</p>
-                  <eg>record(left? as map:another, value, right? as map:another)</eg>
+                  <eg>record(left? as .., value, right? as ..)</eg>
                   <p>A function to walk this tree and enumerate all the values in depth-first order might be written 
                      (using XQuery syntax) as:</p>
                   <eg><![CDATA[declare item-type binary-tree as
-    record(left? as map:another, value, right? as map:another);                 
+    record(left? as .., value, right? as ..);                 
 declare function flatten($tree as binary-tree?) as item()* {
     $tree ! (flatten(?left), ?value, flatten(?right))   
+}]]></eg>
+               </example>
+               
+               <example id="e-arbitrary-tree">
+                  <p>A record used to represent a node in a tree where each node has an arbitrary number
+                     of children might be represented as:</p>
+                  <eg>record(value, children as ..*)</eg>
+                  <p>A function to walk this tree and enumerate all the values in order might be written 
+                     (using XQuery syntax) as:</p>
+                  <eg><![CDATA[declare item-type tree as
+    record(value, children as ..*);                 
+declare function flatten($tree as tree) as item()* {
+    $tree?value, $tree?children ! flatten(.))   
 }]]></eg>
                </example>
 
@@ -14047,6 +14066,10 @@ map {
   for simple strings as keys in maps or integers as keys in arrays,
   supports wildcards, and iterates over sequences of maps and
   arrays.</p>
+            
+            <p diff="add" at="A">The lookup operator can also be used to extract
+            the components of atomic values that can be divided into parts: for details
+            see <specref ref="id-composite-atomic-values"/>.</p>
 
             <div4 id="id-unary-lookup">
                <head>Unary Lookup</head>
@@ -14294,6 +14317,328 @@ return .($k)
                   </item>
                </ulist>
             </div4>
+         </div3>
+         <div3 id="id-composite-atomic-values" diff="add" at="A">
+            <head>Composite Atomic Values</head>
+            <p>Some <termref def="dt-atomic-value">atomic values</termref> (despite the name) can be divided into
+            parts: for example, an <code>xs:date</code> comprises year, month, day, and timezone.
+            The components of such values are accessible using the lookup operator, for example
+            <code>current-date()?year</code> returns the current year, while <code>document-uri($doc)?scheme</code>
+            returns the scheme part of a URI.</p>
+            
+            <p>Previous versions of this specification provided functions such as <code>fn:year-from-date</code>
+            to access these components. These functions remain available, but &language; additionally
+            allows the lookup operator to be used to obtain the components of other data types including
+               <code>xs:anyURI</code>, <code>xs:gYear</code>, <code>xs:gYearMonth</code>, <code>xs:gMonth</code>, 
+               <code>xs:gMonthDay</code>, <code>xs:gDay</code>, <code>xs:hexBinary</code>, and 
+               <code>xs:base64Binary</code>.</p>
+            
+            <p>When an atomic value belonging to one of these atomic types appears as the first operand
+            of the postfix lookup operator, or when the unary lookup operator is evaluated with the
+            atomic value as the context item, the atomic value is implicitly converted to a map, and
+            the lookup operator is then applied to this map.</p>
+            
+            <p>The mappable atomic types are defined by the table below. For each mappable atomic
+            type the table lists the components that are available, their types, and their values.</p>
+            
+            <table>
+               <thead>
+                  <tr>
+                     <th>Type</th>
+                     <th>Component</th>
+                     <th>Component Type</th>
+                     <th>Value</th>
+                  </tr>
+               </thead>
+               <tbody>
+                  <tr>
+                     <td><code>xs:dateTime</code></td>
+                     <td><code>year</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:year-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>month</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:month-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>day</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:day-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>hours</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:hours-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>minutes</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:minutes-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>seconds</code></td>
+                     <td><code>xs:decimal</code></td>
+                     <td><code>fn:seconds-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td><code>fn:timezone-from-dateTime(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:date</code></td>
+                     <td><code>year</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:year-from-date(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>month</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:month-from-date(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>day</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:day-from-date(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td><code>fn:timezone-from-date(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:time</code></td>
+                     <td><code>hours</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:hours-from-time(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>minutes</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:minutes-from-time(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>seconds</code></td>
+                     <td><code>xs:decimal</code></td>
+                     <td><code>fn:seconds-from-time(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td><code>fn:timezone-from-time(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:gYear</code></td>
+                     <td><code>year</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:gYearMonth</code></td>
+                     <td><code>year</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>month</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:gMonth</code></td>
+                     <td><code>month</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:gMonthDay</code></td>
+                     <td><code>month</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>day</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:gDay</code></td>
+                     <td><code>day</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td>See below</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>timezone</code></td>
+                     <td><code>xs:dayTimeDuration?</code></td>
+                     <td>See below</td>
+                  </tr>
+                  
+                  <tr>
+                     <td><code>xs:duration</code></td>
+                     <td><code>years</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:years-from-duration(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>months</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:months-from-duration(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>days</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:days-from-duration(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>hours</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:hours-from-duration(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>minutes</code></td>
+                     <td><code>xs:integer</code></td>
+                     <td><code>fn:minutes-from-duration(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>seconds</code></td>
+                     <td><code>xs:decimal</code></td>
+                     <td><code>fn:seconds-from-duration(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:hexBinary</code></td>
+                     <td><code>octets</code></td>
+                     <td><code>xs:unsignedByte*</code></td>
+                     <td><code>A sequence of integers in the range 0 to 255 representing the octets in the binary value</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:base64Binary</code></td>
+                     <td><code>octets</code></td>
+                     <td><code>xs:unsignedByte*</code></td>
+                     <td><code>A sequence of integers in the range 0 to 255 representing the octets in the binary value</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:QName</code></td>
+                     <td><code>prefix</code></td>
+                     <td><code>xs:NCName?</code></td>
+                     <td><code>fn:prefix-from-QName(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>local-name</code></td>
+                     <td><code>xs:NCName</code></td>
+                     <td><code>fn:local-name-from-QName(.)</code></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>namespace-uri</code></td>
+                     <td><code>xs:anyURI</code></td>
+                     <td><code>fn:namespace-uri-from-QName</code></td>
+                  </tr>
+                  <tr>
+                     <td><code>xs:anyURI</code></td>
+                     <td><code>scheme</code></td>
+                     <td><code>xs:string?</code></td>
+                     <td>The scheme part of the URI (as defined in RFC2396), if present</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>authority</code></td>
+                     <td><code>xs:string?</code></td>
+                     <td>The authority part of the URI (as defined in RFC2396), if present</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>path</code></td>
+                     <td><code>xs:string?</code></td>
+                     <td>The path component of the URI (as defined in RFC2396), if present</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>query</code></td>
+                     <td><code>xs:string</code></td>
+                     <td>The query component of the URI (as defined in RFC2396), if present</td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>query-parameters</code></td>
+                     <td><code>map(xs:string, xs:string*)</code></td>
+                     <td>The query component of the URI (as defined in RFC2396), if present and parseable.
+                     The query is parsed as follows:
+                     <olist>
+                        <item><p>The query is split into parts using "&amp;" or ";" as a separator.</p></item>
+                        <item><p>If a query part contains an "=" character, the resulting map contains
+                        an entry whose key is the string that precedes the first "=" character, and whose value is
+                        the string that follows the first "=" character.</p></item>
+                        <item><p>If a query part contains no "=" character, the resulting map contains
+                        an entry whose key is equal to the complete query part and whose value is the
+                        <code>xs:boolean</code> value <code>true()</code>.</p></item>
+                        <item><p>If two query parts have the same key, the resulting map contains a single
+                           entry with this key, in which the corresponding values are
+                        combined into a sequence, retaining order.</p></item>
+                     </olist></td>
+                  </tr>
+                  <tr>
+                     <td><code></code></td>
+                     <td><code>fragment</code></td>
+                     <td><code>xs:string?</code></td>
+                     <td><code>The fragment component of the URI reference (as defined in RFC2396), if present</code></td>
+                  </tr>
+               </tbody>
+            </table>
+            
+            <p>The components for types <code>xs:gYear</code>, <code>xs:gYearMonth</code>, <code>xs:gMonth</code>, 
+               <code>xs:gMonthDay</code>, and <code>xs:gDay</code> are defined as follows. Given a value 
+               <code>G</code> of one of these types, it can be expanded to an instance of <code>xs:date</code>
+               (call it <code>D</code>) by supplying arbitrary values for the absent components in the 7-property model as defined
+               in XSD 1.1 Part 2. The value of component <var>C</var> in <var>G</var> is then the same as the
+            value of the same component in <code>D</code>.</p>
+            
          </div3>
          
       </div2>
