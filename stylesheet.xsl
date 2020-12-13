@@ -17,13 +17,25 @@
       <p>The latest drafts of</p>
       <ul>
         <li><a href="branch/master/xslt-40/Overview.html"
-               >XSLT Transformations (XSLT) Version 4.0</a></li>
+               >XSLT Transformations (XSLT) Version 4.0</a>
+        <span class="diffs"> (<a href="branch/master/xslt-40/Overview-diff.html">latest
+        diffs</a>)</span>
+        </li>
         <li><a href="branch/master/xpath-functions-40/Overview.html"
-               >XPath and XQuery Functions and Operators 4.0</a></li>
+               >XPath and XQuery Functions and Operators 4.0</a>
+        <span class="diffs"> (<a href="branch/master/xpath-functions-40/Overview-diff.html">latest
+        diffs</a>)</span>
+        </li>
         <li><a href="branch/master/xquery-40/xpath-40.html"
-               >XML Path Language (XPath) 4.0</a>, and</li>
+               >XML Path Language (XPath) 4.0</a>
+        <span class="diffs"> (<a href="branch/master/xquery-40/xpath-40-diff.html">latest
+        diffs</a>)</span>, and
+        </li>
         <li><a href="branch/master/xquery-40/xquery-40.html"
-               >XQuery 4.0: An XML Query Language</a></li>
+               >XQuery 4.0: An XML Query Language</a>
+        <span class="diffs"> (<a href="branch/master/xquery-40/xquery-40-diff.html">latest
+        diffs</a>)</span>
+        </li>
       </ul>
       <p>are updated automatically when changes are made to the repository.</p>
       <xsl:if test="branch[@name != 'master']">
@@ -46,7 +58,6 @@
 </xsl:template>
 
 <xsl:template match="specification">
-
   <xsl:choose>
     <xsl:when test="html[. = 'Overview.html']">
       <li>
