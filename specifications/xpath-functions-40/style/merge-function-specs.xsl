@@ -71,6 +71,7 @@
 			<gitem>
 				<label>Summary</label>
 				<def>
+					<xsl:copy-of select="$fspec/fos:summary/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:summary/node()" mode="summary"/>
 				</def>
 			</gitem>
@@ -79,6 +80,7 @@
 					<label>Operator Mapping</label>
 					<def>
 						<p>
+							<xsl:copy-of select="$fspec/fos:opermap/(@diff, @at)"/>
 							<xsl:copy-of select="$fspec/fos:opermap/node()" copy-namespaces="no"/>
 						</p>
 					</def>
@@ -88,6 +90,7 @@
 				<label>Signature<xsl:value-of select="'s'[$fspec/fos:signatures/fos:proto[2]]"
 					/></label>
 				<def>
+					<xsl:copy-of select="$fspec/fos:signatures/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>				
 				</def>
 			</gitem>
@@ -95,6 +98,7 @@
 				<gitem>
 					<label>Properties</label>
 					<def>
+						<xsl:copy-of select="$fspec/fos:properties/(@diff, @at)"/>
 						<xsl:for-each select="$fspec/fos:properties">
 							<p>
 								<xsl:choose>
@@ -121,6 +125,7 @@
 			<gitem>
 				<label>Rules</label>
 				<def>
+					<xsl:copy-of select="$fspec/fos:rules/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:rules/node()"/>
 				</def>
 			</gitem>
@@ -128,6 +133,7 @@
 				<gitem>
 					<label>Error Conditions</label>
 					<def>
+						<xsl:copy-of select="$fspec/fos:errors/(@diff, @at)"/>
 						<xsl:copy-of select="$fspec/fos:errors/node()" copy-namespaces="no"/>
 					</def>
 				</gitem>
@@ -136,6 +142,7 @@
 				<gitem>
 					<label>Notes</label>
 					<def>
+						<xsl:copy-of select="$fspec/fos:notes/(@diff, @at)"/>
 						<xsl:apply-templates select="$fspec/fos:notes/node()" mode="make-note"/>
 					</def>
 				</gitem>
@@ -144,6 +151,7 @@
 				<gitem>
 					<label>Examples</label>
 					<def role="example">
+						<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
 						<xsl:apply-templates select="$fspec/fos:examples/node()"/>
 					</def>
 				</gitem>
@@ -183,13 +191,16 @@
 			<proto name="{@name}" return-type="{@return-type}"
 				isOp="{if ($isOp) then 'yes' else 'no'}"
 				prefix="{if ($prefix) then $prefix else if ($isOp) then 'op' else 'fn'}">
+				<xsl:copy-of select="@diff, @at"/>
 				<xsl:apply-templates/>
 			</proto>
 		</example>
 	</xsl:template>
 
 	<xsl:template match="fos:arg">
-		<arg name="{@name}" type="{@type}"/>
+		<arg name="{@name}" type="{@type}">
+			<xsl:copy-of select="@diff, @at"/>
+		</arg>
 	</xsl:template>
 	
 	<xsl:template match="fos:arg[@type='record']">
@@ -204,6 +215,7 @@
 				</xsl:variable>
 				<xsl:value-of select="serialize(array{$fields}, map{'method':'json'})"/>
 			</xsl:attribute>
+			<xsl:copy-of select="@diff, @at"/>
 		</arg>
 	</xsl:template>
 
@@ -213,6 +225,7 @@
 
 	<xsl:template match="fos:variable">
 		<eg>
+			<xsl:copy-of select="@diff, @at"/>
 			<xsl:value-of select="concat('let $', @name, ' := ')"/>
 			<xsl:if test="@select">
 					<xsl:value-of select="@select"/>
@@ -225,6 +238,7 @@
 
 	<xsl:template match="fos:test">
 		<p>
+			<xsl:copy-of select="@diff, @at"/>
 			<xsl:choose>
 				<xsl:when test="fos:preamble">
 					<xsl:copy-of select="fos:preamble/node()" copy-namespaces="no"/>
@@ -336,6 +350,7 @@
 	
 	<xsl:template match="fos:options">
 		<table style="border-collapse: collapse">
+			<xsl:copy-of select="@diff, @at"/>
 			<thead>
 				<tr style="border-top: 2px solid black; border-bottom: 2px solid black">
 					<th style="text-align:left; padding-right: 10px; ">Key</th>
@@ -361,6 +376,7 @@
 	
 	<xsl:template match="fos:option">
 		<tr>
+			<xsl:copy-of select="@diff, @at"/>
 			<td style="white-space:nowrap; padding-right: 10px; vertical-align:top; border-bottom: 2px solid black" 
 				rowspan="{1 + count(fos:values/fos:value)}">
 				<code><xsl:value-of select="@key"/></code>
