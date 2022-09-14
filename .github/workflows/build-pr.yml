@@ -1,0 +1,50 @@
+name: build-pr
+on:
+  pull_request_target:
+    types: [assigned, opened, edited, synchronize, reopened]
+    branches:
+      - main
+jobs:
+  build-and-deploy-pr:
+    runs-on: ubuntu-latest
+    env:
+      HAVE_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN != '' }}
+    steps:
+      - name: Install dependencies
+        run: sudo apt-get install tidy rsync
+
+      - name: Get the pull request
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Save XML
+        run: |
+          mkdir /tmp/pr-sources
+          mkdir /tmp/pr-sources/{errata,etc,requirements,schema,specifications,use-cases}
+          rsync -ar ./errata/ /tmp/pr-sources/errata/
+          rsync -ar ./etc/ /tmp/pr-sources/etc/
+          rsync -ar ./requirements/ /tmp/pr-sources/requirements/
+          rsync -ar ./schema/ /tmp/pr-sources/schema/
+          rsync -ar ./specifications/ /tmp/pr-sources/specifications/
+          rsync -ar ./use-cases/ /tmp/pr-sources/use-cases/
+          find /tmp/pr-sources -type f -name "build*.xml" -exec rm {} \;
+
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Update XML
+        run: rsync -var /tmp/pr-sources/ ./
+
+      - name: Build specifications
+        run: |
+          ./gradlew
+
+      - name: Deploy
+        if: ${{ env.HAVE_ACCESS_TOKEN == 'true' }}
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build/www
+          token: ${{ secrets.ACCESS_TOKEN }}
+          branch: gh-pages
+          target-folder: /pr/${{ github.event.number }}
