@@ -97,6 +97,7 @@
                           else concat($root-prefix-a, ':')"/>
     
     <xsl:variable name="tokens-a" as="xs:string*" select="tokenize($xmlText, '&lt;')"/>
+    <!--
     <xsl:message>
       <xsl:text>document-type: </xsl:text><xsl:value-of select="$doctype"/>
       <xsl:text> rendering </xsl:text>
@@ -104,6 +105,7 @@
       <xsl:value-of select="$doctype"/>
       <xsl:text> tokens ...</xsl:text>
     </xsl:message>
+    -->
     <xsl:variable name="tokens" select="if (normalize-space($tokens-a[1]) eq '') then subsequence($tokens-a, 2) else $tokens-a"/>
     <xsl:variable name="spans" as="element()*">
       <xsl:call-template name="iterateTokens">
@@ -267,7 +269,7 @@
   
   <xsl:function name="f:expected-offset" as="xs:integer">
     <xsl:param name="in"/>
-    <xsl:value-of select="if ($in eq '?&gt;') then 2
+    <xsl:sequence select="if ($in eq '?&gt;') then 2
                           else if ($in eq '--&gt;') then 3
                           else if ($in eq ']]>') then 9
                           else 1"/>

@@ -48,6 +48,8 @@
   <xsl:param name="use-local-css" select="0"/>
   <xsl:param name="back.to.top.link" select="0"/>
 
+  <xsl:param name="override-publoc" select="()"/>
+
   <xsl:key name="ids" match="*[@id]" use="@id"/>
   <xsl:key name="specrefs" match="specref" use="@ref"/>
 
@@ -1496,7 +1498,16 @@
   <xsl:template match="publoc">
     <dt>This version:</dt>
     <dd>
-      <xsl:apply-templates/>
+      <xsl:choose>
+        <xsl:when test="exists($override-publoc)">
+          <a href="{$override-publoc}/">
+            <xsl:sequence select="$override-publoc"/>
+          </a>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:apply-templates/>
+        </xsl:otherwise>
+      </xsl:choose>
     </dd>
   </xsl:template>
 

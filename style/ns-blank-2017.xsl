@@ -4,8 +4,6 @@
   xmlns:f="http://local-functions/"
   xmlns:rddl="http://www.rddl.org/" exclude-result-prefixes="#all" version="2.0">
 
-  <xsl:import href="xsl-query-2016.xsl"/>
-
   <xsl:output method="xml" encoding="utf-8"/>
 
   <xsl:param name="specdoc" select="'SomeNS'"/>

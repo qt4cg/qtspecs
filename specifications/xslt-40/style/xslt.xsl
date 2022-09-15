@@ -228,13 +228,22 @@ overflow: auto;
     <xsl:apply-templates/>
 </xsl:template>
 
-    <xsl:variable name="latest" 
-        select="concat('https://www.w3.org/TR/', $yyyy, '/', 
-                $stage, '-xslt-30-', $yyyy, $mm, $dd, '/')"/>
+<xsl:variable name="latest" select="'https://qt4cg.org/specifications/xslt-40/'"/>
 
 <xsl:template match="publoc">
-	<dt>This version:</dt>
-        <dd><a href="{$latest}"><xsl:value-of select="$latest"/></a></dd>
+  <dt>This version:</dt>
+  <dd>
+    <xsl:choose>
+      <xsl:when test="exists($override-publoc)">
+        <a href="{$override-publoc}/">
+          <xsl:sequence select="$override-publoc"/>
+        </a>
+      </xsl:when>
+      <xsl:otherwise>
+        <a href="{$latest}"><xsl:value-of select="$latest"/></a>
+      </xsl:otherwise>
+    </xsl:choose>
+  </dd>
 </xsl:template>				
 
 <xsl:template match="elcode">
@@ -487,14 +496,14 @@ constructor. These elements are:</p>
 
 <xsl:template match="processing-instruction('schema-for-xslt')">
 <pre class="font-size: small">
-<xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt30.xsd', 'iso-8859-1')"/>
+<xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt40.xsd', 'iso-8859-1')"/>
 <xsl:value-of select="translate($schema, '&#xD;', '')"/>
 </pre>
 </xsl:template>
   
   <xsl:template match="processing-instruction('rng-schema-for-xslt')">
     <pre class="font-size: small">
-      <xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt30.rnc', 'utf-8')"/>
+      <xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt40.rnc', 'utf-8')"/>
       <xsl:value-of select="translate($schema, '&#xD;', '')"/>
     </pre>
   </xsl:template>
@@ -1052,30 +1061,11 @@ constructor. These elements are:</p>
 </xsl:template>  
   
 <xsl:template match="*/g:graph">
-  <!-- The */g:graph ensures we only match a g:graph in the original source document, and not one created by this rule itself -->
-  <!--
-  <xsl:variable name="preprocessed-graph">
-    <xsl:apply-templates select="." mode="preprocess-dotml"/>
-  </xsl:variable>
-  -->
-  <!--<xsl:message select="$preprocessed-graph"/>-->
+  <!-- */g:graph so that this template doesn't match when we 
+       are preprocessing the graphs from make-dot-files mode. -->
   <xsl:variable name="n" select="count(preceding::g:graph) + 1"/>
-  <!--
-  <xsl:result-document href="img/fig{$n}.dot" method="text">
-    <xsl:apply-templates select="$preprocessed-graph/g:graph"/>
-  </xsl:result-document>
-  -->
-  <xsl:variable name="svgfile" select="concat('img/fig', $n, '.svg')"/>
-  <xsl:variable name="svgdoc" select="doc(concat('../html/', $svgfile))"/>
-  
-  <!--<object type="image/svg+xml" codetype="image/svg+xml" data="{$svgfile}"
-    width="{g:points-to-pixels($svgdoc/*/@width)}"
-    height="{g:points-to-pixels($svgdoc/*/@height)}">
-      <span style="background-color:#FFFF20;padding-top:1pt;padding-bottom:1pt;">This browser can't
-        display the SVG file <xsl:value-of select="$svgfile"/>. 
-        Please upgrade your browser or install the Adobe SVG Viewer.
-      </span>
-  </object>-->
+  <xsl:variable name="svgfile" select="concat('../img/fig', $n, '.svg')"/>
+  <xsl:variable name="svgdoc" select="doc(resolve-uri($svgfile, base-uri($root)))"/>
   
   <xsl:apply-templates select="$svgdoc" mode="copy-svg"/>
 </xsl:template>

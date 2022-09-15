@@ -96,7 +96,7 @@
     <xsl:sequence select="$capture"/>   
   </xsl:template>
   
-  <xsl:template match="def[@role='example']">
+  <xsl:template match="def[@role='example']" priority="100">
     <dd>
       <div class="example">
         <xsl:apply-templates/>

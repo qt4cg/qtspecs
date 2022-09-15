@@ -38,7 +38,7 @@ to fix the rdf:about="xyzzy" on line 3</xsl:message>
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>
+    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
     <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <rdf:RDF>
    <owl:Ontology rdf:about="">

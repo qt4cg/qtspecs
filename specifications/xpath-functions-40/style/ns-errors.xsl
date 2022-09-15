@@ -6,7 +6,6 @@
                 exclude-result-prefixes="exsl"
                 version="1.0">
 
-<xsl:import href="xpath-functions.xsl"/>
 <xsl:import href="ns-xpath-functions.xsl"/>
 
 <xsl:param name="specdoc" select="'ERRNS'"/>
