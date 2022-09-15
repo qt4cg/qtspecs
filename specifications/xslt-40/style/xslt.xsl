@@ -1061,30 +1061,11 @@ constructor. These elements are:</p>
 </xsl:template>  
   
 <xsl:template match="*/g:graph">
-  <!-- The */g:graph ensures we only match a g:graph in the original source document, and not one created by this rule itself -->
-  <!--
-  <xsl:variable name="preprocessed-graph">
-    <xsl:apply-templates select="." mode="preprocess-dotml"/>
-  </xsl:variable>
-  -->
-  <!--<xsl:message select="$preprocessed-graph"/>-->
+  <!-- */g:graph so that this template doesn't match when we 
+       are preprocessing the graphs from make-dot-files mode. -->
   <xsl:variable name="n" select="count(preceding::g:graph) + 1"/>
-  <!--
-  <xsl:result-document href="img/fig{$n}.dot" method="text">
-    <xsl:apply-templates select="$preprocessed-graph/g:graph"/>
-  </xsl:result-document>
-  -->
-  <xsl:variable name="svgfile" select="concat('img/fig', $n, '.svg')"/>
-  <xsl:variable name="svgdoc" select="doc(concat('../html/', $svgfile))"/>
-  
-  <!--<object type="image/svg+xml" codetype="image/svg+xml" data="{$svgfile}"
-    width="{g:points-to-pixels($svgdoc/*/@width)}"
-    height="{g:points-to-pixels($svgdoc/*/@height)}">
-      <span style="background-color:#FFFF20;padding-top:1pt;padding-bottom:1pt;">This browser can't
-        display the SVG file <xsl:value-of select="$svgfile"/>. 
-        Please upgrade your browser or install the Adobe SVG Viewer.
-      </span>
-  </object>-->
+  <xsl:variable name="svgfile" select="concat('../img/fig', $n, '.svg')"/>
+  <xsl:variable name="svgdoc" select="doc(resolve-uri($svgfile, base-uri($root)))"/>
   
   <xsl:apply-templates select="$svgdoc" mode="copy-svg"/>
 </xsl:template>
