@@ -228,13 +228,22 @@ overflow: auto;
     <xsl:apply-templates/>
 </xsl:template>
 
-    <xsl:variable name="latest" 
-        select="concat('https://www.w3.org/TR/', $yyyy, '/', 
-                $stage, '-xslt-30-', $yyyy, $mm, $dd, '/')"/>
+<xsl:variable name="latest" select="'https://qt4cg.org/specifications/xslt-40/'"/>
 
 <xsl:template match="publoc">
-	<dt>This version:</dt>
-        <dd><a href="{$latest}"><xsl:value-of select="$latest"/></a></dd>
+  <dt>This version:</dt>
+  <dd>
+    <xsl:choose>
+      <xsl:when test="exists($override-publoc)">
+        <a href="{$override-publoc}/">
+          <xsl:sequence select="$override-publoc"/>
+        </a>
+      </xsl:when>
+      <xsl:otherwise>
+        <a href="{$latest}"><xsl:value-of select="$latest"/></a>
+      </xsl:otherwise>
+    </xsl:choose>
+  </dd>
 </xsl:template>				
 
 <xsl:template match="elcode">
@@ -487,14 +496,14 @@ constructor. These elements are:</p>
 
 <xsl:template match="processing-instruction('schema-for-xslt')">
 <pre class="font-size: small">
-<xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt30.xsd', 'iso-8859-1')"/>
+<xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt40.xsd', 'iso-8859-1')"/>
 <xsl:value-of select="translate($schema, '&#xD;', '')"/>
 </pre>
 </xsl:template>
   
   <xsl:template match="processing-instruction('rng-schema-for-xslt')">
     <pre class="font-size: small">
-      <xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt30.rnc', 'utf-8')"/>
+      <xsl:variable name="schema" select="unparsed-text('../src/schema-for-xslt40.rnc', 'utf-8')"/>
       <xsl:value-of select="translate($schema, '&#xD;', '')"/>
     </pre>
   </xsl:template>

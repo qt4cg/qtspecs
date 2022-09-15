@@ -10,11 +10,29 @@ buildscript {
       force 'xml-apis:xml-apis:1.4.01'
     }
   }
+
+  dependencies {
+    classpath group: 'net.sf.saxon', name: 'Saxon-HE', version: '11.4'
+  }
+}
+
+plugins {
+  id "java"
 }
 
 repositories {
   mavenLocal()
   mavenCentral()
+}
+
+configurations {
+  transform.extendsFrom(implementation)
+}
+
+dependencies {
+  implementation (
+    [group: 'net.sf.saxon', name: 'Saxon-HE', version: '11.4' ]
+  )
 }
 
 defaultTasks 'publish'
@@ -71,14 +89,553 @@ task "publish-xquery-40"(type: Copy,
   from "specifications/xquery-40/html"
 }
 
-task "publish-xpath-functions-40"(type: Copy,
-                                  dependsOn: ["xpath-functions-40"]) {
-  into "build/www/xpath-functions-40"
-  from "specifications/xpath-functions-40/html"
+// Use the Gradle task, not the ant tasks
+task "publish-xpath-functions-40"(dependsOn: ["xpath_functions_40"]) {
 }
 
+// Use the Gradle task, not the ant tasks
 task "publish-xslt-40"(type: Copy,
-                       dependsOn: ["publish-xquery-40", "xslt-40"]) {
-  into "build/www/xslt-40"
-  from "specifications/xslt-40/html"
+                       dependsOn: ["publish-xquery-40", "xslt_40"]) {
+}
+
+// ============================================================
+
+task xpath_functions_40(
+  group: "Specifications",
+  description: "Build the XPath Functions and Operators 4.0 specification",
+  dependsOn: ["fo_xml", "fo_html", "fo_html_diff", "fo_resources"]
+) {
+  // Just somewhere to hang dependencies
+}
+
+task fo_merge(
+  type: JavaExec,
+  description: "Expand the FO sources into a single XML file"
+) {
+  inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/src")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/images")
+  outputs.file "${buildDir}/expanded/xpath-functions-40/xpath-functions-40.xml"
+
+  classpath = configurations.transform
+  mainClass = "net.sf.saxon.Transform"
+  args "${projectDir}/specifications/xpath-functions-40/src/xpath-functions.xml",
+    "-xsl:${projectDir}/specifications/xpath-functions-40/style/merge-function-specs.xsl",
+    "-o:${buildDir}/expanded/xpath-functions-40/xpath-functions-40.xml"
+}
+
+task fo_xml(
+  type: JavaExec,
+  dependsOn: ["fo_merge"],
+  group: "Spec XML",
+  description: "Create the XML version of the specification"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style/identity.xsl")
+  inputs.file fo_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xpath-functions-40/xpath-functions-40.xml"
+
+  classpath = configurations.transform
+  mainClass = "net.sf.saxon.Transform"
+  args fo_merge.outputs.getFiles().getSingleFile().toString(),
+    "-xsl:${projectDir}/style/identity.xsl",
+    "-o:${fo_xml.outputs.getFiles().getSingleFile()}"
+}
+
+task fo_html(
+  dependsOn: ["fo_merge"],
+  group: "Spec HTML",
+  description: "Create the HTML and XHTML versions of the specification"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/style")
+  inputs.file fo_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xpath-functions-40/Overview.xml"
+  outputs.file "${buildDir}/www/xpath-functions-40/Overview.html"
+
+  String prpath = System.getenv("PRPATH")
+  String publoc = prpath == null ?
+    "x-override-publoc=irrelevant" :
+    "override-publoc=https://qt4cg.org${prpath}/xpath-functions-40/"
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args fo_merge.outputs.getFiles().getSingleFile().toString(),
+        "-xsl:${projectDir}/specifications/xpath-functions-40/style/xpath-functions.xsl",
+        "-o:${buildDir}/www/xpath-functions-40/Overview.xml",
+        publoc
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Query"
+      args "-qs:.",
+        "-s:${buildDir}/www/xpath-functions-40/Overview.xml",
+        "-o:${buildDir}/www/xpath-functions-40/Overview.html",
+        "!method=html", "!version=5", "!indent=yes",
+        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+    }
+  }
+}
+
+task fo_html_diff(
+  dependsOn: ["fo_merge"],
+  group: "Spec HTML (diff)",
+  description: "Create the HTML and XHTML versions of the specification (with diff markup)"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/style")
+  inputs.file fo_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xpath-functions-40/Overview-diff.xml"
+  outputs.file "${buildDir}/www/xpath-functions-40/Overview-diff.html"
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args fo_merge.outputs.getFiles().getSingleFile().toString(),
+        "-xsl:${projectDir}/specifications/xpath-functions-40/style/fo-diff.xsl",
+        "-o:${buildDir}/www/xpath-functions-40/Overview-diff.xml",
+        "baseline=",
+        "diff.baseline.description=the version 3.1 Recommendation published on 21 March 2017"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Query"
+      args "-qs:.",
+        "-s:${buildDir}/www/xpath-functions-40/Overview-diff.xml",
+        "-o:${buildDir}/www/xpath-functions-40/Overview-diff.html",
+        "!method=html", "!version=5", "!indent=yes",
+        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+    }
+  }
+}
+
+task fo_resources(
+  description: "Copy static resources for publication"
+) {
+  doFirst {
+    mkdir "${buildDir}/www/xpath-functions-40"
+  }
+
+  doLast {
+    copy {
+      from "${projectDir}/specifications/xpath-functions-40/src"
+      into "${buildDir}/www/xpath-functions-40"
+      include "analyze-string.xsd"
+      include "schema-for-json.xsd"
+      include "function-catalog.xml"
+    }
+  }
+
+  doLast {
+    copy {
+      from "${projectDir}/specifications/images"
+      into "${buildDir}/www/xpath-functions-40"
+      include "XPathTypeHierarchy-1-items-3.1.png"
+      include "XPathTypeHierarchy-2-anyTypes-3.1.png"
+      include "XPathTypeHierarchy-3-anyAtomicTypes-3.1.png"
+    }
+  }
+
+  doLast {
+    // The W3C uses index files called Overview.html, so that's what the
+    // build produces. But everyone else, including the GitHub pages that
+    // back qt4cg.org, uses index.html. So redirect.
+    PrintStream index = new PrintStream(new File("${buildDir}/www/xpath-functions-40/index.html"));
+    index.println("<!DOCTYPE html>")
+    index.println("<html xmlns='http://www.w3.org/1999/xhtml'>")
+    index.println("<head>");
+    index.println("<meta http-equiv='refresh' content='0; url=Overview.html' />");
+    index.println("</head>");
+    index.println("<body>");
+    index.println("<p>See <a href='Overview.html'>Overview</a>.</p>");
+    index.println("</body>");
+    index.println("</html>");
+    index.close();
+  }
+}
+
+// ============================================================
+
+task xslt_40(
+  group: "Specifications",
+  description: "Build the XSLT 4.0 specification",
+  dependsOn: ["xslt_xml", "xslt_html", "xslt_html_diff", "xslt_resources", "xslt_svg"]
+) {
+  // Just somewhere to hang dependencies
+}
+
+task xslt_merge(
+  type: JavaExec,
+  description: "Expand the XSLT sources into a single XML file"
+) {
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/src")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/images")
+  outputs.file "${buildDir}/expanded/xslt-40/xslt-40.xml"
+
+  classpath = configurations.transform
+  mainClass = "net.sf.saxon.Transform"
+  args "${projectDir}/specifications/xslt-40/src/xslt.xml",
+    "-xsl:${projectDir}/specifications/xslt-40/style/merge-xslt-function-specs.xsl",
+    "-o:${buildDir}/expanded/xslt-40/xslt-40.xml"
+}
+
+task xslt_xml(
+  type: JavaExec,
+  dependsOn: ["xslt_merge"],
+  group: "Spec XML",
+  description: "Create the XML version of the specification"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style/identity.xsl")
+  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xslt-40/xslt-40.xml"
+
+  classpath = configurations.transform
+  mainClass = "net.sf.saxon.Transform"
+  args xslt_merge.outputs.getFiles().getSingleFile().toString(),
+    "-xsl:${projectDir}/style/identity.xsl",
+    "-o:${xslt_xml.outputs.getFiles().getSingleFile()}"
+}
+
+task xslt_html(
+  dependsOn: ["xslt_merge"],
+  group: "Spec HTML",
+  description: "Create the HTML and XHTML versions of the specification"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
+  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xslt-40/Overview.xml"
+  outputs.file "${buildDir}/www/xslt-40/Overview.html"
+
+  String prpath = System.getenv("PRPATH")
+  String publoc = prpath == null ?
+    "x-override-publoc=irrelevant" :
+    "override-publoc=https://qt4cg.org${prpath}/xslt-40/"
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args xslt_merge.outputs.getFiles().getSingleFile().toString(),
+        "-xsl:${projectDir}/specifications/xslt-40/style/xslt.xsl",
+        "-o:${buildDir}/www/xslt-40/Overview.xml",
+        publoc
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Query"
+      args "-qs:.",
+        "-s:${buildDir}/www/xslt-40/Overview.xml",
+        "-o:${buildDir}/www/xslt-40/Overview.html",
+        "!method=html", "!version=5", "!indent=yes",
+        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+    }
+  }
+}
+
+task xslt_html_diff(
+  dependsOn: ["xslt_merge"],
+  group: "Spec HTML (diff)",
+  description: "Create the HTML and XHTML versions of the specification (with diff markup)"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
+  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xslt-40/Overview-diff.xml"
+  outputs.file "${buildDir}/www/xslt-40/Overview-diff.html"
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args xslt_merge.outputs.getFiles().getSingleFile().toString(),
+        "-xsl:${projectDir}/specifications/xslt-40/style/xslt-diff.xsl",
+        "-o:${buildDir}/www/xslt-40/Overview-diff.xml",
+        "baseline=",
+        "diff.baseline.date.string=2017-06-08",
+        "specdoc=XT",
+        "date=2001-01-01",
+        "use-local-css=0",
+        "back.to.top.link=1"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Query"
+      args "-qs:.",
+        "-s:${buildDir}/www/xslt-40/Overview-diff.xml",
+        "-o:${buildDir}/www/xslt-40/Overview-diff.html",
+        "!method=html", "!version=5", "!indent=yes",
+        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+    }
+  }
+}
+
+// Find GraphViz dot...if we can
+def dot_exec = null
+System.getenv("PATH").split(System.getProperty("path.separator")).each { dir ->
+  if (dot_exec == null) {
+    def fn = new File(dir + "/dot")
+    if (fn.exists() && fn.canExecute()) {
+      dot_exec = fn.toString()
+    } else {
+      fn = new File(dir + "/dot.exe")
+      if (fn.exists() && fn.canExecute()) {
+        dot_exec = fn.toString()
+      }
+    }
+  }
+}
+
+task xslt_svg(
+) {
+  if (dot_exec == null) {
+    dependsOn "xslt_copy_svg"
+  } else {
+    dependsOn "xslt_make_svg"
+  }
+}
+
+task xslt_make_svg(
+  dependsOn: "xslt_merge",
+  description: "Create SVG images with GraphViz"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
+  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xslt-40/img/fig1.svg"
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "-s:${xslt_merge.outputs.getFiles().getSingleFile().toString()}",
+        "-xsl:${projectDir}/specifications/xslt-40/style/xslt.xsl",
+        "-o:${buildDir}/www/xslt-40/xslt-temporary.html",
+        "-im:make-dot-files",
+        "baseline=",
+        "show.diff.markup.string=0"
+    }
+  }
+
+  doLast {
+    delete "${buildDir}/www/xslt-40/xslt-temporary.html"
+  }
+
+  doLast {
+    new File("${buildDir}/www/xslt-40/img").listFiles().each { fn ->
+      exec {
+        commandLine dot_exec, "-Tsvg",
+          "-o${fn.toString().replace('.dot', '.svg')}",
+          fn
+      }
+      delete fn
+    }
+  }
+}
+
+task xslt_copy_svg(
+  description: "Copy SVG images"
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
+  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xslt-40/img/fig1.svg"
+
+  doLast {
+    println("GraphViz dot unavailable; copying SVG diagram(s)")
+  }
+  
+  doLast {
+    copy {
+      from "${projectDir}/specifications/xslt-40/src"
+      into "${buildDir}/www/xslt-40/img"
+      include "*.svg"
+    }
+  }
+}
+
+task xslt_resources(
+  description: "Copy static resources for publication"
+) {
+  doFirst {
+    mkdir "${buildDir}/www/xslt-40"
+  }
+
+  doLast {
+    copy {
+      from "${projectDir}/specifications/xslt-40/src"
+      into "${buildDir}/www/xslt-40"
+      include "*.rnc"
+      include "*.xsd"
+      include "*.xsl"
+    }
+  }
+
+  doLast {
+    // The W3C uses index files called Overview.html, so that's what the
+    // build produces. But everyone else, including the GitHub pages that
+    // back qt4cg.org, uses index.html. So redirect.
+    PrintStream index = new PrintStream(new File("${buildDir}/www/xslt-40/index.html"));
+    index.println("<!DOCTYPE html>")
+    index.println("<html xmlns='http://www.w3.org/1999/xhtml'>")
+    index.println("<head>");
+    index.println("<meta http-equiv='refresh' content='0; url=Overview.html' />");
+    index.println("</head>");
+    index.println("<body>");
+    index.println("<p>See <a href='Overview.html'>Overview</a>.</p>");
+    index.println("</body>");
+    index.println("</html>");
+    index.close();
+  }
+}
+
+/* XQuery is a lot more complicated...save it for another day
+// ============================================================
+
+task xpath_40(
+  group: "Specifications",
+  dependsOn: "xquery_40"
+) {
+  // Alias for xquery_40
+}
+
+task xquery_40(
+  group: "Specifications",
+  description: "Build the XPath and XQuery 4.0 specifications",
+  dependsOn: ["xquery_xml"]
+) {
+  // Just somewhere to hang dependencies
+}
+
+task xquery_merge(
+  type: JavaExec,
+  description: "Expand the XSLT sources into a single XML file"
+) {
+  inputs.files fileTree(dir: "${projectDir}/specifications/xquery-40/src")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xquery-40/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/xquery-40/images")
+  outputs.file "${buildDir}/expanded/xquery-40/xquery-40.xml"
+
+  classpath = configurations.transform
+  mainClass = "net.sf.saxon.Transform"
+  args "${projectDir}/specifications/xquery-40/src/xslt.xml",
+    "-xsl:${projectDir}/specifications/xquery-40/style/merge-xquery-function-specs.xsl",
+    "-o:${buildDir}/expanded/xquery-40/xquery-40.xml"
+}
+*/
+
+/* Norm hacking below here...
+def namespace_documents = [
+  "xpath-functions-40": [
+    ["filename": "ns-xpath-functions",
+     "uri": "http://www.w3.org/2005/xpath-functions",
+     "stylesheet": "ns-xpath-functions.xsl"
+    ],
+    ["filename": "ns-xpath-math-functions",
+     "uri": "http://www.w3.org/2005/xpath-functions/math",
+     "stylesheet": "ns-xpath-math-functions.xsl"
+    ],
+    ["filename": "ns-xpath-map-functions",
+     "uri": "http://www.w3.org/2005/xpath-functions/map",
+     "stylesheet": "ns-xpath-map-functions.xsl"
+    ],
+    ["filename": "ns-xpath-array-functions",
+     "uri": "http://www.w3.org/2005/xpath-functions/array",
+     "stylesheet": "ns-xpath-array-functions.xsl"
+    ],
+    ["filename": "ns-codepoint",
+     "uri": "http://www.w3.org/2005/xpath-functions/collation/codepoint",
+     "stylesheet": "ns-xpath-functions.xsl"
+    ],
+    ["filename": "ns-insensitive",
+     "uri": "http://www.w3.org/2005/xpath-functions/collation/html-ascii-case-insensitive",
+     "stylesheet": "ns-xpath-functions.xsl"
+    ],
+    ["filename": "ns-uca",
+     "uri": "http://www.w3.org/2013/collation/UCA",
+     "stylesheet": "ns-xpath-functions.xsl"
+    ],
+    ["filename": "ns-errors",
+     "uri": "http://www.w3.org/2005/xpath-functions/collation/xqt-errors",
+     "stylesheet": "ns-errors.xsl"
+    ]
+  ]
+]
+
+namespace_documents.keySet().each { spec ->
+  String taskbase = spec.replace("-", "_")
+
+  Task specns = task "${taskbase}_namespaces"(
+    group: "namespaces",
+    description: "Namespace documents for ${spec}"
+  ) {
+    // Just a place to hang dependencies
+  }
+
+  namespace_documents[spec].each { ns ->
+    String filename = ns['filename']
+    String nsbase = filename.replace("-", "_")
+    String srcxml = "${projectDir}/specifications/${spec}/src/${ns['filename']}.xml"
+    String style = "${projectDir}/specifications/${spec}/style/${ns['stylesheet']}"
+    if (ns['stylesheet'].startsWith("/")) {
+      style = ns['stylesheet']
+    }
+
+    Task nsdoc = task "${taskbase}_${nsbase}_namespace"(
+      group: "namespaces",
+      description: "Namespace document for ${ns['uri']}"
+    ) {
+      inputs.files fileTree(dir: "${projectDir}/style")
+      inputs.file style
+      inputs.file srcxml
+      outputs.file "${buildDir}/temp/${spec}/${filename}.xml"
+      outputs.file "${buildDir}/www/${spec}/${filename}.html"
+
+      doLast {
+        javaexec {
+          classpath = configurations.transform
+          mainClass = "net.sf.saxon.Transform"
+          args srcxml,
+            "-xsl:${style}",
+            "-o:${buildDir}/temp/${spec}/${filename}.xml",
+            "pubdate='2017-03-21'"
+        }
+      }
+
+      doLast {
+        javaexec {
+          classpath = configurations.transform
+          mainClass = "net.sf.saxon.Query"
+          args "-qs:.",
+            "-s:${buildDir}/temp/${spec}/${filename}.xml",
+            "-o:${buildDir}/www/${spec}/${filename}.html",
+            "!method=html", "!version=5", "!indent=yes",
+            "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+        }
+      }
+    }
+    specns.dependsOn nsdoc
+  }
+}
+*/
+
+task helloWorld() {
+  doLast {
+    println("Hello, world.")
+  }
 }
