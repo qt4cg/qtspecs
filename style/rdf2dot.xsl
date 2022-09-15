@@ -49,7 +49,7 @@ $Id: rdf2dot.xsl,v 1.2 2008/09/26 00:57:39 jmelton Exp $</address>
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>
+    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
     <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
     <xsl:apply-templates/>
   </xsl:template> 

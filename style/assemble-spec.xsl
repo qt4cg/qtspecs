@@ -28,7 +28,7 @@
   <xsl:variable name="prodrecaps" select="//prodrecap"/>
 
   <!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
-  <xsl:template match="/">
+  <xsl:template match="/" priority="100">
     <xsl:variable name="XSLTprocessor">
       <xsl:text>{assemble-spec} </xsl:text>
       <xsl:text>XSLT Processor: </xsl:text>
@@ -40,7 +40,7 @@
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>
+    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
     <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
     <xsl:apply-templates/>
   </xsl:template>

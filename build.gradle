@@ -267,120 +267,137 @@ task fo_resources(
 task xslt_40(
   group: "Specifications",
   description: "Build the XSLT 4.0 specification",
-  dependsOn: ["xslt_xml", "xslt_html", "xslt_html_diff", "xslt_resources", "xslt_svg"]
+  dependsOn: ["xslt_grammar", "xslt_merge_catalog", "xslt_resources",
+              "xslt_html", "xslt_html_diff", "xslt_xml"]
 ) {
   // Just somewhere to hang dependencies
 }
 
-task xslt_merge(
-  type: JavaExec,
-  description: "Expand the XSLT sources into a single XML file"
+task xslt_grammar(
+  description: "Build the grammar files for XSLT 4.0"
 ) {
+  inputs.files fileTree(dir: "${projectDir}/style")
+  inputs.files fileTree(dir: "${projectDir}/xslt-40/src")
+  inputs.files fileTree(dir: "${projectDir}/xslt-40/style")
+  inputs.files fileTree(dir: "${projectDir}/specifications/grammar-40")
+  outputs.file "${buildDir}/xslt-40/src/xslt-40-assembled.xml"
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "${projectDir}/specifications/grammar-40/xpath-grammar.xml",
+        "-xsl:${projectDir}/Specifications/grammar-40/parser/strip.xsl",
+        "-o:${buildDir}/xslt-40/temp-xslt40-grammar.xml",
+        "spec1=xslt40-patterns"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "${buildDir}/xslt-40/temp-xslt40-grammar.xml",
+        "-xsl:${projectDir}/style/extract-tokens.xsl",
+        "-o:${buildDir}/xslt-40/tokens-with-dups.xml",
+        "spec=xslt-40",
+        "grammar-file=${buildDir}/xslt-40/temp-xslt40-grammar.xml"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "${buildDir}/xslt-40/tokens-with-dups.xml",
+        "-xsl:${projectDir}/style/elim-dup-tokens.xsl",
+        "-o:${buildDir}/xslt-40/tokens.xml"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "${projectDir}/specifications/xslt-40/src/xslt.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/convert-grammar.xsl",
+        "-o:${buildDir}/xslt-40/src/xslt-40-assembled.xml",
+        "spec=xslt-40",
+        "grammar-file=${buildDir}/xslt-40/temp-xslt40-grammar.xml",
+        "tokens-file=${buildDir}/xslt-40/tokens.xml"
+    }
+  }
+}
+
+task xslt_merge_catalog(
+  dependsOn: ["xslt_grammar"]
+) {
+  inputs.files fileTree(dir: "${projectDir}/style")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/src")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
-  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/images")
-  outputs.file "${buildDir}/expanded/xslt-40/xslt-40.xml"
+  inputs.file xslt_grammar.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/xslt-40/src/xslt-expanded.xml"
 
-  classpath = configurations.transform
-  mainClass = "net.sf.saxon.Transform"
-  args "${projectDir}/specifications/xslt-40/src/xslt.xml",
-    "-xsl:${projectDir}/specifications/xslt-40/style/merge-xslt-function-specs.xsl",
-    "-o:${buildDir}/expanded/xslt-40/xslt-40.xml"
-}
-
-task xslt_xml(
-  type: JavaExec,
-  dependsOn: ["xslt_merge"],
-  group: "Spec XML",
-  description: "Create the XML version of the specification"
-) {
-  inputs.files fileTree(dir: "${projectDir}/style/identity.xsl")
-  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
-  outputs.file "${buildDir}/www/xslt-40/xslt-40.xml"
-
-  classpath = configurations.transform
-  mainClass = "net.sf.saxon.Transform"
-  args xslt_merge.outputs.getFiles().getSingleFile().toString(),
-    "-xsl:${projectDir}/style/identity.xsl",
-    "-o:${xslt_xml.outputs.getFiles().getSingleFile()}"
-}
-
-task xslt_html(
-  dependsOn: ["xslt_merge"],
-  group: "Spec HTML",
-  description: "Create the HTML and XHTML versions of the specification"
-) {
-  inputs.files fileTree(dir: "${projectDir}/style")
-  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
-  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
-  outputs.file "${buildDir}/www/xslt-40/Overview.xml"
-  outputs.file "${buildDir}/www/xslt-40/Overview.html"
-
-  String prpath = System.getenv("PRPATH")
-  String publoc = prpath == null ?
-    "x-override-publoc=irrelevant" :
-    "override-publoc=https://qt4cg.org${prpath}/xslt-40/"
+  doLast {
+    copy {
+      from "${projectDir}/specifications/xslt-40/src"
+      into "${buildDir}/xslt-40/src"
+      include "*.xsd"
+      include "*.rnc"
+      include "*.xsl"
+    }
+  }
 
   doLast {
     javaexec {
       classpath = configurations.transform
       mainClass = "net.sf.saxon.Transform"
-      args xslt_merge.outputs.getFiles().getSingleFile().toString(),
-        "-xsl:${projectDir}/specifications/xslt-40/style/xslt.xsl",
-        "-o:${buildDir}/www/xslt-40/Overview.xml",
-        publoc
+      args "${projectDir}/specifications/xslt-40/src/function-catalog.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/function-streamability.xsl",
+        "-o:${buildDir}/xslt-40/built-in-streamability-expanded.xml"
     }
   }
-
-  doLast {
-    javaexec {
-      classpath = configurations.transform
-      mainClass = "net.sf.saxon.Query"
-      args "-qs:.",
-        "-s:${buildDir}/www/xslt-40/Overview.xml",
-        "-o:${buildDir}/www/xslt-40/Overview.html",
-        "!method=html", "!version=5", "!indent=yes",
-        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
-    }
-  }
-}
-
-task xslt_html_diff(
-  dependsOn: ["xslt_merge"],
-  group: "Spec HTML (diff)",
-  description: "Create the HTML and XHTML versions of the specification (with diff markup)"
-) {
-  inputs.files fileTree(dir: "${projectDir}/style")
-  inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
-  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
-  outputs.file "${buildDir}/www/xslt-40/Overview-diff.xml"
-  outputs.file "${buildDir}/www/xslt-40/Overview-diff.html"
 
   doLast {
     javaexec {
       classpath = configurations.transform
       mainClass = "net.sf.saxon.Transform"
-      args xslt_merge.outputs.getFiles().getSingleFile().toString(),
-        "-xsl:${projectDir}/specifications/xslt-40/style/xslt-diff.xsl",
-        "-o:${buildDir}/www/xslt-40/Overview-diff.xml",
-        "baseline=",
-        "diff.baseline.date.string=2017-06-08",
-        "specdoc=XT",
-        "date=2001-01-01",
-        "use-local-css=0",
-        "back.to.top.link=1"
+      args "${xslt_grammar.outputs.getFiles().getSingleFile()}",
+        "-xsl:${projectDir}/specifications/xslt-40/style/merge-xslt-function-specs.xsl",
+        "-o:${buildDir}/xslt-40/src/xslt-expanded0.xml",
+        "function-catalog=${projectDir}/specifications/xslt-40/src/function-catalog.xml",
+        "built-in-streamability-expanded=${buildDir}/xslt-40/built-in-streamability-expanded.xml"
     }
   }
 
   doLast {
     javaexec {
       classpath = configurations.transform
-      mainClass = "net.sf.saxon.Query"
-      args "-qs:.",
-        "-s:${buildDir}/www/xslt-40/Overview-diff.xml",
-        "-o:${buildDir}/www/xslt-40/Overview-diff.html",
-        "!method=html", "!version=5", "!indent=yes",
-        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+      mainClass = "net.sf.saxon.Transform"
+      args "${buildDir}/xslt-40/src/xslt-expanded0.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/merge-element-specs.xsl",
+        "-o:${buildDir}/xslt-40/src/xslt-expanded1.xml",
+        "catalog=${projectDir}/specifications/xslt-40/src/element-catalog.xml"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "${buildDir}/xslt-40/src/xslt-expanded1.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/check-internal-links.xsl",
+        "-o:${buildDir}/xslt-40/src/xslt-expanded2.xml"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "${buildDir}/xslt-40/src/xslt-expanded1.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/table-cleanup.xsl",
+        "-o:${buildDir}/xslt-40/src/xslt-expanded.xml"
     }
   }
 }
@@ -411,19 +428,19 @@ task xslt_svg(
 }
 
 task xslt_make_svg(
-  dependsOn: "xslt_merge",
+  dependsOn: "xslt_merge_catalog",
   description: "Create SVG images with GraphViz"
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
-  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  inputs.file xslt_merge_catalog.outputs.getFiles().getSingleFile()
   outputs.file "${buildDir}/www/xslt-40/img/fig1.svg"
 
   doLast {
     javaexec {
       classpath = configurations.transform
       mainClass = "net.sf.saxon.Transform"
-      args "-s:${xslt_merge.outputs.getFiles().getSingleFile().toString()}",
+      args "-s:${xslt_merge_catalog.outputs.getFiles().getSingleFile().toString()}",
         "-xsl:${projectDir}/specifications/xslt-40/style/xslt.xsl",
         "-o:${buildDir}/www/xslt-40/xslt-temporary.html",
         "-im:make-dot-files",
@@ -437,13 +454,16 @@ task xslt_make_svg(
   }
 
   doLast {
-    new File("${buildDir}/www/xslt-40/img").listFiles().each { fn ->
-      exec {
-        commandLine dot_exec, "-Tsvg",
-          "-o${fn.toString().replace('.dot', '.svg')}",
-          fn
+    new File("${buildDir}/www/xslt-40/img").listFiles().each { imgfile ->
+      def fn = imgfile.toString()
+      if (fn.endsWith(".dot")) {
+        exec {
+          commandLine dot_exec, "-Tsvg",
+            "-o${fn.replace('.dot', '.svg')}",
+            fn
+        }
+        delete fn
       }
-      delete fn
     }
   }
 }
@@ -453,7 +473,7 @@ task xslt_copy_svg(
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/style")
-  inputs.file xslt_merge.outputs.getFiles().getSingleFile()
+  inputs.file xslt_merge_catalog.outputs.getFiles().getSingleFile()
   outputs.file "${buildDir}/www/xslt-40/img/fig1.svg"
 
   doLast {
@@ -470,6 +490,7 @@ task xslt_copy_svg(
 }
 
 task xslt_resources(
+  dependsOn: ["xslt_svg"],
   description: "Copy static resources for publication"
 ) {
   doFirst {
@@ -504,135 +525,111 @@ task xslt_resources(
   }
 }
 
-/* XQuery is a lot more complicated...save it for another day
-// ============================================================
-
-task xpath_40(
-  group: "Specifications",
-  dependsOn: "xquery_40"
+task xslt_html(
+  dependsOn: ["xslt_merge_catalog"],
+  description: "Create the HTML version of the specification"
 ) {
-  // Alias for xquery_40
+  
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "-s:${xslt_merge_catalog.outputs.getFiles().getSingleFile().toString()}",
+        "-xsl:${projectDir}/specifications/xslt-40/style/xslt-diff.xsl",
+        "-o:${buildDir}/xslt-40/rendered.xml",
+        "baseline=",
+        "show.diff.markup.string=0",
+        "date=2000-01-01",
+        "diff.baseline.date.string=2012-07-10",
+        "use-local-css=0",
+        "back.to.top.link=1"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "-s:${buildDir}/xslt-40/rendered.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/highlighter.xsl",
+        "-o:${buildDir}/xslt-40/highlighted.xml"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Query"
+      args "-qs:.",
+        "-s:${buildDir}/xslt-40/highlighted.xml",
+        "-o:${buildDir}/www/xslt-40/Overview.html",
+        "!method=html", "!version=5", "!indent=yes",
+        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+    }
+  }
 }
 
-task xquery_40(
-  group: "Specifications",
-  description: "Build the XPath and XQuery 4.0 specifications",
-  dependsOn: ["xquery_xml"]
+task xslt_html_diff(
+  dependsOn: ["xslt_merge_catalog"],
+  description: "Create the HTML version of the specification (with diffs)"
 ) {
-  // Just somewhere to hang dependencies
+  
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "-s:${xslt_merge_catalog.outputs.getFiles().getSingleFile().toString()}",
+        "-xsl:${projectDir}/specifications/xslt-40/style/xslt-diff.xsl",
+        "-o:${buildDir}/xslt-40/rendered-diff.xml",
+        "baseline=",
+        "date=2000-01-01",
+        "diff.baseline.date.string=2012-07-10",
+        "specdoc=XT",
+        "use-local-css=0",
+        "back.to.top.link=1"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Transform"
+      args "-s:${buildDir}/xslt-40/rendered-diff.xml",
+        "-xsl:${projectDir}/specifications/xslt-40/style/highlighter.xsl",
+        "-o:${buildDir}/xslt-40/highlighted-diff.xml"
+    }
+  }
+
+  doLast {
+    javaexec {
+      classpath = configurations.transform
+      mainClass = "net.sf.saxon.Query"
+      args "-qs:.",
+        "-s:${buildDir}/xslt-40/highlighted-diff.xml",
+        "-o:${buildDir}/www/xslt-40/Overview-diff.html",
+        "!method=html", "!version=5", "!indent=yes",
+        "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
+    }
+  }
 }
 
-task xquery_merge(
+task xslt_xml(
   type: JavaExec,
-  description: "Expand the XSLT sources into a single XML file"
+  dependsOn: ["xslt_merge_catalog"],
+  description: "Create the XML version of the specification"
 ) {
-  inputs.files fileTree(dir: "${projectDir}/specifications/xquery-40/src")
-  inputs.files fileTree(dir: "${projectDir}/specifications/xquery-40/style")
-  inputs.files fileTree(dir: "${projectDir}/specifications/xquery-40/images")
-  outputs.file "${buildDir}/expanded/xquery-40/xquery-40.xml"
+  inputs.files fileTree(dir: "${projectDir}/style/identity.xsl")
+  inputs.file xslt_merge_catalog.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/www/xslt-40/xslt-40.xml"
 
   classpath = configurations.transform
   mainClass = "net.sf.saxon.Transform"
-  args "${projectDir}/specifications/xquery-40/src/xslt.xml",
-    "-xsl:${projectDir}/specifications/xquery-40/style/merge-xquery-function-specs.xsl",
-    "-o:${buildDir}/expanded/xquery-40/xquery-40.xml"
+  args xslt_merge_catalog.outputs.getFiles().getSingleFile().toString(),
+    "-xsl:${projectDir}/style/identity.xsl",
+    "-o:${xslt_xml.outputs.getFiles().getSingleFile()}"
 }
-*/
 
-/* Norm hacking below here...
-def namespace_documents = [
-  "xpath-functions-40": [
-    ["filename": "ns-xpath-functions",
-     "uri": "http://www.w3.org/2005/xpath-functions",
-     "stylesheet": "ns-xpath-functions.xsl"
-    ],
-    ["filename": "ns-xpath-math-functions",
-     "uri": "http://www.w3.org/2005/xpath-functions/math",
-     "stylesheet": "ns-xpath-math-functions.xsl"
-    ],
-    ["filename": "ns-xpath-map-functions",
-     "uri": "http://www.w3.org/2005/xpath-functions/map",
-     "stylesheet": "ns-xpath-map-functions.xsl"
-    ],
-    ["filename": "ns-xpath-array-functions",
-     "uri": "http://www.w3.org/2005/xpath-functions/array",
-     "stylesheet": "ns-xpath-array-functions.xsl"
-    ],
-    ["filename": "ns-codepoint",
-     "uri": "http://www.w3.org/2005/xpath-functions/collation/codepoint",
-     "stylesheet": "ns-xpath-functions.xsl"
-    ],
-    ["filename": "ns-insensitive",
-     "uri": "http://www.w3.org/2005/xpath-functions/collation/html-ascii-case-insensitive",
-     "stylesheet": "ns-xpath-functions.xsl"
-    ],
-    ["filename": "ns-uca",
-     "uri": "http://www.w3.org/2013/collation/UCA",
-     "stylesheet": "ns-xpath-functions.xsl"
-    ],
-    ["filename": "ns-errors",
-     "uri": "http://www.w3.org/2005/xpath-functions/collation/xqt-errors",
-     "stylesheet": "ns-errors.xsl"
-    ]
-  ]
-]
-
-namespace_documents.keySet().each { spec ->
-  String taskbase = spec.replace("-", "_")
-
-  Task specns = task "${taskbase}_namespaces"(
-    group: "namespaces",
-    description: "Namespace documents for ${spec}"
-  ) {
-    // Just a place to hang dependencies
-  }
-
-  namespace_documents[spec].each { ns ->
-    String filename = ns['filename']
-    String nsbase = filename.replace("-", "_")
-    String srcxml = "${projectDir}/specifications/${spec}/src/${ns['filename']}.xml"
-    String style = "${projectDir}/specifications/${spec}/style/${ns['stylesheet']}"
-    if (ns['stylesheet'].startsWith("/")) {
-      style = ns['stylesheet']
-    }
-
-    Task nsdoc = task "${taskbase}_${nsbase}_namespace"(
-      group: "namespaces",
-      description: "Namespace document for ${ns['uri']}"
-    ) {
-      inputs.files fileTree(dir: "${projectDir}/style")
-      inputs.file style
-      inputs.file srcxml
-      outputs.file "${buildDir}/temp/${spec}/${filename}.xml"
-      outputs.file "${buildDir}/www/${spec}/${filename}.html"
-
-      doLast {
-        javaexec {
-          classpath = configurations.transform
-          mainClass = "net.sf.saxon.Transform"
-          args srcxml,
-            "-xsl:${style}",
-            "-o:${buildDir}/temp/${spec}/${filename}.xml",
-            "pubdate='2017-03-21'"
-        }
-      }
-
-      doLast {
-        javaexec {
-          classpath = configurations.transform
-          mainClass = "net.sf.saxon.Query"
-          args "-qs:.",
-            "-s:${buildDir}/temp/${spec}/${filename}.xml",
-            "-o:${buildDir}/www/${spec}/${filename}.html",
-            "!method=html", "!version=5", "!indent=yes",
-            "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
-        }
-      }
-    }
-    specns.dependsOn nsdoc
-  }
-}
-*/
+// ============================================================
 
 task helloWorld() {
   doLast {
