@@ -4,10 +4,10 @@ This is a forked source for the XSLT and XQuery Specifications created for the d
 View the latest HTML version of the draft specs via the links below:
 | Draft 4.0 Spec | Diff against 3.0 Specs |
 | -------------- | ---------------------- |
-| [XSLT Transformations (XSLT) Version 4.0](https://qt4cg.org/branch/master/xslt-40/Overview.html) | [(Diffs)](https://qt4cg.org/branch/master/xslt-40/Overview-diff.html) |
-| [XPath and XQuery Functions and Operators 4.0](https://qt4cg.org/branch/master/xpath-functions-40/Overview.html) | [(Diffs)](https://qt4cg.org/branch/master/xpath-functions-40/Overview-diff.html) |
-| [XML Path Language (XPath) 4.0](https://qt4cg.org/branch/master/xquery-40/xpath-40.html) | [(Diffs)](https://qt4cg.org/branch/master/xquery-40/xpath-40-diff.html) |
-| [XQuery 4.0: An XML Query Language](https://qt4cg.org/branch/master/xquery-40/xquery-40.html) | [(Diffs)](https://qt4cg.org/branch/master/xquery-40/xquery-40-diff.html) |
+| [XSLT Transformations (XSLT) Version 4.0](https://qt4cg.org/specifications/xslt-40/Overview.html) | [(Diffs)](https://qt4cg.org/specifications/xslt-40/Overview-diff.html) |
+| [XPath and XQuery Functions and Operators 4.0](https://qt4cg.org/specifications/xpath-functions-40/Overview.html) | [(Diffs)](https://qt4cg.org/specifications/xpath-functions-40/Overview-diff.html) |
+| [XML Path Language (XPath) 4.0](https://qt4cg.org/specifications/xquery-40/xpath-40.html) | [(Diffs)](https://qt4cg.org/specifications/xquery-40/xpath-40-diff.html) |
+| [XQuery 4.0: An XML Query Language](https://qt4cg.org/specifications/xquery-40/xquery-40.html) | [(Diffs)](https://qt4cg.org/specifications/xquery-40/xquery-40-diff.html) |
 
 ## Participate in Spec Development
 There are numerous paths to participating in qtspec development.
