@@ -84,13 +84,23 @@ a.judgment:visited, a.judgment:link     { font-family: sans-serif;
 a.processing:visited, a.processing:link { color: black; 
                               		        text-decoration: none }
 a.env:visited, a.env:link               { color: black; 
-                                          text-decoration: none }</xsl:param>
+                                          text-decoration: none }
+
+.markup-error {
+  background-color: red;
+  color: yellow;
+}
+</xsl:param>
 
   <xsl:param name="additional.title">
     <xsl:if test="$show.diff.markup != 0">
       <xsl:text>Review Version</xsl:text>
     </xsl:if>
   </xsl:param>
+
+  <!-- Should we be pedantic about things? Ideally, turn this on
+       and fix the warnings reported before final publication. -->
+  <xsl:param name="pedantic" select="'false'"/>
 
   <xsl:output method="xml" indent="no" encoding="utf-8" version="1.0"/>
 
@@ -773,10 +783,16 @@ th.issue-toc-head { border-bottom-color: black;
         <xsl:apply-templates select="$error[1]"/>
       </xsl:when>
       <xsl:otherwise>
-        <xsl:message>Warning: Error <xsl:value-of select="concat(@class,@code)"/> not found.</xsl:message>
-        <xsl:text>[ERROR </xsl:text>
-        <xsl:value-of select="@code"/>
-        <xsl:text> NOT FOUND]</xsl:text>
+        <xsl:message>
+          <xsl:text>Error: errorref </xsl:text>
+          <xsl:value-of select="concat(@class,@code)"/>
+          <xsl:text>not found.</xsl:text>
+        </xsl:message>
+        <span class="markup-error">
+          <xsl:text>[ERROR errorref </xsl:text>
+          <xsl:value-of select="concat(@class,@code)"/>
+          <xsl:text> NOT FOUND]</xsl:text>
+        </span>
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>
@@ -934,22 +950,26 @@ th.issue-toc-head { border-bottom-color: black;
       </xsl:when>
       <xsl:otherwise>
         <xsl:message>
-          <xsl:text>Warning: Cannot resolve </xsl:text>
-          <xsl:copy-of select="."/>
+          <xsl:text>Error: cannot resolve </xsl:text>
+          <xsl:value-of select="@ref"/>
+          <xsl:text> in </xsl:text>
+          <xsl:value-of select="@spec"/>
           <xsl:text> at id=</xsl:text>
           <xsl:value-of select="(ancestor::*/@id)[last()]"/>
         </xsl:message>
-        <xsl:text>[TITLE OF </xsl:text>
-        <xsl:value-of select="@spec"/>
-        <xsl:text> SPEC, TITLE OF </xsl:text>
-        <xsl:value-of select="@ref"/>
-        <xsl:text> SECTION]</xsl:text>
-        <xsl:apply-templates/>
-        <sup>
-          <small>
-            <xsl:value-of select="@spec"/>
-          </small>
-        </sup>
+        <span class='markup-error'>
+          <xsl:text>[TITLE OF </xsl:text>
+          <xsl:value-of select="@spec"/>
+          <xsl:text> SPEC, TITLE OF </xsl:text>
+          <xsl:value-of select="@ref"/>
+          <xsl:text> SECTION]</xsl:text>
+          <xsl:apply-templates/>
+          <sup>
+            <small>
+              <xsl:value-of select="@spec"/>
+            </small>
+          </sup>
+        </span>
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>
@@ -1057,17 +1077,21 @@ th.issue-toc-head { border-bottom-color: black;
       </xsl:when>
       <xsl:when test="not($nt)">
         <xsl:message>
-          <xsl:text>Warning: Cannot resolve </xsl:text>
-          <xsl:copy-of select="."/>
+          <xsl:text>Error: cannot resolve xnt </xsl:text>
+          <xsl:value-of select="@ref"/>
+          <xsl:text> in </xsl:text>
+          <xsl:value-of select="@spec"/>
           <xsl:text> at id=</xsl:text>
           <xsl:value-of select="(ancestor::*/@id)[last()]"/>
         </xsl:message>
-        <xsl:text>[NT </xsl:text>
-        <xsl:value-of select="@ref"/>
-        <xsl:text> IN </xsl:text>
-        <xsl:value-of select="@spec"/>
-        <xsl:text>]</xsl:text>
-        <xsl:apply-templates/>
+        <span class="markup-error">
+          <xsl:text>[NT </xsl:text>
+          <xsl:value-of select="@ref"/>
+          <xsl:text> IN </xsl:text>
+          <xsl:value-of select="@spec"/>
+          <xsl:text>]</xsl:text>
+          <xsl:apply-templates/>
+        </span>
       </xsl:when>
       <xsl:when test="node()">
         <xsl:apply-templates/>
@@ -1111,17 +1135,21 @@ th.issue-toc-head { border-bottom-color: black;
         <xsl:choose>
           <xsl:when test="not($termdef)">
             <xsl:message>
-              <xsl:text>Warning: Cannot resolve </xsl:text>
-              <xsl:copy-of select="."/>
+              <xsl:text>Error: cannot resolve xtermref </xsl:text>
+              <xsl:value-of select="@ref"/>
+              <xsl:text> in </xsl:text>
+              <xsl:value-of select="@spec"/>
               <xsl:text> at id=</xsl:text>
               <xsl:value-of select="(ancestor::*/@id)[last()]"/>
             </xsl:message>
-            <xsl:text>[TERMDEF </xsl:text>
-            <xsl:value-of select="@ref"/>
-            <xsl:text> IN </xsl:text>
-            <xsl:value-of select="@spec"/>
-            <xsl:text>]</xsl:text>
-            <xsl:apply-templates/>
+            <span class="markup-error">
+              <xsl:text>[TERMDEF </xsl:text>
+              <xsl:value-of select="@ref"/>
+              <xsl:text> IN </xsl:text>
+              <xsl:value-of select="@spec"/>
+              <xsl:text>]</xsl:text>
+              <xsl:apply-templates/>
+            </span>
           </xsl:when>
           <xsl:when test="node()">
             <xsl:choose>
@@ -1207,17 +1235,19 @@ th.issue-toc-head { border-bottom-color: black;
     <xsl:choose>
       <xsl:when test="not($error)">
         <xsl:message>
-          <xsl:text>Warning: Cannot resolve </xsl:text>
-          <xsl:copy-of select="."/>
+          <xsl:text>Error: cannot resolve xerrorref </xsl:text>
+          <xsl:value-of select="concat(@class,@code)"/>
           <xsl:text> at id=</xsl:text>
           <xsl:value-of select="(ancestor::*/@id)[last()]"/>
         </xsl:message>
-        <xsl:text>[ERROR </xsl:text>
-        <xsl:value-of select="concat(@class,@code)"/>
-        <xsl:text> IN </xsl:text>
-        <xsl:value-of select="$spec"/>
-        <xsl:text>]</xsl:text>
-        <xsl:apply-templates/>
+        <span class="markup-error">
+          <xsl:text>[ERROR </xsl:text>
+          <xsl:value-of select="concat(@class,@code)"/>
+          <xsl:text> IN </xsl:text>
+          <xsl:value-of select="$spec"/>
+          <xsl:text>]</xsl:text>
+          <xsl:apply-templates/>
+        </span>
       </xsl:when>
       <xsl:when test="node()">
         <xsl:apply-templates/>
@@ -1245,7 +1275,15 @@ th.issue-toc-head { border-bottom-color: black;
   <xsl:template match="nt">
     <xsl:variable name="target" select="key('ids', @def)"/>
     <xsl:if test="not($target)">
-      <xsl:message>broken reference: no @id matches nt/@def="<xsl:value-of select="@def"/>"</xsl:message>
+      <xsl:message>
+        <xsl:text>Error: cannot resolve nt: </xsl:text>
+        <xsl:value-of select="@def"/>
+      </xsl:message>
+      <span class="markup-error">
+        <xsl:text>[ERROR: no </xsl:text>
+        <xsl:value-of select="@def"/>
+        <xsl:text>]</xsl:text>
+      </span>
     </xsl:if>
     <a>
       <xsl:attribute name="href">
@@ -1266,9 +1304,9 @@ th.issue-toc-head { border-bottom-color: black;
     <xsl:variable name="rfc" select="document('../etc/rfc.xml')"/>
     <xsl:variable name="id" select="@id"/>
 
-    <xsl:if test="count(key('bibrefs', @id)) = 0">
+    <xsl:if test="$pedantic != 'false' and count(key('bibrefs', @id)) = 0">
       <xsl:message>
-        <xsl:text>Warning: no bibref to bibl "</xsl:text>
+        <xsl:text>Warning: no reference to bibliography entry "</xsl:text>
         <xsl:value-of select="@id"/>
         <xsl:text>"</xsl:text>
       </xsl:message>
@@ -1315,9 +1353,11 @@ th.issue-toc-head { border-bottom-color: black;
           </xsl:when>
           <xsl:when test="not(node())">
             <xsl:message>Error: no <xsl:value-of select="$id"/> known!</xsl:message>
-            <xsl:text>ERROR: NO </xsl:text>
-            <xsl:value-of select="$id"/>
-            <xsl:text> KNOWN!</xsl:text>
+            <span class="markup-error">
+              <xsl:text>ERROR: NO </xsl:text>
+              <xsl:value-of select="$id"/>
+              <xsl:text> KNOWN!</xsl:text>
+            </span>
           </xsl:when>
           <xsl:otherwise>
             <xsl:apply-templates/>
