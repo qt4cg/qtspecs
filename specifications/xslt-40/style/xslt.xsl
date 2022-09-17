@@ -1115,7 +1115,7 @@ constructor. These elements are:</p>
   <xsl:template match="eg">
     <xsl:variable name="max-length"
       select="max(for $line in tokenize(., '\n') return string-length($line))"/>
-    <xsl:if test="$max-length gt 75">
+    <xsl:if test="$pedantic != 'false' and $max-length gt 75">
       <!-- ideally, get this down to 60 -->
       <xsl:message>*** WARNING: code example has max line length <xsl:value-of select="$max-length"/> 
         at <xsl:value-of select="(ancestor::*/@id)[last()]"/> 
