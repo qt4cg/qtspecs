@@ -72,7 +72,7 @@
               match="html:p|p" mode="unwrap.p">
   <!-- xmlns:html is necessary for the xhtml stylesheet case -->
   <xsl:variable name="blocks" xmlns:html="http://www.w3.org/1999/xhtml"
-                select="address|blockquote|div|hr|h1|h2|h3|h4|h5|h6
+                select="address|blockquote|child::div|hr|h1|h2|h3|h4|h5|h6
                         |layer|p|pre|table|dl|menu|ol|ul|form
                         |html:address|html:blockquote|html:div|html:hr
                         |html:h1|html:h2|html:h3|html:h4|html:h5|html:h6

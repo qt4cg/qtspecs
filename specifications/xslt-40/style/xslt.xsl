@@ -228,24 +228,6 @@ overflow: auto;
     <xsl:apply-templates/>
 </xsl:template>
 
-<xsl:variable name="latest" select="'https://qt4cg.org/specifications/xslt-40/'"/>
-
-<xsl:template match="publoc">
-  <dt>This version:</dt>
-  <dd>
-    <xsl:choose>
-      <xsl:when test="exists($override-publoc)">
-        <a href="{$override-publoc}/">
-          <xsl:sequence select="$override-publoc"/>
-        </a>
-      </xsl:when>
-      <xsl:otherwise>
-        <a href="{$latest}"><xsl:value-of select="$latest"/></a>
-      </xsl:otherwise>
-    </xsl:choose>
-  </dd>
-</xsl:template>				
-
 <xsl:template match="elcode">
    <!--xsl:call-template name="diff"/-->
    <a href="#element-{substring-after(.,'xsl:')}"><code><xsl:value-of select="."/></code></a>
@@ -1115,7 +1097,7 @@ constructor. These elements are:</p>
   <xsl:template match="eg">
     <xsl:variable name="max-length"
       select="max(for $line in tokenize(., '\n') return string-length($line))"/>
-    <xsl:if test="$max-length gt 75">
+    <xsl:if test="$pedantic != 'false' and $max-length gt 75">
       <!-- ideally, get this down to 60 -->
       <xsl:message>*** WARNING: code example has max line length <xsl:value-of select="$max-length"/> 
         at <xsl:value-of select="(ancestor::*/@id)[last()]"/> 
