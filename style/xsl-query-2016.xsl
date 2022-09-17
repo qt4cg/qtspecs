@@ -786,7 +786,7 @@ th.issue-toc-head { border-bottom-color: black;
         <xsl:message>
           <xsl:text>Error: errorref </xsl:text>
           <xsl:value-of select="concat(@class,@code)"/>
-          <xsl:text>not found.</xsl:text>
+          <xsl:text> not found.</xsl:text>
         </xsl:message>
         <span class="markup-error">
           <xsl:text>[ERROR errorref </xsl:text>
