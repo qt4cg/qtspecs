@@ -16,24 +16,24 @@
     <xsl:result-document href="#speclist" method="ixsl:replace-content">
       <p>The latest drafts of</p>
       <ul>
-        <li><a href="branch/master/xslt-40/Overview.html"
+        <li><a href="specifications/xslt-40/Overview.html"
                >XSLT Transformations (XSLT) Version 4.0</a>
-        <span class="diffs"> (<a href="branch/master/xslt-40/Overview-diff.html">latest
+        <span class="diffs"> (<a href="specifications/xslt-40/Overview-diff.html">latest
         diffs</a>)</span>
         </li>
-        <li><a href="branch/master/xpath-functions-40/Overview.html"
+        <li><a href="specifications/xpath-functions-40/Overview.html"
                >XPath and XQuery Functions and Operators 4.0</a>
-        <span class="diffs"> (<a href="branch/master/xpath-functions-40/Overview-diff.html">latest
+        <span class="diffs"> (<a href="specifications/xpath-functions-40/Overview-diff.html">latest
         diffs</a>)</span>
         </li>
-        <li><a href="branch/master/xquery-40/xpath-40.html"
+        <li><a href="specifications/xquery-40/xpath-40.html"
                >XML Path Language (XPath) 4.0</a>
-        <span class="diffs"> (<a href="branch/master/xquery-40/xpath-40-diff.html">latest
+        <span class="diffs"> (<a href="specifications/xquery-40/xpath-40-diff.html">latest
         diffs</a>)</span>, and
         </li>
-        <li><a href="branch/master/xquery-40/xquery-40.html"
+        <li><a href="specifications/xquery-40/xquery-40.html"
                >XQuery 4.0: An XML Query Language</a>
-        <span class="diffs"> (<a href="branch/master/xquery-40/xquery-40-diff.html">latest
+        <span class="diffs"> (<a href="specifications/xquery-40/xquery-40-diff.html">latest
         diffs</a>)</span>
         </li>
       </ul>
