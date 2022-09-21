@@ -14,151 +14,192 @@
 
 <xsl:output method="html" html-version="5" encoding="utf-8" indent="no"/>
 
-<xsl:template match="/specifications[branch]">
-  <xsl:if test="not(contains(ixsl:get(ixsl:window(), 'location.href'), '?nojs'))">
-    <xsl:result-document href="#speclist" method="ixsl:replace-content">
-      <p>The latest drafts of</p>
-      <ul>
-        <li><a href="specifications/xslt-40/Overview.html"
-               >XSLT Transformations (XSLT) Version 4.0</a>
-        <span class="diffs"> (<a href="specifications/xslt-40/Overview-diff.html">latest
-        diffs</a>)</span>
-        </li>
-        <li><a href="specifications/xpath-functions-40/Overview.html"
-               >XPath and XQuery Functions and Operators 4.0</a>
-        <span class="diffs"> (<a href="specifications/xpath-functions-40/Overview-diff.html">latest
-        diffs</a>)</span>
-        </li>
-        <li><a href="specifications/xquery-40/xpath-40.html"
-               >XML Path Language (XPath) 4.0</a>
-        <span class="diffs"> (<a href="specifications/xquery-40/xpath-40-diff.html">latest
-        diffs</a>)</span>, and
-        </li>
-        <li><a href="specifications/xquery-40/xquery-40.html"
-               >XQuery 4.0: An XML Query Language</a>
-        <span class="diffs"> (<a href="specifications/xquery-40/xquery-40-diff.html">latest
-        diffs</a>)</span>
-        </li>
-      </ul>
-      <p>are updated automatically when changes are made to the repository.</p>
-      <xsl:call-template name="pull-requests"/>
-      <xsl:call-template name="branches"/>
-    </xsl:result-document>
-  </xsl:if>
+<xsl:template name="main">
+  <ixsl:schedule-action
+      http-request="map {
+                      'method': 'GET',
+                      'href': 'https://api.github.com/repos/qt4cg/qtspecs/pulls?state=open'
+                    }">
+    <xsl:call-template name="pull-requests"/>
+  </ixsl:schedule-action>
+  <ixsl:schedule-action
+      http-request="map {
+                      'method': 'GET',
+                      'href': 'https://api.github.com/repos/qt4cg/qtspecs/branches'
+                    }">
+    <xsl:call-template name="branches"/>
+  </ixsl:schedule-action>
 </xsl:template>
 
 <xsl:template name="pull-requests">
-  <xsl:try>
-    <xsl:variable name="pulls"
-         select="unparsed-text('https://api.github.com/repos/qt4cg/qtspecs/pulls?state=open')"/>
-    <xsl:variable name="pulls" select="parse-json($pulls)"/>
+  <xsl:context-item as="map(*)" use="required"/>
 
-    <xsl:variable name="open" as="map(*)*">
-      <xsl:for-each select="array:flatten($pulls)">
-        <xsl:sort select=".?number" order="descending"/>
-        <xsl:try>
-          <xsl:variable name="formatted"
-               select="unparsed-text('https://qt4cg.org/pr/' || .?number || '/index.html')"/>
-          <xsl:if test="not(contains($formatted, 'Cannot retrieve unparsed-text'))">
-            <xsl:sequence select="."/>
-          </xsl:if>
-          <xsl:catch>
-            <!-- nop -->
-          </xsl:catch>
-        </xsl:try>
-      </xsl:for-each>
-    </xsl:variable>
-
-    <xsl:if test="exists($open)">
-      <div>
-        <h2>Formatted pull requests</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>PR</th>
-              <th>Author</th>
-              <th>Title</th>
-            </tr>
-          </thead>
-          <tbody>
-            <xsl:for-each select="$open">
-              <tr>
-                <td>
-                  <a href="{.?html_url}">
-                    <xsl:sequence select=".?number"/>
-                  </a>
-                </td>
-                <td>
-                  <xsl:sequence select=".?user?login"/>
-                </td>
-                <td>
-                  <a href="https://qt4cg.org/pr/{.?number}/index.html">
-                    <xsl:sequence select=".?title"/>
-                  </a>
-                </td>
-              </tr>
-            </xsl:for-each>
-          </tbody>
-        </table>
-      </div>
+  <xsl:if test=".?status = 200 and starts-with(.?headers?content-type, 'application/json')">
+    <xsl:variable name="pulls" select="parse-json(.?body)"/>
+    <xsl:variable name="prs" select="array:flatten($pulls)"/>
+    <xsl:if test="exists($prs)">
+      <ixsl:schedule-action
+          http-request="map {
+                          'method': 'GET',
+                          'href': 'https://qt4cg.org/pr/' || $prs[1]?number || '/index.html',
+                          'status-only': true()
+                        }">
+        <xsl:call-template name="check-pull-requests">
+          <xsl:with-param name="pr" select="$prs[1]"/>
+          <xsl:with-param name="open-prs" select="()"/>
+          <xsl:with-param name="remaining-prs" select="$prs[position() gt 1]"/>
+        </xsl:call-template>
+      </ixsl:schedule-action>
     </xsl:if>
+  </xsl:if>
+</xsl:template>
 
-    <xsl:catch>
-      <p>Failed to get list of pull requests from GitHub API.</p>
-      <xsl:message select="$err:code, $err:description"/>
-    </xsl:catch>
-  </xsl:try>
+<xsl:template name="check-pull-requests">
+  <xsl:context-item as="map(*)" use="required"/>
+  <xsl:param name="pr" as="map(*)" required="yes"/>
+  <xsl:param name="open-prs" as="map(*)*" required="yes"/>
+  <xsl:param name="remaining-prs" as="map(*)*" required="yes"/>
+
+  <xsl:choose>
+    <xsl:when test="exists($remaining-prs)">
+      <ixsl:schedule-action
+          http-request="map {
+                          'method': 'GET',
+                          'href': 'https://qt4cg.org/pr/' || $remaining-prs[1]?number || '/index.html',
+                          'status-only': true()
+                        }">
+        <xsl:call-template name="check-pull-requests">
+          <xsl:with-param name="pr" select="$remaining-prs[1]"/>
+          <xsl:with-param name="open-prs"
+                          select="if (.?status = 200)
+                                  then ($open-prs, $pr)
+                                  else $open-prs"/>
+          <xsl:with-param name="remaining-prs" select="$remaining-prs[position() gt 1]"/>
+        </xsl:call-template>
+      </ixsl:schedule-action>
+    </xsl:when>
+    <xsl:when test="exists($open-prs)">
+      <xsl:result-document href="#pull-requests" method="ixsl:replace-content">
+        <div>
+          <h3>Formatted pull requests</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>PR</th>
+                <th>Author</th>
+                <th>Title</th>
+              </tr>
+            </thead>
+            <tbody>
+              <xsl:for-each select="$open-prs">
+                <tr>
+                  <td>
+                    <a href="{.?html_url}">
+                      <xsl:sequence select=".?number"/>
+                    </a>
+                  </td>
+                  <td>
+                    <xsl:sequence select=".?user?login"/>
+                  </td>
+                  <td>
+                    <a href="https://qt4cg.org/pr/{.?number}/index.html">
+                      <xsl:sequence select=".?title"/>
+                    </a>
+                  </td>
+                </tr>
+              </xsl:for-each>
+            </tbody>
+          </table>
+        </div>
+      </xsl:result-document>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:message>No open pull requests found.</xsl:message>
+    </xsl:otherwise>
+  </xsl:choose>
 </xsl:template>
 
 <xsl:template name="branches">
-  <xsl:try>
-    <xsl:variable name="branches"
-                  select="unparsed-text('https://api.github.com/repos/qt4cg/qtspecs/branches')"/>
-    <xsl:variable name="branches" select="parse-json($branches)"/>
+  <xsl:context-item as="map(*)" use="required"/>
 
-    <xsl:variable name="open" as="map(*)*">
-      <xsl:for-each select="array:flatten($branches)">
-        <xsl:sort select=".?name" order="ascending"/>
-        <xsl:choose>
-          <xsl:when test=".?name = 'gh-pages' or .?name = 'master'">
-            <!-- ignore this one -->
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:try>
-              <xsl:variable name="formatted"
-                   select="unparsed-text('https://qt4cg.org/branch/' || .?name || '/index.html')"/>
-              <xsl:if test="not(contains($formatted, 'Cannot retrieve unparsed-text'))">
-                <xsl:sequence select="."/>
-              </xsl:if>
-              <xsl:catch>
-                <!-- nop -->
-              </xsl:catch>
-            </xsl:try>
-          </xsl:otherwise>
-        </xsl:choose>
-      </xsl:for-each>
-    </xsl:variable>
-
-    <xsl:if test="exists($open)">
-      <div>
-        <h2>Formatted branches</h2>
-        <ul>
-          <xsl:for-each select="$open">
-            <li>
-              <a href="https://qt4cg.org/branch/{.?name}/">
-                <xsl:sequence select=".?name"/>
-              </a>
-            </li>
-          </xsl:for-each>
-        </ul>
-      </div>
+  <xsl:if test=".?status = 200 and starts-with(.?headers?content-type, 'application/json')">
+    <xsl:variable name="branches" select="array:flatten(parse-json(.?body))"/>
+    <xsl:if test="exists($branches)">
+      <ixsl:schedule-action
+          http-request="map {
+                          'method': 'GET',
+                          'href': 'https://qt4cg.org/branch/' || $branches[1]?name || '/index.html',
+                          'status-only': true()
+                        }">
+        <xsl:call-template name="check-branches">
+          <xsl:with-param name="branch" select="$branches[1]"/>
+          <xsl:with-param name="open-branches" select="()"/>
+          <xsl:with-param name="remaining-branches" select="$branches[position() gt 1]"/>
+        </xsl:call-template>
+      </ixsl:schedule-action>
     </xsl:if>
+  </xsl:if>
+</xsl:template>
 
-    <xsl:catch>
-      <p>Failed to get list of branches from GitHub API.</p>
-      <xsl:message select="$err:code, $err:description"/>
-    </xsl:catch>
-  </xsl:try>
+<xsl:template name="check-branches">
+  <xsl:context-item as="map(*)" use="required"/>
+  <xsl:param name="branch" as="map(*)" required="yes"/>
+  <xsl:param name="open-branches" as="map(*)*" required="yes"/>
+  <xsl:param name="remaining-branches" as="map(*)*" required="yes"/>
+
+  <xsl:choose>
+    <xsl:when test="exists($remaining-branches)">
+      <ixsl:schedule-action
+          http-request="map {
+                          'method': 'GET',
+                          'href': 'https://qt4cg.org/branch/' || $remaining-branches[1]?name || '/index.html',
+                          'status-only': true()
+                        }">
+        <xsl:call-template name="check-branches">
+          <xsl:with-param name="branch" select="$remaining-branches[1]"/>
+          <xsl:with-param name="open-branches"
+                          select="if (.?status = 200)
+                                  then ($open-branches, $branch)
+                                  else $open-branches"/>
+          <xsl:with-param name="remaining-branches" select="$remaining-branches[position() gt 1]"/>
+        </xsl:call-template>
+      </ixsl:schedule-action>
+    </xsl:when>
+    <xsl:when test="exists($open-branches)">
+      <xsl:result-document href="#pull-requests" method="ixsl:replace-content">
+        <div>
+          <h2>Formatted branches</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Commit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <xsl:for-each select="$open-branches">
+                <tr>
+                  <td>
+                    <a href="https://qt4cg.org/branch/{.?name}/">
+                      <xsl:sequence select=".?name"/>
+                    </a>
+                  </td>
+                  <td>
+                    <a href="{.?commit?url}">
+                      <xsl:sequence select=".?commit?sha"/>
+                    </a>
+                  </td>
+                </tr>
+              </xsl:for-each>
+            </tbody>
+          </table>
+        </div>
+      </xsl:result-document>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:message>No open branches found.</xsl:message>
+    </xsl:otherwise>
+  </xsl:choose>
 </xsl:template>
 
 </xsl:stylesheet>
