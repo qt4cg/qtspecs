@@ -156,6 +156,14 @@
 					</def>
 				</gitem>
 			</xsl:if>
+			<xsl:if test="$fspec/fos:history">
+				<gitem>
+					<label>History</label>
+					<def role="example">
+						<xsl:apply-templates select="$fspec/fos:history/fos:version/node()"/>
+					</def>
+				</gitem>
+			</xsl:if>
 		</glist>
 	</xsl:template>
 	
@@ -415,5 +423,7 @@
 		</xsl:for-each>
 
 	</xsl:template>
+	
+	<xsl:template match="fos:history|fos:version"/>
 	
 </xsl:stylesheet>

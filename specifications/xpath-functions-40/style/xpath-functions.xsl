@@ -1245,5 +1245,9 @@ table.data table.index {
     </dl>
   </xsl:template>
   
+  <xsl:template match="fos:*" xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace" mode="transform">
+    <xsl:message terminate="yes">Found <xsl:value-of select="name(.)"/> element which should not have been copied from the function catalog</xsl:message>
+  </xsl:template>
+  
 
 </xsl:stylesheet>
