@@ -189,7 +189,8 @@
                     </a>
                   </td>
                   <td>
-                    <a href="{.?commit?url}">
+                    <xsl:message select="serialize(., map{'method':'json','indent':true()})"/>
+                    <a href="https://github.com/qt4cg/qtspecs/commit/{.?commit?sha}">
                       <xsl:sequence select=".?commit?sha"/>
                     </a>
                   </td>
