@@ -172,7 +172,7 @@
     <xsl:when test="exists($found-branches)">
       <xsl:result-document href="#branches" method="ixsl:replace-content">
         <div>
-          <h2>Formatted branches</h2>
+          <h3>Formatted branches</h3>
           <table>
             <thead>
               <tr>
