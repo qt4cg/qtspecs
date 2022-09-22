@@ -60,6 +60,11 @@
   <xsl:param name="open-prs" as="map(*)*" required="yes"/>
   <xsl:param name="remaining-prs" as="map(*)*" required="yes"/>
 
+  <xsl:variable name="found-prs"
+                select="if (.?status = 200)
+                        then ($open-prs, $pr)
+                        else $open-prs"/>
+
   <xsl:choose>
     <xsl:when test="exists($remaining-prs)">
       <ixsl:schedule-action
@@ -70,15 +75,12 @@
                         }">
         <xsl:call-template name="check-pull-requests">
           <xsl:with-param name="pr" select="$remaining-prs[1]"/>
-          <xsl:with-param name="open-prs"
-                          select="if (.?status = 200)
-                                  then ($open-prs, $pr)
-                                  else $open-prs"/>
+          <xsl:with-param name="open-prs" select="$found-prs"/>
           <xsl:with-param name="remaining-prs" select="$remaining-prs[position() gt 1]"/>
         </xsl:call-template>
       </ixsl:schedule-action>
     </xsl:when>
-    <xsl:when test="exists($open-prs)">
+    <xsl:when test="exists($found-prs)">
       <xsl:result-document href="#pull-requests" method="ixsl:replace-content">
         <div>
           <h3>Formatted pull requests</h3>
@@ -91,7 +93,7 @@
               </tr>
             </thead>
             <tbody>
-              <xsl:for-each select="$open-prs">
+              <xsl:for-each select="$found-prs">
                 <tr>
                   <td>
                     <a href="{.?html_url}">
@@ -147,6 +149,11 @@
   <xsl:param name="open-branches" as="map(*)*" required="yes"/>
   <xsl:param name="remaining-branches" as="map(*)*" required="yes"/>
 
+  <xsl:variable name="found-branches"
+                select="if (.?status = 200)
+                        then ($open-branches, $branch)
+                        else $open-branches"/>
+
   <xsl:choose>
     <xsl:when test="exists($remaining-branches)">
       <ixsl:schedule-action
@@ -157,16 +164,13 @@
                         }">
         <xsl:call-template name="check-branches">
           <xsl:with-param name="branch" select="$remaining-branches[1]"/>
-          <xsl:with-param name="open-branches"
-                          select="if (.?status = 200)
-                                  then ($open-branches, $branch)
-                                  else $open-branches"/>
+          <xsl:with-param name="open-branches" select="$found-branches"/>
           <xsl:with-param name="remaining-branches" select="$remaining-branches[position() gt 1]"/>
         </xsl:call-template>
       </ixsl:schedule-action>
     </xsl:when>
-    <xsl:when test="exists($open-branches)">
-      <xsl:result-document href="#pull-requests" method="ixsl:replace-content">
+    <xsl:when test="exists($found-branches)">
+      <xsl:result-document href="#branches" method="ixsl:replace-content">
         <div>
           <h2>Formatted branches</h2>
           <table>
@@ -177,7 +181,7 @@
               </tr>
             </thead>
             <tbody>
-              <xsl:for-each select="$open-branches">
+              <xsl:for-each select="$found-branches">
                 <tr>
                   <td>
                     <a href="https://qt4cg.org/branch/{.?name}/">
