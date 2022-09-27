@@ -91,7 +91,11 @@
 					/></label>
 				<def>
 					<xsl:copy-of select="$fspec/fos:signatures/(@diff, @at)"/>
-					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>				
+					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>
+					<xsl:for-each select="$fspec/fos:signatures/fos:proto/fos:arg[@default]">
+						<p>The <code>$<xsl:value-of select="@name"/></code> argument is optional
+						and defaults to <code><xsl:value-of select="@default"/></code>.</p>
+					</xsl:for-each>
 				</def>
 			</gitem>
 			<xsl:if test="$fspec/fos:properties">
