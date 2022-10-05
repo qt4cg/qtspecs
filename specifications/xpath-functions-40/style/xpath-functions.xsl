@@ -186,6 +186,16 @@ table.data table.index {
  border-bottom:2px !important ;
 }
 
+table.proto tr td {
+  font-family: monospace;
+  padding-right: 0.5em;
+}
+table.proto tr.arg td:first-child  {
+  padding-left: 2em;
+}
+table.proto tr.name span.name {
+  font-weight: bold;
+}
 </xsl:text>
 </xsl:param>
 
@@ -446,97 +456,95 @@ table.data table.index {
     </xsl:choose>
   </xsl:variable>
 
-  <xsl:variable name="stringvalue">
-    <xsl:apply-templates select="." mode="stringify"/>
-  </xsl:variable>
-
-  <!-- If the prototype is going to be "too long", use a tabular presentation -->
-
   <div class="proto">
-    <xsl:variable name="small" select="if (string-length(@name) gt 30) then 'small ' else ''"/>
+    <!--<pre><xsl:sequence select="serialize(., map{'method':'xml', 'indent': true()})"/></pre>-->
     <xsl:choose>
-      <xsl:when test="string-length($stringvalue) &gt; 70">
-	       <table class="proto">
-	         <tr>
-	           <td style="vertical-align:baseline">
-              <xsl:if test="count(arg) &gt; 1">
-                <xsl:attribute name="rowspan">
-                  <xsl:value-of select="count(arg)"/>
-                </xsl:attribute>
-              </xsl:if>
-
-              <code class="{$small}function">
+      <xsl:when test="empty(arg)">
+        <table class="proto" border="0">
+          <tr class="name return-type">
+	    <td colspan="3">
+              <code class="function">
+                <xsl:value-of select="$prefix"/>
+                <xsl:value-of select="@name"/>
+              </code>
+              <xsl:text>(</xsl:text>
+              <xsl:text>)</xsl:text>
+              <code class="as">&#160;as&#160;</code>
+              <xsl:choose>
+                <xsl:when test="@returnVaries = 'yes'">
+                  <code class="return-varies">
+                    <xsl:value-of select="@return-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </code>
+                </xsl:when>
+                <xsl:otherwise>
+                  <code class="return-type">
+                    <xsl:value-of select="@return-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </code>
+                </xsl:otherwise>
+              </xsl:choose>
+            </td>
+          </tr>
+        </table>
+      </xsl:when>
+      <xsl:otherwise>
+        <table class="proto" border="0">
+          <tr class="name">
+	    <td colspan="3">
+              <code class="function">
                 <xsl:value-of select="$prefix"/>
                 <xsl:value-of select="@name"/>
               </code>
               <xsl:text>(</xsl:text>
             </td>
-
-            <xsl:choose>
-              <xsl:when test="arg">
-                <xsl:apply-templates select="arg[1]" mode="tabular">
-                  <xsl:with-param name="small" select="$small" tunnel="yes"/>
-                </xsl:apply-templates>
-              </xsl:when>
-              <xsl:otherwise>
-                <td style="vertical-align:baseline">
-                  <xsl:text>)</xsl:text>
-                  <xsl:if test="@return-type != 'nil'">
-                    <code class="as">&#160;as&#160;</code>
-                    <xsl:choose>
-                      <xsl:when test="@returnVaries = 'yes'">
-                        <code class="return-varies">
-                          <xsl:value-of select="@return-type"/>
-                          <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                        </code>
-                      </xsl:when>
-                      <xsl:otherwise>
-                        <code class="return-type">
-                          <xsl:value-of select="@return-type"/>
-                          <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                        </code>
-                      </xsl:otherwise>
-                    </xsl:choose>
-                  </xsl:if>
-                </td>
-              </xsl:otherwise>
-            </xsl:choose>
           </tr>
-          <xsl:for-each select="arg[position() &gt; 1]">
-            <tr>
-              <xsl:apply-templates select="." mode="tabular">
-                <xsl:with-param name="small" select="$small" tunnel="yes"/>
-              </xsl:apply-templates>
+
+          <xsl:for-each select="arg">
+            <xsl:variable name="last" select="position() eq last()"/>
+            <tr class="arg">
+              <td>
+                <code>$<xsl:sequence select="@name/string()"/></code>
+                <xsl:if test="not(@type) and not($last)">,</xsl:if>
+              </td>
+              <td>
+                <xsl:if test="@type">
+                  <code class="as">as&#160;</code>
+                  <code class="type"><xsl:sequence select="@type/string()"/></code>
+                  <xsl:if test="not (@default) and not($last)">,</xsl:if>
+                </xsl:if>
+              </td>
+              <td>
+                <xsl:if test="@default">
+                  <code class="assign">:= </code>
+                  <code><xsl:sequence select="@default/string()"/></code>
+                  <xsl:if test="not($last)">,</xsl:if>
+                </xsl:if>
+              </td>
             </tr>
           </xsl:for-each>
-        </table>
-      </xsl:when>
 
-      <xsl:otherwise>
-        <code class="function">
-          <xsl:value-of select="$prefix"/>
-          <xsl:value-of select="@name"/>
-        </code>
-        <xsl:text>(</xsl:text>
-        <xsl:apply-templates/>
-        <xsl:text>)</xsl:text>
-        <xsl:if test="@return-type != 'nil'">
-          <code class="as">&#160;as&#160;</code>
-          <xsl:choose>
-            <xsl:when test="@returnVaries = 'yes'">
-              <code class="return-varies">
-                <xsl:value-of select="@return-type"/>
-                <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-              </code>
-            </xsl:when>
-            <xsl:otherwise>
-              <code class="return-type">
-                <xsl:value-of select="@return-type"/>
-                <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-              </code>
-            </xsl:otherwise>
-          </xsl:choose>
-        </xsl:if>
+          <tr class="return-type">
+	    <td colspan="3">
+              <xsl:text>)</xsl:text>
+              <code class="as">&#160;as&#160;</code>
+              <xsl:choose>
+                <xsl:when test="@returnVaries = 'yes'">
+                  <code class="return-varies">
+                    <xsl:value-of select="@return-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </code>
+                </xsl:when>
+                <xsl:otherwise>
+                  <code class="return-type">
+                    <xsl:value-of select="@return-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </code>
+                </xsl:otherwise>
+              </xsl:choose>
+            </td>
+          </tr>
+        </table>
       </xsl:otherwise>
     </xsl:choose>
   </div>
