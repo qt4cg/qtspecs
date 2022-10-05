@@ -25,6 +25,20 @@
 <xsl:param name="strikeout.missing.functions" select="0"/>
 
 <xsl:param name="additional.css"><xsl:text>
+#function-finder {
+  position: fixed;
+  background-color: rgb(247, 248, 249);
+  opacity 1;
+  width: 23.5em;
+  border-bottom: 1px solid rgb(135,149,159);
+  padding-bottom: 0.5em;
+  margin-bottom: 4px;
+}
+
+#toc h2 {
+  padding-top: 4em ! important;
+}
+
 div.schemaComp  { border: 4px double gray;
                   margin: 0em 1em;
                   padding: 0em;
@@ -177,7 +191,13 @@ table.data table.index {
 
 <xsl:param name="toc.level" select="3"/>
 
-  <xsl:template name="finder" xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace" exclude-result-prefixes="fos">
+<xsl:key name="id" match="*" use="@id"/>
+
+  <xsl:template name="finder"
+                xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
+                exclude-result-prefixes="fos">
+    <xsl:variable name="spec" select="./root()"/>
+
     <xsl:variable name="catalog" select="doc('../src/function-catalog.xml')"/>
     <xsl:variable name="prefixes" select="('fn', 'array', 'map', 'math', 'op')"/>
     <xsl:variable name="body" select="."/>
@@ -209,7 +229,19 @@ table.data table.index {
                   onchange="location.hash = this.value">
             <xsl:for-each select="$catalog//fos:function[(@prefix, 'fn')[1] = $prefix]">
               <xsl:sort select="@name" lang="en"/>
-              <option value="{local:target-id(concat($prefix, ':', @name))}"><xsl:value-of select="@name"/></option>
+              <xsl:variable name="target" select="local:target-id(concat($prefix, ':', @name))"/>
+              <option value="{$target}">
+                <xsl:if test="empty(key('id', $target, $spec))">
+                  <xsl:attribute name="disabled" select="'disabled'"/>
+                </xsl:if>
+                <xsl:value-of select="@name"/>
+              </option>
+
+              <xsl:if test="empty(key('id', $target, $spec))">
+                <xsl:message select="'Function '
+                                     || $prefix || ':' || @name
+                                     || ' in catalog but not spec'"/>
+              </xsl:if>
             </xsl:for-each>
           </select>  
         </xsl:for-each>
