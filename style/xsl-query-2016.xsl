@@ -1273,7 +1273,19 @@ th.issue-toc-head { border-bottom-color: black;
   <!-- nt: production non-terminal -->
   <!-- make a link to the non-terminal's definition -->
   <xsl:template match="nt">
-    <xsl:variable name="target" select="key('ids', @def)"/>
+    <!-- Something has changed about how productions are linked
+         in the xslt 4.0 spec. I'm not sure exactly what.
+         This is a total hack. -->
+    <xsl:variable name="prod-def" select="string(@def)"/>
+    <xsl:variable name="doc-def"
+                  select="if (starts-with($prod-def, 'prod-'))
+                          then 'doc-' || substring($prod-def, 6)
+                          else $prod-def"/>
+    <xsl:variable name="target"
+                  select="if (key('ids', $prod-def))
+                          then key('ids', $prod-def)
+                          else key('ids', $doc-def)"/>
+
     <xsl:if test="not($target)">
       <xsl:message>
         <xsl:text>Error: cannot resolve nt: </xsl:text>

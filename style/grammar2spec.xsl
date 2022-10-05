@@ -649,7 +649,7 @@
         we show the annotations in the main body too.
         See Bug 29702.
       -->
-      <xsl:if test="$result_id_docprod_part = 'prod-' or ends-with($base_language_id, '31')">
+      <xsl:if test="$result_id_docprod_part = 'prod-' or ends-with($base_language_id, '40')">
         <xsl:if test="@whitespace-spec">
           <xsl:call-template name="do-whitespace-comment"/>
         </xsl:if>
