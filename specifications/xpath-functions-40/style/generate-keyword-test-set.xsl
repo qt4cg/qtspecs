@@ -12,6 +12,20 @@
    <xsl:strip-space elements="*"/>
    
    <xsl:template match="/">
+     <xsl:comment> ************************************************** </xsl:comment>
+     <xsl:text>&#10;</xsl:text>
+     <xsl:comment> * This file is generated automatically by the    * </xsl:comment>
+     <xsl:text>&#10;</xsl:text>
+     <xsl:comment> * qtspecs build process. It is committed to the  * </xsl:comment>
+     <xsl:text>&#10;</xsl:text>
+     <xsl:comment> * test repository automatically. Any changes you * </xsl:comment>
+     <xsl:text>&#10;</xsl:text>
+     <xsl:comment> * make to this file will be lost on the next     * </xsl:comment>
+     <xsl:text>&#10;</xsl:text>
+     <xsl:comment> * build. Have a nice day. The cake is a lie.     * </xsl:comment>
+     <xsl:comment> ************************************************** </xsl:comment>
+     <xsl:text>&#10;</xsl:text>
+
       <test-set name="misc-BuiltInKeywords">
          <description>Tests for keyword argument names to built-in functions: 4.0 proposal</description>        
          <dependency type="spec" value="XP40+ XQ40+"/>
