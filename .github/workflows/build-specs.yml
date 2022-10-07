@@ -5,19 +5,50 @@ jobs:
     runs-on: ubuntu-latest
     env:
       HAVE_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN != '' }}
+      # There’s no particular reason why the TEST_REPOSITORY should be
+      # a secret. This is the only way I can think of to initialize
+      # a variable based on the repository that the action is running in,
+      # rather than the *contents* of that repository.
+      UPDATE_TESTS: ${{ secrets.TEST_REPOSITORY != '' && secrets.ACCESS_TOKEN != '' }}
+      PUBLISH_TESTS_FROM: "master"
       BRANCH_NAME: ${{ github.ref_name }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
       - name: Install dependencies
         run: sudo apt-get install tidy graphviz
+
+      - name: Checkout the tests repository
+        if: ${{ env.UPDATE_TESTS == 'true' && github.ref_name == env.PUBLISH_TESTS_FROM }}
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ secrets.TEST_REPOSITORY }}
+          token: ${{ secrets.ACCESS_TOKEN }}
+          ref: 'master'
+
+      - name: Save the tests
+        if: ${{ env.UPDATE_TESTS == 'true' && github.ref_name == env.PUBLISH_TESTS_FROM }}
+        run: |
+          mkdir -p /tmp/test-suite/{app,array,docs,fn,map,math,misc,op,prod,ser,upd,xs}
+          rsync -ar ./app/ /tmp/test-suite/app/
+          rsync -ar ./array/ /tmp/test-suite/array/
+          rsync -ar ./docs/ /tmp/test-suite/docs/
+          rsync -ar ./fn/ /tmp/test-suite/fn/
+          rsync -ar ./map/ /tmp/test-suite/map/
+          rsync -ar ./math/ /tmp/test-suite/math/
+          rsync -ar ./misc/ /tmp/test-suite/misc/
+          rsync -ar ./op/ /tmp/test-suite/op/
+          rsync -ar ./prod/ /tmp/test-suite/prod/
+          rsync -ar ./ser/ /tmp/test-suite/ser/
+          rsync -ar ./upd/ /tmp/test-suite/upd/
+          rsync -ar ./xs/ /tmp/test-suite/xs/
+
+      - name: Checkout the specifications
+        uses: actions/checkout@v3
 
       - name: Build
         run: |
           ./gradlew
 
-      - name: Deploy to specifications
+      - name: Deploy master to specifications
         if: ${{ env.HAVE_ACCESS_TOKEN == 'true' && github.ref_name == 'master' }}
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -26,7 +57,7 @@ jobs:
           branch: gh-pages
           target-folder: /specifications
 
-      - name: Deploy to branch
+      - name: Deploy other branches to branch
         if: ${{ env.HAVE_ACCESS_TOKEN == 'true' && github.ref_name != 'master' }}
         uses: JamesIves/github-pages-deploy-action@v4
         with:
@@ -34,3 +65,28 @@ jobs:
           token: ${{ secrets.ACCESS_TOKEN }}
           branch: gh-pages
           target-folder: /branch/${{ github.ref_name }}
+
+      - name: Update the saved tests
+        if: ${{ env.UPDATE_TESTS == 'true' && github.ref_name == env.PUBLISH_TESTS_FROM }}
+        run: rsync -ar build/test-suite/ /tmp/test-suite/
+
+      - name: Checkout the tests repository again
+        if: ${{ env.UPDATE_TESTS == 'true' && github.ref_name == env.PUBLISH_TESTS_FROM }}
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ secrets.TEST_REPOSITORY }}
+          token: ${{ secrets.ACCESS_TOKEN }}
+          ref: 'master'
+
+      - name: Update the tests repository
+        run: rsync -ar /tmp/test-suite/ ./
+
+      - name: Deploy the updated tests
+        if: ${{ env.UPDATE_TESTS == 'true' && github.ref_name == env.PUBLISH_TESTS_FROM }}
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          repository-name: ${{ secrets.TEST_REPOSITORY }}
+          token: ${{ secrets.ACCESS_TOKEN }}
+          branch: master
+          folder: .
+          target-folder: /
