@@ -92,10 +92,6 @@
 				<def>
 					<xsl:copy-of select="$fspec/fos:signatures/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>
-					<xsl:for-each select="$fspec/fos:signatures/fos:proto/fos:arg[@default]">
-						<p>The <code>$<xsl:value-of select="@name"/></code> argument is optional
-						and defaults to <code><xsl:value-of select="@default"/></code>.</p>
-					</xsl:for-each>
 				</def>
 			</gitem>
 			<xsl:if test="$fspec/fos:properties">
@@ -211,7 +207,7 @@
 
 	<xsl:template match="fos:arg">
 		<arg name="{@name}" type="{@type}">
-			<xsl:copy-of select="@diff, @at"/>
+			<xsl:copy-of select="@diff, @at, @default"/>
 		</arg>
 	</xsl:template>
 	
@@ -227,7 +223,7 @@
 				</xsl:variable>
 				<xsl:value-of select="serialize(array{$fields}, map{'method':'json'})"/>
 			</xsl:attribute>
-			<xsl:copy-of select="@diff, @at"/>
+			<xsl:copy-of select="@diff, @at, @default"/>
 		</arg>
 	</xsl:template>
 
