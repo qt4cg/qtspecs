@@ -1,12 +1,25 @@
 window.onload = function() {
   document.querySelector("html").className = "js";
 
-  const webroot = "https://qt4cg.org";
-  SaxonJS.getResource({"location": `${webroot}/dashboard.json`,
+  // Work out the protocol and hostname of our source...
+  let location = window.location.href;
+  let webroot = "";
+  let pos = location.indexOf("//");
+  webroot = location.substring(0, pos+2);
+  location = location.substring(pos+2);
+  pos = location.indexOf("/");
+  if (pos > 0) {
+    webroot += location.substring(0, pos);
+  } else {
+    webroot += location;
+  }
+
+  const configJson = `${webroot}/dashboard.json`;
+  SaxonJS.getResource({"location": configJson,
                        "type": "json"})
     .then(config => {
       SaxonJS.transform({
-        "stylesheetLocation": "dashboard.sef.json?date=2022-09-29-1",
+        "stylesheetLocation": "dashboard.sef.json?date=2022-10-08-1",
         "initialTemplate": "Q{}main",
         "stylesheetParams": {
           "Q{}config": config
@@ -20,7 +33,7 @@ window.onload = function() {
       // go over the limit. (Perhaps someday I'll make a version that
       // you can login with for a higher limit. But really, this
       // configuration doesn't change very often.
-      console.log(`Failed to load ${webroot}/dashboard.json; using defaults`);
+      console.log(`Failed to load ${configJson}; using defaults`);
       const config = {
         "web-root": webroot,
         "main-branch-name": "master",

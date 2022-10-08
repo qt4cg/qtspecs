@@ -357,17 +357,49 @@
 <xsl:template match="*" mode="show-map-results">
   <xsl:param name="title" as="element()"/>
   <xsl:param name="documents" as="map(*)*"/>
+
+  <!-- THERE IS A TOTAL HACK HERE TO SUPPORT THE DeltaXML DIFFS -->
   <xsl:result-document href="?." method="ixsl:replace-content">
     <xsl:sequence select="$title"/>
     <xsl:choose>
       <xsl:when test="exists($documents)">
         <ul>
           <xsl:for-each select="$documents">
-            <li>
-              <a href="{.?uri}">
-                <xsl:sequence select="?title"/>
-              </a>
-            </li>
+            <xsl:choose>
+              <xsl:when test="contains(.?uri, 'autodiff')">
+                <!-- nop, not this one -->
+              </xsl:when>
+              <xsl:otherwise>
+                <xsl:variable name="dxml" as="map(*)?">
+                  <xsl:choose>
+                    <xsl:when test="ends-with(.?uri, 'xquery-40.html')">
+                      <xsl:sequence
+                          select="f:find-dxml($documents, .?dir, '/xquery-40-autodiff.html')"/>
+                    </xsl:when>
+                    <xsl:when test="ends-with(.?uri, 'xpath-40.html')">
+                      <xsl:sequence
+                          select="f:find-dxml($documents, .?dir, '/xpath-40-autodiff.html')"/>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <xsl:sequence
+                          select="f:find-dxml($documents, .?dir, '/autodiff.html')"/>
+                    </xsl:otherwise>
+                  </xsl:choose>
+                </xsl:variable>
+                <li>
+                  <a href="{.?uri}">
+                    <xsl:sequence select="?title"/>
+                  </a>
+                  <xsl:if test="exists($dxml)">
+                    <xsl:text>   (</xsl:text>
+                    <a href="{$dxml?uri}">
+                      <xsl:sequence select="$dxml?title"/>
+                    </a>
+                    <xsl:text>)</xsl:text>
+                  </xsl:if>
+                </li>
+              </xsl:otherwise>
+            </xsl:choose>
           </xsl:for-each>
         </ul>
       </xsl:when>
@@ -377,6 +409,27 @@
     </xsl:choose>
   </xsl:result-document>
 </xsl:template>
+
+<xsl:function name="f:find-dxml" as="map(*)?">
+  <xsl:param name="documents" as="map(*)*"/>
+  <xsl:param name="dir" as="xs:string"/>
+  <xsl:param name="suffix" as="xs:string"/>
+
+  <!-- we should never match more than one, but just in case... -->
+  <xsl:variable name="candidates" as="map(*)*">
+    <xsl:for-each select="$documents">
+      <xsl:if test=".?dir = $dir and ends-with(.?uri, $suffix)">
+        <xsl:sequence select="."/>
+      </xsl:if>
+    </xsl:for-each>
+  </xsl:variable>
+
+  <xsl:if test="count($candidates) gt 1">
+    <xsl:message select="'Warning: multiple find-dxml candidates!?'"/>
+  </xsl:if>
+
+  <xsl:sequence select="$candidates[1]"/>
+</xsl:function>
 
 <!-- ============================================================ -->
 
@@ -471,7 +524,7 @@
         <xsl:variable name="comm" select="map:get($ignore, $community)"/>
         <xsl:if test="$comm instance of map(*)
                       and map:contains($comm, $repository)">
-          <xsl:sequence select="map:get($comm, $repository)?pulls ! xs:integer(.)"/>
+          <xsl:sequence select="array:flatten(map:get($comm, $repository)?pulls) ! xs:integer(.)"/>
         </xsl:if>
       </xsl:if>
     </xsl:if>
