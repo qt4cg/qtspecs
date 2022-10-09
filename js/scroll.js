@@ -1,5 +1,3 @@
-/* JavaScript */
-
 class DXmlView {
   constructor() {
     this.body = document.querySelector("body");
@@ -47,7 +45,7 @@ class DXmlView {
     this.visible_offset = [];
     this.recalculate = true;
 
-    this.fadingMessage(`  (${this.all_diff.length.toLocaleString()} differences)`);
+    this.fadingMessage(`  (${this.xml_diff.length.toLocaleString()} differences)`);
   }
 
   fadingMessage(message) {
@@ -117,7 +115,7 @@ class DXmlView {
     if (cur_diff < this.visible_diff.length) {
       window.scrollTo(0, curOffset - halfY);
     } else {
-      this.fadingMessage("The last diff is visible.");
+      this.fadingMessage("There are no more following differences.");
     }
   }
 
@@ -145,7 +143,7 @@ class DXmlView {
         window.scrollTo(0, curOffset - halfY);
       }
     } else {
-      this.fadingMessage("The first diff is visible.");
+      this.fadingMessage("The are no more preceding differences.");
     }
   }
 
@@ -164,15 +162,15 @@ class DXmlView {
   view_old() {
     this.all_diff.forEach(span => {
       let displayType = this.displayType(span);
-      if (this.new_classes.includes(span.className) || this.mod_classes.includes(span.className)) {
-        span.style.display = "none";
-      } else {
+      if (this.old_classes.includes(span.className) || this.del_classes.includes(span.className)) {
         span.style.display = displayType;
         span.style.background="#FFF";
         //need to take border off images
         span.querySelectorAll("img").forEach(img => {
           img.style.border = "none";
         });
+      } else {
+        span.style.display = "none";
       }
     });
   }
@@ -219,6 +217,8 @@ class DXmlView {
     });
   }
 }
+
+// I'm not sure this is the cleanest approach...
 
 let dxmlview = new DXmlView();
 window.scroll_to = function(direction) {
