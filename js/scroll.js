@@ -44,6 +44,7 @@ class DXmlView {
     this.visible_diff = [];
     this.visible_offset = [];
     this.recalculate = true;
+    this.fading = false;
 
     this.fadingMessage(`  (${this.xml_diff.length.toLocaleString()} differences)`);
   }
@@ -54,13 +55,18 @@ class DXmlView {
       span.innerHTML = message;
       span.className = "autoshow";
 
-      setTimeout(function(){
-        span.className = "autohide";
+      if (!this.fading) {
+        this.fading = true;
+        let outer = this;
         setTimeout(function(){
-          span.innerHTML = "";
-          span.className = "";
-        }, 5000);
-      }, 100);
+          span.className = "autohide";
+          setTimeout(function(){
+            span.innerHTML = "";
+            span.className = "";
+            outer.fading = false;
+          }, 5000);
+        }, 100);
+      }
     }
   }
   
@@ -114,6 +120,7 @@ class DXmlView {
 
     if (cur_diff < this.visible_diff.length) {
       window.scrollTo(0, curOffset - halfY);
+      this.fadingMessage(`Difference ${cur_diff.toLocaleString()} of ${this.xml_diff.length.toLocaleString()}.`);
     } else {
       this.fadingMessage("There are no more following differences.");
     }
@@ -141,6 +148,7 @@ class DXmlView {
       curOffset = this.visible_offset[cur_diff];
       if (cur_diff < this.visible_diff.length) {
         window.scrollTo(0, curOffset - halfY);
+        this.fadingMessage(`Difference ${cur_diff.toLocaleString()} of ${this.xml_diff.length.toLocaleString()}.`);
       }
     } else {
       this.fadingMessage("The are no more preceding differences.");
