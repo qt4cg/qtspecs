@@ -9,39 +9,4 @@
 
 <xsl:mode on-no-match="shallow-copy"/>
 
-<xsl:template match="html:head/html:script">
-  <!-- replace script with a new bit of styling -->
-  <link rel="stylesheet" href="/css/autodiff.css"/>
-</xsl:template>
-
-<xsl:template match="html:body">
-  <copy>
-    <xsl:apply-templates select="@*, node()"/>
-    <script src="/js/scroll.js"/>
-  </copy>
-</xsl:template>
-
-<xsl:template match="html:body/html:div[contains(@style, 'position:fixed')]">
-  <div style="position:fixed; clear:both; top:0px">
-    <p>
-      <a class="button" onclick="view('old')">
-        View Old
-      </a>
-      <a class="button" onclick="view('new')">
-        View New
-      </a>
-      <a class="button" onclick="view('both')">
-        View Both
-      </a>
-      <a class="button" onclick="scroll_to('prev')">
-        Previous
-      </a>
-      <a class="button" onclick="scroll_to('next')">
-        Next
-      </a>
-      <span class="autoshow" id="__autodiff__"></span>
-    </p>
-  </div>
-</xsl:template>
-
 </xsl:stylesheet>
