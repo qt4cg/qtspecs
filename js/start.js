@@ -19,7 +19,7 @@ window.onload = function() {
                        "type": "json"})
     .then(config => {
       SaxonJS.transform({
-        "stylesheetLocation": "dashboard.sef.json?date=2022-10-08-1",
+        "stylesheetLocation": "dashboard.sef.json?date=2022-10-09-1",
         "initialTemplate": "Q{}main",
         "stylesheetParams": {
           "Q{}config": config

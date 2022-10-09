@@ -391,11 +391,13 @@
                     <xsl:sequence select="?title"/>
                   </a>
                   <xsl:if test="exists($dxml)">
-                    <xsl:text>   (</xsl:text>
-                    <a href="{$dxml?uri}">
-                      <xsl:sequence select="$dxml?title"/>
-                    </a>
-                    <xsl:text>)</xsl:text>
+                    <span class="diffs">
+                      <xsl:text> (</xsl:text>
+                      <a href="{$dxml?uri}">
+                        <xsl:sequence select="$dxml?title"/>
+                      </a>
+                      <xsl:text>)</xsl:text>
+                    </span>
                   </xsl:if>
                 </li>
               </xsl:otherwise>
@@ -629,15 +631,19 @@
         <xsl:variable name="body" select="parse-json($context?body)"/>
         <xsl:variable name="files" select="array:flatten($body?files) ! .?filename"/>
         <xsl:if test="exists($files)">
-          <h5>Changed files</h5>
-          <!-- It would be nice to link to the diffs for each file, but CORS
-               prevents us from reading the GitHub page and I have no idea
-               how to predict the fragment identifiers for each file. -->
-          <ul class="changed-files">
-            <xsl:for-each select="$files">
-              <li>{.}</li>
-            </xsl:for-each>
-          </ul>
+          <details>
+            <summary>
+              <span class="fake-h5">Changed files</span>
+            </summary>
+            <!-- It would be nice to link to the diffs for each file, but CORS
+                 prevents us from reading the GitHub page and I have no idea
+                 how to predict the fragment identifiers for each file. -->
+            <ul class="changed-files">
+              <xsl:for-each select="$files">
+                <li>{.}</li>
+              </xsl:for-each>
+            </ul>
+          </details>
         </xsl:if>
       </xsl:when>
       <xsl:otherwise>
