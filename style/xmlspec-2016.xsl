@@ -2231,6 +2231,24 @@
       <xsl:apply-templates/>
     </var>
   </xsl:template>
+  
+  <xsl:template match="var[matches(., '[A-Z][0-9]')]">
+    <var>
+      <xsl:value-of select="substring(., 1, 1)"/>
+      <sub><xsl:value-of select="substring(., 2, 1)"/></sub>
+    </var>
+  </xsl:template>
+  
+  <xsl:template match="var[contains(., '/')]">
+    <var>
+      <xsl:value-of select="substring-before(., '/')"/>
+      <sub><xsl:value-of select="substring-after(., '/')"/></sub>
+    </var>
+  </xsl:template>
+  
+  <xsl:template match="var[matches(., '[A-Z]''')]">
+    <var><xsl:value-of select="translate(., '''', '&#x2032;')"/></var>
+  </xsl:template>  
 
   <!-- vc: validity check reference in a formal production -->
   <xsl:template match="vc">
