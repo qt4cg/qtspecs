@@ -548,9 +548,9 @@
         <xsl:sort select=".?number" order="descending"/>
         <xsl:choose>
           <xsl:when test=".?number = $useful-pulls">
-            <div class="pull-request" x-pull="{.?number}"
+            <div class="pull-request" x-pull="{.?number}" id="pr-{.?number}"
                  x-base="{.?base?sha}" x-head="{.?head?sha}">
-              <h4>{.?title}</h4>
+              <h4>PR #{.?number}: {.?title}</h4>
               <xsl:choose>
                 <xsl:when test="normalize-space(.?body) = ''">
                   <p>
