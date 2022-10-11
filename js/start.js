@@ -14,12 +14,12 @@ window.onload = function() {
     webroot += location;
   }
 
-  const configJson = `${webroot}/dashboard.json`;
+  const configJson = `${webroot}/dashboard.json?date=2022-10-11-1`;
   SaxonJS.getResource({"location": configJson,
                        "type": "json"})
     .then(config => {
       SaxonJS.transform({
-        "stylesheetLocation": "dashboard.sef.json?date=2022-10-09-1",
+        "stylesheetLocation": "dashboard.sef.json?date=2022-10-11-1",
         "initialTemplate": "Q{}main",
         "stylesheetParams": {
           "Q{}config": config
