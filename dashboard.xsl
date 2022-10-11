@@ -564,11 +564,13 @@
                 <xsl:otherwise>
                   <details>
                     <summary>
-                      <xsl:text>Pull request </xsl:text>
-                      <a href="{.?html_url}">#{.?number}</a>
-                      <xsl:text> by </xsl:text>
-                      <a href="{.?user?html_url}">{.?user?login}</a>
-                      <xsl:text>.</xsl:text>
+                      <span>
+                        <xsl:text>Pull request </xsl:text>
+                        <a href="{.?html_url}">#{.?number}</a>
+                        <xsl:text> by </xsl:text>
+                        <a href="{.?user?html_url}">{.?user?login}</a>
+                        <xsl:text>.</xsl:text>
+                      </span>
                     </summary>
                     <xsl:variable name="id" select="'pr' || .?number || '-desc'"/>
                     <div class="prdesc" id="{$id}">
