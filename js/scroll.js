@@ -8,13 +8,18 @@ class DXmlView {
     this.add_classes = ["add_version"];
     this.mod_classes = ["modify_version"];
 
+    this.all_classes = [];
+    this.old_classes.forEach(name => { this.all_classes.push(name); });
+    this.new_classes.forEach(name => { this.all_classes.push(name); });
+    this.del_classes.forEach(name => { this.all_classes.push(name); });
+    this.add_classes.forEach(name => { this.all_classes.push(name); });
+    this.mod_classes.forEach(name => { this.all_classes.push(name); });
+
     // Turn the classes into selector patterns
     let patterns = [];
-    this.old_classes.forEach(name => { patterns.push("."+name); });
-    this.new_classes.forEach(name => { patterns.push("."+name); });
-    this.del_classes.forEach(name => { patterns.push("."+name); });
-    this.add_classes.forEach(name => { patterns.push("."+name); });
-    this.mod_classes.forEach(name => { patterns.push("."+name); });
+    this.all_classes.forEach(name => { patterns.push("."+name); });
+
+    this.all_selector = patterns.join(",");
 
     // Select any element in the ToC; we want to exclude these
     // because they're in a separate scroll and that messes with
@@ -34,7 +39,7 @@ class DXmlView {
 
     this.all_diff = [];
     this.xml_diff = [];
-    document.querySelectorAll(patterns.join(",")).forEach(item => {
+    document.querySelectorAll(this.all_selector).forEach(item => {
       this.all_diff.push(item);
       if (!this.toc_diff.includes(item)) {
         this.xml_diff.push(item);
@@ -45,6 +50,7 @@ class DXmlView {
     this.visible_offset = [];
     this.recalculate = true;
     this.fading = false;
+    this.stylemap = new Map();
 
     this.fadingMessage(`  (${this.xml_diff.length.toLocaleString()} differences)`);
   }
@@ -168,6 +174,7 @@ class DXmlView {
   }
 
   view_old() {
+    this.restore_view();
     this.all_diff.forEach(span => {
       let displayType = this.displayType(span);
       if (this.old_classes.includes(span.className) || this.del_classes.includes(span.className)) {
@@ -184,6 +191,7 @@ class DXmlView {
   }
 
   view_new() {
+    this.restore_view();
     this.all_diff.forEach(span => {
       let displayType = this.displayType(span);
       if (this.new_classes.includes(span.className) || this.add_classes.includes(span.className)) {
@@ -200,6 +208,7 @@ class DXmlView {
   }
 
   view_both() {
+    this.restore_view();
     this.all_diff.forEach(span => {
       let displayType= this.displayType(span);
       if (this.new_classes.includes(span.className)) {
@@ -224,6 +233,106 @@ class DXmlView {
       }
     });
   }
+
+  view_only() {
+    this.restore_view();
+    this.recursediffs(document.querySelector("body"));
+    let buttons = document.querySelector("#_autodiff_buttons");
+    if (buttons) {
+      buttons.style.display = "block";
+    }
+    this.recalculate = true;
+  }
+
+  restore_view() {
+    if (this.stylemap.size === 0) {
+      return;
+    }
+
+    const nodeIter = this.stylemap.entries();
+    let item = nodeIter.next();
+    while (!item.done) {
+      const node = item.value[0];
+      for (const [key, value] of Object.entries(item.value[1])) {
+        if (node.style) {
+          node.style[key] = value;
+        } else {
+          node.style.display = value;
+        }
+      }
+      item = nodeIter.next();
+    }
+
+    this.stylemap.clear();
+    this.recalculate = true;
+  }
+   
+  recursediffs(root) {
+    for (const child of root.children) {
+      this.stylemap.set(child, {'display': child.style.display});
+
+      // Don't bother computing the intersection if child.classList is empty
+      let intersect = [];
+      if (child.classList.length > 0) {
+        intersect = this.all_classes.filter(name => child.classList.contains(name));
+      }
+      
+      if (intersect.length > 0) {
+        this.find_header(child);
+      } else {
+        if (child.querySelector(this.all_selector)) {
+          this.recursediffs(child);
+        } else {
+          child.style.display = "none";
+          }
+      }
+    }
+  }
+
+  find_header(node) {
+    if (["H1", "H2", "H3", "H4", "H5", "H6"].includes(node.nodeName)) {
+      let props = this.stylemap.get(node);
+      node.style.display = props["display"];
+      if (!("border-top" in props)) {
+        props["border-top"] = node.style["border-top"];
+        props["margin-top"] = node.style["margin-top"];
+        props["padding-top"] = node.style["padding-top"];
+      }
+      node.style["border-top"] = "6px dotted #ff5555";
+      node.style["padding-top"] = "20px";
+      node.style["margin-top"] = "20px";
+      return;
+    }
+
+    if (node.nodeName == "BODY") {
+      return;
+    }
+
+    while (node.previousSibling) {
+      node = node.previousSibling;
+      if ("style" in node) {
+        let props = this.stylemap.get(node);
+        node.style.display = props["display"];
+      }
+      if (["H1", "H2", "H3", "H4", "H5", "H6"].includes(node.nodeName)) {
+        let props = this.stylemap.get(node);
+        node.style.display = props["display"];
+        if (!("border-top" in props)) {
+          props["border-top"] = node.style["border-top"];
+          props["margin-top"] = node.style["margin-top"];
+          props["padding-top"] = node.style["padding-top"];
+        }
+        node.style["border-top"] = "6px dotted #ff5555";
+        node.style["padding-top"] = "20px";
+        node.style["margin-top"] = "20px";
+        return;
+      }
+    }
+    node = node.parentNode;
+    if (node) {
+      this.find_header(node);
+    }
+  }
 }
 
 // I'm not sure this is the cleanest approach...
@@ -245,7 +354,14 @@ window.view = function(doc) {
     dxmlview.view_old();
   } else if (doc === "both") {
     dxmlview.view_both();
+  } else if (doc === "only") {
+    dxmlview.view_both();
+    dxmlview.view_only();
   } else {
     console.log("Unexpected view doc: ", doc);
   }
 };
+window.addEventListener('resize', (event) => {
+  console.log("resize");
+  dxmlview.find_visible_diffs();
+});
