@@ -18071,36 +18071,45 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
       <fos:signatures>
          <fos:proto name="build" return-type="map(*)">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="key" type="function(item()) as xs:anyAtomicType" default="fn:identity#1"/>
+            <fos:arg name="key" type="function(item()) as xs:anyAtomicType?" default="fn:identity#1"/>
             <fos:arg name="value" type="function(item()) as item()*" default="fn:identity#1"/>
-            <fos:arg name="combine" type="function(item()*, item()*) as item()*" default="op(',')"/>
+            <fos:arg name="combine" type="function(item()*, item()*) as item()*" default="fn:op(',')"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
+         <fos:property>higher-order</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a map that contains one entry for each item in a supplied input sequence, combining duplicates.</p>
+         <p>Returns a map that typically contains one entry for each item in a supplied input sequence.</p>
       </fos:summary>
       <fos:rules>
          <p>Informally, the function processes each item in <code>$input</code> in order. It calls the <code>$key</code> function on
-            that item to obtain a key value, and the <code>$value</code> function to obtain an associated value. 
-            If the key is not already present in the target map, it adds a new key-value pair with that key 
-            and that value. If the key is already present, it calls the <code>$combine</code> function to combine the existing value 
-            for the key with the new value, and replaces the entry with this combined value.
-         </p>
+            that item to obtain a key value, and the <code>$value</code> function to obtain an associated value.
+            If the key is non-empty, then:</p>
+         <ulist>
+            <item><p>If the key is not already present in the target map, the processor adds a new key-value pair to the map, with that key 
+               and that value. </p></item>
+            <item><p>If the key is already present, the processor calls the <code>$combine</code> function to combine the existing value 
+               for the key with the new value, and replaces the entry with this combined value.</p></item>
+         </ulist>
+            
          <p>More formally, the result of the function is the result of the following expression:</p>
          
          <eg>
             fold-left($input, map{}, ->($map, $next) {
-            let $nextKey := $key($next)
-            let $nextValue := $value($next)
-            return 
-            if (map:contains($map, $nextKey))
-            then map:put($map, $nextKey, $combine($map($nextKey), $nextValue))
-            else map:put($map, $nextKey, $nextValue)
+               let $nextKey := $key($next)
+               let $nextValue := $value($next)
+               return
+                  if (fn:exists($nextKey))
+                  then
+                     if (map:contains($map, $nextKey))
+                     then map:put($map, $nextKey, $combine($map($nextKey), $nextValue))
+                     else map:put($map, $nextKey, $nextValue)
+                  else
+                     $map
             })
          </eg>
       </fos:rules>
@@ -18117,8 +18126,8 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <ulist>
             <item><p><code>->($a, $b){$a}</code> Use the first value and discard the remainder</p></item>
             <item><p><code>->($a, $b){$b}</code> Use the last value and discard the remainder</p></item>
-            <item><p><code>concat(?, ",", ?)</code> Form the string-concatenation of the values, comma-separated</p></item>
-            <item><p><code>op('+')</code> Compute the sum of the values</p></item>
+            <item><p><code>fn:concat(?, ",", ?)</code> Form the string-concatenation of the values, comma-separated</p></item>
+            <item><p><code>fn:op('+')</code> Compute the sum of the values</p></item>
          </ulist>
       </fos:notes>
       <fos:examples>
@@ -18163,7 +18172,8 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          </fos:example>
          <fos:example>
             <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
-               corresponding values represent the number of employees at each distinct location:</p>
+               corresponding values represent the number of employees at each distinct location. Any employees that
+               lack an <code>@location</code> attribute will be excluded from the result.</p>
             <eg>map:build(//employee, ->{@location}, ->{1}, fn:op("+"))</eg>
          </fos:example>
          <fos:example>
