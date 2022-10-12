@@ -18070,56 +18070,120 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
       </fos:examples>
    </fos:function>
 
-   <fos:function name="group-by" prefix="map">
+   <fos:function name="build" prefix="map">
       <fos:signatures>
-         <fos:proto name="group-by" return-type="map(*)">
-            <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="key" type="function(item()) as xs:anyAtomicType?" usage="inspection"/>
+         <fos:proto name="build" return-type="map(*)">
+            <fos:arg name="input" type="item()*"/>
+            <fos:arg name="key" type="function(item()) as xs:anyAtomicType" default="fn:identity#1"/>
+            <fos:arg name="value" type="function(item()) as item()*" default="fn:identity#1"/>
+            <fos:arg name="combine" type="function(item()*, item()*) as item()*" default="op(',')"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
+         <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Constructs a map by taking the items in a sequence and grouping on a key that is computed for each item.</p>
+         <p>Returns a map that contains one entry for each item in a supplied input sequence, combining duplicates.</p>
       </fos:summary>
       <fos:rules>
-         <p>The result of the function <code>map:group-by($seq, $key)</code> is equivalent to the
-            result of the expression:</p>
-         <eg><![CDATA[map:merge(
-  for $item in $input,
-      $k in $key($item)
-    return map:entry($k, $item),
-  map{"duplicates":"combine"})
-            ]]></eg>
+         <p>Informally, the function processes each item in <code>$input</code> in order. It calls the <code>$key</code> function on
+            that item to obtain a key value, and the <code>$value</code> function to obtain an associated value. 
+            If the key is not already present in the target map, it adds a new key-value pair with that key 
+            and that value. If the key is already present, it calls the <code>$combine</code> function to combine the existing value 
+            for the key with the new value, and replaces the entry with this combined value.
+         </p>
+         <p>More formally, the result of the function is the result of the following expression:</p>
+         
+         <eg>
+            fold-left($input, map{}, ->($map, $next) {
+            let $nextKey := $key($next)
+            let $nextValue := $value($next)
+            return 
+            if (map:contains($map, $nextKey))
+            then map:put($map, $nextKey, $combine($map($nextKey), $nextValue))
+            else map:put($map, $nextKey, $nextValue)
+            })
+         </eg>
       </fos:rules>
+      
       <fos:notes>
-         <p>The effect of the function is to create a map that indexes the items in the supplied
-            sequence <code>$input</code>, computing a key for each one by evaluating the supplied
-            function <code>$key</code>. If the <code>$key</code> function returns an empty sequence
-            for an input item, that input item is not included in the index. If two items in the input
-            sequence have the same computed key value, then the index contains an entry in which the two
-            items both appear, retaining order.</p>
-         <p>This function may sometimes be an effective substitute for the <code>xsl:for-each-group</code>
-         instruction in XSLT.</p>
+         <p>Although defined to process the input sequence in order, this is only relevant when combining the entries
+            for duplicate keys.</p>
+         <p>The default function for both <code>$key</code> and <code>$value</code> is the identity function.
+            Although it is permitted to default both, this serves little purpose: usually at least one of these arguments
+            will be supplied.</p>
+         <p>The default action for combining entries with duplicate keys is to perform a sequence-concatenation of the corresponding values,
+            equivalent to the <code>duplicates: combine</code> option on <code>map:merge</code>. Other potentially useful
+            functions for combining duplicates include:</p>
+         <ulist>
+            <item><p><code>->($a, $b){$a}</code> Use the first value and discard the remainder</p></item>
+            <item><p><code>->($a, $b){$b}</code> Use the last value and discard the remainder</p></item>
+            <item><p><code>concat(?, ",", ?)</code> Form the string-concatenation of the values, comma-separated</p></item>
+            <item><p><code>op('+')</code> Compute the sum of the values</p></item>
+         </ulist>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>map:group-by(("January", "February", "March", "April", "May",
+               <fos:expression>map:build((), fn:string#1)</fos:expression>
+               <fos:result>map{}</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>map:build(1 to 10, ->{. mod 3})</fos:expression>
+               <fos:result>map{0: (3, 6, 9), 1: (1, 4, 7, 10), 2: (2, 5, 8)}</fos:result>
+               <fos:postamble>Returns a map with one entry for each distinct value of <code>. mod 3</code>. The
+                  function to compute the value is the identity function, and duplicates are combined by
+                  sequence concatenation.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression>map:build(1 to 5, value := fn:format-integer(?, "w")})</fos:expression>
+               <fos:result>map{1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}</fos:result>
+               <fos:postamble>Returns a map with five entries. The function to compute the key is an identity function, the
+                  function to compute the value invokes <code>fn:format-integer</code>.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression>map:build(("January", "February", "March", "April", "May",
                   "June", "July", "August", "September", "October", "November", "December"), fn:substring(?, 1, 1)})</fos:expression>
                <fos:result>map{"A": ("April", "August"), "D": ("December"), "F": ("February"), "J": ("January", "June", "July"), 
                   "M": ("March", "May"), "N": ("November"), "O": ("October"), "S": ("September")}</fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression>map:build(("apple", "apricot", "banana", "blueberry", "cherry"), 
+                  fn:substring(?, 1, 1), fn:string-length#1, fn:op("+"))</fos:expression>
+               <fos:result>map{"a": 12, "b": 15, "c": 6}</fos:result>
+               <fos:postamble>Constructs a map where the key is the first character of an input item, and where the corresponding value
+                  is the total string-length of the items starting with that character.</fos:postamble>
+            </fos:test>
+            
+            
          </fos:example>
          <fos:example>
-            <p>To index employees by date of birth:</p>
-            <eg>map:group-by(//employee, ->{xs:date(./date-of-birth)})</eg>
+            <p>The following expression creates a map whose keys are employee <code>@ssn</code> values, and whose
+               corresponding values are the employee nodes:</p>
+            <eg>map:build(//employee, ->{@ssn})</eg>
          </fos:example>
-
+         <fos:example>
+            <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
+               corresponding values represent the number of employees at each distinct location:</p>
+            <eg>map:build(//employee, ->{@location}, ->{1}, fn:op("+"))</eg>
+         </fos:example>
+         <fos:example>
+            <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
+               corresponding values contain the employee node for the highest-paid employee at each distinct location:</p>
+            <eg>map:build(//employee, ->{@location}, 
+               combine := ->($a, $b){fn:highest(($a, $b), ->{xs:decimal(@salary)}))</eg>
+         </fos:example>
+         <fos:example>
+            <p>The following expression creates a map allowing efficient access to every element in a document by means
+               of its <code>fn:generate-id</code> value:</p>
+            <eg>map:build(//*, fn:generate-id#1)</eg>
+         </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Proposed for version 4.0 2022-10-11</fos:version>
+      </fos:history>
    </fos:function>
 
    <fos:function name="size" prefix="map">
