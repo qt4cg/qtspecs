@@ -231,12 +231,14 @@ table.proto tr.name span.name {
           <option value="math">math</option>
           <option value="op">op</option>
         </select>
+        <xsl:text> </xsl:text>
         
         <xsl:for-each select="$prefixes">
           <xsl:variable name="prefix" select="."/>
           <select id="select-{$prefix}" 
             style="display: {if ($prefix='fn') then 'inline' else 'none'}" 
                   onchange="location.hash = this.value">
+            <option value="">      — Select a function —</option>
             <xsl:for-each select="$catalog//fos:function[(@prefix, 'fn')[1] = $prefix]">
               <xsl:sort select="@name" lang="en"/>
               <xsl:variable name="target" select="local:target-id(concat($prefix, ':', @name))"/>
@@ -244,7 +246,13 @@ table.proto tr.name span.name {
                 <xsl:if test="empty(key('id', $target, $spec))">
                   <xsl:attribute name="disabled" select="'disabled'"/>
                 </xsl:if>
-                <xsl:value-of select="@name"/>
+                <xsl:variable name="name" select="string(@name)"/>
+                <xsl:variable name="l" select="string-length($name)"/>
+                <xsl:value-of select="if ($l gt 31)
+                                      then substring($name, 1, 14)
+                                           || '…'
+                                           || substring($name, $l - 15)
+                                      else $name"/>
               </option>
 
               <xsl:if test="empty(key('id', $target, $spec))">
