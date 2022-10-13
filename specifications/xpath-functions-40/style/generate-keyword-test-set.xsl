@@ -33,9 +33,7 @@
          <environment name="ka">
             <namespace prefix="math" uri="http://www.w3.org/2005/xpath-functions/math"/>
             <decimal-format name="data" decimal-separator="." grouping-separator=","/>
-            <source role=".">
-               <content><![CDATA[<doc attribute="attr_val"><e/></doc>]]></content>
-            </source>
+            <source role="." file="BuiltInKeywords/simple-doc.xml"/>
          </environment>
          <xsl:apply-templates select="//function"/>
       </test-set>      
