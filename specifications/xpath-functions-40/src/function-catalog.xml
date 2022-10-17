@@ -23491,7 +23491,196 @@ declare function fn:some(
       </fos:history>
    </fos:function>
 
+   <fos:function name="parse-uri" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="parse-uri" return-type="map(xs:string,xs:string)">
+            <fos:arg name="uri" type="xs:string"/>
+            <fos:arg name="options" type="map(*)" default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
 
+      <fos:summary>
+         <p>Parses the URI provided and returns a map of its parts.</p>
+      </fos:summary>
 
+      <fos:rules>
+         <p>The function parses the <code>$uri</code> provided,
+         returning a map containing its constituent parts: scheme,
+         authority components, path, etc.</p>
 
+         <p>If the <code>$uri</code> provided is a relative reference,
+         it is made absolute with respect to the static base URI
+         before parsing it. It is an error XXX if the static base URI
+         is undefined.</p>
+
+         <p>The parts returned are the <code>scheme</code>,
+         <code>userinfo</code>, <code>host</code>, <code>port</code>,
+         <code>path</code>, <code>query</code>, and
+         <code>fragment</code> These are defined in the ABNF for URIs
+         defined in <bibref ref="rfc3986"/>.</p>
+
+         <p>If the <code>$options</code> map contains the key
+         <code>details</code> with the effective boolean value
+         <code>true()</code>, the <code>path</code> and
+         <code>query</code> values are further parsed to provide
+         <code>segments</code> and <code>query-keys</code>.</p>
+
+         <p>The value of the <code>segments</code> key will be the
+         seqeuence of strings that results from tokenizing the path
+         component on the “<code>/</code>” character. Any escaped characters in each
+         segment will be replaced by their literal forms.</p>
+
+         <p>The value of the <code>query-keys</code> key will be
+         a sequence of maps. The <code>query</code> will be split into parts
+         delimited by “<code>&amp;</code>”. Each part will further be split at the
+         first “<code>=</code>”. The string preceding the equal sign, or the whole
+         string if no equal sign is present, will be stored in the map as the value
+         of the key “<code>key</code>”. The string following the equal sign, or the
+         empty string if no equal sign is present, will be stored in the map as the
+         value of the key “<code>value</code>”. Any escaped characters in the keys or
+         values will be replaced by their literal forms.</p>
+      </fos:rules>
+      
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>fn:parse-uri("https://qt4cg.org/specifications/index.html")</fos:expression>
+               <fos:result>map {
+    "scheme": "https",
+    "userinfo": (),
+    "host": "qt4cg.org",
+    "port": (),
+    "path": "/specifications/index.html",
+    "query": (),
+    "fragment": (),
+  }</fos:result>               
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>fn:parse-uri("urn:example:part%3aone:two")</fos:expression>
+               <fos:result>map {
+    "scheme": "urn",
+    "host": (),
+    "path": "example:part%3aone:two"
+  }</fos:result>               
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>fn:parse-uri("http://user@example.com:8080/a%2fb/c+d?a=b&amp;c=d&amp;c=e%26#foo", map{"details": true()})</fos:expression>
+               <fos:result>map {
+    "scheme": "http",
+    "userinfo": "user",
+    "host": "example.com",
+    "port": "8080",
+    "path": "/a%2fb/c+d",
+    "query": "a=b&amp;c=d&amp;c=e%26",
+    "fragment": "foo",
+    "segments": ("a/b", "c d"),
+    "query-keys": ({"key": "a", "value": "b"}, {"key": "c", "value": "d"}, {"key": "c", "value": "e&amp;"}), 
+  }</fos:result>               
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>fn:parse-uri("jar:file://path/to/file.jar!/resource")</fos:expression>
+               <fos:result>map {
+    "scheme": "jar",
+    "host": (),
+    "path": "file://path/to/file.jar!/resource"
+  }</fos:result>               
+            </fos:test>
+         </fos:example>
+
+      </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Proposed on 17 Oct 2022 to resolve
+         <a href="https://github.com/qt4cg/qtspecs/issues/72">issue #72</a>.
+         Not yet accepted.</fos:version>
+      </fos:history>
+   </fos:function>
+
+   <fos:function name="build-uri" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="build-uri" return-type="xs:string">
+            <fos:arg name="parts" type="map(xs:string,xs:string)"/>
+            <fos:arg name="options" type="map(*)" default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+
+      <fos:summary>
+         <p>Constructs a URI from the parts provided.</p>
+      </fos:summary>
+
+      <fos:rules>
+        <p>If the <code>segments</code> key exists in the map, then <code>$path</code> is constructed
+        with <code>string-join($parts?segments ! encode-for-uri(.), "/")</code>,
+        otherwise the value of the <code>path</code> key is used.
+        If the <code>$path</code> value is the empty sequence,
+        the empty string is used for the <code>$path</code> value.</p>
+
+        <p>If the <code>query-keys</code> key exists in the map, the <code>$query</code> is constructed
+        with <code>string-join($parts?query-keys ! concat(encode-for-uri(.?key), "=", encode-for-uri(.?value)), "&amp;")</code>, otherwise the value of the <code>query</code> key is used.</p>
+
+        <p>If the <code>scheme</code> key is absent or is the empty sequence, then
+        <code>$scheme</code> is the scheme of the
+        static base URI, otherwise the value of the <code>scheme</code> key is
+        used. It is an error XXX if there is no static base URI.</p>
+
+        <p>If the <code>host</code> key is absent, then
+        <code>$host</code> is the host of the
+        static base URI, otherwise the value of the <code>host</code> key is used.
+        It is an error XXX if there is no static base URI.</p>
+
+        <p>The <code>$authority</code> is
+        <eg>concat((if (exists($parts?userinfo)) then $parts?userinfo || "@" else ""),
+       $host,
+       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg>
+        It is an error XXX if the <code>$host</code> is the empty sequence and 
+        either <code>$parts?userinfo</code> or <code>$parts?port</code> is not
+        the empty sequence.</p>
+
+        <p>If the <code>$host</code> is the empty sequence,
+        the function returns: <code>concat($scheme, ":", $path)</code>.</p>
+
+        <p>If the <code>$host</code> is not the empty sequence,
+        the function returns:
+        <eg>concat($scheme, "://", $authority, $path,
+       (if (exists($query)) then "?" || $query else ""),
+       (if (exists($parts?fragment)) then "#" || $parts?fragment else "")</eg></p>
+
+       <p>TODO: can non-hierarchical URIs have queries or fragments?</p>
+
+      </fos:rules>
+      
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>fn:build-uri(map {
+    "scheme": "https",
+    "host": "qt4cg.org",
+    "port": (),
+    "path": "/specifications/index.html"
+  })</fos:expression>
+               <fos:result>https://qt4cg.org/specifications/index.html</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Proposed on 17 Oct 2022 to resolve
+         <a href="https://github.com/qt4cg/qtspecs/issues/72">issue #72</a>.
+         Not yet accepted.</fos:version>
+      </fos:history>
+   </fos:function>
 </fos:functions>
