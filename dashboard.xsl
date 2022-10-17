@@ -174,7 +174,7 @@
     <xsl:if test="exists($useful-branches)">
       <h3>Branches</h3>
 
-      <xsl:if test="$main-branch-name = $branches">
+      <xsl:if test="$main-branch-name = $useful-branches">
         <div id="x-{$this/../../@x-name}-{$this/../@x-name}-{$main-branch-name}"
              x-community="{$this/../../@x-name}" x-repository="{$this/../@x-name}"
              x-branch="{$main-branch-name}" class="branch">
@@ -292,7 +292,8 @@
           <xsl:map-entry key="'uri'"
                          select="$base-uri
                                  || (if (ends-with($base-uri, '/')) then '' else '/')
-                                 || $dir || '/' || ."/>
+                                 || (if ($dir eq '') then '' else $dir || '/')
+                                 || ."/>
         </xsl:map>
       </xsl:for-each>
     </xsl:for-each>
@@ -358,9 +359,19 @@
   <xsl:param name="title" as="element()"/>
   <xsl:param name="documents" as="map(*)*"/>
 
+  <xsl:variable name="non-auto-documents" as="map(*)*">
+    <xsl:for-each select="$documents">
+      <xsl:if test="not(contains(.?uri, 'autodiff'))">
+        <xsl:sequence select="."/>
+      </xsl:if>
+    </xsl:for-each>
+  </xsl:variable>
+
   <!-- THERE IS A TOTAL HACK HERE TO SUPPORT THE DeltaXML DIFFS -->
   <xsl:result-document href="?." method="ixsl:replace-content">
-    <xsl:sequence select="$title"/>
+    <xsl:if test="exists(@x-branch) or count($non-auto-documents) gt 1">
+      <xsl:sequence select="$title"/>
+    </xsl:if>
     <xsl:choose>
       <xsl:when test="exists($documents)">
         <ul>
@@ -543,7 +554,12 @@
 
   <xsl:result-document href="?." method="ixsl:replace-content">
     <xsl:if test="exists($useful-pulls)">
-      <h3>Pull requests</h3>
+      <h3>
+        <xsl:text>Pull requests in </xsl:text>
+        <a href="#" id="prdesc">ascending</a>
+        <a href="#" id="prasc">descending</a>
+        <xsl:text> order</xsl:text>
+      </h3>
       <xsl:for-each select="$pulls">
         <xsl:sort select=".?number" order="descending"/>
         <xsl:choose>
@@ -551,37 +567,29 @@
             <div class="pull-request" x-pull="{.?number}" id="pr-{.?number}"
                  x-base="{.?base?sha}" x-head="{.?head?sha}">
               <h4>PR #{.?number}: {.?title}</h4>
-              <xsl:choose>
-                <xsl:when test="normalize-space(.?body) = ''">
-                  <p>
-                    <xsl:text>Pull request </xsl:text>
-                    <a href="{.?html_url}">#{.?number}</a>
-                    <xsl:text> by </xsl:text>
-                    <a href="{.?user?html_url}">{.?user?login}</a>
-                    <xsl:text>.</xsl:text>
-                  </p>
-                </xsl:when>
-                <xsl:otherwise>
-                  <details>
-                    <summary>
-                      <span>
-                        <xsl:text>Pull request </xsl:text>
-                        <a href="{.?html_url}">#{.?number}</a>
-                        <xsl:text> by </xsl:text>
-                        <a href="{.?user?html_url}">{.?user?login}</a>
-                        <xsl:text>.</xsl:text>
-                      </span>
-                    </summary>
-                    <xsl:variable name="id" select="'pr' || .?number || '-desc'"/>
-                    <div class="prdesc" id="{$id}">
+              <details>
+                <summary>
+                  <xsl:text>Pull request </xsl:text>
+                  <a href="{.?html_url}">#{.?number}</a>
+                  <xsl:text> by </xsl:text>
+                  <a href="{.?user?html_url}">{.?user?login}</a>
+                  <xsl:text>.</xsl:text>
+                </summary>
+                <xsl:variable name="id" select="'pr' || .?number || '-desc'"/>
+                <div class="prdesc" id="{$id}">
+                  <xsl:choose>
+                    <xsl:when test="empty(.?body) or .?body = ''">
+                      <pre>No description provided.</pre>
+                    </xsl:when>
+                    <xsl:otherwise>
                       <pre>{.?body}</pre>
                       <!-- injecting the result has to be deferred because we're
                            still constructing the page... -->
                       <xsl:sequence select="js:renderCommonMark($id, .?body)"/>
-                    </div>
-                  </details>
-                </xsl:otherwise>
-              </xsl:choose>
+                    </xsl:otherwise>
+                  </xsl:choose>
+                </div>
+              </details>
               <div class="changed-files">Loading changed files…</div>
               <div class="document-list">Loading documents…</div>
             </div>
@@ -592,6 +600,39 @@
         </xsl:choose>
       </xsl:for-each>
     </xsl:if>
+  </xsl:result-document>
+</xsl:template>
+
+<xsl:template match="a[@id='prasc']" mode="ixsl:onclick">
+  <xsl:sequence select="ixsl:call(ixsl:event(), 'preventDefault', [])"/>
+  <xsl:apply-templates select="../.." mode="flip-divs"/>
+  <!-- Why doesn't this apply to the context item if @object is omitted? -->
+  <ixsl:set-style name="display" select="'none'" object="ixsl:page()//a[@id='prasc']"/>
+  <ixsl:set-style name="display" select="'inline'" object="ixsl:page()//a[@id='prdesc']"/>
+</xsl:template>
+
+<xsl:template match="a[@id='prdesc']" mode="ixsl:onclick">
+  <xsl:sequence select="ixsl:call(ixsl:event(), 'preventDefault', [])"/>
+  <xsl:apply-templates select="../.." mode="flip-divs"/>
+  <!-- Why doesn't this apply to the context item if @object is omitted? -->
+  <ixsl:set-style name="display" select="'none'" object="ixsl:page()//a[@id='prdesc']"/>
+  <ixsl:set-style name="display" select="'inline'" object="ixsl:page()//a[@id='prasc']"/>
+</xsl:template>
+
+<xsl:template match="*" mode="flip-divs">
+  <xsl:variable name="divs" select="div"/>
+  <xsl:result-document href="?." method="ixsl:replace-content">
+    <xsl:for-each select="node()">
+      <xsl:choose>
+        <xsl:when test="self::div[empty(preceding-sibling::div)]">
+          <xsl:sequence select="reverse($divs)"/>
+        </xsl:when>
+        <xsl:when test="self::div"/>
+        <xsl:otherwise>
+          <xsl:sequence select="."/>
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:for-each>
   </xsl:result-document>
 </xsl:template>
 
