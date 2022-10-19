@@ -1,6 +1,53 @@
 window.onload = function() {
   document.querySelector("html").className = "js";
 
+  let pstarted = 0;
+  let pfinished = 0;
+  let pcount = 0;
+
+  function checkProgress() {
+    let started = 0;
+    let finished = 0;
+    document.querySelectorAll("html head meta").forEach(meta => {
+      let name = meta.getAttribute("name");
+      let value = meta.getAttribute("content");
+      if (name && name.startsWith("tid-")) {
+        if (value === "started") {
+          started++;
+        } else {
+          finished++;
+        }
+      }
+    });
+
+    if (pstarted === started && pfinished === finished) {
+      pcount++;
+    } else {
+      pstarted = started;
+      pfinished = finished;
+      pcount = 0;
+    }
+
+    if (pcount > 20) {
+      let bar = document.querySelector("#progress-bar");
+      if (bar) {
+        bar.removeAttribute("id");
+        bar.innerHTML = "Something appears to have gone wrong...";
+      }
+    }
+
+    if (pcount > 30) {
+      let popup = document.querySelector("#loading");
+      if (popup) {
+        popup.style.display = "none";
+      }
+    } else {
+      if (started > 0) {
+        setTimeout(checkProgress, 250);
+      }
+    }
+  }
+
   // Work out the protocol and hostname of our source...
   let location = window.location.href;
   let webroot = "";
@@ -14,12 +61,22 @@ window.onload = function() {
     webroot += location;
   }
 
-  const configJson = `${webroot}/dashboard.json?date=2022-10-11-1`;
+  // Caching of resources in the browser is a real pain.
+  // Make sure they get reloaded at least once a day.
+  // If this is localhost, every time.
+  let uid = new Date().toString();
+  if (webroot.indexOf("localhost") > 0) {
+    uid = new Date().getTime();
+  }
+
+  setTimeout(checkProgress, 1000);
+
+  const configJson = `${webroot}/dashboard.json?ts=${uid}`;
   SaxonJS.getResource({"location": configJson,
                        "type": "json"})
     .then(config => {
       SaxonJS.transform({
-        "stylesheetLocation": "dashboard.sef.json?date=2022-10-11-1",
+        "stylesheetLocation": `dashboard.sef.json?ts=${uid}`,
         "initialTemplate": "Q{}main",
         "stylesheetParams": {
           "Q{}config": config
