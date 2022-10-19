@@ -4,6 +4,7 @@ window.onload = function() {
   let pstarted = 0;
   let pfinished = 0;
   let pcount = 0;
+  let pclose = false;
 
   function checkProgress() {
     let started = 0;
@@ -20,6 +21,18 @@ window.onload = function() {
       }
     });
 
+    let bar = document.querySelector("#progress-bar");
+    if (bar && !pclose) {
+      let x = document.querySelector(".js .popup-header .popup-close");
+      let popup = document.querySelector("#loading");
+      if (x && popup) {
+        pclose = true;
+        x.addEventListener("click", (event) => {
+          popup.style.display = "none";
+        });
+      }
+    }
+
     if (pstarted === started && pfinished === finished) {
       pcount++;
     } else {
@@ -28,19 +41,9 @@ window.onload = function() {
       pcount = 0;
     }
 
-    if (pcount > 20) {
-      let bar = document.querySelector("#progress-bar");
-      if (bar) {
-        bar.removeAttribute("id");
-        bar.innerHTML = "Something appears to have gone wrong...";
-      }
-    }
-
-    if (pcount > 30) {
-      let popup = document.querySelector("#loading");
-      if (popup) {
-        popup.style.display = "none";
-      }
+    if (pcount > 20 && bar) {
+      bar.removeAttribute("id");
+      bar.innerHTML = "Oops, something appears to have gone wrong...";
     } else {
       if (started > 0) {
         setTimeout(checkProgress, 250);
