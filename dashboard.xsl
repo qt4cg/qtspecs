@@ -110,23 +110,25 @@
                     select="if (contains(ixsl:location(), '#'))
                             then substring-after(ixsl:location(), '#')
                             else ()"/>
+
+      <xsl:variable name="target"
+                    select="if (empty($fragid))
+                            then ()
+                            else (ixsl:page()//*[@id=$fragid])[1]"/>
+
       <xsl:choose>
-        <xsl:when test="empty($fragid)">
-          <!-- Turn off the "Loading" dialog -->
-          <ixsl:set-style name="display" select="'none'"
-                          object="ixsl:page()//aside[@id='loading']"/>
-        </xsl:when>
-        <xsl:when test="empty(ixsl:page()//*[@id=$fragid])">
+        <xsl:when test="exists($fragid) and empty($target)">
           <xsl:result-document href="#progress-bar" method="ixsl:replace-content">
             <xsl:text>Cannot jump to #{$fragid}; that anchor doesn’t exist.</xsl:text>
           </xsl:result-document>
         </xsl:when>
         <xsl:otherwise>
-          <ixsl:set-property name="location.hash" select="''"/>
-          <ixsl:set-property name="location.hash" select="$fragid"/>
           <!-- Turn off the "Loading" dialog -->
           <ixsl:set-style name="display" select="'none'"
                           object="ixsl:page()//aside[@id='loading']"/>
+          <xsl:if test="exists($target)">
+            <xsl:sequence select="ixsl:call($target, 'scrollIntoView', [])"/>
+          </xsl:if>
         </xsl:otherwise>
       </xsl:choose>
     </xsl:when>
