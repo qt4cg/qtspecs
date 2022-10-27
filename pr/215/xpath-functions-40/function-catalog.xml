@@ -3063,14 +3063,18 @@
       </fos:rules>
       <fos:notes>
          <p>The treatment of the <code>underflow</code> exception is defined in <specref
-               ref="op.numeric"/>. </p>
+               ref="op.numeric"/>. The following rules apply when the values are finite and non-zero, 
+            (subject to rules for overflow, underflow and approximation).</p>
          <p>If either argument is <code>NaN</code> then the result is <code>NaN</code>.</p>
-         <p>If <code>$y</code> is positive and <code>$x</code> is positive and finite, then (subject
-            to rules for overflow, underflow and approximation) the value of <code>atan2($y,
+         <p diff="chg" at="B">If <code>$x</code> is positive, then  the value of <code>atan2($y,
                $x)</code> is <code>atan($y div $x)</code>.</p>
-         <p>If <code>$y</code> is positive and <code>$x</code> is negative and finite, then (subject
-            to the same caveats) the value of <code>atan2($y, $x)</code> is <var>π</var>
-            <code>- atan($y div $x)</code>.</p>
+         <p diff="chg" at="B">If <code>$x</code> is negative, then:</p>
+         <ulist diff="chg" at="B">
+            <item><p>If <code>$y</code> is positive, then the value of <code>atan2($y, $x)</code> is 
+               <code>atan($y div $x) + </code><var>π</var>.</p></item>
+            <item><p>If <code>$y</code> is negative, then the value of <code>atan2($y, $x)</code> is 
+               <code>atan($y div $x) - </code><var>π</var>.</p></item>
+         </ulist>
          <p>Some results for special values of the arguments are shown in the examples below.</p>
 
       </fos:notes>
@@ -18067,56 +18071,130 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
       </fos:examples>
    </fos:function>
 
-   <fos:function name="group-by" prefix="map">
+   <fos:function name="build" prefix="map">
       <fos:signatures>
-         <fos:proto name="group-by" return-type="map(*)">
-            <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="key" type="function(item()) as xs:anyAtomicType?" usage="inspection"/>
+         <fos:proto name="build" return-type="map(*)">
+            <fos:arg name="input" type="item()*"/>
+            <fos:arg name="key" type="function(item()) as xs:anyAtomicType?" default="fn:identity#1"/>
+            <fos:arg name="value" type="function(item()) as item()*" default="fn:identity#1"/>
+            <fos:arg name="combine" type="function(item()*, item()*) as item()*" default="fn:op(',')"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
+         <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
          <fos:property>higher-order</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Constructs a map by taking the items in a sequence and grouping on a key that is computed for each item.</p>
+         <p>Returns a map that typically contains one entry for each item in a supplied input sequence.</p>
       </fos:summary>
       <fos:rules>
-         <p>The result of the function <code>map:group-by($seq, $key)</code> is equivalent to the
-            result of the expression:</p>
-         <eg><![CDATA[map:merge(
-  for $item in $input,
-      $k in $key($item)
-    return map:entry($k, $item),
-  map{"duplicates":"combine"})
-            ]]></eg>
+         <p>Informally, the function processes each item in <code>$input</code> in order. It calls the <code>$key</code> function on
+            that item to obtain a key value, and the <code>$value</code> function to obtain an associated value.
+            If the key is non-empty, then:</p>
+         <ulist>
+            <item><p>If the key is not already present in the target map, the processor adds a new key-value pair to the map, with that key 
+               and that value. </p></item>
+            <item><p>If the key is already present, the processor calls the <code>$combine</code> function to combine the existing value 
+               for the key with the new value, and replaces the entry with this combined value.</p></item>
+         </ulist>
+            
+         <p>More formally, the result of the function is the result of the following expression:</p>
+         
+         <eg>
+            fold-left($input, map{}, ->($map, $next) {
+               let $nextKey := $key($next)
+               let $nextValue := $value($next)
+               return
+                  if (fn:exists($nextKey))
+                  then
+                     if (map:contains($map, $nextKey))
+                     then map:put($map, $nextKey, $combine($map($nextKey), $nextValue))
+                     else map:put($map, $nextKey, $nextValue)
+                  else
+                     $map
+            })
+         </eg>
       </fos:rules>
+      
       <fos:notes>
-         <p>The effect of the function is to create a map that indexes the items in the supplied
-            sequence <code>$input</code>, computing a key for each one by evaluating the supplied
-            function <code>$key</code>. If the <code>$key</code> function returns an empty sequence
-            for an input item, that input item is not included in the index. If two items in the input
-            sequence have the same computed key value, then the index contains an entry in which the two
-            items both appear, retaining order.</p>
-         <p>This function may sometimes be an effective substitute for the <code>xsl:for-each-group</code>
-         instruction in XSLT.</p>
+         <p>Although defined to process the input sequence in order, this is only relevant when combining the entries
+            for duplicate keys.</p>
+         <p>The default function for both <code>$key</code> and <code>$value</code> is the identity function.
+            Although it is permitted to default both, this serves little purpose: usually at least one of these arguments
+            will be supplied.</p>
+         <p>The default action for combining entries with duplicate keys is to perform a sequence-concatenation of the corresponding values,
+            equivalent to the <code>duplicates: combine</code> option on <code>map:merge</code>. Other potentially useful
+            functions for combining duplicates include:</p>
+         <ulist>
+            <item><p><code>->($a, $b){$a}</code> Use the first value and discard the remainder</p></item>
+            <item><p><code>->($a, $b){$b}</code> Use the last value and discard the remainder</p></item>
+            <item><p><code>fn:concat(?, ",", ?)</code> Form the string-concatenation of the values, comma-separated</p></item>
+            <item><p><code>fn:op('+')</code> Compute the sum of the values</p></item>
+         </ulist>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>map:group-by(("January", "February", "March", "April", "May",
+               <fos:expression>map:build((), fn:string#1)</fos:expression>
+               <fos:result>map{}</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>map:build(1 to 10, ->{. mod 3})</fos:expression>
+               <fos:result>map{0: (3, 6, 9), 1: (1, 4, 7, 10), 2: (2, 5, 8)}</fos:result>
+               <fos:postamble>Returns a map with one entry for each distinct value of <code>. mod 3</code>. The
+                  function to compute the value is the identity function, and duplicates are combined by
+                  sequence concatenation.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression>map:build(1 to 5, value := fn:format-integer(?, "w")})</fos:expression>
+               <fos:result>map{1: "one", 2: "two", 3: "three", 4: "four", 5: "five"}</fos:result>
+               <fos:postamble>Returns a map with five entries. The function to compute the key is an identity function, the
+                  function to compute the value invokes <code>fn:format-integer</code>.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression>map:build(("January", "February", "March", "April", "May",
                   "June", "July", "August", "September", "October", "November", "December"), fn:substring(?, 1, 1)})</fos:expression>
                <fos:result>map{"A": ("April", "August"), "D": ("December"), "F": ("February"), "J": ("January", "June", "July"), 
                   "M": ("March", "May"), "N": ("November"), "O": ("October"), "S": ("September")}</fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression>map:build(("apple", "apricot", "banana", "blueberry", "cherry"), 
+                  fn:substring(?, 1, 1), fn:string-length#1, fn:op("+"))</fos:expression>
+               <fos:result>map{"a": 12, "b": 15, "c": 6}</fos:result>
+               <fos:postamble>Constructs a map where the key is the first character of an input item, and where the corresponding value
+                  is the total string-length of the items starting with that character.</fos:postamble>
+            </fos:test>
+            
+            
          </fos:example>
          <fos:example>
-            <p>To index employees by date of birth:</p>
-            <eg>map:group-by(//employee, ->{xs:date(./date-of-birth)})</eg>
+            <p>The following expression creates a map whose keys are employee <code>@ssn</code> values, and whose
+               corresponding values are the employee nodes:</p>
+            <eg>map:build(//employee, ->{@ssn})</eg>
          </fos:example>
-
+         <fos:example>
+            <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
+               corresponding values represent the number of employees at each distinct location. Any employees that
+               lack an <code>@location</code> attribute will be excluded from the result.</p>
+            <eg>map:build(//employee, ->{@location}, ->{1}, fn:op("+"))</eg>
+         </fos:example>
+         <fos:example>
+            <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
+               corresponding values contain the employee node for the highest-paid employee at each distinct location:</p>
+            <eg>map:build(//employee, ->{@location}, 
+               combine := ->($a, $b){fn:highest(($a, $b), ->{xs:decimal(@salary)}))</eg>
+         </fos:example>
+         <fos:example>
+            <p>The following expression creates a map allowing efficient access to every element in a document by means
+               of its <code>fn:generate-id</code> value:</p>
+            <eg>map:build(//*, fn:generate-id#1)</eg>
+         </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Proposed for version 4.0 2022-10-11</fos:version>
+      </fos:history>
    </fos:function>
 
    <fos:function name="size" prefix="map">
@@ -23511,93 +23589,419 @@ declare function fn:some(
       <fos:rules>
          <p>The function parses the <code>$uri</code> provided,
          returning a map containing its constituent parts: scheme,
-         authority components, path, etc.</p>
+         authority components, path, etc.
+         <bibref ref="rfc3986"/>, which defines URIs, is concerned with
+         the syntax of absolute URIs. This function must also account
+         for relative URIs, which complicates things somewhat.</p>
 
-         <p>If the <code>$uri</code> provided is a relative reference,
-         it is made absolute with respect to the static base URI
-         before parsing it. It is an error XXX if the static base URI
-         is undefined.</p>
+         <p>This function is described as a series of transformations
+         over the input string to identify the parts of a URI that are
+         present. Some portions of the URI are identified by matching
+         with a regular expression. This approach is designed to make
+         the description clear and unambiguous, it is not implementation
+         advice.</p>
 
-         <p>The parts returned are the <code>scheme</code>,
-         <code>userinfo</code>, <code>host</code>, <code>port</code>,
-         <code>path</code>, <code>query</code>, and
-         <code>fragment</code> These are defined in the ABNF for URIs
-         defined in <bibref ref="rfc3986"/>.</p>
+         <p>Begin with a <emph>string</emph> that is equal to the <code>$uri</code>.
+         If the <emph>string</emph> contains any backlashes
+         (“<code>\</code>”), replace them with forward slashes
+         (“<code>/</code>”).</p>
 
-         <p>If the <code>$options</code> map contains the key
-         <code>details</code> with the effective boolean value
-         <code>true()</code>, the <code>path</code> and
-         <code>query</code> values are further parsed to provide
-         <code>segments</code> and <code>query-keys</code>.</p>
+         <p>If the <emph>string</emph> matches <code>^(.*)#([^#]*)$</code>,
+         the <emph>string</emph> is the first match group and the
+         <emph>fragment</emph> is the second match group. Otherwise,
+         the string is unchanged and the <emph>fragment</emph> is the empty
+         sequence.</p>
 
-         <p>The value of the <code>segments</code> key will be the
-         seqeuence of strings that results from tokenizing the path
-         component on the “<code>/</code>” character. Any escaped characters in each
-         segment will be replaced by their literal forms.</p>
+         <p>If the <emph>string</emph> matches <code>^(.*)\?([^\?]*)$</code>,
+         the <emph>string</emph> is the first match group and the
+         <emph>query</emph> is the second match group. Otherwise,
+         the string is unchanged and the <emph>query</emph> is the empty
+         sequence.</p>
 
-         <p>The value of the <code>query-keys</code> key will be
-         a sequence of maps. The <code>query</code> will be split into parts
-         delimited by “<code>&amp;</code>”. Each part will further be split at the
-         first “<code>=</code>”. The string preceding the equal sign, or the whole
-         string if no equal sign is present, will be stored in the map as the value
-         of the key “<code>key</code>”. The string following the equal sign, or the
-         empty string if no equal sign is present, will be stored in the map as the
-         value of the key “<code>value</code>”. Any escaped characters in the keys or
-         values will be replaced by their literal forms.</p>
+         <p>If the <emph>string</emph> matches <code>^[a-zA-Z]:</code>,
+         the <emph>scheme</emph> is <code>file</code> and the
+         <emph>string</emph> is unchanged. Otherwise, if the
+         <emph>string</emph> matches
+         <code>^([a-zA-Z][A-Za-z0-9\+\-\.]*):(.*)$</code>, the
+         <emph>scheme</emph> is the first match group and the
+         <emph>string</emph> is the second match group. If the
+         <emph>string</emph> does not match either expression, the <emph>scheme</emph>
+         is the empty sequence and the <emph>string</emph> is unchanged.</p>
+
+         <p>If the <emph>string</emph> matches <code>^//*([a-zA-Z]:.*)$</code>,
+         the <emph>authority</emph> is empty and the <emph>string</emph> is
+         the first match group. Otherwise, if the <emph>string</emph>
+         matches <code>^///*([^/]+)(/.*)?$</code> then the <emph>authority</emph>
+         is the first match group and the <emph>string</emph> is the second
+         match group. If the <emph>string</emph> does not match either
+         regular expression, the <emph>authority</emph> is the empty sequence
+         and the <emph>string</emph> is unchanged.</p>
+
+         <p>If the <emph>authority</emph> matches
+         <code>(([^@]*)@)(.*)(:([^:]*))?$</code>,
+         then the <emph>userinfo</emph> is match group 2, otherwise
+         <emph>userinfo</emph> is the empty sequence.</p>
+
+         <p>If the <emph>authority</emph> matches
+         <code>(([^@]*)@)?(.+)(:([^:]*))?$</code>,
+         then the <emph>host</emph> is match group 3, otherwise
+         <emph>host</emph> is the empty sequence.</p>
+
+         <p>If the <emph>authority</emph> matches
+         <code>(([^@]*)@)?(.*)(:([^:]*))$</code>,
+         then the <emph>port</emph> is match group 5, otherwise
+         <emph>port</emph> is the empty sequence.</p>
+
+         <p>If the <emph>string</emph> is the empty string, then
+         <emph>path</emph> is the empty sequence, otherwise the <emph>path</emph>
+         is the whole <emph>string</emph>.</p>
+
+         <p>If the <code>$options</code> map contains a key named
+         “<code>path-separator</code>”, the value of that key is the
+         <emph>path separator</emph> otherwise the separator is
+         a single slash (“<code>/</code>”). It is a dynamic error XXXX if the key
+         is present and it’s value is not a string of length one.</p>
+
+         <p>A <emph>path-segments</emph> array is constructed as follows: tokenize the
+         <emph>string</emph> on the <emph>path separator</emph>,
+         apply <emph>uri decoding</emph> on each token, and convert
+         the result to an array.</p>
+
+         <p>Applying <emph>uri decoding</emph> replaces all occurrences of
+         plus (“<code>+</code>”) with spaces and all occurrences of
+         <code>%[a-fA-F0-9][a-fA-F0-9]</code> with a single character with the
+         codepoint represented by the two digit hexadecimal number that
+         follows the “<code>%</code>”. In other words, “<code>A%42C</code>” becomes
+         “<code>ABC</code>”. If there are any occurrences of <code>%</code> followed
+         by up to two characters that are not hexadecimal digits, they are
+         replaced by the single character with the
+         codepoint 0xfffd. In other words “<code>A%XYC%Z</code>” becomes
+         “<code>A&#xfffd;C&#xfffd;</code>.</p>
+
+         <p>If the <code>$options</code> map contains a key named
+         “<code>query-separator</code>”, the value of that key is the
+         <emph>query separator</emph> otherwise the separator is
+         a single ampersand (“<code>&amp;</code>”). It is a dynamic error XXXX if the key
+         is present and it’s value is not a string of length one.</p>
+
+         <p>A <emph>query-segments</emph> is constructed as follows: tokenize
+         the <emph>query</emph> on the <emph>query separator</emph>,
+         apply <emph>uri decoding</emph> on each token, and convert
+         the result to an array.</p>
+         
+         <p>The following map is returned:</p>
+
+         <eg>{
+  "uri": $uri,
+  "scheme": <emph>scheme</emph>,
+  "authority": <emph>authority</emph>,
+  "userinfo": <emph>userinfo</emph>,
+  "host": <emph>host</emph>,
+  "port": <emph>port</emph>,
+  "path": <emph>path</emph>,
+  "query": <emph>query</emph>,
+  "fragment": <emph>fragment</emph>,
+  "path-segments": <emph>path-segments</emph>,
+  "query-segments": <emph>query-segments</emph>
+}</eg>
+
+         <p>TODO: should the map contain keys with values that are the empty sequence or an empty array, or should they be omitted?</p>
+
       </fos:rules>
       
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression>fn:parse-uri("https://qt4cg.org/specifications/index.html")</fos:expression>
-               <fos:result>map {
-    "scheme": "https",
-    "userinfo": (),
-    "host": "qt4cg.org",
-    "port": (),
-    "path": "/specifications/index.html",
-    "query": (),
-    "fragment": (),
-  }</fos:result>               
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>fn:parse-uri("urn:example:part%3aone:two")</fos:expression>
-               <fos:result>map {
-    "scheme": "urn",
-    "host": (),
-    "path": "example:part%3aone:two"
-  }</fos:result>               
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>fn:parse-uri("http://user@example.com:8080/a%2fb/c+d?a=b&amp;c=d&amp;c=e%26#foo", map{"details": true()})</fos:expression>
-               <fos:result>map {
-    "scheme": "http",
-    "userinfo": "user",
-    "host": "example.com",
-    "port": "8080",
-    "path": "/a%2fb/c+d",
-    "query": "a=b&amp;c=d&amp;c=e%26",
-    "fragment": "foo",
-    "segments": ("a/b", "c d"),
-    "query-keys": ({"key": "a", "value": "b"}, {"key": "c", "value": "d"}, {"key": "c", "value": "e&amp;"}), 
-  }</fos:result>               
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>fn:parse-uri("jar:file://path/to/file.jar!/resource")</fos:expression>
-               <fos:result>map {
-    "scheme": "jar",
-    "host": (),
-    "path": "file://path/to/file.jar!/resource"
-  }</fos:result>               
-            </fos:test>
-         </fos:example>
-
+<fos:examples>
+  <fos:example>
+    <p>In the examples that follow, keys with values that are null, or an empty array,
+are elided for editorial clarity.</p>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("http://qt4cg.org/specifications/xpath-functions-40/Overview.html#parse-uri")</eg></fos:expression>
+      <fos:result><eg>map {
+  "uri": "http://qt4cg.org/specifications/xpath-functions-40/Overview.html#parse-uri",
+  "scheme": "http",
+  "authority": "qt4cg.org",
+  "host": "qt4cg.org",
+  "path": "/specifications/xpath-functions-40/Overview.html",
+  "fragment": "parse-uri",
+  "path-segments": array { "", "specifications", "xpath-functions-40", "Overview.html" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("http://www.ietf.org/rfc/rfc2396.txt")</eg></fos:expression>
+      <fos:result><eg>map {
+  "uri": "http://www.ietf.org/rfc/rfc2396.txt",
+  "scheme": "http",
+  "authority": "www.ietf.org",
+  "host": "www.ietf.org",
+  "path": "/rfc/rfc2396.txt",
+  "path-segments": array { "", "rfc", "rfc2396.txt" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("https://example.com/path/to/file")</eg></fos:expression>
+      <fos:result><eg>map {
+  "uri": "https://example.com/path/to/file",
+  "scheme": "https",
+  "authority": "example.com",
+  "host": "example.com",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("https://example.com:8080/path?s=%22hello world%22&amp;sort=relevance")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "https://example.com:8080/path?s=%22hello world%22&amp;sort=relevance",
+  "scheme": "https",
+  "authority": "example.com:8080",
+  "host": "example.com",
+  "port": "080",
+  "path": "/path",
+  "query": "s=%22hello world%22&amp;sort=relevance",
+  "query-segments": array { "s=""hello world""", "sort=relevance" },
+  "path-segments": array { "", "path" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("https://user@example.com/path/to/file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "https://user@example.com/path/to/file",
+  "scheme": "https",
+  "authority": "user@example.com",
+  "userinfo": "user",
+  "host": "example.com",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("ftp://ftp.is.co.za/rfc/rfc1808.txt")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "ftp://ftp.is.co.za/rfc/rfc1808.txt",
+  "scheme": "ftp",
+  "authority": "ftp.is.co.za",
+  "host": "ftp.is.co.za",
+  "path": "/rfc/rfc1808.txt",
+  "path-segments": array { "", "rfc", "rfc1808.txt" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("file:////uncname/path/to/file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "file:////uncname/path/to/file",
+  "scheme": "file",
+  "authority": "uncname",
+  "host": "uncname",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("file:///c:/path/to/file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "file:///c:/path/to/file",
+  "scheme": "file",
+  "path": "c:/path/to/file",
+  "path-segments": array { "c:", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("file:/C:/Program%20Files/test.jar")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "file:/C:/Program%20Files/test.jar",
+  "scheme": "file",
+  "path": "C:/Program%20Files/test.jar",
+  "path-segments": array { "C:", "Program Files", "test.jar" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("file:\\c:\path\to\file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "file:\\c:\path\to\file",
+  "scheme": "file",
+  "path": "c:/path/to/file",
+  "path-segments": array { "c:", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("file:\c:\path\to\file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "file:\c:\path\to\file",
+  "scheme": "file",
+  "path": "c:/path/to/file",
+  "path-segments": array { "c:", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("c:\path\to\file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "c:\path\to\file",
+  "scheme": "file",
+  "path": "c:/path/to/file",
+  "path-segments": array { "c:", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("/path/to/file")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "/path/to/file",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("#testing")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "#testing",
+  "path": "",
+  "fragment": "testing"
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("?q=1")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "?q=1",
+  "path": "",
+  "query": "q=1",
+  "query-segments": array { "q=1" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <p>TODO: How much effort do we want to put into parsing IPV6 host names?</p>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("ldap://[2001:db8::7]/c=GB?objectClass?one")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "ldap://[2001:db8::7]/c=GB?objectClass?one",
+  "scheme": "ldap",
+  "authority": "[2001:db8::7]",
+  "host": "[2001:db8::7]",
+  "path": "/c=GB",
+  "query": "objectClass?one",
+  "query-segments": array { "objectClass?one" },
+  "path-segments": array { "", "c=GB" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("mailto:John.Doe@example.com")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "mailto:John.Doe@example.com",
+  "scheme": "mailto",
+  "path": "John.Doe@example.com",
+  "path-segments": array { "John.Doe@example.com" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("news:comp.infosystems.www.servers.unix")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "news:comp.infosystems.www.servers.unix",
+  "scheme": "news",
+  "path": "comp.infosystems.www.servers.unix",
+  "path-segments": array { "comp.infosystems.www.servers.unix" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("tel:+1-816-555-1212")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "tel:+1-816-555-1212",
+  "scheme": "tel",
+  "path": "+1-816-555-1212",
+  "path-segments": array { " 1-816-555-1212" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("telnet://192.0.2.16:80/")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "telnet://192.0.2.16:80/",
+  "scheme": "telnet",
+  "authority": "92.0.2.16:80",
+  "host": "92.0.2.16",
+  "port": "0",
+  "path": "/",
+  "path-segments": array { "", "" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("urn:oasis:names:specification:docbook:dtd:xml:4.1.2")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "urn:oasis:names:specification:docbook:dtd:xml:4.1.2",
+  "scheme": "urn",
+  "path": "oasis:names:specification:docbook:dtd:xml:4.1.2",
+  "path-segments": array { "oasis:names:specification:docbook:dtd:xml:4.1.2" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+<p>This example uses the algorithm described above, but may not be
+useful to the user. TODO: should we allow implementations to use different parsing
+algorithms for URI schemes that they recognize?</p>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("jar:file:/C:/Program%20Files/test.jar!/foo/bar")</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "jar:file:/C:/Program%20Files/test.jar!/foo/bar",
+  "scheme": "jar",
+  "path": "file:/C:/Program%20Files/test.jar!/foo/bar",
+  "path-segments": array { "file:", "C:", "Program Files", "test.jar!", "foo", "bar" }
+}
+</eg></fos:result>
+    </fos:test>
+  </fos:example>
       </fos:examples>
       <fos:history>
          <fos:version version="4.0">Proposed on 17 Oct 2022 to resolve
