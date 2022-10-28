@@ -119,8 +119,16 @@
       <xsl:choose>
         <xsl:when test="exists($fragid) and empty($target)">
           <xsl:result-document href="#progress-bar" method="ixsl:replace-content">
-            <xsl:text>Cannot jump to #{$fragid}; that anchor doesn’t exist.</xsl:text>
+            <p>Cannot jump to #{$fragid}; that anchor doesn’t exist.</p>
           </xsl:result-document>
+          <xsl:if test="starts-with($fragid, 'pr-')">
+            <xsl:variable name="pr" select="substring-after($fragid, 'pr-')"/>
+            <xsl:result-document href="#progress-bar" method="ixsl:append-content">
+              <p>Redirecting to original GitHub PR #{$pr}</p>
+            </xsl:result-document>
+            <ixsl:set-property name="location.href"
+                               select="'https://github.com/qt4cg/qtspecs/pull/' || $pr"/>
+          </xsl:if>
         </xsl:when>
         <xsl:otherwise>
           <!-- Turn off the "Loading" dialog -->
