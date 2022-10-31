@@ -77,8 +77,7 @@
 
   <xsl:result-document href="#load-from-github" method="ixsl:replace-content">
     <section class="repository" x-name="qtspecs">
-      <h2>Repository Dashboard</h2>
-      <p>Open pull requests and current branches. Where possible, a summary of the
+      <p>These are the open pull requests and current branches. Where possible, a summary of the
       changes between the pull request or branch and the latest drafts is
       provided with a <a href="deltaxml.html">DeltaXML</a> pipeline
       (pull requests #188 and earlier, and the “variadicity” branch, predate this

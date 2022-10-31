@@ -41,7 +41,7 @@ window.onload = function() {
       pcount = 0;
     }
 
-    if (pcount > 20 && bar) {
+    if (pcount > 40 && bar) {
       bar.removeAttribute("id");
       bar.innerHTML = "Oops, something appears to have gone wrong...";
     } else {
