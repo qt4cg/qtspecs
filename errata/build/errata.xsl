@@ -39,7 +39,7 @@
 			  as="xs:string"/>
 
 <xsl:variable name="etc-doc"
-              select="doc(concat('../../etc/', $specdoc, '.xml'))"
+              select="doc(concat('../../build/etc/', $specdoc, '.xml'))"
 			  as="document-node()"/>
 
 <xsl:variable name="htmlref"
@@ -543,7 +543,7 @@
 <xsl:function name="er:section-title" as="xs:string">
    <xsl:param name="id" as="xs:NCName"/>
    <xsl:variable name="etc-section" select="$etc-doc/key('id',$id)[1]" as="element()?"/>
-   <!-- the index in the /etc directory appears to omit some id values, notably those
+   <!-- the index in th../build/etc directory appears to omit some id values, notably those
         within a non-normative appendix (inform-div). So we have to be prepared to
 		go to the base document if necessary -->
    <xsl:variable name="spec-section" select="$spec/key('id',$id)"/>

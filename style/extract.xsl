@@ -1,31 +1,19 @@
 <?xml version="1.0"?>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-                version="1.0">
+                expand-text="yes"
+                version="3.0">
 
-<xsl:import href="xsl-query.xsl"/>
+<xsl:import href="xsl-query-2016.xsl"/>
 
-<xsl:output method="xml" indent="yes"/>
+<xsl:output method="xml" indent="yes" omit-xml-declaration="yes"/>
 
 <xsl:param name="uri" select="''"/>
 
-<!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
 <xsl:template match="/">
-    <xsl:variable name="XSLTprocessor">
-      <xsl:text>XSLT Processor: </xsl:text>
-      <xsl:value-of select="system-property('xsl:vendor')"/>
-      <xsl:if test="system-property('xsl:version') = '2.0'">
-        <xsl:text> </xsl:text>
-        <xsl:value-of select="system-property('xsl:product-name')"/>
-        <xsl:text> </xsl:text>
-        <xsl:value-of select="system-property('xsl:product-version')"/>
-      </xsl:if>
-    </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <document-summary>
     <xsl:if test="$uri != ''">
       <xsl:attribute name="uri">
-	      <xsl:value-of select="$uri"/>
+	<xsl:value-of select="$uri"/>
       </xsl:attribute>
     </xsl:if>
     <xsl:apply-templates select="spec"/>
@@ -47,11 +35,11 @@
 </xsl:template>
 
 <xsl:template match="head">
-  <head>
+  <xsl:variable name="html">
     <xsl:apply-imports/>
-<!--
-    <xsl:apply-templates/>
--->
+  </xsl:variable>
+  <head>
+    <xsl:text>{normalize-space($html)}</xsl:text>
   </head>
 </xsl:template>
 
@@ -100,6 +88,7 @@
 <xsl:template match="inform-div1">
   <inform-div1 id="{@id}">
     <xsl:apply-templates select="head"/>
+    <xsl:apply-templates select="div2"/>
   </inform-div1>
 </xsl:template>
 
