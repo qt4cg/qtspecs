@@ -82,17 +82,17 @@
   
   <xsl:function name="f:get-bibl" as="element(bibl)?">
     <xsl:param name="id" as="xs:string"/>
-    <xsl:variable name="xsl-query" select="document('../etc/xsl-query-bibl.xml')"/>
-    <xsl:variable name="tr" select="document('../etc/tr.xml')"/>
-    <xsl:variable name="rfc" select="document('../etc/rfc.xml')"/>
+    <xsl:variable name="xsl-query" select="document('../build/etc/xsl-query-bibl.xml')"/>
+    <xsl:variable name="tr" select="document('../build/etc/tr.xml')"/>
+    <xsl:variable name="rfc" select="document('../build/etc/rfc.xml')"/>
     <xsl:sequence select="$xsl-query//bibl[@id = $id]"/>
   </xsl:function>
 
 
   <xsl:template match="bibl" name="bibl">
-    <xsl:variable name="xsl-query" select="document('../etc/xsl-query-bibl.xml')"/>
-    <xsl:variable name="tr" select="document('../etc/tr.xml')"/>
-    <xsl:variable name="rfc" select="document('../etc/rfc.xml')"/>
+    <xsl:variable name="xsl-query" select="document('../build/etc/xsl-query-bibl.xml')"/>
+    <xsl:variable name="tr" select="document('../build/etc/tr.xml')"/>
+    <xsl:variable name="rfc" select="document('../build/etc/rfc.xml')"/>
     <xsl:variable name="id" select="@id"/>
 
     <xsl:if test="count(key('bibrefs', @id)) = 0">
