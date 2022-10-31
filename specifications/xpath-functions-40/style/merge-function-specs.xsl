@@ -159,9 +159,9 @@
 			<xsl:if test="$fspec/fos:history">
 				<gitem>
 					<label>History</label>
-					<def role="example">
+					<def role="example"><p>
 						<xsl:apply-templates select="$fspec/fos:history/fos:version/node()"/>
-					</def>
+					</p></def>
 				</gitem>
 			</xsl:if>
 		</glist>
