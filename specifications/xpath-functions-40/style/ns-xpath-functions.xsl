@@ -234,7 +234,7 @@
   
   <xsl:function name="fos:spec-date" as="xs:date">
     <xsl:param name="spec-id"/>
-    <xsl:variable name="bib-entry" select="doc('../../../etc/xsl-query-bibl.xml')//bibl[@id = substring-before($spec-id, '-ref')]"/>
+    <xsl:variable name="bib-entry" select="doc('../../../build/etc/xsl-query-bibl.xml')//bibl[@id = substring-before($spec-id, '-ref')]"/>
     <xsl:variable name="date" select="replace(normalize-space($bib-entry), '^.*This version is https://www.w3.org/TR/.*?([0-9]{8,8})/.*$', '$1', 'm')"/>
     <xsl:message select="'**DATE: ', $date"/>
     <xsl:sequence select="xs:date(concat(substring($date,1,4), '-', substring($date,5,2), '-', substring($date, 7, 2)))"/>
@@ -243,7 +243,7 @@
   <!--<xsl:template match="div1[@id='normrefs']/blist/bibl">
     <xsl:variable name="date" select="fos:spec-date(@id)"/>
     <xsl:variable name="date8" select="format-date($date, '[Y0001][M01][D01]')"/>
-    <!-\-<xsl:variable name="href" select="doc('../../../etc/xsl-query-bibl.xml')//bibl[@id = substring-before(@id, '-ref')]//a[.='latest version']/@href"/>-\->
+    <!-\-<xsl:variable name="href" select="doc('../../../build/etc/xsl-query-bibl.xml')//bibl[@id = substring-before(@id, '-ref')]//a[.='latest version']/@href"/>-\->
     <xsl:variable name="href" select="concat('https://www.w3.org/TR/', substring-before(@id, '-ref'), '/')"/>
       <dt class="label"><span><a name="{@id}" id="{@id}"></a><xsl:value-of select="@key"/></span></dt>
       <dd>
