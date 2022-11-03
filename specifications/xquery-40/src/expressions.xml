@@ -2676,31 +2676,13 @@ would raise an error because it has an <code>id</code> child whose value is not 
                   </note>
                </item>
                <item>
-                  <p>
-                     <phrase role="xpath">Conditional</phrase>
-                     <phrase role="xquery"
-                        >Conditional, switch, and typeswitch</phrase> expressions
-                must not raise a dynamic error in
-                respect of subexpressions occurring in a branch that is not selected,
-                and must not
-                return the value delivered by a branch unless that branch is selected.
-                Thus, the following example must not raise a
-                dynamic error if the document <code>abc.xml</code> does not exist:
-             </p>
-                  <eg xml:space="preserve" role="parse-test"><![CDATA[if (doc-available('abc.xml')) then doc('abc.xml') else ()]]></eg>
-                  <p>Of course, the condition must be evaluated in order to determine which branch is selected, and the query must not be rewritten in a way that would bypass evaluating the condition.</p>
+                  <p diff="add" at="B">
+                     The rules described in <specref ref="id-guarded-expressions"/> ensure that for
+                     certain kinds of expression (for example conditional expressions), changing the
+                     order of evaluation of subexpressions does not result in dynamic errors that
+                     would not otherwise occur.</p>
                </item>
-               <item>
-                  <p>
-                As stated earlier, an expression
-                must not be rewritten to dispense with a
-                required cardinality check: for example, <code
-                        role="parse-test"
-                     >string-length(//title)</code>
-                must raise an
-                error if the document contains more than one title element.
-             </p>
-               </item>
+ 
                <item>
                   <p>
                 Expressions must not be rewritten in such a way
@@ -2710,63 +2692,137 @@ would raise an error because it has an <code>id</code> child whose value is not 
                 for the original expression, and must be preserved if
                 the expression is rewritten.</p>
                </item>
-            </ulist>
-            <p>
-          Expression rewrite is illustrated by the following examples.
-          </p>
-            <!-- </change> -->
-
-            <ulist>
-
+               
                <item>
-                  <p>Consider the expression <code role="parse-test"
-                        >//part[color eq "Red"]</code>. An implementation might
-choose to rewrite this expression as <code
+                  <p>
+                     As stated earlier, an expression
+                     must not be rewritten to dispense with a
+                     required cardinality check: for example, <code
                         role="parse-test"
-                        >//part[color = "Red"][color eq
-"Red"]</code>. The implementation might then process the expression as follows:
-First process the "<code>=</code>" predicate by probing an index on parts by color to
-quickly find all the parts that have a Red color; then process the "<code>eq</code>"
-predicate by checking each of these parts to make sure it has only a
-single color. The result would be as follows:
-
-<ulist> <item>
-                           <p>Parts that have exactly one color that is Red are returned.</p>
-                        </item> <item>
-                           <p>If some part has color Red together with some other color, an error is
-raised.</p>
-                        </item> <item>
-                           <p>The existence of some part that has no color Red but has multiple non-Red
-colors does not trigger an error.</p>
-                        </item>
-                     </ulist>
+                        >string-length(//title)</code>
+                     must raise an
+                     error if the document contains more than one title element.
                   </p>
                </item>
+            </ulist>
+ 
 
-               <item>
-                  <p>The expression in the following example cannot raise a casting error if it is evaluated
-exactly as written (i.e., left to right). Since neither predicate depends on the context position, an implementation might choose to reorder the predicates to achieve better
-performance (for example, by taking advantage of an index). This
-reordering could cause the expression to raise an
-error.</p>
-                  <eg role="parse-test"
-                     ><![CDATA[$N[@x castable as xs:date][xs:date(@x) gt xs:date("2000-01-01")]]]></eg>
-
-                  <p at="XQ.E4 and XP.E4"
-                        >To avoid unexpected errors caused by expression rewrite,
-tests that are designed to prevent dynamic errors should be expressed
-using conditional <phrase
-                        role="xquery">or <code>typeswitch</code>
-                     </phrase> expressions. For example, the above expression can be written as
-follows:</p>
-
-
-                  <eg role="parse-test"><![CDATA[$N[if (@x castable as xs:date)
-   then xs:date(@x) gt xs:date("2000-01-01")
-   else false()]]]></eg>
+         </div3>
+         <div3 id="id-guarded-expressions" diff="add" at="B">
+            <head>Guarded Expressions</head>
+            <p><termdef id="dt-guarded" term="guarded">An expression <var>E</var> is said to be <term>guarded</term>
+               by some governing condition <var>C</var> if evaluation of <var>E</var> is not allowed to fail
+               with a <termref def="dt-dynamic-error"/> except when <var>C</var> applies.</termdef></p>
+            
+            <p>For example, in a conditional expression <code>if (P) then T else F</code>, the subexpression
+               <var>T</var> is guarded by <var>P</var>, and the subexpression <var>F</var> is guarded by
+               <code>not(P)</code>. One way an implementation can satisfy this rule is by not evaluating <var>T</var> unless <var>P</var>
+               is true, and likewise not evaluating <var>F</var> unless <var>P</var> is false. Another
+               way of satisfying the rule is for the implementation to evaluate all the subexpressions, but to catch any errors that occur 
+               in a guarded subexpression so they are not propagated.
+            </p>
+            
+            <p>The existence of this rule enables errors to be prevented by writing expressions such as
+            <code>if ($y eq 0) then "N/A" else ($x div $y)</code>. This example will never fail with a divide-by-zero
+            error because the <code>else</code> branch of the conditional is <termref def="dt-guarded"/>.</p>
+            
+            <p>Similarly, in the mapping expression <code>E1!E2</code>, the subexpression <code>E2</code> is guarded
+            by the existence of an item from <var>E1</var>. This means, for example, that the expression <code>(1 to $n)!doc('bad.xml')</code>
+            must not raise a dynamic error if <code>$n</code> is zero. The rule governing evaluation of guarded expressions
+               is phrased so as not to disallow “loop-lifting” or “constant-folding” optimizations 
+               whose aim is to avoid repeated evaluation of a common subexpression;
+            but such optimizations must not result in errors that would not otherwise occur.</p>
+            
+            <p>The complete list of expressions that have guarded subexpressions is as follows:</p>
+            
+            <ulist>
+               <item><p>In a conditional expression (<nt def="IfExpr">IfExpr</nt>) the <code>then</code> branch
+                  is guarded by the condition being true, and the <code>else</code> branch
+                  is guarded by the condition being false.</p></item>
+               <item role="xquery"><p>In a <code>switch</code> expression (<nt def="SwitchExpr">SwitchExpr</nt>), 
+               the <code>return</code> expression of a particular <code>case</code> is guarded by the condition for that case
+               matching, and no earlier case matching.</p></item>
+               <item role="xquery"><p>In a <code>typeswitch</code> expression (<nt def="TypeswitchExpr">TypeswitchExpr</nt>), 
+                  the <code>return</code> expression of a particular <code>case</code> is guarded by the condition for that case
+                  matching, and no earlier case matching.</p></item>
+               <item><p>In an <code>and</code> expression (<nt def="AndExpr">AndExpr</nt>), the second operand
+               is guarded by the value of the first operand being true.</p></item>
+               <item><p>In an <code>or</code> expression (<nt def="OrExpr">OrExpr</nt>), the second operand
+                  is guarded by the value of the first operand being false.</p></item>
+               <item><p>In an <code>otherwise</code> expression (<nt def="OtherwiseExpr">OtherwiseExpr</nt>), the second operand
+                  is guarded by the value of the first operand being an empty sequence.</p></item>
+               <item><p>In a path expression of the form <code>E1/E2</code> or <code>E1//E2</code>, and in a mapping
+               expression of the form <code>E1!E2</code>, the right-hand operand <code>E2</code> is guarded by
+               the existence of the relevant context item in the result of evaluating <code>E1</code>.</p>
+                  <p>This rule applies even if <code>E2</code> does not reference the context item.
+                     For example, no dynamic error can be thrown by the expression 
+               <code>(1 to $n)!doc('bad.xml')</code> in the case where <code>$n</code> is zero.</p></item>
+               <item><p>In a filter expression of the form <code>E[P]</code>, the predicate <code>P</code> is guarded by
+                  the existence of the relevant context item in the result of evaluating <code>E</code>.</p>
+               <p>This rule has the consequence that in a filter expression with multiple predicates, such as <code>E[P1][P2]</code>,
+               evaluation of <code>P2</code> must not raise a dynamic error unless <code>P1</code> returns true. This rule does
+               not prevent reordering of predicates (for example, to take advantage of indexes), but it does require that any
+               such reordering must not result in errors that would not otherwise occur.</p>
+               </item>
+               <item><p role="xpath">In a <code>for</code> expression (<nt def="ForExpr">ForExpr</nt>) such
+                  as <code>for $x in S return E</code>, the expression <code>E</code> is guarded by the existence of
+                  an item bound to <code>$x</code>.</p>
+                  <p role="xquery">In a <code>FLWOR</code> expression (<nt def="FLWORExpr">FLWORExpr</nt>), an expression
+                     that is logically dependent on the tuples in the tuple stream is guarded by the existence
+                     of a relevant tuple. This applies even where the expression does not actually reference
+                     any of the variable bindings in the tuple stream. For example, in the expression
+                     <code>for $x in S return E</code>, the expression <code>E</code> is guarded by the existence of
+                        an item bound to <code>$x</code>.</p>
+               <p>This means that the expression <code>for $x in 1 to $n return doc('bad.xml')</code>
+               must not raise a dynamic error in the case where <code>$n</code> is zero.</p></item>
+               <item><p>In a <code>quantified</code> expression (<nt def="QuantifiedExpr">QuantifiedExpr</nt>) such
+                  as <code>some $x in S satisfies P</code>, the expression <code>P</code> is guarded by the existence of
+                     an item bound to <code>$x</code>.</p>
                </item>
             </ulist>
-
+            
+            <p>The fact that an expression is <termref def="dt-guarded"/> does not remove the obligation to report
+            <termref def="dt-static-error">static errors</termref> in the expression; nor does it remove the option
+            to report statically detectable <termref def="dt-type-error">type errors</termref>.</p>
+            
+            <note>
+               <p>These rules do not constrain the order of evaluation of subexpressions. For example, given an expression
+                  such as <code>//person[@first="Winston"][@last="Churchill"]</code>, or equivalently
+                  <code>//person[@first="Winston" and @last="Churchill"]</code>, an implementation might use an index on the value of
+                  <code>@last</code> to select items that satisfy the second condition, and then filter these
+                  items on the value of the first condition. Alternatively, it might evaluate both predicates in parallel.
+                  Or it might interpose an additional redundant condition: 
+                  <code>//person[string-length(@first)+string-length(@last)=16][@first="Winston"][@last="Churchill"]</code>.
+                  But implementations must ensure that
+                  such rewrites do not result in dynamic errors being reported that would not occur if the predicates
+                  were evaluated in order as written.</p>
+            </note>
+            <note>
+               <p>Although the rules for guarded expressions prevent optimizations resulting in spurious errors, 
+                  they do not prevent optimizations whose effect is to mask errors. For example, the rules guarantee that
+                  <code>("A", 3)[. instance of xs:integer][. eq 3]</code> will not raise an error caused by the comparison
+                  <code>("A" eq 3)</code>, but they
+                  do not guarantee the converse: the expression <code>("A", 3)[. eq 3][. instance of xs:integer]</code>
+                  may or may not raise a dynamic error.</p>
+            </note>
+            <note>
+               <p>The rules in this section do not disallow all expression rewrites that might result in dynamic
+                  errors. For example, rewriting <code>($x - $y + $z)</code> as <code>($x + $z - $y)</code> is permitted
+               even though it might result in an arithmetic overflow.</p>
+            </note>
+            
+            <note>
+               <p>Some implementations allow calls on external functions that have side-effects. The semantics of
+               such function calls are entirely <termref def="dt-implementation-defined"/>. Processors <rfc2119>may</rfc2119>
+               choose to reference the rules for <termref def="dt-guarded"/> expressions when defining the behavior
+               of such function calls, but this is outside the scope of the language specification.</p>
+            </note>
+            
+ 
+            
+            
+          
+            
          </div3>
       </div2>
       <div2 id="id-important-concepts">
@@ -17037,9 +17093,9 @@ effective boolean value of the test expression is <code>false</code>,
 the value of the else-expression is returned.</p>
          <p>Conditional expressions have a special rule for propagating <termref
                def="dt-dynamic-error"
-               >dynamic errors</termref>. If the effective value of the test expression is <code>true</code>, the conditional expression ignores (does not raise) any dynamic errors encountered in the else-expression. In this case, since the else-expression can have no observable effect, it need not be evaluated. Similarly, if the effective value of the test expression is <code>false</code>, the conditional expression ignores any <termref
-               def="dt-dynamic-error"
-            >dynamic errors</termref> encountered in the then-expression, and the then-expression need not be evaluated.</p>
+               >dynamic errors</termref>: <phrase diff="chg" at="B">the <code>then</code> and <code>else</code> expressions are
+            <termref def="dt-guarded"/>, as described in <specref ref="id-guarded-expressions"/>, to prevent
+                  spurious dynamic errors.</phrase></p>
          <p>Here are some examples of conditional expressions:</p>
 
          <ulist>
@@ -17087,8 +17143,8 @@ named <code>discounted</code>, independently of its value:</p>
          if the attribute <code>@discount</code> exists, or the value of <code>@price</code> if the <code>@discount</code>
             attribute is absent.</p>
 
-         <p>To prevent spurious errors, the right hand operand <rfc2119>must not</rfc2119> be evaluated unless
-         the left-hand operand returns an empty sequence.</p>
+         <p>To prevent spurious errors, the right hand operand is <termref def="dt-guarded"/>: it cannot throw any
+            dynamic error unless the left-hand operand returns an empty sequence.</p>
 
          <note>
             <p>The operator is associative (even under error conditions): <code>A otherwise (B otherwise C)</code> returns
@@ -17155,11 +17211,8 @@ the switch expression is the value of the return expression in the
 effective case.</p>
 
          <p>Switch expressions have rules regarding the propagation of dynamic
-errors that take precedence over the general rules given in <specref
-               ref="id-errors-and-opt"
-            />.
-
-The return clauses of a switch expression must not raise any dynamic
+errors: <phrase diff="chg" at="B">see <specref ref="id-guarded-expressions"/>. These rules mean that</phrase>
+the return clauses of a switch expression must not raise any dynamic
 errors except in the effective case.  Dynamic errors raised in the
 operand expressions of the switch or the case clauses are propagated;
 however, an implementation must not raise dynamic errors in the
@@ -17753,8 +17806,9 @@ the same <code>typeswitch</code> expression to bind variables with the
 same name.
 </p>
 
-            <p>A special rule applies to propagation of <termref def="dt-dynamic-error"
-                  >dynamic errors</termref> by <code>typeswitch</code> expressions. A <code>typeswitch</code> expression ignores (does not raise) any dynamic errors encountered in <code>case</code> clauses other than the <termref
+            <p>Typeswitch expressions have rules regarding the propagation of dynamic
+               errors: <phrase diff="chg" at="B">see <specref ref="id-guarded-expressions"/>.
+               These rules mean that</phrase> a <code>typeswitch</code> expression ignores (does not raise) any dynamic errors encountered in <code>case</code> clauses other than the <termref
                   def="dt-effective-case"
                   >effective case</termref>. Dynamic errors encountered in the <code>default</code> clause are raised only if there is no <termref
                   def="dt-effective-case"
