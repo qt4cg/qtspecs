@@ -656,7 +656,9 @@
             <xsl:with-param name="node" select=".."/>
             <xsl:with-param name="conditional" select="0"/>
           </xsl:call-template>
-          <xsl:text>Example: </xsl:text>
+          <xsl:if test="not(starts-with(., 'Example:') or starts-with(., 'Examples:'))">
+            <xsl:text>Example: </xsl:text>
+          </xsl:if>
           <xsl:apply-templates/>
         </div>
       </xsl:when>
@@ -667,7 +669,9 @@
             <xsl:with-param name="conditional" select="0"/>
           </xsl:call-template>
 
-          <xsl:text>Example: </xsl:text>
+          <xsl:if test="not(starts-with(., 'Example:') or starts-with(., 'Examples:'))">
+            <xsl:text>Example: </xsl:text>
+          </xsl:if>
           <xsl:apply-templates/>
         </h5>
       </xsl:otherwise>
