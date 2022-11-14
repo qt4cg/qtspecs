@@ -2746,9 +2746,10 @@ Tak, tak, tak! - da kommen sie.
          </record></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>The function parses the <code>$uri</code> provided,
          returning a map containing its constituent parts: scheme,
          authority components, path, etc.
-         <bibref ref="rfc3986"/>, which defines URIs, is concerned with
-         the syntax of absolute URIs. This function must also account
-         for relative URIs, which complicates things somewhat.</p><p>This function is described as a series of transformations
+         In addition to parsing URIs as defined by <bibref ref="rfc3986"/>
+         (and <bibref ref="rfc3987"/>), this function also attempts to
+         account for strings that are not valid URIs but that often appear
+         in URI-adjacent spaces, such as file names.</p><p>This function is described as a series of transformations
          over the input string to identify the parts of a URI that are
          present. Some portions of the URI are identified by matching
          with a regular expression. This approach is designed to make
@@ -2811,9 +2812,15 @@ Tak, tak, tak! - da kommen sie.
          <emph>query separator</emph> otherwise the separator is
          a single ampersand (“<code>&amp;</code>”). It is a dynamic error XXXX if the key
          is present and it’s value is not a string of length one.</p><p>A <emph>query-segments</emph> is constructed as follows: tokenize
-         the <emph>query</emph> on the <emph>query separator</emph>,
-         apply <emph>uri decoding</emph> on each token, and convert
-         the result to an array.</p><p>The following map is returned:</p><eg xml:space="preserve">{
+         the <emph>query</emph> on the <emph>query separator</emph>. For each
+         token, construct a map. If the token contains an equal sign (“=”),
+         the map contains a key named <code>key</code> with a value equal to the
+         string preceding the first equal sign and a key named <code>value</code>
+         with a value equal to the string following the first equal sign. If the
+         token does not contain an equal sign, the map contains a single key named
+         <code>value</code> with a value equal to the token. In every case,
+         <emph>uri decoding</emph> is applied to each value add to the map.
+         The resulting sequence of maps is converted into an array.</p><p>The following map is returned:</p><eg xml:space="preserve">{
   "uri": $uri,
   "scheme": <emph>scheme</emph>,
   "authority": <emph>authority</emph>,
@@ -2833,7 +2840,13 @@ Tak, tak, tak! - da kommen sie.
          syntax in ways not defined by <bibref ref="rfc3986"/>. Implementations may add
          additional keys to the map. The meaning of those keys is implementation-defined.</p><p>TODO: In order to better support implementation extensibility, should the
          keys in the map be QNames with the requirement that implementation-defined
-         keys be in a non-empty namespace?</p></def></gitem><gitem><label>Examples</label><def role="example"><p>In the examples that follow, keys with values that are null, or an empty array,
+         keys be in a non-empty namespace?</p></def></gitem><gitem><label>Error Conditions</label><def><p>An error is raised XXXX if the supplied path separator is not a single character.</p><p>An error is raised XXXX if the supplied query separator is not a single character.</p></def></gitem><gitem><label>Notes</label><def><p role="note">Like <code>fn:resolve-uri</code>, this function handles the additional characters
+         allowed in <bibref ref="rfc3987"/> IRIs in the same way that other unreserved
+         characters are handled.</p><p role="note">Unlike <code>fn:resolve-uri</code>, this function is not attempting to resolve
+         one URI against another and consequently, the errors that can arise under those
+         circumstances do not apply here. The <code>fn:parse-uri</code> function will
+         accept strings that would raise errors if resolution was attempted,
+         see <code>fn:build-uri</code>.</p></def></gitem><gitem><label>Examples</label><def role="example"><p>In the examples that follow, keys with values that are null, or an empty array,
 are elided for editorial clarity.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("http://qt4cg.org/specifications/xpath-functions-40/Overview.html#parse-uri")</eg></code> returns <eg xml:space="preserve">map {
   "uri": "http://qt4cg.org/specifications/xpath-functions-40/Overview.html#parse-uri",
   "scheme": "http",
@@ -2865,7 +2878,10 @@ map {
   "port": "080",
   "path": "/path",
   "query": "s=%22hello world%22&amp;sort=relevance",
-  "query-segments": array { "s=""hello world""", "sort=relevance" },
+  "query-segments": array {
+    map { "key": "s", "value": """hello world""" },
+    map { "key": "sort", "value": "relevance" }
+  },
   "path-segments": array { "", "path" }
 }</eg>.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("https://user@example.com/path/to/file")</eg></code> returns <eg xml:space="preserve">
 map {
@@ -2937,7 +2953,9 @@ map {
   "uri": "?q=1",
   "path": "",
   "query": "q=1",
-  "query-segments": array { "q=1" }
+  "query-segments": array {
+    map { "key": "q", "value": "1" }
+  }
 }</eg>.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("ldap://[2001:db8::7]/c=GB?objectClass?one")</eg></code> returns <eg xml:space="preserve">
 map {
   "uri": "ldap://[2001:db8::7]/c=GB?objectClass?one",
@@ -2946,7 +2964,9 @@ map {
   "host": "[2001:db8::7]",
   "path": "/c=GB",
   "query": "objectClass?one",
-  "query-segments": array { "objectClass?one" },
+  "query-segments": array {
+    map { "value": "objectClass?one" }
+  },
   "path-segments": array { "", "c=GB" }
 }</eg>.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("mailto:John.Doe@example.com")</eg></code> returns <eg xml:space="preserve">
 map {
@@ -2981,7 +3001,21 @@ map {
   "scheme": "urn",
   "path": "oasis:names:specification:docbook:dtd:xml:4.1.2",
   "path-segments": array { "oasis:names:specification:docbook:dtd:xml:4.1.2" }
-}</eg>.</p><p>This example uses the algorithm described above, not an algorithm that is
+}</eg>.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("tag:textalign.net,2015:ns")</eg></code> returns <eg xml:space="preserve">
+map {
+    "uri": "tag:textalign.net,2015:ns",
+    "scheme": "tag",
+    "path": "textalign.net,2015:ns",
+    "path-segments": [ "textalign.net,2015:ns" ]
+  }
+</eg>.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("tag:jan@example.com,1999-01-31:my-uri")</eg></code> returns <eg xml:space="preserve">
+map {
+    "uri": "tag:jan@example.com,1999-01-31:my-uri"
+    "scheme": "tag",
+    "path": "jan@example.com,1999-01-31:my-uri",
+    "path-segments": [ "jan@example.com,1999-01-31:my-uri" ],
+}
+</eg>.</p><p>This example uses the algorithm described above, not an algorithm that is
 specifically aware of the <code>jar:</code> scheme.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("jar:file:/C:/Program%20Files/test.jar!/foo/bar")</eg></code> returns <eg xml:space="preserve">
 map {
   "uri": "jar:file:/C:/Program%20Files/test.jar!/foo/bar",
@@ -2989,31 +3023,79 @@ map {
   "path": "file:/C:/Program%20Files/test.jar!/foo/bar",
   "path-segments": array { "file:", "C:", "Program Files", "test.jar!", "foo", "bar" }
 }
-</eg>.</p></def></gitem><gitem><label>History</label><def role="example">Proposed on 17 Oct 2022 to resolve
+</eg>.</p><p>This example demonstrates that parsing the URI treats non-URI characters in
+lexical IRIs as “unreserved characters”. The rationale for this is given in the
+description of <code>fn:resolve-uri</code>.</p><p>The expression <code><eg xml:space="preserve">fn:parse-uri("http://www.example.org/Dürst")</eg></code> returns <eg xml:space="preserve">
+map {
+    "uri": "http://www.example.org/Dürst",
+    "scheme": "http",
+    "authority": "www.example.org",
+    "host": "www.example.org",
+    "path": "/Dürst",
+    "path-segments": [ "","Dürst" ]
+}
+</eg>.</p><p>This example demonstrates a non-standard query separator.</p><p>The expression <code><eg xml:space="preserve">
+fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;sort=relevance",
+             map { "query-separator": ";" })</eg></code> returns <eg xml:space="preserve">
+map {
+  "uri": "https://example.com:8080/path?s=%22hello world%22;sort=relevance",
+  "scheme": "https",
+  "authority": "example.com:8080",
+  "host": "example.com",
+  "port": "080",
+  "path": "/path",
+  "query": "s=%22hello world%22;sort=relevance",
+  "query-segments": array {
+    map { "key": "s", "value": """hello world""" },
+    map { "key": "sort", "value": "relevance" }
+  },
+  "path-segments": array { "", "path" }
+}</eg>.</p><p>This example uses an invalid query separator so raises an error.</p><p>The expression <code><eg xml:space="preserve">
+fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;;sort=relevance",
+             map { "query-separator": ";;" })</eg></code> raises error <code>FOXX0000</code>.</p></def></gitem><gitem><label>History</label><def role="example">Proposed on 17 Oct 2022 to resolve
          <a href="https://github.com/qt4cg/qtspecs/issues/72">issue #72</a>.
-         Not yet accepted.</def></gitem></glist></div2><div2 id="func-build-uri"><head>fn:build-uri</head><glist><gitem><label>Summary</label><def><p>Constructs a URI from the parts provided.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="build-uri" return-type="xs:string" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="parts" type="map(xs:string,xs:string)"/><arg name="options" type="map(*)" default="map{}"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-dependent">context-dependent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>If the <code>segments</code> key exists in the map, then <code>$path</code> is constructed
-        with <code>string-join($parts?segments ! encode-for-uri(.), "/")</code>,
-        otherwise the value of the <code>path</code> key is used.
-        If the <code>$path</code> value is the empty sequence,
-        the empty string is used for the <code>$path</code> value.</p><p>If the <code>query-keys</code> key exists in the map, the <code>$query</code> is constructed
-        with <code>string-join($parts?query-keys ! concat(encode-for-uri(.?key), "=", encode-for-uri(.?value)), "&amp;")</code>, otherwise the value of the <code>query</code> key is used.</p><p>If the <code>scheme</code> key is absent or is the empty sequence, then
-        <code>$scheme</code> is the scheme of the
-        static base URI, otherwise the value of the <code>scheme</code> key is
-        used. It is an error XXX if there is no static base URI.</p><p>If the <code>host</code> key is absent, then
-        <code>$host</code> is the host of the
-        static base URI, otherwise the value of the <code>host</code> key is used.
-        It is an error XXX if there is no static base URI.</p><p>The <code>$authority</code> is
+         Not yet accepted.</def></gitem></glist></div2><div2 id="func-build-uri"><head>fn:build-uri</head><glist><gitem><label>Summary</label><def><p>Constructs a URI from the parts provided.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="build-uri" return-type="xs:string" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="parts" type-ref="parts-record"/><arg name="options" type="map(*)" default="map{}"/></proto></example><example role="record"><record name="parts-record">
+           <arg name="scheme?" type="xs:string"/>
+           <arg name="authority?" type="xs:string"/>
+           <arg name="userinfo?" type="xs:string"/>
+           <arg name="host?" type="xs:string"/>
+           <arg name="port?" type="xs:string"/>
+           <arg name="path?" type="xs:string"/>
+           <arg name="query?" type="xs:string"/>
+           <arg name="fragment?" type="xs:string"/>
+           <arg name="path-segments?" type="array(xs:string)"/>
+           <arg name="query-segments?" type="array(record(key? as xs:string, value? as xs:string, *))"/>
+           <arg name="*"/>
+         </record></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-dependent">context-dependent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>A URI is composed from a scheme, authority, path, query, and fragment.
+        These components are derived from the contents of the <code>$parts</code>
+        map in the following way:</p><p>If the <code>scheme</code> key is present in the map, the URI begins
+        with the value of that key concatenated with <code>//</code>, otherwise
+        it begins <code>//</code>.</p><p>If any of <code>userinfo</code>, <code>host</code>, or <code>port</code>
+        are present in the map, the following authority is added to the URI
+        under construction:
         <eg xml:space="preserve">concat((if (exists($parts?userinfo)) then $parts?userinfo || "@" else ""),
        $host,
-       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg>
-        It is an error XXX if the <code>$host</code> is the empty sequence and 
-        either <code>$parts?userinfo</code> or <code>$parts?port</code> is not
-        the empty sequence.</p><p>If the <code>$host</code> is the empty sequence,
-        the function returns: <code>concat($scheme, ":", $path)</code>.</p><p>If the <code>$host</code> is not the empty sequence,
-        the function returns:
-        <eg xml:space="preserve">concat($scheme, "://", $authority, $path,
-       (if (exists($query)) then "?" || $query else ""),
-       (if (exists($parts?fragment)) then "#" || $parts?fragment else "")</eg></p><p>TODO: can non-hierarchical URIs have queries or fragments?</p></def></gitem><gitem><label>Examples</label><def role="example"><p>The expression <code>fn:build-uri(map {
+       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg></p><p>If none of <code>userinfo</code>, <code>host</code>, or <code>port</code>
+        is present, and <code>authority</code> is present, the value of the
+        <code>authority</code> key is added to the URI.</p><p>If the <code>path-segments</code> key exists in the map, then the
+        path is constructed
+        with <code>string-join($parts?path-segments ! encode-for-uri(.), "/")</code>,
+        otherwise the value of the <code>path</code> key is used.
+        If the <code>path</code> value is the empty sequence,
+        the empty string is used for the path. The path is added to the URI.</p><p>If the <code>query-segments</code> key exists in the map, then
+        a sequence of strings is constructed from each segment in turn.
+        If the segment contains both a <code>key</code> and a <code>value</code>,
+        the string is the concatenation of the value of the <code>key</code>,
+        an equal sign (“<code>=</code>”), and the value of the <code>value</code>. If it contains
+        only one of those keys, then it is the value of that key. If it contains
+        neither, it is ignored. The query is constructed by joining the resulting
+        strings into a single string, separated by ampersands (“<code>&amp;</code>”).
+        If the <code>query-segments</code> key does not exist in the map, but
+        the <code>query</code> key does, then the query is the value of the
+        <code>query</code> key. If there’s a query, it is added to the URI with
+        a preceding question mark (“<code>?</code>”).</p><p>If the <code>fragment</code> key exists in the map, then
+        the value of that key is added to the URI with
+        a preceding hash mark (“<code>#</code>”).</p><p>The resulting URI is returned.</p></def></gitem><gitem><label>Examples</label><def role="example"><p>The expression <code>fn:build-uri(map {
     "scheme": "https",
     "host": "qt4cg.org",
     "port": (),

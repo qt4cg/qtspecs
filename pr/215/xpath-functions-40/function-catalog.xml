@@ -23606,9 +23606,10 @@ declare function fn:some(
          <p>The function parses the <code>$uri</code> provided,
          returning a map containing its constituent parts: scheme,
          authority components, path, etc.
-         <bibref ref="rfc3986"/>, which defines URIs, is concerned with
-         the syntax of absolute URIs. This function must also account
-         for relative URIs, which complicates things somewhat.</p>
+         In addition to parsing URIs as defined by <bibref ref="rfc3986"/>
+         (and <bibref ref="rfc3987"/>), this function also attempts to
+         account for strings that are not valid URIs but that often appear
+         in URI-adjacent spaces, such as file names.</p>
 
          <p>This function is described as a series of transformations
          over the input string to identify the parts of a URI that are
@@ -23701,10 +23702,16 @@ declare function fn:some(
          is present and it’s value is not a string of length one.</p>
 
          <p>A <emph>query-segments</emph> is constructed as follows: tokenize
-         the <emph>query</emph> on the <emph>query separator</emph>,
-         apply <emph>uri decoding</emph> on each token, and convert
-         the result to an array.</p>
-         
+         the <emph>query</emph> on the <emph>query separator</emph>. For each
+         token, construct a map. If the token contains an equal sign (“=”),
+         the map contains a key named <code>key</code> with a value equal to the
+         string preceding the first equal sign and a key named <code>value</code>
+         with a value equal to the string following the first equal sign. If the
+         token does not contain an equal sign, the map contains a single key named
+         <code>value</code> with a value equal to the token. In every case,
+         <emph>uri decoding</emph> is applied to each value add to the map.
+         The resulting sequence of maps is converted into an array.</p>
+
          <p>The following map is returned:</p>
 
          <eg>{
@@ -23735,6 +23742,22 @@ declare function fn:some(
          keys in the map be QNames with the requirement that implementation-defined
          keys be in a non-empty namespace?</p>
       </fos:rules>
+
+      <fos:notes>
+         <p>Like <code>fn:resolve-uri</code>, this function handles the additional characters
+         allowed in <bibref ref="rfc3987"/> IRIs in the same way that other unreserved
+         characters are handled.</p>
+         <p>Unlike <code>fn:resolve-uri</code>, this function is not attempting to resolve
+         one URI against another and consequently, the errors that can arise under those
+         circumstances do not apply here. The <code>fn:parse-uri</code> function will
+         accept strings that would raise errors if resolution was attempted,
+         see <code>fn:build-uri</code>.</p>
+      </fos:notes>
+
+      <fos:errors>
+         <p>An error is raised XXXX if the supplied path separator is not a single character.</p>
+         <p>An error is raised XXXX if the supplied query separator is not a single character.</p>
+      </fos:errors>
       
 <fos:examples>
   <fos:example>
@@ -23791,7 +23814,10 @@ map {
   "port": "080",
   "path": "/path",
   "query": "s=%22hello world%22&amp;sort=relevance",
-  "query-segments": array { "s=""hello world""", "sort=relevance" },
+  "query-segments": array {
+    map { "key": "s", "value": "&quot;&quot;hello world&quot;&quot;" },
+    map { "key": "sort", "value": "relevance" }
+  },
   "path-segments": array { "", "path" }
 }</eg></fos:result>
     </fos:test>
@@ -23929,7 +23955,9 @@ map {
   "uri": "?q=1",
   "path": "",
   "query": "q=1",
-  "query-segments": array { "q=1" }
+  "query-segments": array {
+    map { "key": "q", "value": "1" }
+  }
 }</eg></fos:result>
     </fos:test>
   </fos:example>
@@ -23944,7 +23972,9 @@ map {
   "host": "[2001:db8::7]",
   "path": "/c=GB",
   "query": "objectClass?one",
-  "query-segments": array { "objectClass?one" },
+  "query-segments": array {
+    map { "value": "objectClass?one" }
+  },
   "path-segments": array { "", "c=GB" }
 }</eg></fos:result>
     </fos:test>
@@ -24013,6 +24043,32 @@ map {
     </fos:test>
   </fos:example>
   <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("tag:textalign.net,2015:ns")</eg></fos:expression>
+      <fos:result><eg>
+map {
+    "uri": "tag:textalign.net,2015:ns",
+    "scheme": "tag",
+    "path": "textalign.net,2015:ns",
+    "path-segments": [ "textalign.net,2015:ns" ]
+  }
+</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("tag:jan@example.com,1999-01-31:my-uri")</eg></fos:expression>
+      <fos:result><eg>
+map {
+    "uri": "tag:jan@example.com,1999-01-31:my-uri"
+    "scheme": "tag",
+    "path": "jan@example.com,1999-01-31:my-uri",
+    "path-segments": [ "jan@example.com,1999-01-31:my-uri" ],
+}
+</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
 <p>This example uses the algorithm described above, not an algorithm that is
 specifically aware of the <code>jar:</code> scheme.</p>
     <fos:test>
@@ -24027,6 +24083,56 @@ map {
 </eg></fos:result>
     </fos:test>
   </fos:example>
+  <fos:example>
+<p>This example demonstrates that parsing the URI treats non-URI characters in
+lexical IRIs as “unreserved characters”. The rationale for this is given in the
+description of <code>fn:resolve-uri</code>.</p>
+    <fos:test>
+      <fos:expression><eg>fn:parse-uri("http://www.example.org/Dürst")</eg></fos:expression>
+      <fos:result><eg>
+map {
+    "uri": "http://www.example.org/Dürst",
+    "scheme": "http",
+    "authority": "www.example.org",
+    "host": "www.example.org",
+    "path": "/Dürst",
+    "path-segments": [ "","Dürst" ]
+}
+</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+<p>This example demonstrates a non-standard query separator.</p>
+    <fos:test>
+      <fos:expression><eg>
+fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;sort=relevance",
+             map { "query-separator": ";" })</eg></fos:expression>
+      <fos:result><eg>
+map {
+  "uri": "https://example.com:8080/path?s=%22hello world%22;sort=relevance",
+  "scheme": "https",
+  "authority": "example.com:8080",
+  "host": "example.com",
+  "port": "080",
+  "path": "/path",
+  "query": "s=%22hello world%22;sort=relevance",
+  "query-segments": array {
+    map { "key": "s", "value": "&quot;&quot;hello world&quot;&quot;" },
+    map { "key": "sort", "value": "relevance" }
+  },
+  "path-segments": array { "", "path" }
+}</eg></fos:result>
+    </fos:test>
+  </fos:example>
+  <fos:example>
+<p>This example uses an invalid query separator so raises an error.</p>
+    <fos:test>
+      <fos:expression><eg>
+fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;;sort=relevance",
+             map { "query-separator": ";;" })</eg></fos:expression>
+      <fos:error-result error-code="FOXX0000"/>
+    </fos:test>
+  </fos:example>
       </fos:examples>
       <fos:history>
          <fos:version version="4.0">Proposed on 17 Oct 2022 to resolve
@@ -24038,9 +24144,24 @@ map {
    <fos:function name="build-uri" prefix="fn" diff="add">
       <fos:signatures>
          <fos:proto name="build-uri" return-type="xs:string">
-            <fos:arg name="parts" type="map(xs:string,xs:string)"/>
+            <fos:arg name="parts" type-ref="parts-record"/>
             <fos:arg name="options" type="map(*)" default="map{}"/>
          </fos:proto>
+
+         <fos:record name="parts-record">
+           <fos:arg name="scheme?" type="xs:string"/>
+           <fos:arg name="authority?" type="xs:string"/>
+           <fos:arg name="userinfo?" type="xs:string"/>
+           <fos:arg name="host?" type="xs:string"/>
+           <fos:arg name="port?" type="xs:string"/>
+           <fos:arg name="path?" type="xs:string"/>
+           <fos:arg name="query?" type="xs:string"/>
+           <fos:arg name="fragment?" type="xs:string"/>
+           <fos:arg name="path-segments?" type="array(xs:string)"/>
+           <fos:arg name="query-segments?"
+                    type="array(record(key? as xs:string, value? as xs:string, *))"/>
+           <fos:arg name="*"/>
+         </fos:record>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
@@ -24053,44 +24174,50 @@ map {
       </fos:summary>
 
       <fos:rules>
-        <p>If the <code>segments</code> key exists in the map, then <code>$path</code> is constructed
-        with <code>string-join($parts?segments ! encode-for-uri(.), "/")</code>,
-        otherwise the value of the <code>path</code> key is used.
-        If the <code>$path</code> value is the empty sequence,
-        the empty string is used for the <code>$path</code> value.</p>
+        <p>A URI is composed from a scheme, authority, path, query, and fragment.
+        These components are derived from the contents of the <code>$parts</code>
+        map in the following way:</p>
 
-        <p>If the <code>query-keys</code> key exists in the map, the <code>$query</code> is constructed
-        with <code>string-join($parts?query-keys ! concat(encode-for-uri(.?key), "=", encode-for-uri(.?value)), "&amp;")</code>, otherwise the value of the <code>query</code> key is used.</p>
+        <p>If the <code>scheme</code> key is present in the map, the URI begins
+        with the value of that key concatenated with <code>//</code>, otherwise
+        it begins <code>//</code>.</p>
 
-        <p>If the <code>scheme</code> key is absent or is the empty sequence, then
-        <code>$scheme</code> is the scheme of the
-        static base URI, otherwise the value of the <code>scheme</code> key is
-        used. It is an error XXX if there is no static base URI.</p>
-
-        <p>If the <code>host</code> key is absent, then
-        <code>$host</code> is the host of the
-        static base URI, otherwise the value of the <code>host</code> key is used.
-        It is an error XXX if there is no static base URI.</p>
-
-        <p>The <code>$authority</code> is
+        <p>If any of <code>userinfo</code>, <code>host</code>, or <code>port</code>
+        are present in the map, the following authority is added to the URI
+        under construction:
         <eg>concat((if (exists($parts?userinfo)) then $parts?userinfo || "@" else ""),
        $host,
-       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg>
-        It is an error XXX if the <code>$host</code> is the empty sequence and 
-        either <code>$parts?userinfo</code> or <code>$parts?port</code> is not
-        the empty sequence.</p>
+       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg></p>
 
-        <p>If the <code>$host</code> is the empty sequence,
-        the function returns: <code>concat($scheme, ":", $path)</code>.</p>
+        <p>If none of <code>userinfo</code>, <code>host</code>, or <code>port</code>
+        is present, and <code>authority</code> is present, the value of the
+        <code>authority</code> key is added to the URI.</p>
 
-        <p>If the <code>$host</code> is not the empty sequence,
-        the function returns:
-        <eg>concat($scheme, "://", $authority, $path,
-       (if (exists($query)) then "?" || $query else ""),
-       (if (exists($parts?fragment)) then "#" || $parts?fragment else "")</eg></p>
+        <p>If the <code>path-segments</code> key exists in the map, then the
+        path is constructed
+        with <code>string-join($parts?path-segments ! encode-for-uri(.), "/")</code>,
+        otherwise the value of the <code>path</code> key is used.
+        If the <code>path</code> value is the empty sequence,
+        the empty string is used for the path. The path is added to the URI.</p>
 
-       <p>TODO: can non-hierarchical URIs have queries or fragments?</p>
+        <p>If the <code>query-segments</code> key exists in the map, then
+        a sequence of strings is constructed from each segment in turn.
+        If the segment contains both a <code>key</code> and a <code>value</code>,
+        the string is the concatenation of the value of the <code>key</code>,
+        an equal sign (“<code>=</code>”), and the value of the <code>value</code>. If it contains
+        only one of those keys, then it is the value of that key. If it contains
+        neither, it is ignored. The query is constructed by joining the resulting
+        strings into a single string, separated by ampersands (“<code>&amp;</code>”).
+        If the <code>query-segments</code> key does not exist in the map, but
+        the <code>query</code> key does, then the query is the value of the
+        <code>query</code> key. If there’s a query, it is added to the URI with
+        a preceding question mark (“<code>?</code>”).</p>
 
+        <p>If the <code>fragment</code> key exists in the map, then
+        the value of that key is added to the URI with
+        a preceding hash mark (“<code>#</code>”).</p>
+
+        <p>The resulting URI is returned.</p>
       </fos:rules>
       
       <fos:examples>
