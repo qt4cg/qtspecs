@@ -541,12 +541,20 @@ span.dagger {
             <tr class="arg">
               <td>
                 <code>$<xsl:sequence select="@name/string()"/></code>
-                <xsl:if test="not(@type) and not($last)">,</xsl:if>
+                <xsl:if test="not(@type) and not(@type-ref) and not($last)">,</xsl:if>
               </td>
               <td>
                 <xsl:if test="@type">
                   <code class="as">as&#160;</code>
                   <code class="type"><xsl:sequence select="@type/string()"/></code>
+                  <xsl:if test="not (@default) and not($last)">,</xsl:if>
+                </xsl:if>
+                <xsl:if test="@type-ref">
+                  <code class="as">as&#160;</code>
+                  <span class="dagger">†</span>
+                  <a href="#{@type-ref}">
+                    <xsl:value-of select="@type-ref"/>
+                  </a>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
                 </xsl:if>
               </td>

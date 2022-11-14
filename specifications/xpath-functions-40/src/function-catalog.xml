@@ -24144,9 +24144,24 @@ fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;;sort=relevance"
    <fos:function name="build-uri" prefix="fn" diff="add">
       <fos:signatures>
          <fos:proto name="build-uri" return-type="xs:string">
-            <fos:arg name="parts" type="map(xs:string,xs:string)"/>
+            <fos:arg name="parts" type-ref="parts-record"/>
             <fos:arg name="options" type="map(*)" default="map{}"/>
          </fos:proto>
+
+         <fos:record name="parts-record">
+           <fos:arg name="scheme?" type="xs:string"/>
+           <fos:arg name="authority?" type="xs:string"/>
+           <fos:arg name="userinfo?" type="xs:string"/>
+           <fos:arg name="host?" type="xs:string"/>
+           <fos:arg name="port?" type="xs:string"/>
+           <fos:arg name="path?" type="xs:string"/>
+           <fos:arg name="query?" type="xs:string"/>
+           <fos:arg name="fragment?" type="xs:string"/>
+           <fos:arg name="path-segments?" type="array(xs:string)"/>
+           <fos:arg name="query-segments?"
+                    type="array(record(key? as xs:string, value? as xs:string, *))"/>
+           <fos:arg name="*"/>
+         </fos:record>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
@@ -24159,44 +24174,50 @@ fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;;sort=relevance"
       </fos:summary>
 
       <fos:rules>
-        <p>If the <code>segments</code> key exists in the map, then <code>$path</code> is constructed
-        with <code>string-join($parts?segments ! encode-for-uri(.), "/")</code>,
-        otherwise the value of the <code>path</code> key is used.
-        If the <code>$path</code> value is the empty sequence,
-        the empty string is used for the <code>$path</code> value.</p>
+        <p>A URI is composed from a scheme, authority, path, query, and fragment.
+        These components are derived from the contents of the <code>$parts</code>
+        map in the following way:</p>
 
-        <p>If the <code>query-keys</code> key exists in the map, the <code>$query</code> is constructed
-        with <code>string-join($parts?query-keys ! concat(encode-for-uri(.?key), "=", encode-for-uri(.?value)), "&amp;")</code>, otherwise the value of the <code>query</code> key is used.</p>
+        <p>If the <code>scheme</code> key is present in the map, the URI begins
+        with the value of that key concatenated with <code>//</code>, otherwise
+        it begins <code>//</code>.</p>
 
-        <p>If the <code>scheme</code> key is absent or is the empty sequence, then
-        <code>$scheme</code> is the scheme of the
-        static base URI, otherwise the value of the <code>scheme</code> key is
-        used. It is an error XXX if there is no static base URI.</p>
-
-        <p>If the <code>host</code> key is absent, then
-        <code>$host</code> is the host of the
-        static base URI, otherwise the value of the <code>host</code> key is used.
-        It is an error XXX if there is no static base URI.</p>
-
-        <p>The <code>$authority</code> is
+        <p>If any of <code>userinfo</code>, <code>host</code>, or <code>port</code>
+        are present in the map, the following authority is added to the URI
+        under construction:
         <eg>concat((if (exists($parts?userinfo)) then $parts?userinfo || "@" else ""),
        $host,
-       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg>
-        It is an error XXX if the <code>$host</code> is the empty sequence and 
-        either <code>$parts?userinfo</code> or <code>$parts?port</code> is not
-        the empty sequence.</p>
+       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg></p>
 
-        <p>If the <code>$host</code> is the empty sequence,
-        the function returns: <code>concat($scheme, ":", $path)</code>.</p>
+        <p>If none of <code>userinfo</code>, <code>host</code>, or <code>port</code>
+        is present, and <code>authority</code> is present, the value of the
+        <code>authority</code> key is added to the URI.</p>
 
-        <p>If the <code>$host</code> is not the empty sequence,
-        the function returns:
-        <eg>concat($scheme, "://", $authority, $path,
-       (if (exists($query)) then "?" || $query else ""),
-       (if (exists($parts?fragment)) then "#" || $parts?fragment else "")</eg></p>
+        <p>If the <code>path-segments</code> key exists in the map, then the
+        path is constructed
+        with <code>string-join($parts?path-segments ! encode-for-uri(.), "/")</code>,
+        otherwise the value of the <code>path</code> key is used.
+        If the <code>path</code> value is the empty sequence,
+        the empty string is used for the path. The path is added to the URI.</p>
 
-       <p>TODO: can non-hierarchical URIs have queries or fragments?</p>
+        <p>If the <code>query-segments</code> key exists in the map, then
+        a sequence of strings is constructed from each segment in turn.
+        If the segment contains both a <code>key</code> and a <code>value</code>,
+        the string is the concatenation of the value of the <code>key</code>,
+        an equal sign (“<code>=</code>”), and the value of the <code>value</code>. If it contains
+        only one of those keys, then it is the value of that key. If it contains
+        neither, it is ignored. The query is constructed by joining the resulting
+        strings into a single string, separated by ampersands (“<code>&amp;</code>”).
+        If the <code>query-segments</code> key does not exist in the map, but
+        the <code>query</code> key does, then the query is the value of the
+        <code>query</code> key. If there’s a query, it is added to the URI with
+        a preceding question mark (“<code>?</code>”).</p>
 
+        <p>If the <code>fragment</code> key exists in the map, then
+        the value of that key is added to the URI with
+        a preceding hash mark (“<code>#</code>”).</p>
+
+        <p>The resulting URI is returned.</p>
       </fos:rules>
       
       <fos:examples>

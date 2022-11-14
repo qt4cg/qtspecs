@@ -211,7 +211,7 @@
 
 	<xsl:template match="fos:arg">
 	  <arg>
-	    <xsl:copy-of select="@name, @type, @diff, @at, @default"/>
+	    <xsl:copy-of select="@name, @type, @type-ref, @diff, @at, @default"/>
 	  </arg>
 	</xsl:template>
 	
