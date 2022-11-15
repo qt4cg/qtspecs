@@ -73,11 +73,15 @@ div.issueBody    { margin-left: 0.25in;
 
 code.function    { font-weight: bold;
                  }
-code.return-type { font-style: italic;
+.return-type { font-style: italic;
                  }
-code.return-varies { font-weight: bold;
+.return-varies { font-weight: bold;
                    font-style: italic;
                  }
+.proto .return-type-ref {
+  background-color: #fff6ff;
+  font-style: normal;
+}
 code.type        { font-style: italic;
                  }
 code.as          { font-style: normal;
@@ -151,6 +155,17 @@ div.proto        {
 		overflow: auto;
                  }
 
+div.record        { 
+    padding: .5em;
+		border: .5em;
+		border-left-style: solid;
+		page-break-inside: avoid;
+		margin: 1em auto;
+		border-color: #ffaaff;
+		background: #fff6ff;
+		overflow: auto;
+                 }
+
 
 div.example-chg  { border: solid thick yellow; background-color: #40e0d0; padding: 1em
                  }
@@ -186,15 +201,23 @@ table.data table.index {
  border-bottom:2px !important ;
 }
 
-table.proto tr td {
+table.proto tr td,
+table.record tr td, {
   font-family: monospace;
   padding-right: 0.5em;
 }
-table.proto tr.arg td:first-child  {
+table.proto tr.arg td:first-child,
+table.record tr.arg td:first-child  {
   padding-left: 2em;
 }
 table.proto tr.name span.name {
   font-weight: bold;
+}
+span.dagger {
+  font-family: serif;
+  font-weight: bold;
+  font-size: 150%;
+  font-style: italic;
 }
 </xsl:text>
 </xsl:param>
@@ -450,6 +473,12 @@ table.proto tr.name span.name {
     </div>
   </xsl:template>
 
+  <xsl:template match="example[@role='record']" priority="10">
+    <div>
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+
 <!-- Override proto and arg to print XQuery F/O-style prototypes -->
 
 <xsl:template match="proto">
@@ -465,7 +494,6 @@ table.proto tr.name span.name {
   </xsl:variable>
 
   <div class="proto">
-    <!--<pre><xsl:sequence select="serialize(., map{'method':'xml', 'indent': true()})"/></pre>-->
     <xsl:choose>
       <xsl:when test="empty(arg)">
         <table class="proto" border="0">
@@ -513,12 +541,20 @@ table.proto tr.name span.name {
             <tr class="arg">
               <td>
                 <code>$<xsl:sequence select="@name/string()"/></code>
-                <xsl:if test="not(@type) and not($last)">,</xsl:if>
+                <xsl:if test="not(@type) and not(@type-ref) and not($last)">,</xsl:if>
               </td>
               <td>
                 <xsl:if test="@type">
                   <code class="as">as&#160;</code>
                   <code class="type"><xsl:sequence select="@type/string()"/></code>
+                  <xsl:if test="not (@default) and not($last)">,</xsl:if>
+                </xsl:if>
+                <xsl:if test="@type-ref">
+                  <code class="as">as&#160;</code>
+                  <span class="dagger">†</span>
+                  <a href="#{@type-ref}">
+                    <xsl:value-of select="@type-ref"/>
+                  </a>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
                 </xsl:if>
               </td>
@@ -536,25 +572,81 @@ table.proto tr.name span.name {
 	    <td colspan="3">
               <xsl:text>)</xsl:text>
               <code class="as">&#160;as&#160;</code>
-              <xsl:choose>
-                <xsl:when test="@returnVaries = 'yes'">
-                  <code class="return-varies">
+              <code>
+                <xsl:if test="@returnVaries = 'yes' or @return-type-ref">
+                  <xsl:attribute name="class"
+                                 select="if (@returnVaries = 'yes' and @return-type-ref)
+                                         then 'return-varies return-type-ref'
+                                         else if (@returnVaries = 'yes')
+                                              then 'return-varies'
+                                              else 'return-type-ref'"/>
+                </xsl:if>
+
+                <xsl:choose>
+                  <xsl:when test="@return-type">
                     <xsl:value-of select="@return-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </code>
-                </xsl:when>
-                <xsl:otherwise>
-                  <code class="return-type">
+                  </xsl:when>
+                  <xsl:when test="@return-type-ref">
+                    <span class="dagger">†</span>
+                    <a href="#{@return-type-ref}">
+                      <xsl:value-of select="@return-type-ref"/>
+                    </a>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </xsl:when>
+                  <xsl:otherwise>
                     <xsl:value-of select="@return-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </code>
-                </xsl:otherwise>
-              </xsl:choose>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </code>
             </td>
           </tr>
         </table>
       </xsl:otherwise>
     </xsl:choose>
+  </div>
+</xsl:template>
+
+<xsl:template match="record">
+  <div class="record">
+    <table class="record" border="0">
+      <tr>
+        <td colspan="2">
+          <code id="{@name}" class="return-type-ref">
+            <span class="dagger">†</span>
+            <xsl:value-of select="@name"/>
+          </code>
+          <xsl:text>:</xsl:text>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2">
+          <code>record(</code>
+        </td>
+      </tr>
+      <xsl:for-each select="arg">
+        <tr class="arg">
+          <td>
+            <xsl:sequence select="@name/string()"/>
+          </td>
+          <td>
+            <xsl:if test="@type">
+              <code class="as">&#160;as&#160;</code>
+              <code>
+                <xsl:value-of select="@type"/>
+              </code>
+            </xsl:if>
+            <xsl:if test="not(position() = last())">,</xsl:if>
+          </td>
+        </tr>
+      </xsl:for-each>
+      <tr>
+        <td colspan="2">
+          <code>)</code>
+        </td>
+      </tr>
+    </table>
   </div>
 </xsl:template>
 
