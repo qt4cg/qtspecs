@@ -225,6 +225,7 @@ made since XPath 3.0 can be found in <a href="#id-revision-log"><b>I Change Log<
                         <li><a href="#id-handling-dynamic"><span class="secno">2.4.3 </span><span class="content">Handling Dynamic Errors</span></a></li>
                         <li><a href="#id-errors-and-opt"><span class="secno">2.4.4 </span><span class="content">Errors and
                                  Optimization</span></a></li>
+                        <li><a href="#id-guarded-expressions"><span class="secno">2.4.5 </span><span class="content">Guarded Expressions</span></a></li>
                      </ol>
                   </li>
                   <li><a href="#id-important-concepts"><span class="secno">2.5 </span><span class="content">Concepts</span></a><ol class="toc">
@@ -2291,28 +2292,10 @@ would raise an error because it has an <code>id</code> child whose value is not 
                      </li>
                      <li>
                         <p>
-                        <span class="xpath">Conditional</span>
-                      expressions
-                must not raise a dynamic error in
-                respect of subexpressions occurring in a branch that is not selected,
-                and must not
-                return the value delivered by a branch unless that branch is selected.
-                Thus, the following example must not raise a
-                dynamic error if the document <code>abc.xml</code> does not exist:
-             </p>
-                        <div class="exampleInner">
-                           <pre>if (doc-available('abc.xml')) then doc('abc.xml') else ()</pre>
-                        </div>
-                        <p>Of course, the condition must be evaluated in order to determine which branch is selected, and the query must not be rewritten in a way that would bypass evaluating the condition.</p>
-                     </li>
-                     <li>
-                        <p>
-                As stated earlier, an expression
-                must not be rewritten to dispense with a
-                required cardinality check: for example, <code>string-length(//title)</code>
-                must raise an
-                error if the document contains more than one title element.
-             </p>
+                     The rules described in <a href="#id-guarded-expressions"><b>2.4.5 Guarded Expressions</b></a> ensure that for
+                     certain kinds of expression (for example conditional expressions), changing the
+                     order of evaluation of subexpressions does not result in dynamic errors that
+                     would not otherwise occur.</p>
                      </li>
                      <li>
                         <p>
@@ -2323,55 +2306,127 @@ would raise an error because it has an <code>id</code> child whose value is not 
                 for the original expression, and must be preserved if
                 the expression is rewritten.</p>
                      </li>
+                     <li>
+                        <p>
+                     As stated earlier, an expression
+                     must not be rewritten to dispense with a
+                     required cardinality check: for example, <code>string-length(//title)</code>
+                     must raise an
+                     error if the document contains more than one title element.
+                  </p>
+                     </li>
                   </ul>
+               </div>
+               <div class="div3">
+                  
+                  <h4><a id="id-guarded-expressions"></a>2.4.5 Guarded Expressions</h4>
                   <p>
-          Expression rewrite is illustrated by the following examples.
-          </p>
+                  [<a id="dt-guarded" title="guarded">Definition</a>: An expression <var>E</var> is said to be <b>guarded</b>
+               by some governing condition <var>C</var> if evaluation of <var>E</var> is not allowed to fail
+               with a <a title="dynamic error" class="termref" href="#dt-dynamic-error">dynamic error</a> except when <var>C</var> applies.]
+               </p>
+                  <p>For example, in a conditional expression <code>if (P) then T else F</code>, the subexpression
+               <var>T</var> is guarded by <var>P</var>, and the subexpression <var>F</var> is guarded by
+               <code>not(P)</code>. One way an implementation can satisfy this rule is by not evaluating <var>T</var> unless <var>P</var>
+               is true, and likewise not evaluating <var>F</var> unless <var>P</var> is false. Another
+               way of satisfying the rule is for the implementation to evaluate all the subexpressions, but to catch any errors that occur 
+               in a guarded subexpression so they are not propagated.
+            </p>
+                  <p>The existence of this rule enables errors to be prevented by writing expressions such as
+            <code>if ($y eq 0) then "N/A" else ($x div $y)</code>. This example will never fail with a divide-by-zero
+            error because the <code>else</code> branch of the conditional is <a title="guarded" class="termref" href="#dt-guarded">guarded</a>.</p>
+                  <p>Similarly, in the mapping expression <code>E1!E2</code>, the subexpression <code>E2</code> is guarded
+            by the existence of an item from <var>E1</var>. This means, for example, that the expression <code>(1 to $n)!doc('bad.xml')</code>
+            must not raise a dynamic error if <code>$n</code> is zero. The rule governing evaluation of guarded expressions
+               is phrased so as not to disallow “loop-lifting” or “constant-folding” optimizations 
+               whose aim is to avoid repeated evaluation of a common subexpression;
+            but such optimizations must not result in errors that would not otherwise occur.</p>
+                  <p>The complete list of expressions that have guarded subexpressions is as follows:</p>
                   <ul>
                      <li>
-                        <p>Consider the expression <code>//part[color eq "Red"]</code>. An implementation might
-choose to rewrite this expression as <code>//part[color = "Red"][color eq
-"Red"]</code>. The implementation might then process the expression as follows:
-First process the "<code>=</code>" predicate by probing an index on parts by color to
-quickly find all the parts that have a Red color; then process the "<code>eq</code>"
-predicate by checking each of these parts to make sure it has only a
-single color. The result would be as follows:
-
-</p>
-                        <ul>
-                           <li>
-                              <p>Parts that have exactly one color that is Red are returned.</p>
-                           </li>
-                           <li>
-                              <p>If some part has color Red together with some other color, an error is
-raised.</p>
-                           </li>
-                           <li>
-                              <p>The existence of some part that has no color Red but has multiple non-Red
-colors does not trigger an error.</p>
-                           </li>
-                        </ul>
+                        <p>In a conditional expression (<a href="#doc-xpath40-IfExpr">IfExpr</a>) the <code>then</code> branch
+                  is guarded by the condition being true, and the <code>else</code> branch
+                  is guarded by the condition being false.</p>
                      </li>
                      <li>
-                        <p>The expression in the following example cannot raise a casting error if it is evaluated
-exactly as written (i.e., left to right). Since neither predicate depends on the context position, an implementation might choose to reorder the predicates to achieve better
-performance (for example, by taking advantage of an index). This
-reordering could cause the expression to raise an
-error.</p>
-                        <div class="exampleInner">
-                           <pre>$N[@x castable as xs:date][xs:date(@x) gt xs:date("2000-01-01")]</pre>
-                        </div>
-                        <p>To avoid unexpected errors caused by expression rewrite,
-tests that are designed to prevent dynamic errors should be expressed
-using conditional  expressions. For example, the above expression can be written as
-follows:</p>
-                        <div class="exampleInner">
-                           <pre>$N[if (@x castable as xs:date)
-   then xs:date(@x) gt xs:date("2000-01-01")
-   else false()]</pre>
-                        </div>
+                        <p>In an <code>and</code> expression (<a href="#doc-xpath40-AndExpr">AndExpr</a>), the second operand
+               is guarded by the value of the first operand being true.</p>
+                     </li>
+                     <li>
+                        <p>In an <code>or</code> expression (<a href="#doc-xpath40-OrExpr">OrExpr</a>), the second operand
+                  is guarded by the value of the first operand being false.</p>
+                     </li>
+                     <li>
+                        <p>In an <code>otherwise</code> expression (<a href="#doc-xpath40-OtherwiseExpr">OtherwiseExpr</a>), the second operand
+                  is guarded by the value of the first operand being an empty sequence.</p>
+                     </li>
+                     <li>
+                        <p>In a path expression of the form <code>E1/E2</code> or <code>E1//E2</code>, and in a mapping
+               expression of the form <code>E1!E2</code>, the right-hand operand <code>E2</code> is guarded by
+               the existence of the relevant context item in the result of evaluating <code>E1</code>.</p>
+                        <p>This rule applies even if <code>E2</code> does not reference the context item.
+                     For example, no dynamic error can be thrown by the expression 
+               <code>(1 to $n)!doc('bad.xml')</code> in the case where <code>$n</code> is zero.</p>
+                     </li>
+                     <li>
+                        <p>In a filter expression of the form <code>E[P]</code>, the predicate <code>P</code> is guarded by
+                  the existence of the relevant context item in the result of evaluating <code>E</code>.</p>
+                        <p>This rule has the consequence that in a filter expression with multiple predicates, such as <code>E[P1][P2]</code>,
+               evaluation of <code>P2</code> must not raise a dynamic error unless <code>P1</code> returns true. This rule does
+               not prevent reordering of predicates (for example, to take advantage of indexes), but it does require that any
+               such reordering must not result in errors that would not otherwise occur.</p>
+                     </li>
+                     <li>
+                        <p class="xpath">In a <code>for</code> expression (<a href="#doc-xpath40-ForExpr">ForExpr</a>) such
+                  as <code>for $x in S return E</code>, the expression <code>E</code> is guarded by the existence of
+                  an item bound to <code>$x</code>.</p>
+                        <p>This means that the expression <code>for $x in 1 to $n return doc('bad.xml')</code>
+               must not raise a dynamic error in the case where <code>$n</code> is zero.</p>
+                     </li>
+                     <li>
+                        <p>In a <code>quantified</code> expression (<a href="#doc-xpath40-QuantifiedExpr">QuantifiedExpr</a>) such
+                  as <code>some $x in S satisfies P</code>, the expression <code>P</code> is guarded by the existence of
+                     an item bound to <code>$x</code>.</p>
                      </li>
                   </ul>
+                  <p>The fact that an expression is <a title="guarded" class="termref" href="#dt-guarded">guarded</a> does not remove the obligation to report
+            <a title="static error" class="termref" href="#dt-static-error">static errors</a> in the expression; nor does it remove the option
+            to report statically detectable <a title="type error" class="termref" href="#dt-type-error">type errors</a>.</p>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>These rules do not constrain the order of evaluation of subexpressions. For example, given an expression
+                  such as <code>//person[@first="Winston"][@last="Churchill"]</code>, or equivalently
+                  <code>//person[@first="Winston" and @last="Churchill"]</code>, an implementation might use an index on the value of
+                  <code>@last</code> to select items that satisfy the second condition, and then filter these
+                  items on the value of the first condition. Alternatively, it might evaluate both predicates in parallel.
+                  Or it might interpose an additional redundant condition: 
+                  <code>//person[string-length(@first)+string-length(@last)=16][@first="Winston"][@last="Churchill"]</code>.
+                  But implementations must ensure that
+                  such rewrites do not result in dynamic errors being reported that would not occur if the predicates
+                  were evaluated in order as written.</p>
+                  </div>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>Although the rules for guarded expressions prevent optimizations resulting in spurious errors, 
+                  they do not prevent optimizations whose effect is to mask errors. For example, the rules guarantee that
+                  <code>("A", 3)[. instance of xs:integer][. eq 3]</code> will not raise an error caused by the comparison
+                  <code>("A" eq 3)</code>, but they
+                  do not guarantee the converse: the expression <code>("A", 3)[. eq 3][. instance of xs:integer]</code>
+                  may or may not raise a dynamic error.</p>
+                  </div>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>The rules in this section do not disallow all expression rewrites that might result in dynamic
+                  errors. For example, rewriting <code>($x - $y + $z)</code> as <code>($x + $z - $y)</code> is permitted
+               even though it might result in an arithmetic overflow.</p>
+                  </div>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>Some implementations allow calls on external functions that have side-effects. The semantics of
+               such function calls are entirely <a title="implementation defined" class="termref" href="#dt-implementation-defined">implementation defined</a>. Processors <strong>may</strong>
+               choose to reference the rules for <a title="guarded" class="termref" href="#dt-guarded">guarded</a> expressions when defining the behavior
+               of such function calls, but this is outside the scope of the language specification.</p>
+                  </div>
                </div>
             </div>
             <div class="div2">
@@ -2901,7 +2956,7 @@ applied to E6 raises an error.
                
                <h3><a id="id-sequencetype-syntax"></a>3.4 Sequence Types</h3>
                <p>Whenever it is necessary to refer to a type in an XPath 4.0 expression, the <a href="#doc-xpath40-SequenceType">SequenceType</a> syntax is used.</p>
-               <a id="d3e4020"></a><table class="scrap">
+               <a id="d3e4198"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-SequenceType"></a>[97]&nbsp;&nbsp;&nbsp;</td>
@@ -3132,10 +3187,10 @@ the schema type named <code>us:address</code>.</p>
             <div class="div2">
                
                <h3><a id="id-matching-item"></a>3.6 Item Types</h3>
-               <a id="d3e4497"></a><table class="scrap">
+               <a id="d3e4675"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4360.doc-xpath40-ItemType"></a>[99]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4538.doc-xpath40-ItemType"></a>[99]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ItemType</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -3157,7 +3212,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4362.doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4540.doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>LocalUnionType</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -3195,7 +3250,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4365.doc-xpath40-ElementTest"></a>[112]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4543.doc-xpath40-ElementTest"></a>[112]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ElementTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"element"  "("  (<a href="#doc-xpath40-NameTest">NameTest</a>  (","  <a href="#doc-xpath40-TypeName">TypeName</a>  "?"?)?)?  ")"</code></td>
@@ -3204,7 +3259,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4366.doc-xpath40-SchemaElementTest"></a>[113]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4544.doc-xpath40-SchemaElementTest"></a>[113]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>SchemaElementTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"schema-element"  "("  <a href="#doc-xpath40-ElementDeclaration">ElementDeclaration</a>  ")"</code></td>
@@ -3213,7 +3268,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4367.doc-xpath40-ElementDeclaration"></a>[114]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4545.doc-xpath40-ElementDeclaration"></a>[114]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ElementDeclaration</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -3224,7 +3279,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4368.doc-xpath40-AttributeTest"></a>[109]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4546.doc-xpath40-AttributeTest"></a>[109]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>AttributeTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"attribute"  "("  (<a href="#doc-xpath40-NameTest">NameTest</a>  (","  <a href="#doc-xpath40-TypeName">TypeName</a>)?)?  ")"</code></td>
@@ -3233,7 +3288,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4369.doc-xpath40-SchemaAttributeTest"></a>[110]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4547.doc-xpath40-SchemaAttributeTest"></a>[110]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>SchemaAttributeTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"schema-attribute"  "("  <a href="#doc-xpath40-AttributeDeclaration">AttributeDeclaration</a>  ")"</code></td>
@@ -3242,7 +3297,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4371.doc-xpath40-AttributeDeclaration"></a>[111]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4549.doc-xpath40-AttributeDeclaration"></a>[111]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>AttributeDeclaration</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -3320,7 +3375,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4381.doc-xpath40-FunctionTest"></a>[119]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4559.doc-xpath40-FunctionTest"></a>[119]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>FunctionTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -3332,7 +3387,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4383.doc-xpath40-AnyFunctionTest"></a>[120]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4561.doc-xpath40-AnyFunctionTest"></a>[120]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>AnyFunctionTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"function"  "("  "*"  ")"</code></td>
@@ -3341,7 +3396,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4384.doc-xpath40-TypedFunctionTest"></a>[121]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4562.doc-xpath40-TypedFunctionTest"></a>[121]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>TypedFunctionTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"function"  "("  (<a href="#doc-xpath40-SequenceType">SequenceType</a>  (","  <a href="#doc-xpath40-SequenceType">SequenceType</a>)*)?  ")"  "as"  <a href="#doc-xpath40-SequenceType">SequenceType</a>
@@ -3360,7 +3415,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4386.doc-xpath40-MapTest"></a>[122]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4564.doc-xpath40-MapTest"></a>[122]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>MapTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -3371,7 +3426,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4387.doc-xpath40-RecordTest"></a>[125]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4565.doc-xpath40-RecordTest"></a>[125]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>RecordTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"record"  "("  <a href="#doc-xpath40-FieldDeclaration">FieldDeclaration</a>  (","  <a href="#doc-xpath40-FieldDeclaration">FieldDeclaration</a>)*  <a href="#doc-xpath40-ExtensibleFlag">ExtensibleFlag</a>?  ")"</code></td>
@@ -3380,7 +3435,7 @@ the schema type named <code>us:address</code>.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e4388.doc-xpath40-ArrayTest"></a>[132]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e4566.doc-xpath40-ArrayTest"></a>[132]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ArrayTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -3495,7 +3550,7 @@ the schema type named <code>us:address</code>.</p>
                      <p>A <code>LocalUnionType</code> defines an anonymous union type locally (for example,
                      within a function signature) which may be more convenient than defining the type in an
                      imported schema.</p>
-                     <a id="d3e4954"></a><table class="scrap">
+                     <a id="d3e5132"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
@@ -3535,7 +3590,7 @@ the schema type named <code>us:address</code>.</p>
                      [<a id="dt-EnumerationType" title="EnumerationType">Definition</a>: An <b>EnumerationType</b> 
                         accepts a fixed set of string values.]
                   </p>
-                     <a id="d3e5022"></a><table class="scrap">
+                     <a id="d3e5200"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-EnumerationType"></a>[131]&nbsp;&nbsp;&nbsp;</td>
@@ -3671,7 +3726,7 @@ the schema type named <code>us:address</code>.</p>
                   <div class="div4">
                      
                      <h5><a id="id-element-test"></a>3.6.3.2 Element Test</h5>
-                     <a id="d3e5243"></a><table class="scrap">
+                     <a id="d3e5421"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-ElementTest"></a>[112]&nbsp;&nbsp;&nbsp;</td>
@@ -3683,7 +3738,7 @@ the schema type named <code>us:address</code>.</p>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e4842.doc-xpath40-NameTest"></a>[58]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5020.doc-xpath40-NameTest"></a>[58]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>NameTest</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -3694,7 +3749,7 @@ the schema type named <code>us:address</code>.</p>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e4843.doc-xpath40-ElementName"></a>[116]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5021.doc-xpath40-ElementName"></a>[116]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>ElementName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -3705,7 +3760,7 @@ the schema type named <code>us:address</code>.</p>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e4844.doc-xpath40-TypeName"></a>[118]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5022.doc-xpath40-TypeName"></a>[118]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>TypeName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -3835,7 +3890,7 @@ matches any nilled or non-nilled element node whose type annotation is
                   <div class="div4">
                      
                      <h5><a id="id-schema-element-test"></a>3.6.3.3 Schema Element Test</h5>
-                     <a id="d3e5606"></a><table class="scrap">
+                     <a id="d3e5784"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-SchemaElementTest"></a>[113]&nbsp;&nbsp;&nbsp;</td>
@@ -3858,7 +3913,7 @@ matches any nilled or non-nilled element node whose type annotation is
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e5176.doc-xpath40-ElementName"></a>[116]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5354.doc-xpath40-ElementName"></a>[116]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>ElementName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -3930,7 +3985,7 @@ in the following two situations:
                   <div class="div4">
                      
                      <h5><a id="id-attribute-test"></a>3.6.3.4 Attribute Test</h5>
-                     <a id="d3e5749"></a><table class="scrap">
+                     <a id="d3e5927"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-AttributeTest"></a>[109]&nbsp;&nbsp;&nbsp;</td>
@@ -3942,7 +3997,7 @@ in the following two situations:
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e5300.doc-xpath40-NameTest"></a>[58]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5478.doc-xpath40-NameTest"></a>[58]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>NameTest</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -3953,7 +4008,7 @@ in the following two situations:
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e5301.doc-xpath40-AttributeName"></a>[115]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5479.doc-xpath40-AttributeName"></a>[115]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>AttributeName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -3964,7 +4019,7 @@ in the following two situations:
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e5302.doc-xpath40-TypeName"></a>[118]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5480.doc-xpath40-TypeName"></a>[118]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>TypeName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -4065,7 +4120,7 @@ name.</p>
                   <div class="div4">
                      
                      <h5><a id="id-schema-attribute-test"></a>3.6.3.5 Schema Attribute Test</h5>
-                     <a id="d3e5992"></a><table class="scrap">
+                     <a id="d3e6170"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-SchemaAttributeTest"></a>[110]&nbsp;&nbsp;&nbsp;</td>
@@ -4088,7 +4143,7 @@ name.</p>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e5514.doc-xpath40-AttributeName"></a>[115]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e5692.doc-xpath40-AttributeName"></a>[115]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>AttributeName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -4173,7 +4228,7 @@ name.</p>
                   <div class="div4">
                      
                      <h5><a id="id-function-test"></a>3.6.4.1 Function Test</h5>
-                     <a id="d3e6186"></a><table class="scrap">
+                     <a id="d3e6364"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-FunctionTest"></a>[119]&nbsp;&nbsp;&nbsp;</td>
@@ -4247,7 +4302,7 @@ name.</p>
                   <div class="div4">
                      
                      <h5><a id="id-map-test"></a>3.6.4.2 Map Test</h5>
-                     <a id="d3e6277"></a><table class="scrap">
+                     <a id="d3e6455"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-MapTest"></a>[122]&nbsp;&nbsp;&nbsp;</td>
@@ -4379,7 +4434,7 @@ name.</p>
                   <div class="div4">
                      
                      <h5><a id="id-record-test"></a>3.6.4.3 Record Test</h5>
-                     <a id="d3e6446"></a><table class="scrap">
+                     <a id="d3e6624"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-RecordTest"></a>[125]&nbsp;&nbsp;&nbsp;</td>
@@ -4572,7 +4627,7 @@ declare function flatten($tree as tree) as item()* {
                   <div class="div4">
                      
                      <h5><a id="id-array-test"></a>3.6.4.4 Array Test</h5>
-                     <a id="d3e6677"></a><table class="scrap">
+                     <a id="d3e6855"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-ArrayTest"></a>[132]&nbsp;&nbsp;&nbsp;</td>
@@ -5644,7 +5699,7 @@ declare function flatten($tree as tree) as item()* {
             <p>
             <span class="xpath">The highest-level symbol in the XPath grammar is XPath.</span>
          </p>
-            <a id="d3e8230"></a><table class="scrap">
+            <a id="d3e8408"></a><table class="scrap">
                <tbody>
                   <tr style="vertical-align:baseline;">
                      <td><a id="doc-xpath40-XPath"></a>[1]&nbsp;&nbsp;&nbsp;</td>
@@ -5697,7 +5752,7 @@ and <a href="#doc-xpath40-OrExpr">OrExpr</a>. Each of these expressions is descr
             <div class="div2">
                
                <h3><a id="with-expressions"></a>4.1 Setting Namespace Context</h3>
-               <a id="d3e8333"></a><table class="scrap">
+               <a id="d3e8511"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-WithExpr"></a>[12]&nbsp;&nbsp;&nbsp;</td>
@@ -5721,7 +5776,7 @@ and <a href="#doc-xpath40-OrExpr">OrExpr</a>. Each of these expressions is descr
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e7687.doc-xpath40-EnclosedExpr"></a>[9]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e7865.doc-xpath40-EnclosedExpr"></a>[9]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xpath40-Expr">Expr</a>?  "}"</code></td>
@@ -5787,7 +5842,7 @@ and <a href="#doc-xpath40-OrExpr">OrExpr</a>. Each of these expressions is descr
             <div class="div2">
                
                <h3><a id="comments"></a>4.2 Comments</h3>
-               <a id="d3e8457"></a><table class="scrap">
+               <a id="d3e8635"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-Comment"></a>[146]&nbsp;&nbsp;&nbsp;</td>
@@ -5838,7 +5893,7 @@ and <a href="#doc-xpath40-OrExpr">OrExpr</a>. Each of these expressions is descr
             Map and Array Constructors are described in <a href="#id-maps-and-arrays"><b>4.14 Maps and Arrays</b></a>.
 
 </p>
-               <a id="d3e8521"></a><table class="scrap">
+               <a id="d3e8699"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-PrimaryExpr"></a>[72]&nbsp;&nbsp;&nbsp;</td>
@@ -5877,7 +5932,7 @@ and <a href="#doc-xpath40-OrExpr">OrExpr</a>. Each of these expressions is descr
                   [<a id="dt-literal" title="literal">Definition</a>: A <b>literal</b> is a direct syntactic representation of an
 		atomic value.] XPath 4.0 supports two kinds of literals: numeric literals and
 		string literals.</p>
-                  <a id="d3e8593"></a><table class="scrap">
+                  <a id="d3e8771"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-Literal"></a>[73]&nbsp;&nbsp;&nbsp;</td>
@@ -6083,7 +6138,7 @@ string in its lexical space.</p>
                <div class="div3">
                   
                   <h4><a id="id-variables"></a>4.3.2 Variable References</h4>
-                  <a id="d3e8874"></a><table class="scrap">
+                  <a id="d3e9052"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-VarRef"></a>[75]&nbsp;&nbsp;&nbsp;</td>
@@ -6122,7 +6177,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                <div class="div3">
                   
                   <h4><a id="id-paren-expressions"></a>4.3.3 Parenthesized Expressions</h4>
-                  <a id="d3e8921"></a><table class="scrap">
+                  <a id="d3e9099"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-ParenthesizedExpr"></a>[77]&nbsp;&nbsp;&nbsp;</td>
@@ -6144,7 +6199,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                <div class="div3">
                   
                   <h4><a id="id-context-item-expression"></a>4.3.4 Context Item Expression</h4>
-                  <a id="d3e8947"></a><table class="scrap">
+                  <a id="d3e9125"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-ContextItemExpr"></a>[78]&nbsp;&nbsp;&nbsp;</td>
@@ -6169,7 +6224,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                   <h4><a id="id-enclosed-expr"></a>4.3.5 Enclosed Expressions</h4>
                   <p>
                   
-<a id="d3e8981"></a></p>
+<a id="d3e9159"></a></p>
                   <table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
@@ -6252,7 +6307,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                   <div class="div4">
                      
                      <h5><a id="id-function-calls"></a>4.4.1.1 Static Function Call Syntax</h5>
-                     <a id="d3e9127"></a><table class="scrap">
+                     <a id="d3e9305"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-FunctionCall"></a>[79]&nbsp;&nbsp;&nbsp;</td>
@@ -6278,7 +6333,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e8267.doc-xpath40-ArgumentList"></a>[61]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e8445.doc-xpath40-ArgumentList"></a>[61]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>ArgumentList</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"("  ((<a href="#prod-xpath40-PositionalArguments">PositionalArguments</a>  (","  <a href="#doc-xpath40-KeywordArguments">KeywordArguments</a>)?)  |  <a href="#doc-xpath40-KeywordArguments">KeywordArguments</a>)?  ")"</code></td>
@@ -6287,7 +6342,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e8268.doc-xpath40-PositionalArguments"></a>[63]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e8446.doc-xpath40-PositionalArguments"></a>[63]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>PositionalArguments</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -6317,7 +6372,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e8271.doc-xpath40-KeywordArguments"></a>[64]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e8449.doc-xpath40-KeywordArguments"></a>[64]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>KeywordArguments</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -6327,7 +6382,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e8272.doc-xpath40-KeywordArgument"></a>[65]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e8450.doc-xpath40-KeywordArgument"></a>[65]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>KeywordArgument</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -6583,7 +6638,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                            </ul>
                            <div class="exampleOuter">
                               
-                              <div class="exampleHeader"><a id="d3e9553"></a>Example: A Built-in Function</div>
+                              <div class="exampleHeader"><a id="d3e9731"></a>Example: A Built-in Function</div>
                               <p>The following function call uses the function 
                                   <a href="https://www.w3.org/TR/xpath-functions-31/#func-base-uri">Section 
             
@@ -6797,7 +6852,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                            </ol>
                            <div class="exampleOuter">
                               
-                              <div class="exampleHeader"><a id="d3e9813"></a>Example: Derived Types and Nonlocal Variable Bindings</div>
+                              <div class="exampleHeader"><a id="d3e9991"></a>Example: Derived Types and Nonlocal Variable Bindings</div>
                               <p>
                               <code>$incr</code> is a nonlocal variable that is available within the function because its variable binding has been added to the variable values of the function..  Even though the parameter and return type of this function are both <code>xs:decimal</code>,
                                   the more specific type <code>xs:integer</code> is preserved in both cases.</p>
@@ -6810,7 +6865,7 @@ return $f(5)                      </pre>
                            </div>
                            <div class="exampleOuter">
                               
-                              <div class="exampleHeader"><a id="d3e9825"></a>Example: Using the Context Item in an Anonymous Function</div>
+                              <div class="exampleHeader"><a id="d3e10003"></a>Example: Using the Context Item in an Anonymous Function</div>
                               <p>The following example will raise a dynamic error [<a href="#ERRXPDY0002" title="err:XPDY0002">err:XPDY0002</a>]:</p>
                               <div class="exampleInner">
                                  <pre>
@@ -6942,7 +6997,7 @@ return $vat()
                            </ul>
                            <div class="exampleOuter">
                               
-                              <div class="exampleHeader"><a id="d3e9956"></a>Example: Partial Application of an Anonymous Function</div>
+                              <div class="exampleHeader"><a id="d3e10134"></a>Example: Partial Application of an Anonymous Function</div>
                               <p>In the following example, <code>$f</code> is an anonymous function, and <code>$paf</code> is a partially applied function created from <code>$f</code>.</p>
                               <div class="exampleInner">
                                  <pre>
@@ -6957,7 +7012,7 @@ return $paf(1 to 5)
                            </div>
                            <div class="exampleOuter">
                               
-                              <div class="exampleHeader"><a id="d3e9993"></a>Example: Partial Application of a Built-In Function</div>
+                              <div class="exampleHeader"><a id="d3e10171"></a>Example: Partial Application of a Built-In Function</div>
                               <p>The following partial function application creates a function that computes the sum of squares of a sequence.</p>
                               <div class="exampleInner">
                                  <pre>let $sum-of-squares := fn:fold-right(?, 0, function($a, $b) { $a*$a + $b })
@@ -6970,7 +7025,7 @@ return $sum-of-squares(1 to 3)</pre>
                             a partial function application that returns a function, but the function it returns is not a map nor an array.</p>
                            <div class="exampleOuter">
                               
-                              <div class="exampleHeader"><a id="d3e10016"></a>Example: Partial Application of a Map</div>
+                              <div class="exampleHeader"><a id="d3e10194"></a>Example: Partial Application of a Map</div>
                               <p>The following partial function application converts a map to an equivalent function that is not a map.</p>
                               <div class="exampleInner">
                                  <pre>let $a := map {"A": 1, "B": 2}(?)
@@ -6983,7 +7038,7 @@ return $a("A")</pre>
                   <div class="div4">
                      
                      <h5><a id="id-named-function-ref"></a>4.4.2.3 Named Function References</h5>
-                     <a id="d3e10024"></a><table class="scrap">
+                     <a id="d3e10202"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-NamedFunctionRef"></a>[85]&nbsp;&nbsp;&nbsp;</td>
@@ -6999,7 +7054,7 @@ return $a("A")</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e9095.doc-xpath40-EQName"></a>[137]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e9273.doc-xpath40-EQName"></a>[137]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>EQName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -7031,7 +7086,7 @@ return $a("A")</pre>
           the dynamic context in which the named function reference is evaluated.</p>
                      <div class="exampleOuter">
                         
-                        <div class="exampleHeader"><a id="d3e10101"></a>Example: A Context-Dependent Named Function Reference</div>
+                        <div class="exampleHeader"><a id="d3e10279"></a>Example: A Context-Dependent Named Function Reference</div>
                         <p>Consider:</p>
                         <div class="exampleInner">
                            <pre>let $f := &lt;foo/&gt;/fn:name#0 return &lt;bar&gt;/$f()</pre>
@@ -7119,7 +7174,7 @@ return $a("A")</pre>
                   <div class="div4">
                      
                      <h5><a id="id-inline-func"></a>4.4.2.4 Inline Function Expressions</h5>
-                     <a id="d3e10242"></a><table class="scrap">
+                     <a id="d3e10420"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-InlineFunctionExpr"></a>[86]&nbsp;&nbsp;&nbsp;</td>
@@ -7141,7 +7196,7 @@ return $a("A")</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e9291.doc-xpath40-ParamList"></a>[6]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e9469.doc-xpath40-ParamList"></a>[6]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>ParamList</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -7151,7 +7206,7 @@ return $a("A")</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e9292.doc-xpath40-Param"></a>[7]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e9470.doc-xpath40-Param"></a>[7]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>Param</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"$"  <a href="#doc-xpath40-EQName">EQName</a>
@@ -7161,7 +7216,7 @@ return $a("A")</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e9293.doc-xpath40-TypeDeclaration"></a>[96]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e9471.doc-xpath40-TypeDeclaration"></a>[96]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>TypeDeclaration</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"as"  <a href="#doc-xpath40-SequenceType">SequenceType</a>
@@ -7171,7 +7226,7 @@ return $a("A")</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e9294.doc-xpath40-FunctionBody"></a>[8]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e9472.doc-xpath40-FunctionBody"></a>[8]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>FunctionBody</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -7699,7 +7754,7 @@ return fn:filter($days,$m)
             <div class="div2">
                
                <h3><a id="id-postfix-expression"></a>4.5 Postfix Expressions</h3>
-               <a id="d3e11001"></a><table class="scrap">
+               <a id="d3e11179"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-PostfixExpr"></a>[60]&nbsp;&nbsp;&nbsp;</td>
@@ -7712,7 +7767,7 @@ return fn:filter($days,$m)
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e9998.doc-xpath40-Predicate"></a>[67]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e10176.doc-xpath40-Predicate"></a>[67]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>Predicate</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"["  <a href="#doc-xpath40-Expr">Expr</a>  "]"</code></td>
@@ -7721,7 +7776,7 @@ return fn:filter($days,$m)
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e9999.doc-xpath40-PositionalArgumentList"></a>[62]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e10177.doc-xpath40-PositionalArgumentList"></a>[62]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>PositionalArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  <a href="#prod-xpath40-PositionalArguments">PositionalArguments</a>?  ")"</code></td>
@@ -7730,7 +7785,7 @@ return fn:filter($days,$m)
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e10000.doc-xpath40-PositionalArguments"></a>[63]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e10178.doc-xpath40-PositionalArguments"></a>[63]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>PositionalArguments</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -7740,7 +7795,7 @@ return fn:filter($days,$m)
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e10001.doc-xpath40-Argument"></a>[80]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e10179.doc-xpath40-Argument"></a>[80]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>Argument</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -7768,10 +7823,10 @@ return fn:filter($days,$m)
                <div class="div3">
                   
                   <h4><a id="id-filter-expression"></a>4.5.1 Filter Expressions</h4>
-                  <a id="d3e11086"></a><table class="scrap">
+                  <a id="d3e11264"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10037.doc-xpath40-PostfixExpr"></a>[60]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10215.doc-xpath40-PostfixExpr"></a>[60]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PostfixExpr</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -7872,10 +7927,10 @@ return fn:filter($days,$m)
                <div class="div3">
                   
                   <h4><a id="id-dynamic-function-invocation"></a>4.5.2 Dynamic Function Calls</h4>
-                  <a id="d3e11210"></a><table class="scrap">
+                  <a id="d3e11388"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10140.doc-xpath40-PostfixExpr"></a>[60]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10318.doc-xpath40-PostfixExpr"></a>[60]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PostfixExpr</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -7894,7 +7949,7 @@ return fn:filter($days,$m)
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10142.doc-xpath40-PositionalArguments"></a>[63]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10320.doc-xpath40-PositionalArguments"></a>[63]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PositionalArguments</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -7904,7 +7959,7 @@ return fn:filter($days,$m)
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10143.doc-xpath40-Argument"></a>[80]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10321.doc-xpath40-Argument"></a>[80]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>Argument</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -7915,7 +7970,7 @@ return fn:filter($days,$m)
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10144.doc-xpath40-ArgumentPlaceholder"></a>[81]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10322.doc-xpath40-ArgumentPlaceholder"></a>[81]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>ArgumentPlaceholder</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"?"</code></td>
@@ -7990,7 +8045,7 @@ return fn:filter($days,$m)
             <div class="div2">
                
                <h3><a id="id-path-expressions"></a>4.6 Path Expressions</h3>
-               <a id="d3e11326"></a><table class="scrap">
+               <a id="d3e11504"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-PathExpr"></a>[47]&nbsp;&nbsp;&nbsp;</td>
@@ -8005,7 +8060,7 @@ return fn:filter($days,$m)
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e10192.doc-xpath40-RelativePathExpr"></a>[48]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e10370.doc-xpath40-RelativePathExpr"></a>[48]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>RelativePathExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -8066,7 +8121,7 @@ return fn:filter($days,$m)
                <div class="div3">
                   
                   <h4><a id="id-relative-path-expressions"></a>4.6.1 Relative Path Expressions</h4>
-                  <a id="d3e11443"></a><table class="scrap">
+                  <a id="d3e11621"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-RelativePathExpr"></a>[48]&nbsp;&nbsp;&nbsp;</td>
@@ -8193,7 +8248,7 @@ return fn:filter($days,$m)
                <div class="div3">
                   
                   <h4><a id="id-steps"></a>4.6.2 Steps</h4>
-                  <a id="d3e11645"></a><table class="scrap">
+                  <a id="d3e11823"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-StepExpr"></a>[49]&nbsp;&nbsp;&nbsp;</td>
@@ -8207,7 +8262,7 @@ return fn:filter($days,$m)
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10472.doc-xpath40-AxisStep"></a>[50]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10650.doc-xpath40-AxisStep"></a>[50]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>AxisStep</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>(<a href="#doc-xpath40-ReverseStep">ReverseStep</a>  |  <a href="#doc-xpath40-ForwardStep">ForwardStep</a>)  <a href="#doc-xpath40-PredicateList">PredicateList</a>
@@ -8239,7 +8294,7 @@ return fn:filter($days,$m)
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e10475.doc-xpath40-PredicateList"></a>[66]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e10653.doc-xpath40-PredicateList"></a>[66]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PredicateList</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -8280,7 +8335,7 @@ return fn:filter($days,$m)
                   <div class="div4">
                      
                      <h5><a id="axes"></a>4.6.2.1 Axes</h5>
-                     <a id="d3e11786"></a><table class="scrap">
+                     <a id="d3e11964"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-ForwardAxis"></a>[52]&nbsp;&nbsp;&nbsp;</td>
@@ -8518,7 +8573,7 @@ return fn:filter($days,$m)
 		  or processing instruction), and/or  <a title="type annotation" class="termref" href="#dt-type-annotation">type annotation</a> of a node. 
       A node test determines which nodes contained by an axis are selected by a <a title="step" class="termref" href="#dt-step">step</a>.]
                   </p>
-                     <a id="d3e12043"></a><table class="scrap">
+                     <a id="d3e12221"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-NodeTest"></a>[57]&nbsp;&nbsp;&nbsp;</td>
@@ -8554,7 +8609,7 @@ return fn:filter($days,$m)
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a id="noid_d4e10792.doc-xpath40-EQName"></a>[137]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a id="noid_d4e10970.doc-xpath40-EQName"></a>[137]&nbsp;&nbsp;&nbsp;</td>
                               <td><code>EQName</code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -8726,7 +8781,7 @@ return fn:filter($days,$m)
                <div class="div3">
                   
                   <h4><a id="id-predicate"></a>4.6.3 Predicates within Steps</h4>
-                  <a id="d3e12359"></a><table class="scrap">
+                  <a id="d3e12537"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-AxisStep"></a>[50]&nbsp;&nbsp;&nbsp;</td>
@@ -8749,7 +8804,7 @@ return fn:filter($days,$m)
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e11056.doc-xpath40-Predicate"></a>[67]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e11234.doc-xpath40-Predicate"></a>[67]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>Predicate</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"["  <a href="#doc-xpath40-Expr">Expr</a>  "]"</code></td>
@@ -8966,7 +9021,7 @@ last <code>chapter</code> or <code>appendix</code> child of the context node</p>
                <div class="div3">
                   
                   <h4><a id="abbrev"></a>4.6.5 Abbreviated Syntax</h4>
-                  <a id="d3e12778"></a><table class="scrap">
+                  <a id="d3e12956"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-AbbrevForwardStep"></a>[53]&nbsp;&nbsp;&nbsp;</td>
@@ -9170,10 +9225,10 @@ in the sequence <code>(1, 2, 3)</code>.</p>
                <div class="div3">
                   
                   <h4><a id="construct_seq"></a>4.7.1 Sequence Concatenation</h4>
-                  <a id="d3e13187"></a><table class="scrap">
+                  <a id="d3e13365"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e11850.doc-xpath40-Expr"></a>[10]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e12028.doc-xpath40-Expr"></a>[10]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>Expr</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -9227,7 +9282,7 @@ the value <code>10.50</code>, the result of this expression is the sequence <cod
                <div class="div3">
                   
                   <h4><a id="id-range-expressions"></a>4.7.2 Range Expressions</h4>
-                  <a id="d3e13252"></a><table class="scrap">
+                  <a id="d3e13430"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-RangeExpr"></a>[28]&nbsp;&nbsp;&nbsp;</td>
@@ -9319,7 +9374,7 @@ every integer between the two operands, in increasing order. </p>
                <div class="div3">
                   
                   <h4><a id="combining_seq"></a>4.7.3 Combining Node Sequences</h4>
-                  <a id="d3e13353"></a><table class="scrap">
+                  <a id="d3e13531"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-UnionExpr"></a>[32]&nbsp;&nbsp;&nbsp;</td>
@@ -9428,7 +9483,7 @@ the results are the same.
                <p>XPath 4.0 provides arithmetic operators for addition, subtraction,
 multiplication, division, and modulus, in their usual binary and unary
 forms.</p>
-               <a id="d3e13486"></a><table class="scrap">
+               <a id="d3e13664"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-AdditiveExpr"></a>[29]&nbsp;&nbsp;&nbsp;</td>
@@ -9602,7 +9657,7 @@ course to the use of parentheses. Therefore, the following two examples have dif
             <div class="div2">
                
                <h3><a id="id-string-concat-expr"></a>4.9 String Concatenation Expressions</h3>
-               <a id="d3e13722"></a><table class="scrap">
+               <a id="d3e13900"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-StringConcatExpr"></a>[27]&nbsp;&nbsp;&nbsp;</td>
@@ -9625,7 +9680,7 @@ course to the use of parentheses. Therefore, the following two examples have dif
                <p>Comparison expressions allow two values to be compared. XPath 4.0 provides
 three kinds of comparison expressions, called value comparisons, general
 comparisons, and node comparisons.</p>
-               <a id="d3e13747"></a><table class="scrap">
+               <a id="d3e13925"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-ComparisonExpr"></a>[26]&nbsp;&nbsp;&nbsp;</td>
@@ -9999,7 +10054,7 @@ side occurs before the node identified by the right side in document order:</p>
                <p>A <b>logical expression</b> is either an <b>and-expression</b> or
 an <b>or-expression</b>. If a logical expression does not raise an error, its value is always one
 of the boolean values <code>true</code> or <code>false</code>.</p>
-               <a id="d3e14428"></a><table class="scrap">
+               <a id="d3e14606"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-OrExpr"></a>[24]&nbsp;&nbsp;&nbsp;</td>
@@ -10200,7 +10255,7 @@ encountered in finding the effective boolean value of its operand,
          the sequence or array, and the term <b>component</b> is used to refer to the
          items of the sequence or the members of the array.</span>
             </p>
-               <a id="d3e14752"></a><table class="scrap">
+               <a id="d3e14930"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-ForExpr"></a>[15]&nbsp;&nbsp;&nbsp;</td>
@@ -10364,7 +10419,7 @@ Instead, the expression must be written to use the variable bound in the <code>f
                
                <h3><a id="id-let-expressions"></a>4.13 Let Expressions</h3>
                <p>XPath allows a variable to be declared and bound to a value using a <b>let expression</b>.</p>
-               <a id="d3e14942"></a><table class="scrap">
+               <a id="d3e15120"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-LetExpr"></a>[18]&nbsp;&nbsp;&nbsp;</td>
@@ -10469,7 +10524,7 @@ item, and can appear as an item in a sequence.</p>
                      
                      <h5><a id="id-map-constructors"></a>4.14.1.1 Map Constructors</h5>
                      <p>A Map is created using a <a href="#doc-xpath40-MapConstructor">MapConstructor</a>.</p>
-                     <a id="d3e15030"></a><table class="scrap">
+                     <a id="d3e15208"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-MapConstructor"></a>[87]&nbsp;&nbsp;&nbsp;</td>
@@ -10691,7 +10746,7 @@ map {
       Atomization converts arrays to sequences (see <a title="atomization" class="termref" href="#dt-atomization">Atomization</a>).  
       </p>
                      <p>An array is created using an <a href="#doc-xpath40-ArrayConstructor">ArrayConstructor</a>.</p>
-                     <a id="d3e15273"></a><table class="scrap">
+                     <a id="d3e15451"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-ArrayConstructor"></a>[91]&nbsp;&nbsp;&nbsp;</td>
@@ -10858,7 +10913,7 @@ map {
                   <div class="div4">
                      
                      <h5><a id="id-unary-lookup"></a>4.14.3.1 Unary Lookup</h5>
-                     <a id="d3e15483"></a><table class="scrap">
+                     <a id="d3e15661"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-UnaryLookup"></a>[94]&nbsp;&nbsp;&nbsp;</td>
@@ -11018,7 +11073,7 @@ return .($k)
                   <div class="div4">
                      
                      <h5><a id="id-postfix-lookup"></a>4.14.3.2 Postfix Lookup</h5>
-                     <a id="d3e15794"></a><table class="scrap">
+                     <a id="d3e15972"></a><table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
                               <td><a id="doc-xpath40-Lookup"></a>[68]&nbsp;&nbsp;&nbsp;</td>
@@ -11091,7 +11146,7 @@ return .($k)
                <p>In addition, it provides a more concise syntax as a ternary expression using the operators <code>??</code>
          and <code>!!</code>
             </p>
-               <a id="d3e15911"></a><table class="scrap">
+               <a id="d3e16089"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-IfExpr"></a>[23]&nbsp;&nbsp;&nbsp;</td>
@@ -11134,7 +11189,10 @@ the <a title="effective boolean value" class="termref" href="#dt-ebv">effective 
 effective boolean value of the test expression is <code>true</code>, the value of the then-expression is returned. If the
 effective boolean value of the test expression is <code>false</code>,
 the value of the else-expression is returned.</p>
-               <p>Conditional expressions have a special rule for propagating <a title="dynamic error" class="termref" href="#dt-dynamic-error">dynamic errors</a>. If the effective value of the test expression is <code>true</code>, the conditional expression ignores (does not raise) any dynamic errors encountered in the else-expression. In this case, since the else-expression can have no observable effect, it need not be evaluated. Similarly, if the effective value of the test expression is <code>false</code>, the conditional expression ignores any <a title="dynamic error" class="termref" href="#dt-dynamic-error">dynamic errors</a> encountered in the then-expression, and the then-expression need not be evaluated.</p>
+               <p>Conditional expressions have a special rule for propagating <a title="dynamic error" class="termref" href="#dt-dynamic-error">dynamic errors</a>: <span>the <code>then</code> and <code>else</code> expressions are
+            <a title="guarded" class="termref" href="#dt-guarded">guarded</a>, as described in <a href="#id-guarded-expressions"><b>2.4.5 Guarded Expressions</b></a>, to prevent
+                  spurious dynamic errors.</span>
+            </p>
                <p>Here are some examples of conditional expressions:</p>
                <ul>
                   <li>
@@ -11166,7 +11224,7 @@ named <code>discounted</code>, independently of its value:</p>
             <div class="div2">
                
                <h3><a id="id-otherwise"></a>4.16 Otherwise Expression</h3>
-               <a id="d3e16006"></a><table class="scrap">
+               <a id="d3e16188"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-OtherwiseExpr"></a>[31]&nbsp;&nbsp;&nbsp;</td>
@@ -11183,8 +11241,8 @@ named <code>discounted</code>, independently of its value:</p>
                <p>For example, <code>@price - (@discount otherwise 0)</code> returns the value of <code>@price - @discount</code>,
          if the attribute <code>@discount</code> exists, or the value of <code>@price</code> if the <code>@discount</code>
             attribute is absent.</p>
-               <p>To prevent spurious errors, the right hand operand <strong>must not</strong> be evaluated unless
-         the left-hand operand returns an empty sequence.</p>
+               <p>To prevent spurious errors, the right hand operand is <a title="guarded" class="termref" href="#dt-guarded">guarded</a>: it cannot throw any
+            dynamic error unless the left-hand operand returns an empty sequence.</p>
                <div class="note">
                   <p class="prefix"><b>Note:</b></p>
                   <p>The operator is associative (even under error conditions): <code>A otherwise (B otherwise C)</code> returns
@@ -11196,7 +11254,7 @@ named <code>discounted</code>, independently of its value:</p>
                <h3><a id="id-quantified-expressions"></a>4.17 Quantified Expressions</h3>
                <p>Quantified expressions support existential and universal quantification. The
 value of a quantified expression is always <code>true</code> or <code>false</code>.</p>
-               <a id="d3e16053"></a><table class="scrap">
+               <a id="d3e16235"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-QuantifiedExpr"></a>[21]&nbsp;&nbsp;&nbsp;</td>
@@ -11336,7 +11394,7 @@ type.
                <div class="div3">
                   
                   <h4><a id="id-instance-of"></a>4.18.1 Instance Of</h4>
-                  <a id="d3e16304"></a><table class="scrap">
+                  <a id="d3e16486"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-InstanceofExpr"></a>[34]&nbsp;&nbsp;&nbsp;</td>
@@ -11385,7 +11443,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                <div class="div3">
                   
                   <h4><a id="id-cast"></a>4.18.2 Cast</h4>
-                  <a id="d3e16385"></a><table class="scrap">
+                  <a id="d3e16567"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-CastExpr"></a>[37]&nbsp;&nbsp;&nbsp;</td>
@@ -11408,7 +11466,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e14727.doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e14909.doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -11516,7 +11574,7 @@ The result of a cast expression is one of the following:
                <div class="div3">
                   
                   <h4><a id="id-castable"></a>4.18.3 Castable</h4>
-                  <a id="d3e16534"></a><table class="scrap">
+                  <a id="d3e16716"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-CastableExpr"></a>[36]&nbsp;&nbsp;&nbsp;</td>
@@ -11529,7 +11587,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e14851.doc-xpath40-SingleType"></a>[95]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e15033.doc-xpath40-SingleType"></a>[95]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>SingleType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -11539,7 +11597,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e14852.doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e15034.doc-xpath40-LocalUnionType"></a>[130]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -11656,7 +11714,7 @@ usa:zipcode?)</code>.</p>
                <div class="div3">
                   
                   <h4><a id="id-treat"></a>4.18.5 Treat</h4>
-                  <a id="d3e16709"></a><table class="scrap">
+                  <a id="d3e16891"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-TreatExpr"></a>[35]&nbsp;&nbsp;&nbsp;</td>
@@ -11742,7 +11800,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-map-operator"></a>4.19 Simple map operator (<code>!</code>)</h3>
-               <a id="d3e16851"></a><table class="scrap">
+               <a id="d3e17033"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-SimpleMapExpr"></a>[46]&nbsp;&nbsp;&nbsp;</td>
@@ -11847,7 +11905,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-arrow-operator"></a>4.20 Arrow Expressions</h3>
-               <a id="d3e17038"></a><table class="scrap">
+               <a id="d3e17220"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-ArrowExpr"></a>[38]&nbsp;&nbsp;&nbsp;</td>
@@ -11904,7 +11962,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e15317.doc-xpath40-ArgumentList"></a>[61]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e15499.doc-xpath40-ArgumentList"></a>[61]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  ((<a href="#prod-xpath40-PositionalArguments">PositionalArguments</a>  (","  <a href="#doc-xpath40-KeywordArguments">KeywordArguments</a>)?)  |  <a href="#doc-xpath40-KeywordArguments">KeywordArguments</a>)?  ")"</code></td>
@@ -13784,7 +13842,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.2.1 Terminal Symbols</h4>
-                  <a id="d3e19317"></a><table class="scrap">
+                  <a id="d3e19499"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-IntegerLiteral"></a>[138]&nbsp;&nbsp;&nbsp;</td>
@@ -13935,7 +13993,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e19464"></a><table class="scrap">
+                  <a id="d3e19646"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-Digits"></a>[150]&nbsp;&nbsp;&nbsp;</td>
@@ -16393,6 +16451,12 @@ the <a title="dynamic context" class="termref" href="#dt-dynamic-context">dynami
                                  <b>grouping-separator</b>
 		          is the character typically used as a thousands separator, both in the picture string and in the formatted number; the default value is the
 		          comma character (,)</p>
+               </dd>
+               <dt><a id="GLdt-guarded"></a>guarded</dt>
+               <dd>
+                  <p>An expression <var>E</var> is said to be <b>guarded</b>
+               by some governing condition <var>C</var> if evaluation of <var>E</var> is not allowed to fail
+               with a <a title="dynamic error" class="termref" href="#dt-dynamic-error">dynamic error</a> except when <var>C</var> applies.</p>
                </dd>
                <dt><a id="GLdt-host-language"></a>host-language</dt>
                <dd>
