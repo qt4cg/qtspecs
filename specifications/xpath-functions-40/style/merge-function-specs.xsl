@@ -258,6 +258,9 @@
 					<xsl:when test="fos:expression/@xml:space='preserve'">
 						<xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/>
 					</xsl:when>
+                                        <xsl:when test="fos:expression/eg">
+                                          <xsl:apply-templates select="fos:expression/node()"/>
+                                        </xsl:when>
 					<xsl:otherwise>
 						<xsl:value-of select="fos:expression"/>
 					</xsl:otherwise>
@@ -283,9 +286,16 @@
 					<xsl:if test="fos:result/@allow-permutation='true'">
 						<xsl:text>some permutation of </xsl:text>
 					</xsl:if>
-					<code>
-						<xsl:value-of select="fos:result"/>
-					</code>
+                                        <xsl:choose>
+                                          <xsl:when test="fos:result/eg">
+                                            <xsl:apply-templates select="fos:result/node()"/>
+                                          </xsl:when>
+                                          <xsl:otherwise>
+					    <code>
+					      <xsl:value-of select="fos:result"/>
+					    </code>
+                                          </xsl:otherwise>
+                                        </xsl:choose>
 					<xsl:if test="fos:result/@approx='true'">
 						<xsl:text> (approximately)</xsl:text>
 					</xsl:if>
