@@ -234,7 +234,7 @@
 	<xsl:template match="fos:record">
 	  <example role="record">
 	    <record>
-	      <xsl:copy-of select="@name, @diff, @at"/>
+	      <xsl:copy-of select="@*"/>
 	      <xsl:apply-templates/>
 	    </record>
 	  </example>
