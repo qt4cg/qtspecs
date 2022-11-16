@@ -889,7 +889,7 @@ th.issue-toc-head { border-bottom-color: black;
 
   <xsl:template match="xspecref">
     <xsl:variable name="ref" select="@ref"/>
-    <xsl:variable name="doc" select="document(concat('../etc/', @spec, '.xml'))"/>
+    <xsl:variable name="doc" select="document(concat('../build/etc/', @spec, '.xml'))"/>
     <xsl:variable name="div" select="$doc//*[@id=$ref]"/>
     <xsl:variable name="nt" select="($doc//*[@def=$ref])[1]"/>
     <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
@@ -981,7 +981,7 @@ th.issue-toc-head { border-bottom-color: black;
 
   <xsl:template match="xnt">
     <xsl:variable name="ref" select="@ref"/>
-    <xsl:variable name="doc" select="document(concat('../etc/', @spec, '.xml'))"/>
+    <xsl:variable name="doc" select="document(concat('../build/etc/', @spec, '.xml'))"/>
     <xsl:variable name="nt" select="$doc//nt[@def=$ref]"/>
     <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
 
@@ -1128,7 +1128,7 @@ th.issue-toc-head { border-bottom-color: black;
       </xsl:when>
       <xsl:otherwise>
         <xsl:variable name="ref" select="@ref"/>
-        <xsl:variable name="doc" select="document(concat('../etc/', @spec, '.xml'))"/>
+        <xsl:variable name="doc" select="document(concat('../build/etc/', @spec, '.xml'))"/>
         <xsl:variable name="termdef" select="$doc//termdef[@id=$ref]"/>
         <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
 
@@ -1215,7 +1215,7 @@ th.issue-toc-head { border-bottom-color: black;
       else
         @spec
     "/>
-    <xsl:variable name="doc" select="document(concat('../etc/', $spec, '.xml'))"/>
+    <xsl:variable name="doc" select="document(concat('../build/etc/', $spec, '.xml'))"/>
     <xsl:variable name="error" select="$doc//error[@code=$ref and @class=$class]"/>
     <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
 
@@ -1311,9 +1311,9 @@ th.issue-toc-head { border-bottom-color: black;
   <!-- ====================================================================== -->
 
   <xsl:template match="bibl" name="bibl">
-    <xsl:variable name="xsl-query" select="document('../etc/xsl-query-bibl.xml')"/>
-    <xsl:variable name="tr" select="document('../etc/tr.xml')"/>
-    <xsl:variable name="rfc" select="document('../etc/rfc.xml')"/>
+    <xsl:variable name="xsl-query" select="document('../build/etc/xsl-query-bibl.xml')"/>
+    <xsl:variable name="tr" select="document('../build/etc/tr.xml')"/>
+    <xsl:variable name="rfc" select="document('../build/etc/rfc.xml')"/>
     <xsl:variable name="id" select="@id"/>
 
     <xsl:if test="$pedantic != 'false' and count(key('bibrefs', @id)) = 0">
