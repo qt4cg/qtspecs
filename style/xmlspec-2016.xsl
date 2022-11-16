@@ -656,7 +656,9 @@
             <xsl:with-param name="node" select=".."/>
             <xsl:with-param name="conditional" select="0"/>
           </xsl:call-template>
-          <xsl:text>Example: </xsl:text>
+          <xsl:if test="not(starts-with(., 'Example:') or starts-with(., 'Examples:'))">
+            <xsl:text>Example: </xsl:text>
+          </xsl:if>
           <xsl:apply-templates/>
         </div>
       </xsl:when>
@@ -667,7 +669,9 @@
             <xsl:with-param name="conditional" select="0"/>
           </xsl:call-template>
 
-          <xsl:text>Example: </xsl:text>
+          <xsl:if test="not(starts-with(., 'Example:') or starts-with(., 'Examples:'))">
+            <xsl:text>Example: </xsl:text>
+          </xsl:if>
           <xsl:apply-templates/>
         </h5>
       </xsl:otherwise>
@@ -2231,6 +2235,24 @@
       <xsl:apply-templates/>
     </var>
   </xsl:template>
+  
+  <xsl:template match="var[matches(., '[A-Z][0-9]')]">
+    <var>
+      <xsl:value-of select="substring(., 1, 1)"/>
+      <sub><xsl:value-of select="substring(., 2, 1)"/></sub>
+    </var>
+  </xsl:template>
+  
+  <xsl:template match="var[contains(., '/')]">
+    <var>
+      <xsl:value-of select="substring-before(., '/')"/>
+      <sub><xsl:value-of select="substring-after(., '/')"/></sub>
+    </var>
+  </xsl:template>
+  
+  <xsl:template match="var[matches(., '[A-Z]''')]">
+    <var><xsl:value-of select="translate(., '''', '&#x2032;')"/></var>
+  </xsl:template>  
 
   <!-- vc: validity check reference in a formal production -->
   <xsl:template match="vc">
