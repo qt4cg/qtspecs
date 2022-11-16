@@ -547,7 +547,7 @@
   <!-- ednote: editors' note -->
   <xsl:template match="ednote">
     <xsl:if test="$show.ednotes != 0">
-      <table style="border: 1px;">
+      <table class="ednote">
         <xsl:attribute name="caption">
           <xsl:text>Editorial note</xsl:text>
           <xsl:if test="name">
