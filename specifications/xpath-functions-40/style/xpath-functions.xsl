@@ -613,9 +613,9 @@ span.dagger {
     <table class="record" border="0">
       <tr>
         <td colspan="2">
-          <code id="{@name}" class="return-type-ref">
+          <code id="{@id}" class="return-type-ref">
             <span class="dagger">†</span>
-            <xsl:value-of select="@name"/>
+            <xsl:value-of select="@id"/>
           </code>
           <xsl:text>:</xsl:text>
         </td>
