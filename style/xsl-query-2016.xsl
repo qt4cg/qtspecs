@@ -2085,6 +2085,15 @@ th.issue-toc-head { border-bottom-color: black;
     </xsl:choose>
   </xsl:function>
   
+  <xsl:template match="example">
+    <xsl:if test="preceding-sibling::*[1][self::example]">
+      <p>&#xa0;</p>
+    </xsl:if>
+    <div class="{if (@diff and $show.diff.markup=1) then 'example-chg' else 'example'}">
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+  
  
 
 </xsl:stylesheet>
