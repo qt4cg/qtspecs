@@ -53,32 +53,7 @@
   <xsl:value-of select="format-date($pubdate, '[Y0000]')"/>
 </xsl:template>
 
-<xsl:param name="additional.css">
-<!-- not used when creating diff version. The additional CSS declarations are in diffspec.xsl -->
-/* from xslt.xsl (A) */  
-dd.indent { margin-left: 2em; }
-p.element-syntax { border: solid thin; background-color: #ffccff }
-/*div.proto { border: solid thin; background-color: #ffccff }*/
-/*div.proto + div.proto { margin-top : 300em; }*/
-div.example { border: solid thin; background-color: #40e0d0; padding: 1em }
-span.verb { font: small-caps 100% sans-serif } 
-span.error { font: small-caps 100% sans-serif } 
-span.definition { font: small-caps 100% sans-serif } 
-span.grayed { color: gray }
-
-div.proto        { 
-padding: .5em;
-border: .5em;
-border-left-style: solid;
-page-break-inside: avoid;
-margin: 1em auto;
-border-color: #ff99ff;
-background: #ffe6ff;
-overflow: auto;
-}
-</xsl:param>
-
-
+<xsl:param name="additional.css" select="'xslt-40.css'"/>
 
 <xsl:template match="edtext">
   <xsl:apply-templates/>
