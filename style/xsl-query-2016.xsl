@@ -464,51 +464,6 @@
     <xsl:apply-imports/>
   </xsl:template>
 
-  <xsl:template name="css">
-    <link rel="stylesheet" type="text/css">
-      <xsl:attribute name="href">
-        <xsl:if test="$use-local-css = 0">
-          <xsl:text>https://www.w3.org/StyleSheets/TR/2016/</xsl:text>
-        </xsl:if>
-        <xsl:choose>
-          <xsl:when test="/spec/@role='editors-copy'">base</xsl:when>
-          <xsl:otherwise>
-            <xsl:choose>
-              <xsl:when test="/spec/@w3c-doctype='wd'">W3C-WD</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='cr'">W3C-CR</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='pr'">W3C-PR</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='per'">W3C-PER</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='rec'">W3C-REC</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='note'">W3C-NOTE</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='wgnote'">W3C-WG-NOTE</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='memsub'">W3C-Member-SUBM</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='teamsub'">W3C-Team-SUBM</xsl:when>
-              <xsl:otherwise>base</xsl:otherwise>
-            </xsl:choose>
-          </xsl:otherwise>
-        </xsl:choose>
-        <xsl:text>.css</xsl:text>
-      </xsl:attribute>
-    </link>
-
-    <link rel="stylesheet" href="css/qtspecs.css"/>
-    <xsl:if test="normalize-space($additional.css) != ''">
-      <xsl:for-each select="tokenize($additional.css, '\s+')">
-        <link rel="stylesheet" href="css/{.}"/>
-      </xsl:for-each>
-    </xsl:if>
-    <xsl:if test="normalize-space($additional.css.diff) != ''">
-      <xsl:for-each select="tokenize($additional.css.diff, '\s+')">
-        <link rel="stylesheet" href="css/{.}"/>
-      </xsl:for-each>
-    </xsl:if>
-    <xsl:if test="normalize-space($additional.css.2) != ''">
-      <xsl:for-each select="tokenize($additional.css.2, '\s+')">
-        <link rel="stylesheet" href="css/{.}"/>
-      </xsl:for-each>
-    </xsl:if>
-  </xsl:template>
-
   <xsl:template match="br">
     <br/>
   </xsl:template>
