@@ -1170,6 +1170,8 @@ a.env:visited, a.env:link               { color: black;
                         <li><a href="#html-string-value-accessor"><span class="secno">15.5.12 </span><span class="content">string-value Accessor</span></a></li>
                         <li><a href="#html-type-name-accessor"><span class="secno">15.5.13 </span><span class="content">type-name Accessor</span></a></li>
                         <li><a href="#html-typed-value-accessor"><span class="secno">15.5.14 </span><span class="content">typed-value Accessor</span></a></li>
+                        <li><a href="#html-unparsed-entity-public-id-accessor"><span class="secno">15.5.15 </span><span class="content">unparsed-entity-public-id Accessor</span></a></li>
+                        <li><a href="#html-unparsed-entity-system-id-accessor"><span class="secno">15.5.16 </span><span class="content">unparsed-entity-system-id Accessor</span></a></li>
                      </ol>
                   </li>
                </ol>
@@ -29303,7 +29305,7 @@ else
                            <p>The expression <code>parse-html(())</code> returns <code>()</code>.</p>
                            <p>The expression <code>parse-html("&lt;p&gt;Hello&lt;/p&gt;")</code> returns an XDM
                document node for a HTML document with a single paragraph within the body element.</p>
-                           <p>The expression <code>parse-html("&lt;p&gt;Hi&lt;/p&gt;", method:="html5")</code>
+                           <p>The expression <code>parse-html("&lt;p&gt;Hi&lt;/p&gt;", method:="html")</code>
                is equivalent to <code>parse-html("&lt;p&gt;Hi&lt;/p&gt;")</code>.</p>
                            <p>The expression <code>parse-html($html, method:="tidy")</code> could use
                the <em>tidy</em> application or library to parse <code>$html</code> if supported
@@ -29760,10 +29762,21 @@ else
                         is not included in this sequence;</p>
                      </li>
                      <li>
+                        <p>If the child is an instance of HTML DOM <code>Text</code>, and the
+                        <code>Node.previousSibling</code> property value is also an instance of HTML DOM
+                        <code>Text</code>, that child is not included in this sequence;</p>
+                     </li>
+                     <li>
                         <p>Otherwise, the HTML DOM <code>Node</code> nodes are mapped to XDM according to
                         the rules in this section.</p>
                      </li>
                   </ol>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>Adjacent text nodes in the HTML DOM are treated as a single XDM text node by only
+                     including the first text node and providing logic to ensure that the text content
+                     is merged into a single text block.</p>
+                  </div>
                </div>
                <div class="div3">
                   
@@ -30137,14 +30150,50 @@ else
                   <code>dm:parent($node)</code> for an HTML DOM <code>Node</code> is as follows:</p>
                   <ol class="enumar">
                      <li>
-                        <p>If the <code>Node.parentNode</code> property is null, then the result is an
-                        empty sequence;</p>
+                        <p>Let <code>$parent</code> be the <code>Node.parentNode</code> property of the
+                        node;</p>
                      </li>
                      <li>
-                        <p>Otherwise, the result is the value of the <code>Node.parentNode</code> property
-                        using the XDM mapping rules described in this section.</p>
+                        <p>If <code>$parent</code> is an instance of HTML DOM <code>DocumentFragment</code>,
+                        then for each HTML DOM <code>HTMLTemplateElement</code> <code>$template</code> in
+                        the parsed DOM tree:</p>
+                        <ol class="enumla">
+                           <li>
+                              <p>Let <code>$content</code> be the value of the
+                              <code>HTMLTemplateElement.content</code> property of <code>$template</code>;</p>
+                           </li>
+                           <li>
+                              <p>If <code>$content</code> is the same node as <code>$parent</code>, then the
+                              result is <code>$template</code> using the XDM mapping rules described in
+                              this section;</p>
+                           </li>
+                           <li>
+                              <p>If there are no more <code>$template</code> nodes, then the result is an
+                              empty sequence;</p>
+                           </li>
+                        </ol>
+                     </li>
+                     <li>
+                        <p>If <code>$parent</code> is null, then the result is an empty sequence;</p>
+                     </li>
+                     <li>
+                        <p>Otherwise, the result is <code>$parent</code> using the XDM mapping rules
+                        described in this section.</p>
                      </li>
                   </ol>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>The current node can only have a HTML DOM <code>DocumentFragment</code> parent node
+                     if the <code>include-template-content</code> key of the <code>html-parser-options</code>
+                     is <code>true()</code>.</p>
+                  </div>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>The HTML DOM <code>DocumentFragment</code>'s <code>Node.parentNode</code> property
+                     is null, and document fragment attached to <code>HTMLTemplateElement.content</code>
+                     property do not have a <code>host</code> property connecting the fragment back to
+                     the template element.</p>
+                  </div>
                </div>
                <div class="div3">
                   
@@ -30153,21 +30202,79 @@ else
                   <code>dm:string-value($node)</code> for an HTML DOM <code>Node</code> is as follows:</p>
                   <ol class="enumar">
                      <li>
-                        <p>If the node is an instance of HTML DOM <code>Document</code> then the result
-                        is the concatenation of the <code>string-value</code>s of all its HTML DOM
-                        <code>Text</code> node descendants in document order or <code>""</code> if the
-                        document has no such descendants;</p>
+                        <p>If the node is an instance of HTML DOM <code>Document</code>, then use the
+                        algorithm described in <a href="#html-tree-string-construction"><b>15.5.12.1 Tree string construction</b></a>;</p>
                      </li>
                      <li>
-                        <p>If the node is an instance of HTML DOM <code>Element</code> then the result
-                        is the concatenation of the <code>string-value</code>s of all its HTML DOM
-                        <code>Text</code> node descendants in document order or <code>""</code> if the
-                        document has no such descendants;</p>
+                        <p>If the node is an instance of HTML DOM <code>Element</code>, then use the
+                        algorithm described in <a href="#html-tree-string-construction"><b>15.5.12.1 Tree string construction</b></a>;</p>
+                     </li>
+                     <li>
+                        <p>If the node is an instance of HTML DOM <code>Text</code>, then use the
+                        algorithm described in <a href="#html-text-node-string-construction"><b>15.5.12.2 Text node string construction</b></a>;</p>
                      </li>
                      <li>
                         <p>Otherwise, the result is the value of the <code>Node.nodeValue</code> property.</p>
                      </li>
                   </ol>
+                  <div class="div4">
+                     
+                     <h5><a id="html-tree-string-construction"></a>15.5.12.1 Tree string construction</h5>
+                     <p>The following algorithm is used to construct the concatenated string value of a
+                     node in the HTML DOM tree:</p>
+                     <ol class="enumar">
+                        <li>
+                           <p>Let <code>$text</code> be the string value <code>""</code>;</p>
+                        </li>
+                        <li>
+                           <p>For each descendant node <code>$node</code> in document order:</p>
+                           <ol class="enumla">
+                              <li>
+                                 <p>If <code>$node</code> is not an instance of HTML DOM
+                                 <code>Text</code>, process the next node in document order;</p>
+                              </li>
+                              <li>
+                                 <p>Append the value of the <code>Node.nodeValue</code> property for
+                                 <code>$node</code> to <code>$text</code>;</p>
+                              </li>
+                           </ol>
+                        </li>
+                        <li>
+                           <p>The result is <code>$text</code>.</p>
+                        </li>
+                     </ol>
+                  </div>
+                  <div class="div4">
+                     
+                     <h5><a id="html-text-node-string-construction"></a>15.5.12.2 Text node string construction</h5>
+                     <p>The following algorithm is used to construct the maximal sequence of adjacent
+                     <em>character information items</em> for text node children of an element:</p>
+                     <ol class="enumar">
+                        <li>
+                           <p>Let <code>$text</code> be the string value <code>""</code>;</p>
+                        </li>
+                        <li>
+                           <p>Append the value of the <code>Node.nodeValue</code> property for
+                           <code>$node</code> to <code>$text</code>;</p>
+                        </li>
+                        <li>
+                           <p>Let <code>$next</code> be the value of <code>Node.nextSibling</code>;</p>
+                        </li>
+                        <li>
+                           <p>Let <code>$next</code> is null, or not an instance of HTML DOM
+                           <code>Text</code>, the result is <code>$text</code>;</p>
+                        </li>
+                        <li>
+                           <p>Otherwise, repeat from step 2 using <code>$next</code> as <code>$node</code>.</p>
+                        </li>
+                     </ol>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>Adjacent text nodes in the HTML DOM are treated as a single XDM text node by only
+                        including the first text node and providing logic to ensure that the text content
+                        is merged into a single text block.</p>
+                     </div>
+                  </div>
                </div>
                <div class="div3">
                   
@@ -30270,6 +30377,20 @@ else
                      <code>Attr.localName</code> and <code>Attr.name</code> properties of HTML DOM
                      <code>Attr</code> nodes are both set to the qualified name.</p>
                   </div>
+               </div>
+               <div class="div3">
+                  
+                  <h4><a id="html-unparsed-entity-public-id-accessor"></a>15.5.15 unparsed-entity-public-id Accessor</h4>
+                  <p>The result of the <a href="https://qt4cg.org/specifications/xpath-datamodel-40/#dm-unparsed-entity-public-id">Section 5.15 unparsed-entity-public-id Accessor</a><sup><small>DM40</small></sup>
+                  <code>dm:unparsed-entity-public-id($node)</code> for an HTML DOM <code>Node</code>
+                  is an empty sequence.</p>
+               </div>
+               <div class="div3">
+                  
+                  <h4><a id="html-unparsed-entity-system-id-accessor"></a>15.5.16 unparsed-entity-system-id Accessor</h4>
+                  <p>The result of the <a href="https://qt4cg.org/specifications/xpath-datamodel-40/#dm-unparsed-entity-system-id">Section 5.16 unparsed-entity-system-id Accessor</a><sup><small>DM40</small></sup>
+                  <code>dm:unparsed-entity-system-id($node)</code> for an HTML DOM <code>Node</code>
+                  is an empty sequence.</p>
                </div>
             </div>
          </div>
