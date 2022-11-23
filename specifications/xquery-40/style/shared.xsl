@@ -17,38 +17,10 @@
   
   <xsl:import href="../../../style/xmlspec-override.xsl"/> 
 
-  <xsl:param name="spec" select="'xpath'"/>
-
-  <xsl:param name="additional.css">
-    <style type="text/css">
-.wsspec      { font-family: monospace; font-size: small; font-style: italic }      
-<xsl:if test="$spec='shared'">
-  <xsl:text>
-.xpath         { color: red; background-color: white }
-.xquery      { color: green; background-color: white }
-
-.xpath:link { color: red; background-color: white }
-.xpath:visited { color: red; background-color: white }
-
-.shared:link { color: black; background-color: white }
-.shared:visited { color: black; background-color: white }
-
-.xquery:link { color: green; background-color: white }
-.xquery:visited { color: green; background-color: white }
-
-  </xsl:text>
-</xsl:if>
-
-    </style>
-  </xsl:param>
-
-  <xsl:param name="additional.css.2"/>
+  <xsl:param name="spec" select="'shared'"/>
 
   <xsl:output method="xml" encoding="utf-8"/>
 
-  <!-- xsl:param name="spec" select="shared"/ -->
-
-  
 <!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
   <xsl:template match="/">
     <xsl:variable name="XSLTprocessor">
