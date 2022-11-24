@@ -633,8 +633,53 @@ General notes <a href="#const-infoset">occur elsewhere</a>.</p>
 </xsl:template>
 
 <!-- ====================================================================== -->
+<!-- Special support for the hierarchy tables and graphics -->
 
-<!-- Special support for the hierarchy tables -->
+<xsl:template match="graphic">
+  <xsl:choose>
+    <xsl:when test="ends-with(@source, '.svg')">
+      <!-- We have to embed the SVG because we want the links to work -->
+      <xsl:variable name="svg"
+                    select="doc('../../../build/'||@source)"/>
+      <xsl:comment>SVG embedded so that links work</xsl:comment>
+      <xsl:apply-templates select="$svg" mode="strip-svg"/>
+    </xsl:when>
+    <xsl:otherwise>
+      <next-match/>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
+
+<xsl:mode name="strip-svg" on-no-match="shallow-copy"/>
+
+<xsl:template match="*:svg" mode="strip-svg">
+  <xsl:element name="{local-name(.)}">
+    <xsl:for-each select="@* except (@width|@height)">
+      <xsl:attribute name="{local-name(.)}" select="string(.)"/>
+    </xsl:for-each>
+    <xsl:choose>
+      <xsl:when test="number(substring-before(@width, 'pt')) gt 800
+                      or number(substring-before(@width, 'pt')) lt 500">
+        <xsl:copy-of select="@width, @height"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:attribute name="width" select="800"/>
+      </xsl:otherwise>
+    </xsl:choose>
+    <xsl:apply-templates mode="#current"/>
+  </xsl:element>
+</xsl:template>
+
+<xsl:template match="*" mode="strip-svg">
+  <xsl:element name="{local-name(.)}">
+    <xsl:for-each select="@*">
+      <xsl:attribute name="{local-name(.)}" select="string(.)"/>
+    </xsl:for-each>
+    <xsl:apply-templates mode="#current"/>
+  </xsl:element>
+</xsl:template>
+
+<xsl:template match="comment()" mode="strip-svg"/>
 
 <xsl:template match="table[@role='hierarchy']">
   <table class="hierarchy">
