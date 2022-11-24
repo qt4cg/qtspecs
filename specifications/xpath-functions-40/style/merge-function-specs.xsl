@@ -92,6 +92,7 @@
 				<def>
 					<xsl:copy-of select="$fspec/fos:signatures/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>
+					<xsl:apply-templates select="$fspec/fos:signatures/fos:record"/>
 				</def>
 			</gitem>
 			<xsl:if test="$fspec/fos:properties">
@@ -159,9 +160,9 @@
 			<xsl:if test="$fspec/fos:history">
 				<gitem>
 					<label>History</label>
-					<def role="example">
+					<def role="example"><p>
 						<xsl:apply-templates select="$fspec/fos:history/fos:version/node()"/>
-					</def>
+					</p></def>
 				</gitem>
 			</xsl:if>
 		</glist>
@@ -196,19 +197,22 @@
 		<xsl:variable name="isOp" as="xs:boolean" select="exists(../../fos:opermap)"/>
 		<example role="signature">
 			<xsl:variable name="prefix" select="../../@prefix"/>
-			<proto name="{@name}" return-type="{@return-type}"
-				isOp="{if ($isOp) then 'yes' else 'no'}"
-				prefix="{if ($prefix) then $prefix else if ($isOp) then 'op' else 'fn'}">
-				<xsl:copy-of select="@diff, @at"/>
-				<xsl:apply-templates/>
+			<proto isOp="{if ($isOp) then 'yes' else 'no'}"
+			       prefix="{if ($prefix)
+                                        then $prefix
+                                        else if ($isOp)
+                                             then 'op'
+                                             else 'fn'}">
+			  <xsl:copy-of select="@name, @return-type, @return-type-ref, @diff, @at"/>
+			  <xsl:apply-templates/>
 			</proto>
 		</example>
 	</xsl:template>
 
 	<xsl:template match="fos:arg">
-		<arg name="{@name}" type="{@type}">
-			<xsl:copy-of select="@diff, @at, @default"/>
-		</arg>
+	  <arg>
+	    <xsl:copy-of select="@name, @type, @type-ref, @diff, @at, @default"/>
+	  </arg>
 	</xsl:template>
 	
 	<xsl:template match="fos:arg[@type='record']">
@@ -225,6 +229,15 @@
 			</xsl:attribute>
 			<xsl:copy-of select="@diff, @at, @default"/>
 		</arg>
+	</xsl:template>
+
+	<xsl:template match="fos:record">
+	  <example role="record">
+	    <record>
+	      <xsl:copy-of select="@*"/>
+	      <xsl:apply-templates/>
+	    </record>
+	  </example>
 	</xsl:template>
 
 	<xsl:template match="fos:example">

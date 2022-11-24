@@ -11,127 +11,7 @@
   <xsl:param name="show.issues" select="1"/>
   <xsl:param name="show.recent.issues" select="'2002-11-15'"/>
 
-  <xsl:param name="additional.css">
-    <style type="text/css">
-      .termdef     { color: rgb(133,0,033);
-                   }
-      .aside       { border-left: 4px solid green;
-                     background-color: #EEFFEE;
-                     padding-left: 1em;
-                     font-size: small;
-                   }
-
-      .node-summary table       { margin-left: 1em;
-                                }
-      .node-summary thead td    { font-weight: bold;
-                                }
-      .node-summary td          { padding-left: 1em;
-                                  padding-right: 1em;
-                                  border-bottom: 1px solid gray;
-                                }
-
-      .infoset-mapping table    { margin-left: 1em;
-                                }
-      .infoset-mapping thead td { font-weight: bold;
-                                }
-      .infoset-mapping td       { padding-left: 1em;
-                                  padding-right: 1em;
-                                }
-
-      .issue-closed             { color: green;
-                                }
-
-      .issue-resolved           { color: red;
-                                }
-
-      .issue-open               { color: red;
-                                }
-
-div.schemaComp  { border: 4px double gray;
-                  margin: 0em 1em;
-                  padding: 0em;
-                }
-div.compHeader  { margin: 4px;
-                  font-weight: bold;
-                }
-span.schemaComp { background-color: white;
-                  color: #A52A2A;
-                }
-div.compBody    { border-top-width: 4px;
-                  border-top-style: double;
-                  border-top-color: #d3d3d3;
-                  padding: 4px;
-                  margin: 0em;
-                }
-
-div.exampleInner { background-color: #d5dee3;
-                   color: black;
-                   border-top-width: 4px;
-                   border-top-style: double;
-                   border-top-color: #d3d3d3;
-                   border-bottom-width: 4px;
-                   border-bottom-style: double;
-                   border-bottom-color: #d3d3d3;
-                   padding: 4px;
-                   margin: 0em;
-                 }
-
-div.issueBody    { margin-left: 0.25in;
-                 }
-
-code.function    { font-weight: bold;
-                 }
-code.return-type { font-style: italic;
-                 }
-code.type        { font-style: italic;
-                 }
-code.as          { font-style: normal;
-                 }
-code.arg         {
-                 }
-code.strikeout   { text-decoration: line-through;
-                 }
-p.table.footnote { font-size: 8pt;
-                 }
-
-span.function    { font-family: monospace;
-                 }
-
-span.prefix      { font-style: italic;
-                 }
-
-table.hierarchy  { font-size: x-small;
-                 }
-
-td.castOther     { background-color: yellow;
-                   color: black;
-                   text-align: left;
-                   vertical-align: middle;
-                 }
-                 
-td.glossary1     {  width: 20%;
-                    vertical-align: top;
-                 }
-
-td.glossary2     {  vertical-align: top;
-                 }
-
-table.glossarytab  {  width: 100%;
-                   }
-
-table.hierarchy  { border: 0;
-                 }
-
-tr.document               { background-color: #FFD4EA; }
-tr.element                { background-color: #96E3D1; }
-tr.attribute              { background-color: #E7E6FF; }
-tr.text                   { background-color: #FFFFC2; }
-tr.processing-instruction { background-color: #E5FDFE; }
-tr.comment                { background-color: #E1E1E1; }
-tr.namespace              { background-color: #E7E6FF; }
-
-    </style>
-  </xsl:param>
+  <xsl:param name="additional.css" select="'xpath-datamodel-40.css'"/>
 
   <!-- ====================================================================== -->
 
@@ -753,8 +633,53 @@ General notes <a href="#const-infoset">occur elsewhere</a>.</p>
 </xsl:template>
 
 <!-- ====================================================================== -->
+<!-- Special support for the hierarchy tables and graphics -->
 
-<!-- Special support for the hierarchy tables -->
+<xsl:template match="graphic">
+  <xsl:choose>
+    <xsl:when test="ends-with(@source, '.svg')">
+      <!-- We have to embed the SVG because we want the links to work -->
+      <xsl:variable name="svg"
+                    select="doc('../../../build/'||@source)"/>
+      <xsl:comment>SVG embedded so that links work</xsl:comment>
+      <xsl:apply-templates select="$svg" mode="strip-svg"/>
+    </xsl:when>
+    <xsl:otherwise>
+      <next-match/>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:template>
+
+<xsl:mode name="strip-svg" on-no-match="shallow-copy"/>
+
+<xsl:template match="*:svg" mode="strip-svg">
+  <xsl:element name="{local-name(.)}">
+    <xsl:for-each select="@* except (@width|@height)">
+      <xsl:attribute name="{local-name(.)}" select="string(.)"/>
+    </xsl:for-each>
+    <xsl:choose>
+      <xsl:when test="number(substring-before(@width, 'pt')) gt 800
+                      or number(substring-before(@width, 'pt')) lt 500">
+        <xsl:copy-of select="@width, @height"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:attribute name="width" select="800"/>
+      </xsl:otherwise>
+    </xsl:choose>
+    <xsl:apply-templates mode="#current"/>
+  </xsl:element>
+</xsl:template>
+
+<xsl:template match="*" mode="strip-svg">
+  <xsl:element name="{local-name(.)}">
+    <xsl:for-each select="@*">
+      <xsl:attribute name="{local-name(.)}" select="string(.)"/>
+    </xsl:for-each>
+    <xsl:apply-templates mode="#current"/>
+  </xsl:element>
+</xsl:template>
+
+<xsl:template match="comment()" mode="strip-svg"/>
 
 <xsl:template match="table[@role='hierarchy']">
   <table class="hierarchy">

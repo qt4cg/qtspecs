@@ -24,180 +24,7 @@
 
 <xsl:param name="strikeout.missing.functions" select="0"/>
 
-<xsl:param name="additional.css"><xsl:text>
-#function-finder {
-  position: fixed;
-  background-color: rgb(247, 248, 249);
-  opacity 1;
-  width: 23.5em;
-  border-bottom: 1px solid rgb(135,149,159);
-  padding-bottom: 0.5em;
-  margin-bottom: 4px;
-}
-
-#toc h2 {
-  padding-top: 4em ! important;
-}
-
-div.schemaComp  { border: 4px double gray;
-                  margin: 0em 1em;
-                  padding: 0em;
-                }
-div.compHeader  { margin: 4px;
-                  font-weight: bold;
-                }
-span.schemaComp { background-color: white;
-                  color: #A52A2A;
-                }
-div.compBody    { border-top-width: 4px;
-                  border-top-style: double;
-                  border-top-color: #d3d3d3;
-                  padding: 4px;
-                  margin: 0em;
-                }
-
-div.exampleInner { background-color: #d5dee3;
-                   color: black;
-                   border-top-width: 4px;
-                   border-top-style: double;
-                   border-top-color: #d3d3d3;
-                   border-bottom-width: 4px;
-                   border-bottom-style: double;
-                   border-bottom-color: #d3d3d3;
-                   padding: 4px;
-		   margin-bottom: 4px;
-                 }
-
-div.issueBody    { margin-left: 0.25in;
-                 }
-
-code.function    { font-weight: bold;
-                 }
-code.return-type { font-style: italic;
-                 }
-code.return-varies { font-weight: bold;
-                   font-style: italic;
-                 }
-code.type        { font-style: italic;
-                 }
-code.as          { font-style: normal;
-                 }
-code.arg         {
-                 }
-code.strikeout   { text-decoration: line-through;
-                 }
-code.small       { font-size: small;
-                 }
-p.table.footnote { font-size: 8pt;
-                 }
-
-table.casting    { font-size: x-small;
-                 }
-table.hierarchy  { font-size: x-small;
-                 }
-table.proto      {
-                  
-                 }
-
-td.castY         { background-color: #7FFF7F;
-                   color: black;
-                   text-align: center;
-                   vertical-align: middle;
-                 }
-
-td.castN         { background-color: #FF7F7F;
-                   color: black;
-                   text-align: center;
-                   vertical-align: middle;
-                 }
-
-td.castM         { background-color: white;
-                   color: black;
-                   text-align: center;
-                   vertical-align: middle;
-                 }
-
-td.castOther     { background-color: yellow;
-                   color: black;
-                   text-align: center;
-                   vertical-align: middle;
-                 }
-
-span.cancast:hover { background-color: #ffa;
-                   color: black;
-                 }
-
-div.protoref     { margin-left: 0.5in;
-                   text-indent: -0.5in;
-                 }
-
-dd.indent        { margin-left: 2em;
-                 }
-
-p.element-syntax { border: solid thin; background-color: #ffccff
-                 }
-
-p.element-syntax-chg { border: solid thick yellow; background-color: #ffccff
-                 }
-
-div.proto        { 
-    padding: .5em;
-		border: .5em;
-		border-left-style: solid;
-		page-break-inside: avoid;
-		margin: 1em auto;
-		border-color: #ff99ff;
-		background: #ffe6ff;
-		overflow: auto;
-                 }
-
-
-div.example-chg  { border: solid thick yellow; background-color: #40e0d0; padding: 1em
-                 }
-                 
-div.ffheader     {  
-			margin-top: .8rem;
-			font-size: 140%;
-			font-variant: all-small-caps;
-			text-transform: lowercase;
-			font-weight: bold;
-			color: hsla(203, 20%, 40%, .7);
-		}                  
-
-span.verb        { font: small-caps 100% sans-serif
-                 }
-
-span.error       { font-size: small
-                 }
-
-span.definition  { font: small-caps 100% sans-serif
-                 }
-
-span.grayed      { color: gray
-                 }
-                 
-table.scrap td {
-	 vertical-align: baseline;
-	 text-align: left;
-	 padding-left: 30px;
-}
-
-table.data table.index {
- border-bottom:2px !important ;
-}
-
-table.proto tr td {
-  font-family: monospace;
-  padding-right: 0.5em;
-}
-table.proto tr.arg td:first-child  {
-  padding-left: 2em;
-}
-table.proto tr.name span.name {
-  font-weight: bold;
-}
-</xsl:text>
-</xsl:param>
+<xsl:param name="additional.css" select="'xpath-functions-40.css'"/>
 
 <xsl:param name="toc.level" select="3"/>
 
@@ -450,6 +277,12 @@ table.proto tr.name span.name {
     </div>
   </xsl:template>
 
+  <xsl:template match="example[@role='record']" priority="10">
+    <div>
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+
 <!-- Override proto and arg to print XQuery F/O-style prototypes -->
 
 <xsl:template match="proto">
@@ -465,7 +298,6 @@ table.proto tr.name span.name {
   </xsl:variable>
 
   <div class="proto">
-    <!--<pre><xsl:sequence select="serialize(., map{'method':'xml', 'indent': true()})"/></pre>-->
     <xsl:choose>
       <xsl:when test="empty(arg)">
         <table class="proto" border="0">
@@ -513,12 +345,20 @@ table.proto tr.name span.name {
             <tr class="arg">
               <td>
                 <code>$<xsl:sequence select="@name/string()"/></code>
-                <xsl:if test="not(@type) and not($last)">,</xsl:if>
+                <xsl:if test="not(@type) and not(@type-ref) and not($last)">,</xsl:if>
               </td>
               <td>
                 <xsl:if test="@type">
                   <code class="as">as&#160;</code>
                   <code class="type"><xsl:sequence select="@type/string()"/></code>
+                  <xsl:if test="not (@default) and not($last)">,</xsl:if>
+                </xsl:if>
+                <xsl:if test="@type-ref">
+                  <code class="as">as&#160;</code>
+                  <span class="dagger">†</span>
+                  <a href="#{@type-ref}">
+                    <xsl:value-of select="@type-ref"/>
+                  </a>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
                 </xsl:if>
               </td>
@@ -536,25 +376,81 @@ table.proto tr.name span.name {
 	    <td colspan="3">
               <xsl:text>)</xsl:text>
               <code class="as">&#160;as&#160;</code>
-              <xsl:choose>
-                <xsl:when test="@returnVaries = 'yes'">
-                  <code class="return-varies">
+              <code>
+                <xsl:if test="@returnVaries = 'yes' or @return-type-ref">
+                  <xsl:attribute name="class"
+                                 select="if (@returnVaries = 'yes' and @return-type-ref)
+                                         then 'return-varies return-type-ref'
+                                         else if (@returnVaries = 'yes')
+                                              then 'return-varies'
+                                              else 'return-type-ref'"/>
+                </xsl:if>
+
+                <xsl:choose>
+                  <xsl:when test="@return-type">
                     <xsl:value-of select="@return-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </code>
-                </xsl:when>
-                <xsl:otherwise>
-                  <code class="return-type">
+                  </xsl:when>
+                  <xsl:when test="@return-type-ref">
+                    <span class="dagger">†</span>
+                    <a href="#{@return-type-ref}">
+                      <xsl:value-of select="@return-type-ref"/>
+                    </a>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </xsl:when>
+                  <xsl:otherwise>
                     <xsl:value-of select="@return-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </code>
-                </xsl:otherwise>
-              </xsl:choose>
+                  </xsl:otherwise>
+                </xsl:choose>
+              </code>
             </td>
           </tr>
         </table>
       </xsl:otherwise>
     </xsl:choose>
+  </div>
+</xsl:template>
+
+<xsl:template match="record">
+  <div class="record">
+    <table class="record" border="0">
+      <tr>
+        <td colspan="2">
+          <code id="{@id}" class="return-type-ref">
+            <span class="dagger">†</span>
+            <xsl:value-of select="@id"/>
+          </code>
+          <xsl:text>:</xsl:text>
+        </td>
+      </tr>
+      <tr>
+        <td colspan="2">
+          <code>record(</code>
+        </td>
+      </tr>
+      <xsl:for-each select="arg">
+        <tr class="arg">
+          <td>
+            <xsl:sequence select="@name/string()"/>
+          </td>
+          <td>
+            <xsl:if test="@type">
+              <code class="as">&#160;as&#160;</code>
+              <code>
+                <xsl:value-of select="@type"/>
+              </code>
+            </xsl:if>
+            <xsl:if test="not(position() = last())">,</xsl:if>
+          </td>
+        </tr>
+      </xsl:for-each>
+      <tr>
+        <td colspan="2">
+          <code>)</code>
+        </td>
+      </tr>
+    </table>
   </div>
 </xsl:template>
 
