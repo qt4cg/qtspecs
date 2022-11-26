@@ -10,11 +10,9 @@
 <xsl:param name="uri" select="''"/>
 
 <xsl:template match="/">
-  <document-summary>
+  <document-summary xmlns:xlink="http://www.w3.org/1999/xlink">
     <xsl:if test="$uri != ''">
-      <xsl:attribute name="uri">
-	<xsl:value-of select="$uri"/>
-      </xsl:attribute>
+      <xsl:attribute name="uri" select="$uri"/>
     </xsl:if>
     <xsl:apply-templates select="spec"/>
   </document-summary>
@@ -99,7 +97,7 @@
 </xsl:template>
 
 <xsl:template match="error">
-  <xsl:copy>
+  <xsl:copy copy-namespaces="no">
     <xsl:attribute name="spec">
       <xsl:value-of select="$specdoc"/>
     </xsl:attribute>
@@ -108,7 +106,7 @@
 </xsl:template>
 
 <xsl:template match="nt">
-  <xsl:copy>
+  <xsl:copy copy-namespaces="no">
     <xsl:copy-of select="@*, node()"/>
   </xsl:copy>
 </xsl:template>
