@@ -91,7 +91,7 @@
 </xsl:template>
 
 <xsl:template match="termdef">
-  <xsl:copy>
+  <xsl:copy copy-namespaces="no">
     <xsl:copy-of select="@*"/>
   </xsl:copy>
 </xsl:template>
