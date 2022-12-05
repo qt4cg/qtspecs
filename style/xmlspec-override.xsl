@@ -22,14 +22,7 @@
 
   <xsl:output method="xml" encoding="utf-8"/>
 
-  <xsl:param name="additional.css.2">
-<!--
-    <xsl:comment> (xmlspec-override - $show.diff.markup = <xsl:value-of select="$show.diff.markup"/>)</xsl:comment>
--->
-    <style type="text/css">
-      table.small    { font-size: x-small; }
-    </style>
-  </xsl:param>
+  <xsl:param name="additional.css.2"/>
 
   <!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
   <xsl:template match="/">

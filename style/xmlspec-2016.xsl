@@ -547,7 +547,7 @@
   <!-- ednote: editors' note -->
   <xsl:template match="ednote">
     <xsl:if test="$show.ednotes != 0">
-      <table style="border: 1px;">
+      <table class="ednote">
         <xsl:attribute name="caption">
           <xsl:text>Editorial note</xsl:text>
           <xsl:if test="name">
@@ -2816,46 +2816,6 @@
   </xsl:template>
 
   <xsl:template name="css">
-    <style type="text/css">
-      <xsl:text>
-code           { font-family: monospace; }
-
-div.constraint,
-div.issue,
-div.note,
-div.notice     { margin-left: 2em; }
-
-ol.enumar      { list-style-type: decimal; }
-ol.enumla      { list-style-type: lower-alpha; }
-ol.enumlr      { list-style-type: lower-roman; }
-ol.enumua      { list-style-type: upper-alpha; }
-ol.enumur      { list-style-type: upper-roman; }
-
-      </xsl:text>
-      <xsl:if test="$tabular.examples = 0">
-        <xsl:text>
-div.exampleInner pre { margin-left: 1em;
-                       margin-top: 0em; margin-bottom: 0em}
-div.exampleOuter {border: 4px double gray;
-                  margin: 0em; padding: 0em}
-div.exampleInner { background-color: #d5dee3;
-                   border-top-width: 4px;
-                   border-top-style: double;
-                   border-top-color: #d3d3d3;
-                   border-bottom-width: 4px;
-                   border-bottom-style: double;
-                   border-bottom-color: #d3d3d3;
-                   padding: 4px; margin: 0em }
-div.exampleWrapper { margin: 4px }
-div.exampleHeader { font-weight: bold;
-                    margin: 4px}
-</xsl:text>
-      </xsl:if>
-      <xsl:value-of select="$additional.css"/>
-<!-- 2010-12-23: Jim added the following inclusion of $additional.css.diff,
-                 which will be non-empty only when diffs are being done -->
-      <xsl:value-of select="$additional.css.diff"/>
-    </style>
     <link rel="stylesheet" type="text/css">
       <xsl:attribute name="href">
         <xsl:if test="$use-local-css = 0">
@@ -2866,10 +2826,10 @@ div.exampleHeader { font-weight: bold;
           <xsl:otherwise>
             <xsl:choose>
               <xsl:when test="/spec/@w3c-doctype='wd'">W3C-WD</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='rec'">W3C-REC</xsl:when>
+              <xsl:when test="/spec/@w3c-doctype='cr'">W3C-CR</xsl:when>
               <xsl:when test="/spec/@w3c-doctype='pr'">W3C-PR</xsl:when>
               <xsl:when test="/spec/@w3c-doctype='per'">W3C-PER</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='cr'">W3C-CR</xsl:when>
+              <xsl:when test="/spec/@w3c-doctype='rec'">W3C-REC</xsl:when>
               <xsl:when test="/spec/@w3c-doctype='note'">W3C-NOTE</xsl:when>
               <xsl:when test="/spec/@w3c-doctype='wgnote'">W3C-WG-NOTE</xsl:when>
               <xsl:when test="/spec/@w3c-doctype='memsub'">W3C-Member-SUBM</xsl:when>
@@ -2881,6 +2841,23 @@ div.exampleHeader { font-weight: bold;
         <xsl:text>.css</xsl:text>
       </xsl:attribute>
     </link>
+
+    <link rel="stylesheet" href="css/qtspecs.css"/>
+    <xsl:if test="normalize-space($additional.css) != ''">
+      <xsl:for-each select="tokenize($additional.css, '\s+')">
+        <link rel="stylesheet" href="css/{.}"/>
+      </xsl:for-each>
+    </xsl:if>
+    <xsl:if test="normalize-space($additional.css.diff) != ''">
+      <xsl:for-each select="tokenize($additional.css.diff, '\s+')">
+        <link rel="stylesheet" href="css/{.}"/>
+      </xsl:for-each>
+    </xsl:if>
+    <xsl:if test="normalize-space($additional.css.2) != ''">
+      <xsl:for-each select="tokenize($additional.css.2, '\s+')">
+        <link rel="stylesheet" href="css/{.}"/>
+      </xsl:for-each>
+    </xsl:if>
   </xsl:template>
 
   <xsl:template name="additional-head">

@@ -6,16 +6,7 @@
   <!-- Baseline date from which differences will be shown -->
   <xsl:param name="diff.baseline" select="'0001-01-01'"/>
 
-<xsl:param name="additional.css">
-<xsl:text>
-dd.indent { margin-left: 2em; }
-p.element-syntax { border: solid thin; background-color: #ffccff }
-div.proto { border: solid thin; background-color: #ffccff }
-div.example { border: solid thin; background-color: blue; padding: 1em }
-span.verb { font: small-caps 100% sans-serif }
-span.error { font-size: small }
-</xsl:text>
-</xsl:param>
+<xsl:param name="additional.css" select="'xslt-xquery-serialization-40.css'"/>
 
 <!-- ==================================================================== -->
 

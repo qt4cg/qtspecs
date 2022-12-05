@@ -12,7 +12,8 @@
   <xsl:import href="xmlspec-2016.xsl"/>
 
   <xsl:param name="show-markup" select="'0'"/>
-  <xsl:variable name="show.diff.markup" as="xs:integer" select="$show-markup cast as xs:integer"/>
+  <xsl:variable name="show.diff.markup" as="xs:integer"
+                select="$show-markup cast as xs:integer"/>
   <xsl:param name="called.by.diffspec" select="0" as="xs:integer"/>
   <!-- Taken from F&O 3.0 and Serialization 3.0 -->
   <xsl:param name="diff.baseline" select="''" as="xs:string"/>
@@ -26,71 +27,11 @@
   <xsl:param name="del-color" select="'#ff9999'"/>
   <xsl:param name="off-color" select="'#ffffff'"/>
 
-  <!-- 2010-12-23: Jim $additional.css to $additional.css.diff, which will be non-empty
-                 only when diffs are being done; won't override doc stylesheet $additional.css -->
   <xsl:param name="additional.css.diff">
-<!--
-<xsl:comment>(xsl-query - $show.diff.markup = <xsl:value-of select="$show.diff.markup"/>)</xsl:comment>
-<xsl:message>(xsl-query - $show.diff.markup = <xsl:value-of select="$show.diff.markup"/>)</xsl:message>
--->
     <xsl:if test="xs:integer($show.diff.markup) != 0">
-/* from xsl-query.xsl (A) */      
-.diff-add  { background-color: <xsl:value-of select="$add-color"/> }
-.diff-del  { background-color: <xsl:value-of select="$del-color"/>; text-decoration: line-through }
-.diff-chg  { background-color: <xsl:value-of select="$chg-color"/> }
-.diff-off  { background-color: <xsl:value-of select="$off-color"/>; text-decoration: none; }
+      <xsl:sequence select="'showdiff.css'"/>
     </xsl:if>
-/* from xsl-query.xsl (B) */    
-table.small                             { 
-                                          font-size: x-small; 
-                                          border-collapse: collapse;
-                                        }
-table.small td                          { 
-                                          border: 1px solid #000000;
-                                          padding: 5px;
-                                        }
-table.small th                          { 
-                                          border: 1px solid #000000;
-                                          padding: 5px;
-                                          text-align: center;
-                                        }
-
-table.medium                            { 
-                                          font-size: smaller;
-                                          border-collapse: collapse; 
-                                        }
-table.medium td                         { 
-                                          border: 1px solid #000000;
-                                          padding: 5px;
-                                        }
-table.medium th                         { 
-                                          border: 1px solid #000000;
-                                          padding: 5px;
-                                          text-align: center;
-                                        }
-                                        
-table.no-code-break code {
-  white-space: nowrap;
-}
-
-table.longlastcol td {
-  vertical-align: baseline;
-  text-align: left;
-}
-
-a.judgment:visited, a.judgment:link     { font-family: sans-serif;
-                              	          color: black; 
-                              	          text-decoration: none }
-a.processing:visited, a.processing:link { color: black; 
-                              		        text-decoration: none }
-a.env:visited, a.env:link               { color: black; 
-                                          text-decoration: none }
-
-.markup-error {
-  background-color: red;
-  color: yellow;
-}
-</xsl:param>
+  </xsl:param>
 
   <xsl:param name="additional.title">
     <xsl:if test="$show.diff.markup != 0">
@@ -523,109 +464,6 @@ a.env:visited, a.env:link               { color: black;
     <xsl:apply-imports/>
   </xsl:template>
 
-  <xsl:template name="css">
-    <style type="text/css">
-      <xsl:text>
-/* from xsl:query.xsl (C) */          
-code           { font-family: monospace; }
-
-div.constraint,
-div.issue,
-div.note,
-div.notice     { margin-left: 2em; }
-
-div.issue
-p.title        { margin-left: -2em; }
-
-ol.enumar      { list-style-type: decimal; }
-ol.enumla      { list-style-type: lower-alpha; }
-ol.enumlr      { list-style-type: lower-roman; }
-ol.enumua      { list-style-type: upper-alpha; }
-ol.enumur      { list-style-type: upper-roman; }
-
-li p           { margin-top: 0.3em;
-                 margin-bottom: 0.3em; }
-
-sup small      { font-style: italic;
-                 color: #8F8F8F;
-               }
-    </xsl:text>
-      <xsl:if test="$tabular.examples = 0">
-        <xsl:text>
-/* from xsl:query.xsl (D) */          
-div.exampleInner pre { margin-left: 1em;
-                       margin-top: 0em; margin-bottom: 0em}
-                       
-pre.small { font-size: small }                       
-div.exampleOuter {border: 4px double gray;
-                  margin: 0em; padding: 0em}
-div.exampleInner { background-color: #d5dee3;
-                   padding: 4px; margin: 0em }
-                   
-div.exampleInner table { border: 0;
-                         border-spacing: 0;
-                       }
-                   
-div.exampleInner td { vertical-align: baseline;
-                      padding: 0;
-                    }
-                   
-div.exampleWrapper { margin: 4px }
-div.exampleHeader { font-weight: bold;
-                    margin: 4px}
-                    
-div.proto { border: 0;
-            border-spacing: 0; 
-          }
-
-div.issue { border-bottom-color: black;
-            border-bottom-style: solid;
-	    border-bottom-width: 1pt;
-	    margin-bottom: 20pt;
-}
-
-th.issue-toc-head { border-bottom-color: black;
-                    border-bottom-style: solid;
-                    border-bottom-width: 1pt;
-}
-
-      </xsl:text>
-      </xsl:if>
-      <xsl:value-of select="$additional.css"/>
-      <xsl:value-of select="$additional.css.2"/>
-      <!-- 2010-12-23: Jim added the following inclusion of $additional.css.diff,
-                 which will be non-empty only when diffs are being done -->
-      <xsl:value-of select="$additional.css.diff"/>
-    </style>
-    <link rel="stylesheet" type="text/css">
-      <xsl:attribute name="href">
-<!-- 2014-01-31: Jim removed the scheme (http:) from the URI text so newer browsers -->
-<!-- can access the CSS stylesheet whether the document itself is reached by http or https -->
-        <xsl:if test="$use-local-css = 0">
-          <xsl:text>https://www.w3.org/StyleSheets/TR/2016/</xsl:text>
-        </xsl:if>
-        <xsl:choose>
-          <xsl:when test="/spec/@role='editors-copy'">base</xsl:when>
-          <xsl:otherwise>
-            <xsl:choose>
-              <xsl:when test="/spec/@w3c-doctype='wd'">W3C-WD</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='cr'">W3C-CR</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='pr'">W3C-PR</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='per'">W3C-PER</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='rec'">W3C-REC</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='note'">W3C-NOTE</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='wgnote'">W3C-WG-NOTE</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='memsub'">W3C-Member-SUBM</xsl:when>
-              <xsl:when test="/spec/@w3c-doctype='teamsub'">W3C-Team-SUBM</xsl:when>
-              <xsl:otherwise>base</xsl:otherwise>
-            </xsl:choose>
-          </xsl:otherwise>
-        </xsl:choose>
-        <xsl:text>.css</xsl:text>
-      </xsl:attribute>
-    </link>
-  </xsl:template>
-
   <xsl:template match="br">
     <br/>
   </xsl:template>
@@ -988,7 +826,7 @@ th.issue-toc-head { border-bottom-color: black;
     <xsl:choose>
       <xsl:when test="contains(@spec, 'XP') and not($nt)">
         <!-- XP and XQ are a special case -->
-        <xsl:variable name="ref2" select="concat('doc-xpath-',@ref)"/>
+        <xsl:variable name="ref2" select="concat('doc-xpath40-',@ref)"/>
         <xsl:variable name="nt2" select="$doc//nt[@def=$ref2]"/>
         <xsl:choose>
           <xsl:when test="$uri">
@@ -1014,7 +852,7 @@ th.issue-toc-head { border-bottom-color: black;
       </xsl:when>
       <xsl:when test="contains(@spec, 'XQ') and not($nt)">
         <!-- XP and XQ are a special case -->
-        <xsl:variable name="ref2" select="concat('doc-xquery-',@ref)"/>
+        <xsl:variable name="ref2" select="concat('doc-xquery40-',@ref)"/>
         <xsl:variable name="nt2" select="$doc//nt[@def=$ref2]"/>
 
         <xsl:choose>
