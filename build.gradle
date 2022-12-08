@@ -8,7 +8,7 @@ buildscript {
   }
 
   dependencies {
-    classpath group: "com.saxonica", name: "Saxon-EE", version: "10.3"
+    classpath group: "com.saxonica", name: "Saxon-EE", version: "11.4"
   }
 }
 
@@ -42,25 +42,92 @@ if (!hasProperty("saxonLicenseDir")) {
 
 dependencies {
   implementation (
-    [group: "com.saxonica", name: "Saxon-EE", version: "10.3"]
+    [group: "com.saxonica", name: "Saxon-EE", version: "11.4"],
+    [group: "com.nwalsh", name: "scommonmark", version: "0.0.1"]
   )
   saxon (
     files(saxonLicenseDir)
   )
 }
 
-defaultTasks 'compileXslt'
+// ============================================================
+
+defaultTasks 'showhelp'
+
+task showhelp() {
+  doLast {
+    println("The compileXslt task will recompile the dashboard.")
+    println("The rss task will rebuild the RSS feed.");
+  }
+}
+
+// ============================================================
+
+task rss(
+  type: JavaExec,
+  dependsOn: ["updateIssues"]
+) {
+  inputs.files fileTree(dir: "${projectDir}/src/status",
+                        include: '20*/*')
+  inputs.file "${projectDir}/src/status/status-rss.xsl"
+  outputs.file "${projectDir}/@qt4cg/status.rss"
+  
+  classpath = configurations.saxon
+  mainClass = "com.saxonica.Transform"
+  args "-it", "-xsl:${projectDir}/src/status/status-rss.xsl"
+}
+
+task updateIssues(
+  type: JavaExec,
+  dependsOn: ["updateLocalIssues"]
+) {
+  inputs.file "${projectDir}/src/status/qtspecs-issues.json"
+  inputs.file "${projectDir}/src/status/issues.xsl"
+  outputs.files fileTree(dir: "${projectDir}/src/status",
+                         include: '20*/*')
+  
+  classpath = configurations.saxon
+  mainClass = "com.saxonica.Transform"
+  args "-it", "-xsl:${projectDir}/src/status/issues.xsl",
+    '-init:com.nwalsh.commonmark.Register'
+}
+
+task updateLocalIssues() {
+  def issues = project.file("${projectDir}/src/status/qtspecs-issues.json")
+  def update = true
+  if (issues.exists()) {
+    def now = new Date().getTime();
+    def age_sec = (now - issues.lastModified()) / 1000
+    update = age_sec > 3600
+  }
+
+  if (update) {
+    doLast {
+      exec {
+        workingDir "${projectDir}/src/status"
+        commandLine "curl", "-o", "qtspecs-issues.json",
+          "https://api.github.com/repos/qt4cg/qtspecs/issues?state=all"
+      }
+    } 
+  } else {
+    doLast {
+      println("Issues file is too recent, erase it to force update.")
+    }
+  }
+}
+
+// ============================================================
 
 if (file(saxonLicenseDir + "/saxon-license.lic").exists()) {
   // We can compile the stylesheet
   task compileXslt(type: JavaExec) {
-    inputs.file "dashboard.xsl"
-    outputs.file "dashboard.sef.json"
+    inputs.file "${projectDir}/dashboard/dashboard.xsl"
+    outputs.file "${projectDir}/dashboard/dashboard.sef.json"
     classpath = configurations.saxon
-    main = "com.saxonica.Transform"
+    mainClass = "com.saxonica.Transform"
     args "-t",
-      "-xsl:dashboard.xsl",
-      "-export:dashboard.sef.json",
+      "-xsl:${projectDir}/dashboard/dashboard.xsl",
+      "-export:${projectDir}/dashboard/dashboard.sef.json",
       "-target:JS", "-nogo", "-relocate:on", "-ns:##html5"
   }
 } else {

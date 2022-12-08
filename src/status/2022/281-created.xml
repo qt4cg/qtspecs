@@ -1,0 +1,147 @@
+<item>
+   <title>Issue #281 created</title>
+   <pubDate>2022-12-03T22:12:41Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/281</link>
+   <guid>https://qt4cg.org/@qt4cg/2022/#created-281</guid>
+   <description>&lt;div&gt;&lt;p&gt;XPath: Short-circuiting Functions and Lazy Evaluation Hints&lt;/p&gt;&lt;div class="markup"&gt;&lt;h1&gt;Short-circuiting Functions and Lazy Evaluation Hints&lt;/h1&gt;
+&lt;h1&gt;&lt;br/&gt;1. Introduction&lt;/h1&gt;
+&lt;p&gt;As shown in &lt;a href="https://en.wikipedia.org/wiki/Short-circuit_evaluation#Support_in_common_programming_and_scripting_languages"&gt;Wikipedia&lt;/a&gt;, most contemporary programming languages offer reasonable support for &lt;a href="https://en.wikipedia.org/wiki/Short-circuit_evaluation#Definition"&gt;short-circuit evaluation&lt;/a&gt;
+(also known as &lt;em&gt;minimal&lt;/em&gt; or &lt;em&gt;McCarthy evaluation&lt;/em&gt;), including several standard language short-circuit operators.&lt;/p&gt;
+&lt;p&gt;Short-circuiting, as we will call the above in this document, is commonly used to achieve:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;em&gt;Avoiding undesired side effects of evaluating the second argument&lt;/em&gt;, such as
+excessive evaluation time or throwing an error&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Usual example, using a &lt;a href="https://en.wikipedia.org/wiki/C_(programming_language)"&gt;C-based&lt;/a&gt; language:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-c"&gt;   int denom = 0;
+   if (denom != 0 &amp;amp;&amp;amp; num / denom)
+   {
+   ...//ensures that calculating num/denom never results in divide-by-zero error
+   }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Consider the following example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-c"&gt;   int a = 0;
+   if (a != 0 &amp;amp;&amp;amp; myfunc(b))
+   {
+     do_something();
+   }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;In this example, short-circuit evaluation guarantees that &lt;code&gt;myfunc(b)&lt;/code&gt; is never called. This is because &lt;code&gt;a != 0&lt;/code&gt; evaluates to &lt;em&gt;&lt;code&gt;false&lt;/code&gt;&lt;/em&gt;. This feature permits two useful programming constructs.&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;If the first sub-expression checks whether an expensive computation is needed and the check evaluates to &lt;em&gt;false&lt;/em&gt;, one can eliminate expensive computation in the second argument.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;It permits a construct where the first expression guarantees a condition without which the second expression may cause a &lt;a href="https://en.wikipedia.org/wiki/Run-time_error"&gt;run-time error&lt;/a&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;em&gt;Idiomatic conditional construct&lt;/em&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;&lt;a href="https://en.wikipedia.org/wiki/Perl"&gt;Perl&lt;/a&gt; idioms:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;   some_condition or die; # Abort execution if some_condition is false
+
+   some_condition and die; # Abort execution if some_condition is true
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h1&gt;&lt;br/&gt;2. Short-circuiting in XPath&lt;/h1&gt;
+&lt;p&gt;In short (pun intended) there is no such thing mentioned in any officially-published W3C version (&amp;lt;= 3.1) of XPath.&lt;/p&gt;
+&lt;p&gt;This topic was briefly mentioned in the discussion of &lt;a href="https://github.com/qt4cg/qtspecs/issues/78"&gt;another proposal&lt;/a&gt;: that of providing the capability to specify strictly the order of evaluation.&lt;/p&gt;
+&lt;p&gt;Aspects of incorporating hints for &lt;a href="https://en.wikipedia.org/wiki/Lazy_evaluation"&gt;lazy evaluation&lt;/a&gt; (a topic related to short-cutting) were discussed also in the thread to &lt;a href="https://app.slack.com/client/T011VK9115Z/C01GVC3JLHE/thread/C01GVC3JLHE-1665542903.180989"&gt;this question&lt;/a&gt; on the Xml.com Slack.&lt;/p&gt;
+&lt;p&gt;The situation at present is that the XPath processor that is being used decides whether or not to perform shortcutting, even in obvious cases. Thus, varying from one XPath processor to another, the differences in performance evaluation could be dramatic. For example, the following XPath expression is evaluated on BaseX (ver. &amp;gt;= 10.3) for 0 seconds, and the same expression is evaluated by Saxon ver. 11 for about 100 seconds.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;
+let $fnAnd := function($x)
+   {
+     function($y)
+     {
+      if(not($x)) then false()
+                  else $y
+     }
+   }
+   return
+      $fnAnd(false())(some $b in ( ((1 to 1000000000000000000) !true()) )  satisfies not($b)   )
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;&lt;br/&gt;3. Analysis&lt;/h2&gt;
+&lt;p&gt;We can define the term “&lt;em&gt;function with shortcutting&lt;/em&gt;” (just for a 2-argument function, but this can be extended for &lt;code&gt;N&lt;/code&gt;-argument function where &lt;code&gt;N &amp;gt;= 2&lt;/code&gt;) in the  following way:&lt;/p&gt;
+&lt;p&gt;Given a function &lt;code&gt;$f($x, $y)&lt;/code&gt;, we denote in XPath its partial application for a given value of $x (say &lt;code&gt;let $x := $t&lt;/code&gt;) as:&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;$f($t, ?)&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;The above is a function of one argument. By definition:&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;$f($x, $y)&lt;/code&gt; is equivalent to &lt;code&gt;$f($x, ?) ($y)&lt;/code&gt;, for every pair &lt;code&gt;$x&lt;/code&gt; and &lt;code&gt;$y&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;That is, the partial application of the 2-argument function &lt;code&gt;$f&lt;/code&gt; with fixed 1st argument is another function &lt;code&gt;$g&lt;/code&gt; which when applied on the 2nd argument (&lt;code&gt;$y&lt;/code&gt;) of &lt;code&gt;$f($x, $y)&lt;/code&gt; produces the same value as &lt;code&gt;$f($x, $y)&lt;/code&gt;:&lt;/p&gt;
+&lt;p&gt;If &lt;code&gt;$g&lt;/code&gt; is defined as &lt;code&gt;$f($x, ?)&lt;/code&gt;, then &lt;code&gt;$g($y)&lt;/code&gt; produces the same value as &lt;code&gt;$f($x, $y)&lt;/code&gt; for every pair &lt;code&gt;$x&lt;/code&gt; and &lt;code&gt;$y&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Let us take a specific function:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
+                     { $x and $y}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then one equivalent way of defining &lt;code&gt;$fAnd&lt;/code&gt; is:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
+                     {
+                       let $partial := function($x as xs:boolean) as function(xs:boolean) as xs:boolean
+                                               {
+                                                  if(not($x)) then -&amp;gt;(){false()}
+                                                              else -&amp;gt;($t) {$t}
+                                               }
+                         return $partial($x)($y)
+                    }
+   return
+       $fAnd(false(), true())
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;strong&gt;&lt;em&gt;&lt;code&gt;$partial&lt;/code&gt;&lt;/em&gt;&lt;/strong&gt; function is the result of the partial application &lt;code&gt;$fAnd($x, ?)&lt;/code&gt; and by definition this is a function of arity 1, which when applied on the 2nd argument of &lt;code&gt;$fAnd&lt;/code&gt;, produces the same result as &lt;code&gt;$fAnd($x, $y)&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;From the code above we see that actually there exists a value of &lt;code&gt;$x&lt;/code&gt; (the value &lt;code&gt;false()&lt;/code&gt; ) for which &lt;code&gt;$fAnd($x, ?)&lt;/code&gt; is not a function of one argument, but a constant function (of &lt;strong&gt;0&lt;/strong&gt; arguments) – that produces the value &lt;code&gt;false()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Definition&lt;/strong&gt;:&lt;/p&gt;
+&lt;p&gt;We say that a function &lt;code&gt;f(x, y)&lt;/code&gt; &lt;em&gt;&lt;strong&gt;allows shortcutting&lt;/strong&gt;&lt;/em&gt; if there exists at least one value &lt;code&gt;t&lt;/code&gt; such that&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;f(t, ?)&lt;/code&gt; is a constant.&lt;/p&gt;
+&lt;h1&gt;&lt;br/&gt;4. Solution&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;How can an XPath processor treat a function with shortcutting?&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;Obviously, if the XPath processor knows that &lt;code&gt;f(x, y)&lt;/code&gt; allows shortcutting, then it becomes possible to delay the evaluation of the 2nd argument &lt;code&gt;y&lt;/code&gt; and only perform this evaluation if the arity of the function returned by &lt;code&gt;f(t, ?)&lt;/code&gt; is &lt;code&gt;1&lt;/code&gt;, and not &lt;code&gt;0&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;How can an XPath processor know that a given function allows shortcutting?&lt;/strong&gt;&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;One way to obtain this knowledge is to evaluate &lt;code&gt;f(t, ?)&lt;/code&gt; and get the arity of the resulting function. XPath 3.1 allows getting the arity of any function item with the function &lt;a href="https://www.w3.org/TR/xpath-functions-31/#func-function-arity"&gt;fn:function-arity()&lt;/a&gt;.      However, doing this on every function call could be expensive and deteriorate performance.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;Another way of informing the XPath processor that a given function &lt;code&gt;f(x, y)&lt;/code&gt; allows shortcutting is if the language provides &lt;em&gt;&lt;strong&gt;hints for lazy evaluation&lt;/strong&gt;&lt;/em&gt;:
+&lt;br/&gt;let $fAnd := function($x as xs:boolean, &lt;em&gt;&lt;strong&gt;lazy&lt;/strong&gt;&lt;/em&gt; $y as xs:boolean) as xs:boolean&lt;br/&gt;
+&lt;br/&gt;Only in the case when there is a &lt;em&gt;&lt;strong&gt;lazy&lt;/strong&gt;&lt;/em&gt; hint specified the XPath processor will check the arity of &lt;code&gt;f(x, ?)&lt;/code&gt; and will not need to evaluate the &lt;code&gt;y&lt;/code&gt; argument if this arity is &lt;code&gt;0&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;Let us return to the original example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
+                     {
+                       let $partial := function($x as xs:boolean) as function(xs:boolean) as xs:boolean
+                                               {
+                                                  if(not($x)) then -&amp;gt;(){false()}
+                                                              else -&amp;gt;($t) {$t}
+                                               }
+                         return $partial($x)($y)
+                    }
+   return
+       $fAnd(false(), true())
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Executing this with an Xpath 3.1 processor, an error is raised: “&lt;em&gt;1 argument supplied, 0 expected: function() as xs:boolean { false() }.&lt;/em&gt;”&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://user-images.githubusercontent.com/10605892/205463393-3b4558ac-66d9-453f-81fc-f83ec0499425.png" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;But according to the updated “&lt;a href="https://qt4cg.org/pr/279/xquery-40/xpath-40.html#id-coercion-rules"&gt;Coercion Rules / Function Coercion&lt;/a&gt;” in Xpath 4.0, no error will occur:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;“&lt;em&gt;If &lt;em&gt;F&lt;/em&gt; has lower arity than the expected type, then &lt;em&gt;F&lt;/em&gt; is wrapped in a new function that declares and ignores the additional argument; the following steps are then applied to this new function.&lt;/em&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;em&gt;For example, if the expected type is &lt;code&gt;function(node(), xs:boolean) as  xs:string&lt;/code&gt;, and the supplied function is &lt;code&gt;fn:name#1&lt;/code&gt;, then the supplied function is effectively replaced by &lt;code&gt;function($n as node(), $b as xs:boolean) as xs:string {fn:name($n)}&lt;/code&gt;&lt;/em&gt;”&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;This is exactly the place where the XPath processor will call the lower-arity function without providing to it the ignored, and not needed to be evaluated, additional argument.&lt;/p&gt;
+&lt;p&gt;Thus, according to this rule, an XPath 4.0 processor will successfully evaluate the above expression and will not issue the error shown above.&lt;/p&gt;
+&lt;p&gt;Finally, we can put the &lt;em&gt;lazy&lt;/em&gt; hint on a function declaration or on a function call, or on both places:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $fAnd := function($x as xs:boolean, lazy $y as xs:boolean) as  xs:boolean
+   {
+     let $partial := function($x as xs:boolean) as function(lazy xs:boolean) as xs:boolean
+                           {
+                              if(not($x)) then -&amp;gt;(){false()}
+                                          else -&amp;gt;($t) {$t}
+                           }
+      return $partial($x)( lazy $y)
+   }
+   return
+       $fAnd(false(), lazy true())
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;How to write short-circuiting functions?&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The code above is a good example how one can write a short-circuiting function evaluating which the XPath processor would be aware that a short-circuit is happening but instead of signaling arity error as an XPath 3.1 processor does, will logically ignore the unneeded 2nd argument.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
