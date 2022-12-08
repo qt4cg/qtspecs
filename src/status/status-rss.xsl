@@ -106,7 +106,7 @@
             <p>This page displays recent status
             updates
             about the QT4CG project.</p>
-            <p>The are also captured in <a href="../status.rss">an RSS feed</a>.</p>
+            <p>The are also captured in <a href="status.rss">an RSS feed</a>.</p>
             <p>
               <xsl:text>By year: </xsl:text>
               <xsl:for-each select="$years">
