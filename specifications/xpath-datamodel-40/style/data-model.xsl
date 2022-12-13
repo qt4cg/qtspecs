@@ -640,7 +640,7 @@ General notes <a href="#const-infoset">occur elsewhere</a>.</p>
     <xsl:when test="ends-with(@source, '.svg')">
       <!-- We have to embed the SVG because we want the links to work -->
       <xsl:variable name="svg"
-                    select="doc('../../../build/'||@source)"/>
+                    select="doc('../../../build/type-hierarchy/'||@source)"/>
       <xsl:comment>SVG embedded so that links work</xsl:comment>
       <xsl:apply-templates select="$svg" mode="strip-svg"/>
     </xsl:when>
