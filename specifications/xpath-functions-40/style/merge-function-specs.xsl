@@ -33,10 +33,10 @@
 	</xsl:template>
 	
 	<xsl:template match="processing-instruction('doc')">
-	<pre class="small">
+	 <eg>
       <xsl:variable name="doc" select="unparsed-text(resolve-uri(concat('../src/', string(.)), base-uri(/)), 'iso-8859-1')"/>
       <xsl:value-of select="translate($doc, '&#xD;', '')"/>
-    </pre>
+    </eg>
 	</xsl:template>
 	
 	<xsl:template match="processing-instruction()">
@@ -203,7 +203,7 @@
                                         else if ($isOp)
                                              then 'op'
                                              else 'fn'}">
-			  <xsl:copy-of select="@name, @return-type, @return-type-ref, @diff, @at"/>
+			  <xsl:copy-of select="@name, @return-type, @diff, @at"/>
 			  <xsl:apply-templates/>
 			</proto>
 		</example>
@@ -211,7 +211,7 @@
 
 	<xsl:template match="fos:arg">
 	  <arg>
-	    <xsl:copy-of select="@name, @type, @type-ref, @diff, @at, @default"/>
+	    <xsl:copy-of select="@name, @type, @diff, @at, @default"/>
 	  </arg>
 	</xsl:template>
 	
@@ -344,7 +344,7 @@
 		<xsl:value-of select="replace(., 'Summary: ', '')"/>
 	</xsl:template>
 
-	<xsl:template match="processing-instruction('local-function-index')">
+	<!--<xsl:template match="processing-instruction('local-function-index')">
 		<table class="index">
 			<thead>
 				<tr>
@@ -372,6 +372,35 @@
 				</xsl:for-each>
 			</tbody>
 		</table>
+	</xsl:template>-->
+	
+	<xsl:template match="processing-instruction('local-function-index')">
+		<table role="local-function-index">
+			<thead>
+				<tr>
+					<th>Function</th>
+					<th>Meaning</th>
+				</tr>
+			</thead>
+			<tbody>
+				<xsl:for-each
+					select="following-sibling::*[starts-with(local-name(), 'div')][head/processing-instruction()]">
+					<xsl:variable name="lexname" select="string(head/processing-instruction())"/>
+					<xsl:variable name="fspec"
+						select="fos:get-function(substring-before($lexname,':'), substring-after($lexname,':'))"/>
+					<tr>
+						<td>
+							<code>
+								<xsl:value-of select="$lexname"/>
+							</code>
+						</td>
+						<td>
+							<xsl:apply-templates select="$fspec/fos:summary/*/node()" mode="summary"/>
+						</td>
+					</tr>
+				</xsl:for-each>
+			</tbody>
+		</table>
 	</xsl:template>
 	
 	<!-- remove dummy termdefs used in XSLT to ensure no dangling references -->
@@ -380,18 +409,18 @@
 	<!-- Handle option parameter specifications -->
 	
 	<xsl:template match="fos:options">
-		<table style="border-collapse: collapse">
+		<table role="options">
 			<xsl:copy-of select="@diff, @at"/>
 			<thead>
-				<tr style="border-top: 2px solid black; border-bottom: 2px solid black">
-					<th style="text-align:left; padding-right: 10px; ">Key</th>
+				<tr>
+					<th>Key</th>
 					<xsl:if test="fos:option/fos:applies-to">
-						<th style="text-align:left; padding-right: 10px; ">Applies to</th>
+						<th>Applies to</th>
 					</xsl:if>
 					<xsl:if test="exists(.//fos:values)">
-						<th style="text-align:left; padding-right: 10px; ">Value</th>
+						<th>Value</th>
 					</xsl:if>
-					<th style="text-align:left">
+					<th>
 						<!--<xsl:if test="exists(.//fos:values)">
 							<xsl:attribute name="colspan">2</xsl:attribute>
 						</xsl:if>-->
@@ -405,7 +434,73 @@
 		</table>
 	</xsl:template>
 	
+	<!--<xsl:template match="fos:options">
+		<table style="border-collapse: collapse">
+			<xsl:copy-of select="@diff, @at"/>
+			<thead>
+				<tr style="border-top: 2px solid black; border-bottom: 2px solid black">
+					<th style="text-align:left; padding-right: 10px; ">Key</th>
+					<xsl:if test="fos:option/fos:applies-to">
+						<th style="text-align:left; padding-right: 10px; ">Applies to</th>
+					</xsl:if>
+					<xsl:if test="exists(.//fos:values)">
+						<th style="text-align:left; padding-right: 10px; ">Value</th>
+					</xsl:if>
+					<th style="text-align:left">
+						<!-\-<xsl:if test="exists(.//fos:values)">
+							<xsl:attribute name="colspan">2</xsl:attribute>
+						</xsl:if>-\->
+						<xsl:text>Meaning</xsl:text>
+					</th>
+				</tr>
+			</thead>
+			<tbody>
+				<xsl:apply-templates select="fos:option"/>
+			</tbody>
+		</table>
+	</xsl:template>-->
+	
 	<xsl:template match="fos:option">
+		<tr>
+			<xsl:copy-of select="@diff, @at"/>
+			<td rowspan="{1 + count(fos:values/fos:value)}">
+				<code><xsl:value-of select="@key"/></code>
+			</td>
+			<xsl:if test="../fos:option/fos:applies-to">
+				<td rowspan="{1 + count(fos:values/fos:value)}">
+					<xsl:value-of select="fos:applies-to"/>
+				</td>
+			</xsl:if>
+			<xsl:variable name="thickness" select="if (exists(fos:values)) then '1' else '2'"/>
+			<td role="last-column-{if (exists(fos:values)) then 'with' else 'sans'}-values">
+				<xsl:if test="exists(..//fos:values)">
+					<xsl:attribute name="colspan">2</xsl:attribute>
+				</xsl:if>
+				<xsl:apply-templates select="fos:meaning/node()"/>
+				<ulist>
+					<item><p><term>Type: </term><code><xsl:value-of select="fos:type"/></code></p></item>
+					<xsl:if test="fos:default">
+						<item><p><term>Default: </term><code><xsl:value-of select="fos:default"/></code></p></item>
+					</xsl:if>
+				</ulist>
+			</td>
+		</tr>
+
+		<xsl:for-each select="fos:values/fos:value">
+			<xsl:variable name="thickness" select="if (position()=last()) then '2' else '1'"/>
+			<tr>
+				<td>
+					<code><xsl:value-of select="@value"/></code>
+				</td>
+				<td>
+					<xsl:apply-templates/>
+				</td>
+			</tr>
+		</xsl:for-each>
+
+	</xsl:template>
+	
+	<!--<xsl:template match="fos:option">
 		<tr>
 			<xsl:copy-of select="@diff, @at"/>
 			<td style="white-space:nowrap; padding-right: 10px; vertical-align:top; border-bottom: 2px solid black" 
@@ -413,8 +508,7 @@
 				<code><xsl:value-of select="@key"/></code>
 			</td>
 			<xsl:if test="../fos:option/fos:applies-to">
-				<td style="white-space:nowrap; padding-right: 10px; vertical-align:top; border-bottom: 2px solid black" 
-					rowspan="{1 + count(fos:values/fos:value)}">
+				<td rowspan="{1 + count(fos:values/fos:value)}">
 					<xsl:value-of select="fos:applies-to"/>
 				</td>
 			</xsl:if>
@@ -432,7 +526,7 @@
 				</ulist>
 			</td>
 		</tr>
-
+		
 		<xsl:for-each select="fos:values/fos:value">
 			<xsl:variable name="thickness" select="if (position()=last()) then '2' else '1'"/>
 			<tr>
@@ -444,9 +538,34 @@
 				</td>
 			</tr>
 		</xsl:for-each>
-
-	</xsl:template>
+		
+	</xsl:template>-->
 	
 	<xsl:template match="fos:history|fos:version"/>
+	
+	<xsl:template match="processing-instruction('type')" expand-text="yes">
+		<xsl:variable name="target" select="$fosdoc//fos:type[@id=normalize-space(current())]" as="element(fos:type)"/>
+
+		<table role="record" id="id-record-{$target!@id}">
+			<thead>
+				<tr>
+					<td colspan="3"><code>record (</code></td>
+				</tr>
+			</thead>
+			<tbody>
+				<xsl:for-each select="$target/fos:record/fos:field">
+					<tr>
+						<td><code>&#xa0;&#xa0;&#xa0;&#xa0;</code></td>
+						<td><code>{@name}{if (xs:boolean(@required)) then '' else '?'}</code></td>
+						<td><code>as {@type}{if (position()!=last() or xs:boolean($target/fos:record/@extensible)) then ',' else ''}</code></td>
+					</tr>
+				</xsl:for-each>
+				<tr>
+					<td colspan="3"><code>{if (xs:boolean($target/fos:record/@extensible)) then '* ' else ''})</code></td>
+				</tr>
+			</tbody>
+		</table>
+
+	</xsl:template>
 	
 </xsl:stylesheet>

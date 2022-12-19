@@ -331,7 +331,7 @@
       <xsl:otherwise>
         <table class="proto" border="0">
           <tr class="name">
-	    <td colspan="3">
+	          <td colspan="3">
               <code class="function">
                 <xsl:value-of select="$prefix"/>
                 <xsl:value-of select="@name"/>
@@ -350,17 +350,17 @@
               <td>
                 <xsl:if test="@type">
                   <code class="as">as&#160;</code>
-                  <code class="type"><xsl:sequence select="@type/string()"/></code>
+                  <code class="type"><xsl:apply-templates select="@type" mode="render-type"/></code>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
                 </xsl:if>
-                <xsl:if test="@type-ref">
+                <!--<xsl:if test="@type-ref">
                   <code class="as">as&#160;</code>
                   <span class="dagger">†</span>
                   <a href="#{@type-ref}">
                     <xsl:value-of select="@type-ref"/>
                   </a>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
-                </xsl:if>
+                </xsl:if>-->
               </td>
               <td>
                 <xsl:if test="@default">
@@ -373,7 +373,7 @@
           </xsl:for-each>
 
           <tr class="return-type">
-	    <td colspan="3">
+	          <td colspan="3">
               <xsl:text>)</xsl:text>
               <code class="as">&#160;as&#160;</code>
               <code>
@@ -388,20 +388,20 @@
 
                 <xsl:choose>
                   <xsl:when test="@return-type">
-                    <xsl:value-of select="@return-type"/>
+                    <xsl:apply-templates select="@return-type" mode="render-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
                   </xsl:when>
-                  <xsl:when test="@return-type-ref">
+                  <!--<xsl:when test="@return-type-ref">
                     <span class="dagger">†</span>
                     <a href="#{@return-type-ref}">
                       <xsl:value-of select="@return-type-ref"/>
                     </a>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </xsl:when>
-                  <xsl:otherwise>
-                    <xsl:value-of select="@return-type"/>
+                  </xsl:when>-->
+                  <!--<xsl:otherwise>
+                    <xsl:apply-templates select="@return-type" mode="render-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </xsl:otherwise>
+                  </xsl:otherwise>-->
                 </xsl:choose>
               </code>
             </td>
@@ -412,7 +412,7 @@
   </div>
 </xsl:template>
 
-<xsl:template match="record">
+<!--<xsl:template match="record">
   <div class="record">
     <table class="record" border="0">
       <tr>
@@ -452,7 +452,7 @@
       </tr>
     </table>
   </div>
-</xsl:template>
+</xsl:template>-->
 
 <xsl:template match="arg">
   <xsl:if test="preceding-sibling::arg">
@@ -465,7 +465,7 @@
     <xsl:otherwise>
       <xsl:apply-templates select="@name"/>
       <code class="as">&#160;as&#160;</code>
-      <xsl:apply-templates select="@type"/>  
+      <xsl:apply-templates select="@type" mode="render-type"/>  
     </xsl:otherwise>
   </xsl:choose>
 </xsl:template>
@@ -487,8 +487,8 @@
     </code>
   </xsl:template>
   
-  <xsl:template match="@type[starts-with(., '[')]">
-    <!-- @type uses a microsyntax representing a record type -->
+  <!--<xsl:template match="@type[starts-with(., '[')]">
+    <!-\- @type uses a microsyntax representing a record type -\->
     <xsl:variable name="structure" select="parse-json(.)?*"/>
     <code>record(</code>
     <br/>
@@ -507,7 +507,7 @@
       <xsl:text>&#xa0;&#xa0;&#xa0;*</xsl:text>  
     </xsl:if>
     <xsl:text>)</xsl:text>
-  </xsl:template>
+  </xsl:template>-->
 
 <xsl:template match="arg" mode="tabular">
   <xsl:param name="small" tunnel="yes" select="''"/>
@@ -529,7 +529,7 @@
         <xsl:value-of select="@type"/>
         <xsl:if test="@emptyOk='yes'">?</xsl:if>
       </code>-->
-      <xsl:apply-templates select="@type"/>
+      <xsl:apply-templates select="@type" mode="render-type"/>
     </xsl:if>
 
     <xsl:choose>
@@ -548,7 +548,7 @@
 	  </xsl:when>
 	  <xsl:otherwise>
 	    <code class="{$small}return-type">
-	      <xsl:value-of select="parent::proto/@return-type"/>
+	      <xsl:apply-templates select="parent::proto/@return-type" mode="render-type"/>
 	      <xsl:if test="parent::proto/@returnEmptyOk='yes'">?</xsl:if>
 	    </code>
 	  </xsl:otherwise>
@@ -557,6 +557,14 @@
     </xsl:choose>
   </td>
 </xsl:template>
+  
+  <xsl:template match="@*[starts-with(., '#')]" mode="render-type" priority="12">
+    <a href="#id-record-{substring(., 2)}"><xsl:value-of select="substring(., 2)"/></a>
+  </xsl:template>
+  
+  <xsl:template match="@*" mode="render-type" priority="11">
+    <code><xsl:value-of select="."/></code>
+  </xsl:template>
 
 <xsl:template match="proto" mode="stringify">
   <xsl:value-of select="@name"/>
@@ -1143,10 +1151,10 @@
 
 <xsl:template match="comment()" mode="strip-svg"/>
 
-<xsl:template match="table[@role='hierarchy']">
+<!--<xsl:template match="table[@role='hierarchy']">
   <table class="hierarchy">
     <xsl:for-each select="@*">
-      <!-- Wait: some of these aren't HTML attributes after all... -->
+      <!-\- Wait: some of these aren't HTML attributes after all... -\->
       <xsl:if test="local-name(.) != 'diff'
                     and local-name(.) != 'role'">
         <xsl:copy/>
@@ -1154,20 +1162,17 @@
     </xsl:for-each>
     <xsl:apply-templates/>
   </table>
-</xsl:template>
+</xsl:template>-->
 
 <!-- Special support for the hierarchy tables -->
 
 <xsl:template match="table[@role='hierarchy']">
   <table class="hierarchy">
     <xsl:call-template name="style-attributes"/>
-    <xsl:apply-templates select="@*[not(f:is-style-attribute(.))]" mode="table-attributes"/>
-    
+    <xsl:apply-templates select="@*[not(f:is-style-attribute(.))]" mode="table-attributes"/>   
     <xsl:apply-templates>
       <xsl:with-param name="max-depth" tunnel="yes" as="xs:integer" select="max(.//tr/count(td))"/>
     </xsl:apply-templates>
-
-    
   </table>
 </xsl:template>
   
@@ -1252,6 +1257,94 @@
   <xsl:template match="fos:*" xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace" mode="transform">
     <xsl:message terminate="yes">Found <xsl:value-of select="name(.)"/> element which should not have been copied from the function catalog</xsl:message>
   </xsl:template>
+  
+  <xsl:template match="sup[matches(., '^[a-z]$')]">
+    <sup><i><xsl:apply-templates/></i></sup>
+  </xsl:template>
+  
+  <!-- Custom styling for local function index -->
+  
+  <xsl:template match="table[@role='local-function-index']">
+    <table class="index">
+      <xsl:apply-templates/>
+    </table>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='local-function-index']/tbody/tr/td">
+    <td style="white-space:nowrap; vertical-align:top">
+      <xsl:apply-templates/>
+    </td>
+  </xsl:template>
+  
+  <!--<xsl:template match="table[@role='local-function-index']/tbody/tr/td/code">
+    <code style="padding-right: 10px">
+      <xsl:apply-templates/>
+    </code>
+  </xsl:template>-->
+  
+  <xsl:template match="table[@role='options']">
+    <table style="border-collapse: collapse">
+      <xsl:apply-templates/>
+    </table>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/thead/tr">
+    <tr style="border-top: 2px solid black; border-bottom: 2px solid black">
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </tr>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/thead/tr/th[position()!=last()]">
+    <th style="text-align:left; padding-right: 10px; ">
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </th>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/thead/tr/th[position()=last()]">
+    <th style="text-align:left">
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </th>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/tbody/tr[1]/td[1]">
+    <xsl:variable name="rowspan" select="(xs:integer(@rowspan), 1)[1]" as="xs:integer"/>
+    <xsl:variable name="not-last-row" select="exists(../following-sibling::tr[$rowspan])"/>
+    <xsl:variable name="thickness" select="if ($not-last-row) then '1' else '2'"/>
+    <td style="white-space:nowrap; padding-right: 10px; vertical-align:top; border-bottom: {$thickness}px solid black" >
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </td>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/tbody/tr[1]/td[@role=('last-column-with-values', 'last-column-sans-values')]">
+    <xsl:variable name="thickness" select="if (@role='last-column-with-values') then '1' else '2'"/>
+    <td style="vertical-align:top; border-bottom: {$thickness}px solid black">
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </td>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/tbody/tr[position() gt 1]/td[1]">
+    <xsl:variable name="rowspan" select="(xs:integer(@rowspan), 1)[1]" as="xs:integer"/>
+    <xsl:variable name="not-last-row" select="exists(../following-sibling::tr[$rowspan])"/>
+    <xsl:variable name="thickness" select="if ($not-last-row) then '1' else '2'"/>
+    <td style="white-space:nowrap; padding-right: 10px; vertical-align:top; border-bottom: {$thickness}px solid black">
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </td>
+  </xsl:template>
+  
+  <xsl:template match="table[@role='options']/tbody/tr[position() gt 1]/td[2]">
+    <xsl:variable name="thickness" select="if (../following-sibling::tr) then 1 else 2"/>
+    <td style="vertical-align:top; border-bottom: {$thickness}px solid black">
+      <xsl:copy-of select="@*"/>
+      <xsl:apply-templates/>
+    </td>
+  </xsl:template>
+
   
 
 </xsl:stylesheet>
