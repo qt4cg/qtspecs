@@ -302,7 +302,7 @@
       <xsl:when test="empty(arg)">
         <table class="proto" border="0">
           <tr class="name return-type">
-	    <td colspan="3">
+	          <td colspan="3">
               <code class="function">
                 <xsl:value-of select="$prefix"/>
                 <xsl:value-of select="@name"/>
@@ -353,14 +353,16 @@
                   <code class="type"><xsl:apply-templates select="@type" mode="render-type"/></code>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
                 </xsl:if>
-                <!--<xsl:if test="@type-ref">
+                <xsl:if test="@type-ref">
                   <code class="as">as&#160;</code>
-                  <span class="dagger">†</span>
-                  <a href="#{@type-ref}">
-                    <xsl:value-of select="@type-ref"/>
-                  </a>
+                  <code>
+                    <span class="dagger">†</span>
+                    <a href="#{@type-ref}">
+                      <xsl:value-of select="@type-ref"/>
+                    </a>
+                  </code>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
-                </xsl:if>-->
+                </xsl:if>
               </td>
               <td>
                 <xsl:if test="@default">
@@ -391,13 +393,13 @@
                     <xsl:apply-templates select="@return-type" mode="render-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
                   </xsl:when>
-                  <!--<xsl:when test="@return-type-ref">
+                  <xsl:when test="@return-type-ref">
                     <span class="dagger">†</span>
                     <a href="#{@return-type-ref}">
                       <xsl:value-of select="@return-type-ref"/>
                     </a>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                  </xsl:when>-->
+                  </xsl:when>
                   <!--<xsl:otherwise>
                     <xsl:apply-templates select="@return-type" mode="render-type"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
@@ -412,14 +414,15 @@
   </div>
 </xsl:template>
 
-<!--<xsl:template match="record">
+<xsl:template match="record">
+  <xsl:variable name="id" select="(@id, ../@id)[1]"/>
   <div class="record">
     <table class="record" border="0">
       <tr>
         <td colspan="2">
-          <code id="{@id}" class="return-type-ref">
+          <code id="{$id}" class="return-type-ref">
             <span class="dagger">†</span>
-            <xsl:value-of select="@id"/>
+            <xsl:value-of select="$id"/>
           </code>
           <xsl:text>:</xsl:text>
         </td>
@@ -432,7 +435,7 @@
       <xsl:for-each select="arg">
         <tr class="arg">
           <td>
-            <xsl:sequence select="@name/string()"/>
+            <code><xsl:value-of select="@name"/></code>
           </td>
           <td>
             <xsl:if test="@type">
@@ -440,6 +443,13 @@
               <code>
                 <xsl:value-of select="@type"/>
               </code>
+            </xsl:if>
+            <xsl:if test="@type-ref">
+              <code class="as">&#160;as&#160;</code>
+              <span class="dagger">†</span>
+              <a href="#{@type-ref}">
+                <xsl:value-of select="@type-ref"/>
+              </a>
             </xsl:if>
             <xsl:if test="not(position() = last())">,</xsl:if>
           </td>
@@ -452,7 +462,7 @@
       </tr>
     </table>
   </div>
-</xsl:template>-->
+</xsl:template>
 
 <xsl:template match="arg">
   <xsl:if test="preceding-sibling::arg">
