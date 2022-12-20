@@ -281,19 +281,19 @@
 				</xsl:when>
 				<xsl:otherwise>The expression </xsl:otherwise>
 			</xsl:choose>
-			<code>
-				<xsl:choose>
-					<xsl:when test="fos:expression/@xml:space = 'preserve'">
-						<xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/>
-					</xsl:when>
-					<xsl:when test="fos:expression/eg">
-						<xsl:apply-templates select="fos:expression/node()"/>
-					</xsl:when>
-					<xsl:otherwise>
-						<xsl:value-of select="fos:expression"/>
-					</xsl:otherwise>
-				</xsl:choose>
-			</code>
+
+			<xsl:choose>
+				<xsl:when test="fos:expression/@xml:space = 'preserve'">
+					<code><xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/></code>
+				</xsl:when>
+				<xsl:when test="fos:expression/eg">
+					<xsl:apply-templates select="fos:expression/node()"/>
+				</xsl:when>
+				<xsl:otherwise>
+					<code><xsl:value-of select="fos:expression"/></code>
+				</xsl:otherwise>
+			</xsl:choose>
+			
 			<xsl:choose>
 				<xsl:when test="fos:result[2]">
 					<xsl:text> returns one of the following: </xsl:text>
