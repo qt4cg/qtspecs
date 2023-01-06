@@ -1,0 +1,100 @@
+<!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses in 2023</title></head><body><main><article><h1>@qt4cg statuses in 2023</h1><p>This page displays status
+              updates
+              about the QT4 CG project from 2023.</p><p>See also <a href="../">recent statuses</a>.</p><div class="toots">
+<div class="toot" id="closed-281"><h2>Issue #281 closed<span class="toot-id"> #closed-281</span></h2><div class="pubdate">02 Jan at 18:12:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/281">https://github.com/qt4cg/qtspecs/issues/281</a></div><p>XPath: Short-circuiting Functions and Lazy Evaluation Hints</p></div>
+<div class="toot" id="created-299"><h2>Issue #299 created<span class="toot-id"> #created-299</span></h2><div class="pubdate">02 Jan at 18:08:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/299">https://github.com/qt4cg/qtspecs/issues/299</a></div><details><summary>Short-circuiting functions, function-arity guards and lazy hints</summary><div class="markup"><h1><strong>I. Shortcutting and lazy hints</strong></h1>
+<p>Let us have this expression:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, $arg2 as item()*) as function(item()*) as item()*
+             {  (: Some code here :) }
+  return
+    $f($x) ($y)
+</code></pre>
+<p>Evaluating&nbsp;<strong><code>$f($x)</code></strong>&nbsp;produces a function. The&nbsp;<strong>actual arity</strong>&nbsp;of this resulting function can be any number&nbsp;<strong><code>N &gt;= 0</code></strong> :</p>
+<ul>
+<li>
+<p>If&nbsp;<strong><code>N &gt; 1</code></strong>&nbsp;there would be arity mismatch error, as only one argument&nbsp;<code>$y</code>&nbsp;is provided in the expression.</p>
+</li>
+<li>
+<p>If&nbsp;<strong><code>N = 1</code></strong>&nbsp;the final function call can be evaluated, and the argument&nbsp;<code>$y</code>   must be evaluated,  or</p>
+</li>
+<li>
+<p><strong>If <code>N = 0</code>, then  <code>$y</code> is unneeded and can safely be ignored</strong> according to the updated <strong>“<a href="https://qt4cg.org/pr/279/xquery-40/xpath-40.html#id-coercion-rules">Coercion Rules / Function Coercion</a>”</strong> in Xpath 4.0.</p>
+</li>
+</ul>
+<p><strong>Because a possibility exists to be able to ignore the evaluation of&nbsp;<code>$y</code>, it is logical to delay the evaluation of&nbsp;<code>$y</code>&nbsp;until the actual arity of&nbsp;<code>$f($x)</code>&nbsp;is known</strong>.</p>
+<p>The current XPath 4.0 evaluation rules do not require an implementation to base its decision whether or not to evaluate&nbsp;<code>$y</code> on the actual arity of the function produced by <code>$f($x)</code>, thus at present an implementation could decide to evaluate <code>$y</code> regardless of the actual arity of the function produced by <code>$f($x)</code>.</p>
+<p><strong>This is where a&nbsp;<em>lazy</em>&nbsp;hint comes</strong>: it indicates to the XPath processor that <em><strong>it is logical to make the decision about evaluation of&nbsp;<code>$y</code>&nbsp;based on the actual arity of the function returned by&nbsp;<code>$f($x)</code></strong></em>.</p>
+<p>A rewrite of the above expression using a <strong><em><em>lazy</em></em></strong>&nbsp;hint looks like this:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, $arg2 as item()*) as function(item()*) as item()*
+             {  (: Some code here :) }  
+  return
+    $f($x) (lazy $y)
+</code></pre>
+<p>Here is one example of a function with short-cutting and calling it with a <strong><em>lazy</em></strong> hint:</p>
+<pre><code class="language-xq">let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
+             {
+                let $partial := function($x as xs:boolean) as function(xs:boolean) as  xs:boolean
+                                {
+                                  if(not($x)) then -&gt;(){false()}
+                                              else -&gt;($t) {$t}
+                                }
+                 return $partial($x)($y)
+             }
+  return
+     $fAnd($x (: possibly false() :), lazy&nbsp;$SomeVeryComplexAndSlowComputedExpression)
+</code></pre>
+<p><strong>Without the <strong><em>lazy</em></strong>&nbsp;hint in the above example, it is perfectly possible that an XPath implementation, unrestricted by the current rules, would evaluate <em><code>$SomeVeryComplexAndSlowComputedExpression</code></em> - something that is unneeded and could be avoided completely</strong>.</p>
+<h2>Formal syntax and semantics</h2>
+<ol>
+<li>
+<p>The <strong><em>lazy</em></strong> keyword should immediately precede any argument in a function call. If specified, it means that <strong><em>it is logical to make the decision about evaluation of&nbsp;this argument&nbsp;based on the actual arity of the function in this function call</em></strong>.</p>
+<p>Based on this definition, it follows that <strong><em><code>lazy $argK</code></em></strong> implies <strong><em>lazy</em></strong> for all arguments following <code>$argK</code> in the function call. Thus specifying more than one <strong><em>lazy</em></strong> hint within a given function call is redundant and an implementation may report this redundancy to the user.</p>
+<p>The scope of a <strong><em>lazy</em></strong> keyword specified on an argument is this and all following arguments of (only) the current function call.</p>
+</li>
+<li>
+<p>It is possible to specify a <strong><em>lazy</em></strong> keyword that is in force for the respective argument(s) of all function calls of the given function. To do this, the <strong><em>lazy</em></strong> keyword must  be  specified immediately preceding a parameter name in the function definition of that function.</p>
+<p>For example, if the function <strong><code>$f</code></strong> is specified as:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, lazy $arg2 as item()*, $arg3 as item()*, $arg4 as item()* ) 
+          { (: some code here:) }
+  return
+     $someExpression
+</code></pre>
+<p>Then any call of <strong><code>$f</code></strong> in its definition scope that has the form:</p>
+<pre><code class="language-xq">$f($x, $y, $z, $t)
+</code></pre>
+<p>is equivalent to:</p>
+<pre><code class="language-xq">$f($x, lazy $y, $z, $t)
+</code></pre>
+</li>
+</ol>
+<h1><strong>II. A function's arity is a guard for its arguments</strong></h1>
+<p>Let us have a  function <strong><code>$f</code></strong> defined as below:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, $arg2 as item()*, …, $argN as item()*)
+   as function(item()*, item()*, …, item()*) as item()*
+     {
+       if($cond0($arg1))       then -&gt; () { 123 }
+        else if($cond1($arg1)) then -&gt; ($Z1 as item()*) {$Z1}
+        else if($cond2($arg1)) then -&gt; ($Z1 as item()*, $Z2 as item()*) {$Z1 + $Z2}
+        (:    .        .        .        .         .        .        .         .  :)
+        else if($condK($arg1)) then -&gt; ($Z1 as item()*, $Z2 as item()*, …, $Zk as item()*)
+                                       {$Z1 + $Z2 + … + $Zk}
+        else ()
+     }
+  return
+     $f($y1, $y2, …, $yN) ($z1, $z2, …, $zk)
+</code></pre>
+<p>A call to <strong><code>$f</code></strong> returns a function whose arity may be any of the numbers: 0, 1, …, K.</p>
+<p>Depending on the arity of the returned function (0, 1, …, K), the last (K, K-1,  K-2, …, 2, 1, 0) arguments of the function call:</p>
+<p><strong><em><code>$f($y1, $y2,  .  .  . , $yN) ($z1, $z2, .  .  . , $zk)</code></em></strong></p>
+<p><strong>are unneeded and it is logical that they would not need to be evaluated</strong>.</p>
+<p><strong>So, the actual arity of the result of calling <strong><code>$f</code></strong> is a guard for the arguments of a call to this function-result</strong>.</p>
+<p>Thus, one more bullet needs to be added to [2.4.5 Guarded Expressions] https://qt4cg.org/specifications/xquery-40/xpath-40.html#id-guarded-expressions), specifying an additional guard-type:</p>
+<ul>
+<li>In an expression of the type&nbsp;<code>E(A1, A2, ..., AN)</code>&nbsp;any of the arguments&nbsp;<code>A</code><sub>K</sub>&nbsp;is guarded by the condition&nbsp;
+<code>actual-arity(E) ge K</code>. This rule has the consequence that if the actual arity of&nbsp;<code>E()</code>&nbsp;is less than&nbsp;<code>K</code>&nbsp;then if any argument&nbsp;<code>Am</code> (where <code>m &gt;= K</code>)&nbsp;is evaluated, this must not raise a dynamic error. An implementation may base on the actual arity of&nbsp;<code>E()</code> its decision for the evaluation of the arguments.</li>
+</ul>
+</div></details></div>
+<div class="toot" id="created-298"><h2>Issue #298 created<span class="toot-id"> #created-298</span></h2><div class="pubdate">02 Jan at 15:36:58 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/298">https://github.com/qt4cg/qtspecs/issues/298</a></div><details><summary>Abstract supertype for map and array</summary><div class="markup"><p>I've been wondering whether there would be any mileage in introducing an abstract super type for map() and array(), perhaps called lookup(). This would basically treat an array as a map with integer keys.</p>
+<p>This would allow a cleaner type signature for map:find() and any future functions such as xx:search() that work both on maps and arrays. It might simplify the description of the lookup operator "?". For functions that already exist in both the map and array namespaces, such as get(), we could introduce a unified function in the fn namespace with the cosmetic benefit of reducing the need for namespace prefixes and namespace declarations.</p>
+<p>I'm still keen to find a better way of doing iteration, filtering, mapping, and construction of maps and arrays, and I think this might be a useful stepping stone.</p>
+</div></details></div></div></article></main></body></html>

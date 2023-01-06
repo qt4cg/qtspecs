@@ -1,6 +1,126 @@
 <!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses</title></head><body><main><article><h1>@qt4cg statuses</h1><p>This page displays recent status
             updates
-            about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2022/">2022</a></p><div class="toots">
+            about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2023/">2023</a>, <a href="2022/">2022</a></p><div class="toots">
+<div class="toot" id="closed-281"><h2>Issue #281 closed<span class="toot-id"> #closed-281</span></h2><div class="pubdate">02 Jan at 18:12:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/281">https://github.com/qt4cg/qtspecs/issues/281</a></div><p>XPath: Short-circuiting Functions and Lazy Evaluation Hints</p></div>
+<div class="toot" id="created-299"><h2>Issue #299 created<span class="toot-id"> #created-299</span></h2><div class="pubdate">02 Jan at 18:08:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/299">https://github.com/qt4cg/qtspecs/issues/299</a></div><details><summary>Short-circuiting functions, function-arity guards and lazy hints</summary><div class="markup"><h1><strong>I. Shortcutting and lazy hints</strong></h1>
+<p>Let us have this expression:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, $arg2 as item()*) as function(item()*) as item()*
+             {  (: Some code here :) }
+  return
+    $f($x) ($y)
+</code></pre>
+<p>Evaluating&nbsp;<strong><code>$f($x)</code></strong>&nbsp;produces a function. The&nbsp;<strong>actual arity</strong>&nbsp;of this resulting function can be any number&nbsp;<strong><code>N &gt;= 0</code></strong> :</p>
+<ul>
+<li>
+<p>If&nbsp;<strong><code>N &gt; 1</code></strong>&nbsp;there would be arity mismatch error, as only one argument&nbsp;<code>$y</code>&nbsp;is provided in the expression.</p>
+</li>
+<li>
+<p>If&nbsp;<strong><code>N = 1</code></strong>&nbsp;the final function call can be evaluated, and the argument&nbsp;<code>$y</code>   must be evaluated,  or</p>
+</li>
+<li>
+<p><strong>If <code>N = 0</code>, then  <code>$y</code> is unneeded and can safely be ignored</strong> according to the updated <strong>“<a href="https://qt4cg.org/pr/279/xquery-40/xpath-40.html#id-coercion-rules">Coercion Rules / Function Coercion</a>”</strong> in Xpath 4.0.</p>
+</li>
+</ul>
+<p><strong>Because a possibility exists to be able to ignore the evaluation of&nbsp;<code>$y</code>, it is logical to delay the evaluation of&nbsp;<code>$y</code>&nbsp;until the actual arity of&nbsp;<code>$f($x)</code>&nbsp;is known</strong>.</p>
+<p>The current XPath 4.0 evaluation rules do not require an implementation to base its decision whether or not to evaluate&nbsp;<code>$y</code> on the actual arity of the function produced by <code>$f($x)</code>, thus at present an implementation could decide to evaluate <code>$y</code> regardless of the actual arity of the function produced by <code>$f($x)</code>.</p>
+<p><strong>This is where a&nbsp;<em>lazy</em>&nbsp;hint comes</strong>: it indicates to the XPath processor that <em><strong>it is logical to make the decision about evaluation of&nbsp;<code>$y</code>&nbsp;based on the actual arity of the function returned by&nbsp;<code>$f($x)</code></strong></em>.</p>
+<p>A rewrite of the above expression using a <strong><em><em>lazy</em></em></strong>&nbsp;hint looks like this:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, $arg2 as item()*) as function(item()*) as item()*
+             {  (: Some code here :) }  
+  return
+    $f($x) (lazy $y)
+</code></pre>
+<p>Here is one example of a function with short-cutting and calling it with a <strong><em>lazy</em></strong> hint:</p>
+<pre><code class="language-xq">let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
+             {
+                let $partial := function($x as xs:boolean) as function(xs:boolean) as  xs:boolean
+                                {
+                                  if(not($x)) then -&gt;(){false()}
+                                              else -&gt;($t) {$t}
+                                }
+                 return $partial($x)($y)
+             }
+  return
+     $fAnd($x (: possibly false() :), lazy&nbsp;$SomeVeryComplexAndSlowComputedExpression)
+</code></pre>
+<p><strong>Without the <strong><em>lazy</em></strong>&nbsp;hint in the above example, it is perfectly possible that an XPath implementation, unrestricted by the current rules, would evaluate <em><code>$SomeVeryComplexAndSlowComputedExpression</code></em> - something that is unneeded and could be avoided completely</strong>.</p>
+<h2>Formal syntax and semantics</h2>
+<ol>
+<li>
+<p>The <strong><em>lazy</em></strong> keyword should immediately precede any argument in a function call. If specified, it means that <strong><em>it is logical to make the decision about evaluation of&nbsp;this argument&nbsp;based on the actual arity of the function in this function call</em></strong>.</p>
+<p>Based on this definition, it follows that <strong><em><code>lazy $argK</code></em></strong> implies <strong><em>lazy</em></strong> for all arguments following <code>$argK</code> in the function call. Thus specifying more than one <strong><em>lazy</em></strong> hint within a given function call is redundant and an implementation may report this redundancy to the user.</p>
+<p>The scope of a <strong><em>lazy</em></strong> keyword specified on an argument is this and all following arguments of (only) the current function call.</p>
+</li>
+<li>
+<p>It is possible to specify a <strong><em>lazy</em></strong> keyword that is in force for the respective argument(s) of all function calls of the given function. To do this, the <strong><em>lazy</em></strong> keyword must  be  specified immediately preceding a parameter name in the function definition of that function.</p>
+<p>For example, if the function <strong><code>$f</code></strong> is specified as:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, lazy $arg2 as item()*, $arg3 as item()*, $arg4 as item()* ) 
+          { (: some code here:) }
+  return
+     $someExpression
+</code></pre>
+<p>Then any call of <strong><code>$f</code></strong> in its definition scope that has the form:</p>
+<pre><code class="language-xq">$f($x, $y, $z, $t)
+</code></pre>
+<p>is equivalent to:</p>
+<pre><code class="language-xq">$f($x, lazy $y, $z, $t)
+</code></pre>
+</li>
+</ol>
+<h1><strong>II. A function's arity is a guard for its arguments</strong></h1>
+<p>Let us have a  function <strong><code>$f</code></strong> defined as below:</p>
+<pre><code class="language-xq">let $f := function($arg1 as item()*, $arg2 as item()*, …, $argN as item()*)
+   as function(item()*, item()*, …, item()*) as item()*
+     {
+       if($cond0($arg1))       then -&gt; () { 123 }
+        else if($cond1($arg1)) then -&gt; ($Z1 as item()*) {$Z1}
+        else if($cond2($arg1)) then -&gt; ($Z1 as item()*, $Z2 as item()*) {$Z1 + $Z2}
+        (:    .        .        .        .         .        .        .         .  :)
+        else if($condK($arg1)) then -&gt; ($Z1 as item()*, $Z2 as item()*, …, $Zk as item()*)
+                                       {$Z1 + $Z2 + … + $Zk}
+        else ()
+     }
+  return
+     $f($y1, $y2, …, $yN) ($z1, $z2, …, $zk)
+</code></pre>
+<p>A call to <strong><code>$f</code></strong> returns a function whose arity may be any of the numbers: 0, 1, …, K.</p>
+<p>Depending on the arity of the returned function (0, 1, …, K), the last (K, K-1,  K-2, …, 2, 1, 0) arguments of the function call:</p>
+<p><strong><em><code>$f($y1, $y2,  .  .  . , $yN) ($z1, $z2, .  .  . , $zk)</code></em></strong></p>
+<p><strong>are unneeded and it is logical that they would not need to be evaluated</strong>.</p>
+<p><strong>So, the actual arity of the result of calling <strong><code>$f</code></strong> is a guard for the arguments of a call to this function-result</strong>.</p>
+<p>Thus, one more bullet needs to be added to [2.4.5 Guarded Expressions] https://qt4cg.org/specifications/xquery-40/xpath-40.html#id-guarded-expressions), specifying an additional guard-type:</p>
+<ul>
+<li>In an expression of the type&nbsp;<code>E(A1, A2, ..., AN)</code>&nbsp;any of the arguments&nbsp;<code>A</code><sub>K</sub>&nbsp;is guarded by the condition&nbsp;
+<code>actual-arity(E) ge K</code>. This rule has the consequence that if the actual arity of&nbsp;<code>E()</code>&nbsp;is less than&nbsp;<code>K</code>&nbsp;then if any argument&nbsp;<code>Am</code> (where <code>m &gt;= K</code>)&nbsp;is evaluated, this must not raise a dynamic error. An implementation may base on the actual arity of&nbsp;<code>E()</code> its decision for the evaluation of the arguments.</li>
+</ul>
+</div></details></div>
+<div class="toot" id="created-298"><h2>Issue #298 created<span class="toot-id"> #created-298</span></h2><div class="pubdate">02 Jan at 15:36:58 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/298">https://github.com/qt4cg/qtspecs/issues/298</a></div><details><summary>Abstract supertype for map and array</summary><div class="markup"><p>I've been wondering whether there would be any mileage in introducing an abstract super type for map() and array(), perhaps called lookup(). This would basically treat an array as a map with integer keys.</p>
+<p>This would allow a cleaner type signature for map:find() and any future functions such as xx:search() that work both on maps and arrays. It might simplify the description of the lookup operator "?". For functions that already exist in both the map and array namespaces, such as get(), we could introduce a unified function in the fn namespace with the cosmetic benefit of reducing the need for namespace prefixes and namespace declarations.</p>
+<p>I'm still keen to find a better way of doing iteration, filtering, mapping, and construction of maps and arrays, and I think this might be a useful stepping stone.</p>
+</div></details></div>
+<div class="toot" id="created-297"><h2>Issue #297 created<span class="toot-id"> #created-297</span></h2><div class="pubdate">28 Dec at 23:51:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/297">https://github.com/qt4cg/qtspecs/issues/297</a></div><details><summary>Lookup in deeply nested JSON, an abbreviated syntax for map:find</summary><div class="markup"><p>In XML, you can select all X nodes with an abbreviated syntax //X</p>
+<p>There is no abbreviated syntax for JSON</p>
+<p>I propose to add a ?? syntax. Like / is doubled for //, it doubles the ? lookup operator.</p>
+<p>The syntax is basically the same as for ?:</p>
+<p>[200]  UnaryLookupRecursion  ::=  "??"  KeySpecifier
+[143]  LookupRecursion ::=  "??"  KeySpecifier
+[144]  KeySpecifier |::=  NCName  |  IntegerLiteral  |  StringLiteral  |  VarRef  |  ParenthesizedExpr  |  "*"</p>
+<p>For the semantic it can call map:find, except for * and varref:</p>
+<p>Unary variant:</p>
+<pre><code>??"string"    becomes map:find(. , "string")
+??NCName      becomes map:find( ., "NCName")
+??123         becomes map:find(., 123)
+
+??*           Recursively every member/value of every array/map underneath .
+              E.g. for `[{"a": {"x": 123}}, 456]`: `{"a": {"x": 123}}, {"x": 123}, 123, 456`
+
+??$varref     calls ?$varref on every nested array/map.
+              Like (.,??*)?$varref   (except for type errors)
+</code></pre>
+<p>Postfix variant:</p>
+<p><code>E??S</code>   would be <code>E!??S</code> if it is atomic, or <code>let $s := data(S) return E!??$s</code> if S is parenthesized</p>
+<p>This probably conflicts with #171</p>
+</div></details></div>
 <div class="toot" id="created-296"><h2>Issue #296 created<span class="toot-id"> #created-296</span></h2><div class="pubdate">22 Dec at 10:44:18 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/296">https://github.com/qt4cg/qtspecs/issues/296</a></div><details><summary>Default namespace for elements; especially in the context of HTML</summary><div class="markup"><p>There can be little doubt that the fact that an unprefixed name in XPath fails to select an unprefixed element in the source document is one of the major gotcha's, causing massive bewilderment to all newbie users.</p>
 <p>The XPath 2.0 solution of using a default element namespace in the static context is a partial solution; its main drawback is that it doesn't help the newbies who didn't know about the problem or its solution.</p>
 <p>The HTML "living standard" introduces a "wilful violation" of the XPath 1.0 spec to address the issue. Given that most elements in an HTML DOM will be in the XHTML namespace, it states:</p>
@@ -133,150 +253,5 @@ For example, the type enum("red", "green", "blue") matches the string "green".</
 <p>The coercion rules as currently written say that if the expected type is an enumeration type, then the rules are largely the same as for any other subtype of <code>xs:string</code>:  casting from <code>xs:untypedAtomic</code> applies, promotion from <code>xs:anyURI</code> does not apply, 1.0 compatibility mode rules do not apply.</p>
 <p>Operators and functions on enumeration types are the same as for <code>xs:string</code>. This means, for example, that there are no special rules for comparison: values are ordered as strings and are compared using the default collation.</p>
 </div></details></div>
-<div class="toot" id="closed-271"><h2>Issue #271 closed<span class="toot-id"> #closed-271</span></h2><div class="pubdate">05 Dec at 10:26:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/271">https://github.com/qt4cg/qtspecs/pull/271</a></div><p>Amendments to data model spec as per minutes of 2022-11-22</p></div>
-<div class="toot" id="agenda-12-06"><h2>QT4 CG meeting 014 draft agenda<span class="toot-id"> #agenda-12-06</span></h2><div class="pubdate">05 Dec at 10:20:13 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2022/12-06">https://qt4cg.org/meeting/agenda/2022/12-06</a></div><p>Draft agenda published.</p></div>
-<div class="toot" id="closed-282"><h2>Issue #282 closed<span class="toot-id"> #closed-282</span></h2><div class="pubdate">05 Dec at 09:51:49 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/282">https://github.com/qt4cg/qtspecs/pull/282</a></div><p>Copy of MK actions-2022-11-15 branch by NW</p></div>
-<div class="toot" id="created-282"><h2>Pull request #282 created<span class="toot-id"> #created-282</span></h2><div class="pubdate">05 Dec at 09:46:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/282">https://github.com/qt4cg/qtspecs/pull/282</a></div><details><summary>Copy of MK actions-2022-11-15 branch by NW</summary><div class="markup"><p>Resolves merge conflicts in #247</p>
-</div></details></div>
-<div class="toot" id="created-281"><h2>Issue #281 created<span class="toot-id"> #created-281</span></h2><div class="pubdate">03 Dec at 22:12:41 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/281">https://github.com/qt4cg/qtspecs/issues/281</a></div><details><summary>XPath: Short-circuiting Functions and Lazy Evaluation Hints</summary><div class="markup"><h1>Short-circuiting Functions and Lazy Evaluation Hints</h1>
-<h1><br>1. Introduction</h1>
-<p>As shown in <a href="https://en.wikipedia.org/wiki/Short-circuit_evaluation#Support_in_common_programming_and_scripting_languages">Wikipedia</a>, most contemporary programming languages offer reasonable support for <a href="https://en.wikipedia.org/wiki/Short-circuit_evaluation#Definition">short-circuit evaluation</a>
-(also known as <em>minimal</em> or <em>McCarthy evaluation</em>), including several standard language short-circuit operators.</p>
-<p>Short-circuiting, as we will call the above in this document, is commonly used to achieve:</p>
-<ol>
-<li><em>Avoiding undesired side effects of evaluating the second argument</em>, such as
-excessive evaluation time or throwing an error</li>
-</ol>
-<p>Usual example, using a&nbsp;<a href="https://en.wikipedia.org/wiki/C_(programming_language)">C-based</a>&nbsp;language:</p>
-<pre><code class="language-c">   int denom = 0;
-   if (denom != 0 &amp;&amp; num / denom)
-   {
-   ...//ensures that calculating num/denom never results in divide-by-zero error
-   }
-</code></pre>
-<p>Consider the following example:</p>
-<pre><code class="language-c">   int a = 0;
-   if (a != 0 &amp;&amp; myfunc(b))
-   {
-     do_something();
-   }
-</code></pre>
-<p>In this example, short-circuit evaluation guarantees that&nbsp;<code>myfunc(b)</code>&nbsp;is never called. This is because&nbsp;<code>a&nbsp;!= 0</code>&nbsp;evaluates to&nbsp;<em><code>false</code></em>. This feature permits two useful programming constructs.</p>
-<ol>
-<li>
-<p>If the first sub-expression checks whether an expensive computation is needed and the check evaluates to&nbsp;<em>false</em>, one can eliminate expensive computation in the second argument.</p>
-</li>
-<li>
-<p>It permits a construct where the first expression guarantees a condition without which the second expression may cause a&nbsp;<a href="https://en.wikipedia.org/wiki/Run-time_error">run-time error</a>.</p>
-</li>
-<li>
-<p><em>Idiomatic conditional construct</em></p>
-</li>
-</ol>
-<p><a href="https://en.wikipedia.org/wiki/Perl">Perl</a>&nbsp;idioms:</p>
-<pre><code>   some_condition or die; # Abort execution if some_condition is false
-
-   some_condition and die; # Abort execution if some_condition is true
-</code></pre>
-<h1><br>2. Short-circuiting in XPath</h1>
-<p>In short (pun intended) there is no such thing mentioned in any officially-published W3C version (&lt;= 3.1) of XPath.</p>
-<p>This topic was briefly mentioned in the discussion of <a href="https://github.com/qt4cg/qtspecs/issues/78">another proposal</a>: that of providing the capability to specify strictly the order of evaluation.</p>
-<p>Aspects of incorporating hints for <a href="https://en.wikipedia.org/wiki/Lazy_evaluation">lazy evaluation</a> (a topic related to short-cutting) were discussed also in the thread to <a href="https://app.slack.com/client/T011VK9115Z/C01GVC3JLHE/thread/C01GVC3JLHE-1665542903.180989">this question</a> on the Xml.com Slack.</p>
-<p>The situation at present is that the XPath processor that is being used decides whether or not to perform shortcutting, even in obvious cases. Thus, varying from one XPath processor to another, the differences in performance evaluation could be dramatic. For example, the following XPath expression is evaluated on BaseX (ver. &gt;= 10.3) for 0 seconds, and the same expression is evaluated by Saxon ver. 11 for about 100 seconds.</p>
-<pre><code class="language-xq">
-let $fnAnd := function($x)
-   {
-     function($y)
-     {
-      if(not($x)) then false()
-                  else $y
-     }
-   }
-   return
-      $fnAnd(false())(some $b in ( ((1 to 1000000000000000000) !true()) )  satisfies not($b)   )
-</code></pre>
-<h2><br>3. Analysis</h2>
-<p>We can define the term “<em>function with shortcutting</em>” (just for a 2-argument function, but this can be extended for <code>N</code>-argument function where <code>N &gt;= 2</code>) in the  following way:</p>
-<p>Given a function <code>$f($x, $y)</code>, we denote in XPath its partial application for a given value of $x (say <code>let $x := $t</code>) as:</p>
-<p><code>$f($t, ?)</code></p>
-<p>The above is a function of one argument. By definition:</p>
-<p><code>$f($x, $y)</code> is equivalent to <code>$f($x, ?) ($y)</code>, for every pair <code>$x</code> and <code>$y</code>.</p>
-<p>That is, the partial application of the 2-argument function <code>$f</code> with fixed 1st argument is another function <code>$g</code> which when applied on the 2nd argument (<code>$y</code>) of <code>$f($x, $y)</code> produces the same value as <code>$f($x, $y)</code>:</p>
-<p>If <code>$g</code> is defined as <code>$f($x, ?)</code>, then <code>$g($y)</code> produces the same value as <code>$f($x, $y)</code> for every pair <code>$x</code> and <code>$y</code>.</p>
-<p>Let us take a specific function:</p>
-<pre><code class="language-xq">let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
-                     { $x and $y}
-</code></pre>
-<p>Then one equivalent way of defining <code>$fAnd</code> is:</p>
-<pre><code class="language-xq">let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
-                     {
-                       let $partial := function($x as xs:boolean) as function(xs:boolean) as xs:boolean
-                                               {
-                                                  if(not($x)) then -&gt;(){false()}
-                                                              else -&gt;($t) {$t}
-                                               }
-                         return $partial($x)($y)
-                    }
-   return
-       $fAnd(false(), true())
-</code></pre>
-<p>The <strong><em><code>$partial</code></em></strong> function is the result of the partial application <code>$fAnd($x, ?)</code> and by definition this is a function of arity 1, which when applied on the 2nd argument of <code>$fAnd</code>, produces the same result as <code>$fAnd($x, $y)</code></p>
-<p>From the code above we see that actually there exists a value of <code>$x</code> (the value <code>false()</code> ) for which <code>$fAnd($x, ?)</code> is not a function of one argument, but a constant function (of <strong>0</strong> arguments) – that produces the value <code>false()</code>.</p>
-<p><strong>Definition</strong>:</p>
-<p>We say that a function <code>f(x, y)</code> <em><strong>allows shortcutting</strong></em> if there exists at least one value <code>t</code> such that</p>
-<p><code>f(t, ?)</code> is a constant.</p>
-<h1><br>4. Solution</h1>
-<p><strong>How can an XPath processor treat a function with shortcutting?</strong></p>
-<p>Obviously, if the XPath processor knows that <code>f(x, y)</code> allows shortcutting, then it becomes possible to delay the evaluation of the 2nd argument <code>y</code> and only perform this evaluation if the arity of the function returned by <code>f(t, ?)</code> is <code>1</code>, and not <code>0</code>.</p>
-<p><strong>How can an XPath processor know that a given function allows shortcutting?</strong></p>
-<ul>
-<li>
-<p>One way to obtain this knowledge is to evaluate <code>f(t, ?)</code> and get the arity of the resulting function. XPath 3.1 allows getting the arity of any function item with the function <a href="https://www.w3.org/TR/xpath-functions-31/#func-function-arity">fn:function-arity()</a>.      However, doing this on every function call could be expensive and deteriorate performance.</p>
-</li>
-<li>
-<p>Another way of informing the XPath processor that a given function <code>f(x, y)</code> allows shortcutting is if the language provides <em><strong>hints for lazy evaluation</strong></em>:
-<br>let $fAnd := function($x as xs:boolean, <em><strong>lazy</strong></em> $y as xs:boolean) as xs:boolean<br>
-<br>Only in the case when there is a <em><strong>lazy</strong></em> hint specified the XPath processor will check the arity of <code>f(x, ?)</code> and will not need to evaluate the <code>y</code> argument if this arity is <code>0</code>.</p>
-</li>
-</ul>
-<p>Let us return to the original example:</p>
-<pre><code class="language-xq">let $fAnd := function($x as xs:boolean, $y as xs:boolean) as xs:boolean
-                     {
-                       let $partial := function($x as xs:boolean) as function(xs:boolean) as xs:boolean
-                                               {
-                                                  if(not($x)) then -&gt;(){false()}
-                                                              else -&gt;($t) {$t}
-                                               }
-                         return $partial($x)($y)
-                    }
-   return
-       $fAnd(false(), true())
-</code></pre>
-<p>Executing this with an Xpath 3.1 processor, an error is raised: “<em>1 argument supplied, 0 expected: function() as xs:boolean { false() }.</em>”</p>
-<p><img src="https://user-images.githubusercontent.com/10605892/205463393-3b4558ac-66d9-453f-81fc-f83ec0499425.png" alt="image"></p>
-<p>But according to the updated “<a href="https://qt4cg.org/pr/279/xquery-40/xpath-40.html#id-coercion-rules">Coercion Rules / Function Coercion</a>” in Xpath 4.0, no error will occur:</p>
-<blockquote>
-<p>“<em>If&nbsp;<em>F</em>&nbsp;has lower arity than the expected type, then&nbsp;<em>F</em>&nbsp;is wrapped in a new function that declares and ignores the additional argument; the following steps are then applied to this new function.</em></p>
-</blockquote>
-<blockquote>
-<p><em>For example, if the expected type is&nbsp;<code>function(node(), xs:boolean) as  xs:string</code>, and the supplied function is&nbsp;<code>fn:name#1</code>, then the supplied function is effectively replaced by&nbsp;<code>function($n as node(), $b as xs:boolean) as xs:string {fn:name($n)}</code></em>”</p>
-</blockquote>
-<p>This is exactly the place where the XPath processor will call the lower-arity function without providing to it the ignored, and not needed to be evaluated, additional argument.</p>
-<p>Thus, according to this rule, an XPath 4.0 processor will successfully evaluate the above expression and will not issue the error shown above.</p>
-<p>Finally, we can put the <em>lazy</em> hint on a function declaration or on a function call, or on both places:</p>
-<pre><code class="language-xq">let $fAnd := function($x as xs:boolean, lazy $y as xs:boolean) as  xs:boolean
-   {
-     let $partial := function($x as xs:boolean) as function(lazy xs:boolean) as xs:boolean
-                           {
-                              if(not($x)) then -&gt;(){false()}
-                                          else -&gt;($t) {$t}
-                           }
-      return $partial($x)( lazy $y)
-   }
-   return
-       $fAnd(false(), lazy true())
-</code></pre>
-<p><strong><em>How to write short-circuiting functions?</em></strong></p>
-<p>The code above is a good example how one can write a short-circuiting function evaluating which the XPath processor would be aware that a short-circuit is happening but instead of signaling arity error as an XPath 3.1 processor does, will logically ignore the unneeded 2nd argument.</p>
-</div></details></div></div><p>See 58
+<div class="toot" id="closed-271"><h2>Issue #271 closed<span class="toot-id"> #closed-271</span></h2><div class="pubdate">05 Dec at 10:26:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/271">https://github.com/qt4cg/qtspecs/pull/271</a></div><p>Amendments to data model spec as per minutes of 2022-11-22</p></div></div><p>See 62
             more statuses in yearly archives.</p></article></main></body></html>
