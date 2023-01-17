@@ -435,7 +435,10 @@
       <xsl:for-each select="arg">
         <tr class="arg">
           <td>
-            <code><xsl:value-of select="@name"/></code>
+            <code>
+              <xsl:value-of select="@name"/>
+              <xsl:if test="@occur = 'opt'">?</xsl:if>
+            </code>
           </td>
           <td>
             <xsl:if test="@type">
