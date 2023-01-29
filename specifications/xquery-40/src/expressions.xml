@@ -11139,16 +11139,282 @@ course to the use of parentheses. Therefore, the following two examples have dif
                >Multiple consecutive unary arithmetic operators are permitted.</p>
          </note>
       </div2>
-      <div2 id="id-string-concat-expr">
-         <head>String Concatenation Expressions</head>
-         <scrap>
-            <head/>
-            <prodrecap ref="StringConcatExpr" id="StringConcatExpr"/>
-         </scrap>
-         <p>String concatenation expressions allow the string representations of values to be concatenated. In &language;, <code>$a || $b</code> is equivalent to <code>fn:concat($a, $b)</code>. The following expression evaluates to the string <code>concatenate</code>:</p>
-         <eg><![CDATA["con" || "cat" || "enate"]]></eg>
+      <div2 id="id-string-expr">
+         <head>String Expressions</head>
+         <p>This section describes several ways of constructing strings.</p>
+         <div3 id="id-string-concat-expr">
+            <head>String Concatenation Expressions</head>
+            <scrap>
+               <head/>
+               <prodrecap ref="StringConcatExpr" id="StringConcatExpr"/>
+            </scrap>
+            <p>String concatenation expressions allow the string representations of values to be concatenated. In &language;, <code>$a || $b</code> is equivalent to <code>fn:concat($a, $b)</code>. The following expression evaluates to the string <code>concatenate</code>:</p>
+            <eg><![CDATA["con" || "cat" || "enate"]]></eg>
+            
+         </div3>
+         <div3 id="id-string-templates" diff="add" at="2023-01-29">
+            <head>String Templates</head>
+            <scrap>
+               <head/>
+               <prodrecap ref="StringTemplate" id="StringTemplate"/>
+               <prodrecap ref="StringTemplateFixedPart" id="StringTemplateFixedPart"/>
+               <prodrecap ref="StringTemplateVariablePart" id="StringTemplateVariablePart"/>
+               <prodrecap ref="EnclosedExpr"/>
+            </scrap>
+            <p>String templates provide an alternative way of constructing strings. For example,
+            the expression <code>`Pi is {round(math:pi(), 4)}`</code> returns the string <code>"Pi is 3.1416"</code>.</p>
+            <p>A string template starts and ends with a grave accent (x60), popularly known as a back-tick. Between
+               the back-ticks is a string consisting of an sequence of fixed parts and
+               variable parts:</p>
+            <ulist>
+               <item><p>A variable part consists of an optional XPath expression enclosed in curly brackets (<code>{}</code>):
+                  more specifically, a string conforming 
+                  to the XPath production <code>Expr?</code>.</p>
+                  <note>
+                     <p>An expression within a variable part may contain an unescaped curly bracket within
+                        a <nt def="StringLiteral">StringLiteral</nt> or within
+                        a comment.</p>
+                     <p>Currently no XPath expression starts with an opening curly
+                        bracket, so the use of <code>{{</code> creates no ambiguity. If an enclosed
+                        expression ends with a closing curly bracket, no whitespace is required between
+                        this and the closing delimiter.</p>
+                     <p>The fact that the expression is optional means that the
+                        string contained between the curly brackets may be zero-length, may comprise whitespace
+                        only, or may contain XPath comments. The effective value in this case is a zero-length
+                        string, which is equivalent to omitting the variable part entirely, together with its 
+                        curly-bracket delimiters. </p> 
+                  </note>
+               </item>
+               <item>
+                  <p>A fixed part may contain any characters, except that:</p>
+                  <ulist>
+                     <item><p>a left curly bracket <rfc2119>must</rfc2119>
+                        be written as <code>{{</code></p></item>
+                     <item><p>a right curly bracket <rfc2119>must</rfc2119> be
+                        written as <code>}}</code>.</p></item>
+                     <item><p>a back-tick <rfc2119>must</rfc2119> be
+                        written as <code>``</code>.</p>
+                     </item>
+                  </ulist>
+               </item>
+            </ulist>
+            
 
+            <p>
+               The result of evaluating a
+                  string template is the string obtained by concatenating the expansions of the fixed
+               and variable parts:</p>
+            <ulist>
+               <item>
+                  <p>The expansion of a fixed part is obtained by replacing any double curly
+                     brackets (<code>{{</code> or <code>}}</code>) by the corresponding single curly
+                     bracket, and replacing doubled back-ticks (<code>``</code>) by a single back-tick.</p>
+               </item>
+               <item>
+                  <p>The expansion of a variable part is as follows:</p>
+                  <ulist>
+                     <item><p>If an expression is present, the result of evaluating the enclosed XPath
+                        >expression and converting the
+                        resulting value to a string by applying the function <code>fn:string-join#1</code>.
+                        This has the effect that each item in the result is converted to a string and
+                        the items are then concatenated with no separator.</p>
+                        <note>
+                           <p>This process can generate dynamic errors, for example if the sequence 
+                              contains a map (which cannot be converted to a string).</p>
+                        </note></item>
+                     <item><p>If the expression is omitted, a zero-length string.</p></item>
+                  </ulist>
+               </item>
+            </ulist>
+            
+            <p>For example:</p>
+            <eg role="parse-test"><![CDATA[let $greeting := "Hello"
+let $planet := "Mars"
+return `{$greeting}, {$planet}!`]]></eg>
+            <p>returns <code>"Hello, Mars!"</code>.</p>
+            
+            <note>
+               <p>A string template containing no variable parts is effectively just another
+                  way of writing a string literal: <code>"Goethe"</code>, <code>'Goethe'</code>, and <code>`Goethe`</code>
+               are interchangeable. This means that back-ticks can sometimes be a useful way of delimiting a string
+               that contains both single and double quotes: <code>`He said: "I didn't."`</code>.</p>
+               <p>It is sometimes useful to use string templates in conjunction with the <code>fn:char</code> function
+                  to build strings containing special characters, for example <code>`Chapter{fn:char("nbsp")}{$chapNr}`</code>.</p>
+            </note>
+            
+            <note>
+               <p>String literals containing an ampersand behave differently between XPath and XQuery: in XPath 
+               (unless first expanded by an XML parser) the string literal <code>"Bacon &amp; Eggs"</code> 
+               represents a string containing an ampersand, while in XQuery
+               it is an error, because an ampersand is taken as introducing a character reference. This difference
+               does not arise for string templates, since neither XPath nor XQuery recognizes character references
+               in a string template.
+               This means that back-tick delimited strings (such as <code>`Bacon &amp; Eggs`</code>) 
+                  may be useful in contexts where an XPath expression
+               needs to have the same effect whether it is evaluated using an XPath or an XQuery processor.</p>
+            </note>
+            
+         </div3>
+         
+         <div3 id="id-string-constructors" role="xquery">
+            <head>String Constructors</head>
+            
+            <p>
+               <termdef term="string constructor" id="dt-string-constructor"
+                  >A
+                  <term>String Constructor</term> creates a string from literal text and interpolated expressions.
+               </termdef>
+            </p>
+            
+            <p>The syntax of a string constructor is convenient for generating
+               JSON, JavaScript, CSS, SPARQL, XQuery, XPath, or other languages that
+               use curly brackets, quotation marks, or other strings that are
+               delimiters in &language;.</p>
+            
+            <scrap>
+               <head/>
+               <prodrecap id="StringConstructor" ref="StringConstructor"/>
+               <prodrecap id="StringConstructorContent" ref="StringConstructorContent"/>
+               <prodrecap ref="StringConstructorChars" id="StringConstructorChars"/>
+               <prodrecap id="StringConstructorInterpolation" ref="StringConstructorInterpolation"/>
+            </scrap>
+            
+            <note diff="add" at="2023-01-29">
+               <p>String templates (see <specref ref="id-string-templates"/>) and string constructors
+               have overlapping functionality. String constructors were introduced in XQuery 3.1,
+               and are not available in XPath; string templates are new in XQuery 4.0 and XPath 4.0.
+               String constructors were designed specifically for convenience when generating
+               code in languages that use curly braces, but with experience, they have been found to
+               be somewhat unwieldy for simpler applications; this motivated the introduction of
+               a simpler syntax in 4.0.</p>
+            </note>
+            
+            <p>In a <nt def="StringConstructor">string constructor</nt>, adjacent
+               <nt
+                  def="StringConstructorChars"
+                  >string constructor characters</nt>
+               are treated as literal text. Line endings are processed as elsewhere
+               in XQuery; no other processing is performed on this text. 
+               
+               To evaluate a string constructor, each sequence of adjacent string
+               constructor characters is converted to a string containing the same
+               characters, and each <nt
+                  def="StringConstructorInterpolation">string
+                  constructor interpolation</nt>
+               <code>$i</code> is evaluated, then
+               converted to a string using the expression <code
+                  role="parse-test"
+                  >string-join($i, ' ')</code>.  
+               
+               A string constructor interpolation that does not contain an expression (<code>`{ }`</code>) is ignored. 
+               
+               The strings
+               created from string constructor characters and the strings created
+               from string constructor interpolations are then concatenated, in
+               order.</p>
+            
+            <p>For instance, the following expression:</p>
+            <eg role="parse-test"><![CDATA[for $s in ("one", "two", "red", "blue")
+return ``[`{$s}` fish]``
+]]></eg>
+            <p>evaluates to the sequence  <code>("one fish", "two fish", "red fish", "blue fish")</code>.</p>
+            
+            <note>
+               <p>Character entities are not expanded in string constructor
+                  content.  Thus, <code>``[&amp;lt;]``</code> evaluates to the string
+                  <code>"&amp;lt;"</code>, not the string
+                  <code>"&lt;"</code>.</p>
+            </note>
+            
+            
+            <p>Interpolations can contain string constructors. For instance, consider the following expression:</p>
+            
+            <eg><![CDATA[``[`{ $i, ``[literal text]``, $j, ``[more literal text]`` }`]``]]></eg>
+            
+            <p>Assuming the values <code>$i := 1</code> and <code>$j := 2</code>, this evaluates to the string <code>"1 literal text 2 more literal text"</code>.</p>
+            
+            <p>The following examples are based on an example taken from the documentation of <bibref
+               ref="Moustache"
+            />, a JavaScript template library. Each function takes a map, containing values like these:</p>
+            
+            <eg><![CDATA[map {
+  "name": "Chris",
+  "value": 10000,
+  "taxed_value": 10000 - (10000 * 0.4),
+  "in_ca": true
+}]]></eg>
+            
+            <p>This function creates a simple string.</p>
+            
+            <eg><![CDATA[declare function local:prize-message($a) as xs:string
+{
+``[Hello `{$a?name}`
+You have just won `{$a?value}` dollars!
+`{ 
+   if ($a?in_ca) 
+   then ``[Well, `{$a?taxed_value}` dollars, after taxes.]``
+   else ""
+}`]``
+};]]></eg>
+            
+            <p>This is the output of the above function :</p>
+            
+            <eg><![CDATA[Hello Chris
+You have just won 10000 dollars!
+Well, 6000 dollars, after taxes.]]></eg>
+            
+            <p>This function creates a similar string in HTML syntax.</p>
+            
+            <eg><![CDATA[declare function local:prize-message($a) as xs:string
+{
+``[<div>
+  <h1>Hello `{$a?name}`</h1>
+  <p>You have just won `{$a?value}` dollars!</p>
+    `{ 
+      if ($a?in_ca) 
+      then ``[  <p>Well, `{$a?taxed_value}` dollars, after taxes.</p> ]``
+      else ""
+    }`
+</div>]``
+};]]></eg>
+            
+            <p>This is the output of the above function :</p>
+            
+            <eg><![CDATA[&lt;div&gt;
+  &lt;h1&gt;Hello Chris&lt;/h1&gt;
+  &lt;p&gt;You have just won 10000 dollars!&lt;/p&gt;
+  &lt;p&gt;Well, 6000 dollars, after taxes.&lt;/p&gt; 
+&lt;/div&gt;]]></eg>
+            
+            <p>This function creates a similar string in JSON syntax.</p>
+            
+            <eg><![CDATA[
+declare function local:prize-message($a) as xs:string
+{
+``[{ 
+  "name" : `{ $a?name }`
+  "value" : `{ $a?value }`
+  `{
+  if ($a?in_ca) 
+  then 
+  ``[, 
+  "taxed_value" : `{ $a?taxed_value }`]``  
+  else ""
+  }`
+}]`` 
+};]]></eg>
+            
+            <p>This is the output of the above function :</p>
+            
+            <eg><![CDATA[{ 
+  "name" : "Chris",
+  "value" : 10000,
+  "taxed_value" : 6000
+}]]></eg>
+            
+         </div3>
       </div2>
+      
       <div2 id="id-comparisons">
          <head>Comparison Expressions</head>
          <p>Comparison expressions allow two values to be compared. &language; provides
@@ -14321,153 +14587,7 @@ return $y[@value gt $x/@min]
 
       </div2>
 
-      <div2 id="id-string-constructors" role="xquery">
-         <head>String Constructors</head>
-
-         <p>
-            <termdef term="string constructor" id="dt-string-constructor"
-                  >A
-<term>String Constructor</term> creates a string from literal text and interpolated expressions.
-</termdef>
-         </p>
-
-         <p>The syntax of a string constructor is convenient for generating
-JSON, JavaScript, CSS, SPARQL, XQuery, XPath, or other languages that
-use curly brackets, quotation marks, or other strings that are
-delimiters in &language;.</p>
-
-         <scrap>
-            <head/>
-            <prodrecap id="StringConstructor" ref="StringConstructor"/>
-            <prodrecap id="StringConstructorContent" ref="StringConstructorContent"/>
-            <prodrecap ref="StringConstructorChars" id="StringConstructorChars"/>
-            <prodrecap id="StringConstructorInterpolation" ref="StringConstructorInterpolation"/>
-         </scrap>
-
-         <p>In a <nt def="StringConstructor">string constructor</nt>, adjacent
-<nt
-               def="StringConstructorChars"
-               >string constructor characters</nt>
-are treated as literal text. Line endings are processed as elsewhere
-in XQuery; no other processing is performed on this text. 
-
-To evaluate a string constructor, each sequence of adjacent string
-constructor characters is converted to a string containing the same
-characters, and each <nt
-               def="StringConstructorInterpolation">string
-constructor interpolation</nt>
-            <code>$i</code> is evaluated, then
-converted to a string using the expression <code
-               role="parse-test"
-               >string-join($i, ' ')</code>.  
-
-A string constructor interpolation that does not contain an expression (<code>`{ }`</code>) is ignored. 
-
-The strings
-created from string constructor characters and the strings created
-from string constructor interpolations are then concatenated, in
-order.</p>
-
-         <p>For instance, the following expression:</p>
-         <eg role="parse-test"><![CDATA[for $s in ("one", "two", "red", "blue")
-return ``[`{$s}` fish]``
-]]></eg>
-         <p>evaluates to the sequence  <code>("one fish", "two fish", "red fish", "blue fish")</code>.</p>
-
-         <note>
-            <p>Character entities are not expanded in string constructor
-content.  Thus, <code>``[&amp;lt;]``</code> evaluates to the string
-<code>"&amp;lt;"</code>, not the string
-<code>"&lt;"</code>.</p>
-         </note>
-
-
-         <p>Interpolations can contain string constructors. For instance, consider the following expression:</p>
-
-         <eg><![CDATA[``[`{ $i, ``[literal text]``, $j, ``[more literal text]`` }`]``]]></eg>
-
-         <p>Assuming the values <code>$i := 1</code> and <code>$j := 2</code>, this evaluates to the string <code>"1 literal text 2 more literal text"</code>.</p>
-
-         <p>The following examples are based on an example taken from the documentation of <bibref
-               ref="Moustache"
-            />, a JavaScript template library. Each function takes a map, containing values like these:</p>
-
-         <eg><![CDATA[map {
-  "name": "Chris",
-  "value": 10000,
-  "taxed_value": 10000 - (10000 * 0.4),
-  "in_ca": true
-}]]></eg>
-
-         <p>This function creates a simple string.</p>
-
-         <eg><![CDATA[declare function local:prize-message($a) as xs:string
-{
-``[Hello `{$a?name}`
-You have just won `{$a?value}` dollars!
-`{ 
-   if ($a?in_ca) 
-   then ``[Well, `{$a?taxed_value}` dollars, after taxes.]``
-   else ""
-}`]``
-};]]></eg>
-
-         <p>This is the output of the above function :</p>
-
-         <eg><![CDATA[Hello Chris
-You have just won 10000 dollars!
-Well, 6000 dollars, after taxes.]]></eg>
-
-         <p>This function creates a similar string in HTML syntax.</p>
-
-         <eg><![CDATA[declare function local:prize-message($a) as xs:string
-{
-``[<div>
-  <h1>Hello `{$a?name}`</h1>
-  <p>You have just won `{$a?value}` dollars!</p>
-    `{ 
-      if ($a?in_ca) 
-      then ``[  <p>Well, `{$a?taxed_value}` dollars, after taxes.</p> ]``
-      else ""
-    }`
-</div>]``
-};]]></eg>
-
-         <p>This is the output of the above function :</p>
-
-         <eg><![CDATA[&lt;div&gt;
-  &lt;h1&gt;Hello Chris&lt;/h1&gt;
-  &lt;p&gt;You have just won 10000 dollars!&lt;/p&gt;
-  &lt;p&gt;Well, 6000 dollars, after taxes.&lt;/p&gt; 
-&lt;/div&gt;]]></eg>
-
-         <p>This function creates a similar string in JSON syntax.</p>
-
-         <eg><![CDATA[
-declare function local:prize-message($a) as xs:string
-{
-``[{ 
-  "name" : `{ $a?name }`
-  "value" : `{ $a?value }`
-  `{
-  if ($a?in_ca) 
-  then 
-  ``[, 
-  "taxed_value" : `{ $a?taxed_value }`]``  
-  else ""
-  }`
-}]`` 
-};]]></eg>
-
-         <p>This is the output of the above function :</p>
-
-         <eg><![CDATA[{ 
-  "name" : "Chris",
-  "value" : 10000,
-  "taxed_value" : 6000
-}]]></eg>
-
-      </div2>
+      
 
       <div2 id="id-maps-and-arrays">
          <head>Maps and Arrays</head>
