@@ -1121,6 +1121,9 @@
   <!-- item: generic list item -->
   <xsl:template match="item">
     <li>
+      <xsl:if test="@role">
+        <xsl:attribute name="class" select="@role"/>
+      </xsl:if>
       <xsl:apply-templates/>
     </li>
   </xsl:template>
@@ -2222,6 +2225,9 @@
   <!-- ulist: unordered list -->
   <xsl:template match="ulist">
     <ul>
+      <xsl:if test="@role">
+        <xsl:attribute name="class" select="@role"/>
+      </xsl:if>
       <xsl:apply-templates/>
     </ul>
   </xsl:template>
