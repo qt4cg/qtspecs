@@ -1121,6 +1121,9 @@
   <!-- item: generic list item -->
   <xsl:template match="item">
     <li>
+      <xsl:if test="@role">
+        <xsl:attribute name="class" select="@role"/>
+      </xsl:if>
       <xsl:apply-templates/>
     </li>
   </xsl:template>
@@ -1375,6 +1378,18 @@
   <!-- p role="closetermdef": indicates the end of an open term definition -->
   <xsl:template match="p[@role='closetermdef']">
     <p>]</p>
+  </xsl:template>
+
+  <xsl:template match="p[contains-token(@role, 'type-hierarchy-figure')]">
+    <div class="{@role}">
+      <div class="hier">
+        <xsl:apply-templates select="ulist[1]"/>
+      </div>
+      <div class="legend">
+        <p>Legend:</p>
+        <xsl:apply-templates select="* except ulist[1]"/>
+      </div>
+    </div>
   </xsl:template>
 
   <!-- param: -->
@@ -2222,6 +2237,9 @@
   <!-- ulist: unordered list -->
   <xsl:template match="ulist">
     <ul>
+      <xsl:if test="@role">
+        <xsl:attribute name="class" select="@role"/>
+      </xsl:if>
       <xsl:apply-templates/>
     </ul>
   </xsl:template>
