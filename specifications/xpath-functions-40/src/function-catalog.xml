@@ -12432,15 +12432,17 @@ else if (fn:empty($input))
       <fos:rules>
          <p>The <code>$collation</code> argument identifies a collation which is used at all levels
             of recursion when strings are compared (but not when names are compared), according to
-            the rules in <specref
-               ref="choosing-a-collation"/>.</p>
+            the rules in <specref ref="choosing-a-collation"/>.</p>
+         <p>The <code>$options</code> argument, if present, defines additional parameters controlling
+            how the comparison is done. The <termref def="option-parameter-conventions"
+               >option parameter conventions</termref> apply.</p>
          <p>If the two sequences are both empty, the function returns <code>true</code>.</p>
          <p>If the two sequences are of different lengths, the function returns
             <code>false</code>.</p>
          <p>If the two sequences are of the same length, the function returns <code>true</code> if
             and only if every item in the sequence <code>$input1</code> is deep-equal to the
             item at the same position in the sequence <code>$input2</code>. The rules for
-            deciding whether two items are deep-equal follow.</p>
+            deciding whether two items are deep-equal appear below.</p>
          
 
             <p>The entries that may appear in the <code>$options</code> map are as follows. As a general convention
@@ -12460,6 +12462,13 @@ else if (fn:empty($input))
                      <rfc2119>should</rfc2119> output messages (in an implementation-dependent format and to
                      an implementation-dependent destination) indicating the nature of the differences that
                      were found.
+                  </fos:meaning>
+                  <fos:type>xs:boolean</fos:type>
+                  <fos:default>false</fos:default>
+               </fos:option>
+               <fos:option key="false-on-error">
+                  <fos:meaning>If true, then in the event of a dynamic error the function will return false rather than
+                     throwing the error.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
@@ -12503,6 +12512,13 @@ else if (fn:empty($input))
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
                </fos:option>
+               <fos:option key="normalize-space">
+                  <fos:meaning>The value false indicates that text and attributes are compared <emph>as-is</emph>;
+                     the value true indicates that they are compared after normalization using <code>fn:normalize-space</code>.
+                  </fos:meaning>
+                  <fos:type>xs:boolean</fos:type>
+                  <fos:default>true</fos:default>
+               </fos:option>
                <fos:option key="processing-instructions">
                   <fos:meaning>Determines whether processing-instructions are significant.
                   </fos:meaning>
@@ -12531,10 +12547,10 @@ else if (fn:empty($input))
                </fos:option>
                <fos:option key="type-variety">
                   <fos:meaning>Determines whether the variety of the type annotation of an element 
-                     (as a simple or complex type) is significant.
+                     (whether it has complex content or simple content) is significant.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
-                  <fos:default>false</fos:default>
+                  <fos:default>true</fos:default>
                </fos:option>
                <fos:option key="typed-values">
                   <fos:meaning>Determines whether nodes are compared using their typed values rather than
@@ -12574,13 +12590,27 @@ else if (fn:empty($input))
          <p>The rules reference a function <code>equal-strings</code> which compares two strings as follows:</p>
          
          <olist>
-            <item><p>If the <code>normalization-form</code> option is present, each string is normalized
-            by calling the <code>fn:normalize-unicode</code> function, supplying the specified normalization
-            form.</p></item>
-            <item><p>If the <code>retain-whitespace</code> option is false, each string is processed
+            <item><p>If the <code>normalize-space</code> option is true, each string is processed
                by calling the <code>fn:normalize-space</code> function.</p></item>
-            <item><p>The two strings are compared for equality under the requested <code>$collation</code>.</p></item>
+            <item><p>If the <code>normalization-form</code> option is present, each string is then normalized
+            by calling the <code>fn:normalize-unicode</code> function, supplying the specified normalization
+            form.</p></item>           
+            <item><p>The two strings are then compared for equality under the requested <code>$collation</code>.</p></item>
          </olist>
+         
+         <p>More formally, the <code>equal-strings</code> function can be expressed as follows:</p>
+         
+         <eg><![CDATA[function ($s1 as xs:string, $s2 as xs:string, 
+                   $collation as xs:string, $options as map(*)) as xs:boolean {
+    let $n1 := if (exists($options?normalization-form))
+               then fn:normalize-unicode(?, $options?normalization-form) 
+               else fn:identity#1,
+        $n2 := if ($options?normalize-space)
+               then fn:normalize-space#1 
+               else fn:identity#1               
+    }
+    return fn:compare($n1($n2($s1)), $n1($n2($s2)), $collation) eq 0    
+}]]></eg>
          
          <p>The two items are deep-equal
          if one or more of the following conditions is true:</p>
@@ -12593,24 +12623,25 @@ else if (fn:empty($input))
                   <item>
                      <p><code>$i2</code> is an atomic value.</p></item>
                   <item>
-                     <p>One of the following conditions is true:</p>
-                     <olist>
-                        <item>
-                           <p>All of the following conditions are true:</p>
-                           <olist>
-                              <item><p><code>$i1</code> is an instanceof of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
-                              or <code>xs:anyURI</code>.</p></item>
-                              <item><p><code>$i2</code> is an instanceof of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
-                                 or <code>xs:anyURI</code>.</p></item>
-                              <item><p>The relation <code>equal-strings</code> holds between <code>$i1</code> and <code>$i2</code>.</p></item>
-                           </olist>
-                        </item>           
-                        <item><p><code>($i1 eq $i2)</code> is <code>true</code> (and the comparison 
-                           does not fail with a dynamic or type error)</p>
-                           <note><p>This rule is only needed for comparing non-string values.</p></note></item>
-                        <item><p>Both <code>$i1</code> and <code>$i2</code> are <code>NaN</code></p></item>
-                     </olist>
+                     <p>If both the following conditions are true:</p>
+                     <ulist>
+                        <item><p><code>$i1</code> is an instance of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                           or <code>xs:anyURI</code>.</p></item>
+                        <item><p><code>$i2</code> is an instance of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                           or <code>xs:anyURI</code>.</p></item>
+                     </ulist>
+                     <p>then the function <code>equal-strings($i1, $i2, $collation, $options)</code> returns true.</p>
+                     <p>Otherwise (the items are of some other type), either:</p>
+                     <ulist>
+                        <item><p><code>$i1</code> and <code>$i2</code> are comparable,
+                           and <code>($i1 eq $i2)</code> is <code>true</code>; or</p></item>
+                        <item><p>both <code>$i1</code> and <code>$i2</code> are <code>NaN</code>.</p></item> 
+                     </ulist>
+                     <note><p>If <code>$i1</code> and <code>$i2</code> are not comparable, that is,
+                        if the expression <code>($i1 eq $i2)</code> would raise an error, then the function
+                     returns false; it does not report an error.</p></note>
                   </item>
+                  
                   <item>
                      <p>One of the following conditions is true:</p>
                      <olist>
@@ -12657,7 +12688,7 @@ else if (fn:empty($input))
                         </item>
                         <item>
                            <p>has the same associated value (compared using the <code>fn:deep-equal</code>
-                              function).</p>
+                              function, recursively).</p>
                         </item>
                      </olist>
                   </item>
@@ -12685,8 +12716,8 @@ else if (fn:empty($input))
                   <item><p><code>$i1</code> is a node.</p></item>
                   <item><p><code>$i2</code> is a node.</p></item>
                   <item><p>Both nodes have the same node kind.</p></item>
-                  <item><p>Let <code>significant-children($parent)</code> be the sequence of nodes formed by
-                  filtering the children of <code>$parent</code> as follows:</p>
+                  <item><p>Let <code>significant-children($parent)</code> be the sequence of nodes applying the following
+                  steps to the children of <code>$parent</code>, in turn:</p>
                      <olist>
                         <item><p>Comment nodes are discarded if the option <code>comments</code> is false.</p></item>
                         <item><p>Processing instruction nodes are discarded if the option <code>processing-instructions</code> is false.</p></item>
@@ -12694,14 +12725,7 @@ else if (fn:empty($input))
                         <item><p>Whitespace-only text nodes are discarded if the option <code>whitespace-text-nodes</code> is false,
                            or if <code>$parent</code> is an element node whose type annotation is a complex type with an element-only
                            or empty content model.</p></item>
-                        <item><p>If <code>$parent</code> is an element node and its name is included in the value
-                           of option <code>unordered-elements</code>, then all text nodes are discarded, and element nodes are
-                           sorted first by namespace and then by local-name, retaining the original order when multiple elements
-                           have the same name.</p>
-                           <note><p>It is inadvisable to use this option for mixed-content elements, or for elements
-                           that allow multiple children with the same name. The rules permit this, but the results
-                           might not be intuitive.</p></note>
-                        </item>
+                 
                      </olist>
                   
                   </item>
@@ -12776,17 +12800,37 @@ else if (fn:empty($input))
                                           above), the <code>typed-values</code> option is true, 
                                           and the typed value of <code>$i1</code> is deep-equal
                                           to the typed value of <code>$i2</code>.</p>
+                                       <note><p>The typed value of an element node is used only when the element
+                                       has simple content, which means that no error can occur as a result
+                                       of atomizing a node with no typed value.</p></note>
                                     </item>
                                     <item>
                                        <p>Both element nodes are annotated as having simple content (as defined
                                           above), the <code>typed-values</code> option is false, 
-                                          and the equal-strings relation holds between the string value of <code>$i1</code> 
+                                          and the <code>equal-strings</code> function returns true when
+                                          applied to the string value of <code>$i1</code> 
                                           and the string value of <code>$i2</code>.</p>
                                     </item>
                                     <item>
-                                       <p>Both element nodes have a type annotation that is a complex type, 
+                                       <p>Both element nodes have a type annotation that is a complex type with
+                                          element-only, mixed, or empty content,
+                                          the (common) element name is not present in the <code>unordered-elements</code> option,
                                           and the sequence <code>significant-children($i1)</code> is
                                           deep-equal to the sequence <code>significant-children($i2)</code>.</p>
+                                    </item>
+                                    <item>
+                                       <p>Both element nodes have a type annotation that is a complex type with
+                                          element-only, mixed, or empty content,
+                                          the (common) element name is present in the <code>unordered-elements</code> option,
+                                          and the sequence <code>significant-children($i1)</code> is
+                                          deep-equal to some permutation of the sequence <code>significant-children($i2)</code>.</p>
+                                       <note>
+                                          <p>Elements annotated as <code>xs:untyped</code> fall into this category.</p>
+                                          <p>Including an element name in the <code>unordered-elements</code> list is unlikely
+                                          to be useful except when the relevant elements have element-only content, but
+                                          this is not a requirement: the rules apply equally to elements with mixed content,
+                                          or even (trivially) to elements with empty content.</p>
+                                       </note>
                                     </item>
                                  </olist>
                               </item>
@@ -12810,16 +12854,6 @@ else if (fn:empty($input))
                                  attribute nodes have the same type annotation.</p>
                               </item>
                               <item>
-                                 <p>The option <code>typed-value</code> is true and 
-                                    the typed value of <code>$i1</code> is deep-equal to the typed value of
-                                       <code>$i2</code>.</p>
-                              </item>
-                              <item>
-                                 <p>The option <code>typed-value</code> is false and 
-                                    the equal-strings relation holds between the string value of <code>$i1</code> 
-                                    and the string value of <code>$i2</code>.</p>
-                              </item>
-                              <item>
                                  <p>Either the option <code>id-property</code> is false, or both attribute nodes
                                     have the same value for their <code>is-id</code> property.</p>
                               </item>
@@ -12827,6 +12861,17 @@ else if (fn:empty($input))
                                  <p>Either the option <code>idrefs-property</code> is false, or both attribute nodes
                                     have the same value for their <code>is-idrefs</code> property.</p>
                               </item>
+                              <item>
+                                 <p>Either the option <code>typed-value</code> is false, or 
+                                    the typed value of <code>$i1</code> is deep-equal to the typed value of
+                                       <code>$i2</code>.</p>
+                              </item>
+                              <item>
+                                 <p>Either the option <code>typed-value</code> is true, or 
+                                    the <code>equal-strings</code> function returns true when applied to the string value of <code>$i1</code> 
+                                    and the string value of <code>$i2</code>.</p>
+                              </item>
+                              
                            </olist>
                         </item>
 
@@ -12838,7 +12883,8 @@ else if (fn:empty($input))
                                           node-name($i2))</code>.</p>
                                  </item>
                                  <item>
-                                    <p>The equal-strings relation holds between the string value of <code>$i1</code> 
+                                    <p>The <code>equal-strings</code> function returns true when applied to 
+                                       the string value of <code>$i1</code> 
                                        and the string value of <code>$i2</code>.</p>
                                  </item>
                               </olist>
@@ -12859,12 +12905,12 @@ else if (fn:empty($input))
                            passed explicitly to the <code>fn:deep-equal</code> function.</p></note>
                         </item>
                         <item>
-                           <p>Both nodes are comment nodes, and the equal-strings relation holds
-                              between their string values.</p>
+                           <p>Both nodes are comment nodes, and the <code>equal-strings</code> function 
+                              returns true when applied to their string values.</p>
                         </item>
                         <item>
-                           <p>Both nodes are text nodes, and the equal-strings relation holds
-                              between their string values.</p>
+                           <p>Both nodes are text nodes, and the <code>equal-strings</code> function 
+                              returns true when applied to their string values.</p>
                         </item>
                   </olist>
                   </item>
@@ -12878,6 +12924,9 @@ else if (fn:empty($input))
                /> if either input
             sequence contains a function item <phrase>that is not a map or
                array</phrase>. </p>
+         <p>However, no error is raised if the <code>false-on-error</code> option has the
+         value true; in this case, the function returns false rather than raising an error.</p>
+
       </fos:errors>
       <fos:notes>
          <p>By default, two nodes are not required to have the same type annotation, and they are not
@@ -12896,9 +12945,11 @@ else if (fn:empty($input))
             or processing instruction, if it causes a text node to be split into two text nodes, may
             affect the result.</p>
          <p>Comparing items of different kind (for example, comparing an atomic
-            value to a node, or a map to an array, or an integer to an <code>xs:date</code>) returns false, it does not return an error. So
+            value to a node, or a map to an array, or an integer to an <code>xs:date</code>) returns false, 
+            it does not return an error. So
             the result of <code>fn:deep-equal(1, current-dateTime())</code> is <code>false</code>.</p>
-         <p>Comparing a function (other than a map or array) to any other value raises a type error.</p>
+         <p>Comparing a function (other than a map or array) to any other value raises a type error,
+         unless the error is suppressed using the <code>false-on-error</code> option.</p>
       </fos:notes>
       <fos:examples>
          <fos:variable name="at" id="v-deep-equal-at" as="element()"
@@ -12947,9 +12998,82 @@ else if (fn:empty($input))
                <fos:result>false()</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a xmlns='AA'/>"),
+    parse-xml("<p:a xmlns:p='AA'/>"))]]></eg></fos:expression>
+               <fos:result>true()</fos:result>
+               <fos:postamble>By default, namespace prefixes are ignored</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a xmlns='AA'/>"),
+    parse-xml("<p:a xmlns:p='AA'/>"),
+    options := map{'prefixes':true()})]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>False because the namespace prefixes differ</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a xmlns='AA'/>"),
+    parse-xml("<p:a xmlns:p='AA'/>"),
+    options := map{'in-scope-namespaces':true()})]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>False because the in-scope namespace bindings differ</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a><b/><c/></a>"),
+    parse-xml("<a><c/><b/></a>"))]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>By default, order of elements is significant</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a><b/><c/></a>"),
+    parse-xml("<a><c/><b/></a>"),
+    options := map{'unordered-elements': fn:QName('a')})]]></eg></fos:expression>
+               <fos:result>true()</fos:result>
+               <fos:postamble>The <code>unordered-elements</code> option means that the ordering of the children
+               of <code>a</code> is ignored.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<para style="bold"><span>x</span></para>"),
+    parse-xml("<para style=" bold"> <span>x</span></para>"))]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>By default, both the leading whitespace in the <code>style</code> attribute
+                  and the whitespace text node preceding the <code>span</code> element are significant.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<para style="bold"><span>x</span></para>"),
+    parse-xml("<para style=" bold"> <span>x</span></para>"),
+    options := map{'normalize-space': true(), 'whitespace-text-nodes': false())]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>The <code>normalize-space</code> option ensures that the leading whitespace
+                  in the attribute value is ignored; the <code>whitespace-text-nodes</code> option
+                  causes the whitespace preceding the <code>span</code> element to be ignored.</fos:postamble>
+            </fos:test>
+         </fos:example>
       </fos:examples>
+      
       <fos:history>
-         <fos:version version="4.0">Options parameter added; not yet reviewed.</fos:version>
+         <fos:version version="4.0">Options parameter added. Approved in principle on 2023-01-31, subject
+            to further review.</fos:version>
       </fos:history>
    </fos:function>
    
