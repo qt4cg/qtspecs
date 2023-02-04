@@ -12394,15 +12394,17 @@ else if (fn:empty($input))
       <fos:rules>
          <p>The <code>$collation</code> argument identifies a collation which is used at all levels
             of recursion when strings are compared (but not when names are compared), according to
-            the rules in <specref
-               ref="choosing-a-collation"/>.</p>
+            the rules in <specref ref="choosing-a-collation"/>.</p>
+         <p>The <code>$options</code> argument, if present, defines additional parameters controlling
+            how the comparison is done. The <termref def="option-parameter-conventions"
+               >option parameter conventions</termref> apply.</p>
          <p>If the two sequences are both empty, the function returns <code>true</code>.</p>
          <p>If the two sequences are of different lengths, the function returns
             <code>false</code>.</p>
          <p>If the two sequences are of the same length, the function returns <code>true</code> if
             and only if every item in the sequence <code>$input1</code> is deep-equal to the
             item at the same position in the sequence <code>$input2</code>. The rules for
-            deciding whether two items are deep-equal follow.</p>
+            deciding whether two items are deep-equal appear below.</p>
          
 
             <p>The entries that may appear in the <code>$options</code> map are as follows. As a general convention
@@ -12410,6 +12412,12 @@ else if (fn:empty($input))
                for the interpretation of each option appear later.</p>
             
             <fos:options>
+               <fos:option key="base-uri">
+                  <fos:meaning>Determines whether the <code>base-uri</code> of a node is significant.
+                  </fos:meaning>
+                  <fos:type>xs:boolean</fos:type>
+                  <fos:default>false</fos:default>
+               </fos:option>
                <fos:option key="comments">
                   <fos:meaning>Determines whether comments are significant.
                   </fos:meaning>
@@ -12422,6 +12430,13 @@ else if (fn:empty($input))
                      <rfc2119>should</rfc2119> output messages (in an implementation-dependent format and to
                      an implementation-dependent destination) indicating the nature of the differences that
                      were found.
+                  </fos:meaning>
+                  <fos:type>xs:boolean</fos:type>
+                  <fos:default>false</fos:default>
+               </fos:option>
+               <fos:option key="false-on-error">
+                  <fos:meaning>If true, then in the event of a dynamic error the function will return false rather than
+                     throwing the error.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
@@ -12465,6 +12480,13 @@ else if (fn:empty($input))
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
                </fos:option>
+               <fos:option key="normalize-space">
+                  <fos:meaning>The value false indicates that text and attributes are compared <emph>as-is</emph>;
+                     the value true indicates that they are compared after normalization using <code>fn:normalize-space</code>.
+                  </fos:meaning>
+                  <fos:type>xs:boolean</fos:type>
+                  <fos:default>true</fos:default>
+               </fos:option>
                <fos:option key="processing-instructions">
                   <fos:meaning>Determines whether processing-instructions are significant.
                   </fos:meaning>
@@ -12493,10 +12515,10 @@ else if (fn:empty($input))
                </fos:option>
                <fos:option key="type-variety">
                   <fos:meaning>Determines whether the variety of the type annotation of an element 
-                     (as a simple or complex type) is significant.
+                     (whether it has complex content or simple content) is significant.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
-                  <fos:default>false</fos:default>
+                  <fos:default>true</fos:default>
                </fos:option>
                <fos:option key="typed-values">
                   <fos:meaning>Determines whether nodes are compared using their typed values rather than
@@ -12536,13 +12558,27 @@ else if (fn:empty($input))
          <p>The rules reference a function <code>equal-strings</code> which compares two strings as follows:</p>
          
          <olist>
-            <item><p>If the <code>normalization-form</code> option is present, each string is normalized
-            by calling the <code>fn:normalize-unicode</code> function, supplying the specified normalization
-            form.</p></item>
-            <item><p>If the <code>retain-whitespace</code> option is false, each string is processed
+            <item><p>If the <code>normalize-space</code> option is true, each string is processed
                by calling the <code>fn:normalize-space</code> function.</p></item>
-            <item><p>The two strings are compared for equality under the requested <code>$collation</code>.</p></item>
+            <item><p>If the <code>normalization-form</code> option is present, each string is then normalized
+            by calling the <code>fn:normalize-unicode</code> function, supplying the specified normalization
+            form.</p></item>           
+            <item><p>The two strings are then compared for equality under the requested <code>$collation</code>.</p></item>
          </olist>
+         
+         <p>More formally, the <code>equal-strings</code> function can be expressed as follows:</p>
+         
+         <eg><![CDATA[function ($s1 as xs:string, $s2 as xs:string, 
+                   $collation as xs:string, $options as map(*)) as xs:boolean {
+    let $n1 := if (exists($options?normalization-form))
+               then fn:normalize-unicode(?, $options?normalization-form) 
+               else fn:identity#1,
+        $n2 := if ($options?normalize-space)
+               then fn:normalize-space#1 
+               else fn:identity#1               
+    }
+    return fn:compare($n1($n2($s1)), $n1($n2($s2)), $collation) eq 0    
+}]]></eg>
          
          <p>The two items are deep-equal
          if one or more of the following conditions is true:</p>
@@ -12555,24 +12591,25 @@ else if (fn:empty($input))
                   <item>
                      <p><code>$i2</code> is an atomic value.</p></item>
                   <item>
-                     <p>One of the following conditions is true:</p>
-                     <olist>
-                        <item>
-                           <p>All of the following conditions are true:</p>
-                           <olist>
-                              <item><p><code>$i1</code> is an instanceof of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
-                              or <code>xs:anyURI</code>.</p></item>
-                              <item><p><code>$i2</code> is an instanceof of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
-                                 or <code>xs:anyURI</code>.</p></item>
-                              <item><p>The relation <code>equal-strings</code> holds between <code>$i1</code> and <code>$i2</code>.</p></item>
-                           </olist>
-                        </item>           
-                        <item><p><code>($i1 eq $i2)</code> is <code>true</code> (and the comparison 
-                           does not fail with a dynamic or type error)</p>
-                           <note><p>This rule is only needed for comparing non-string values.</p></note></item>
-                        <item><p>Both <code>$i1</code> and <code>$i2</code> are <code>NaN</code></p></item>
-                     </olist>
+                     <p>If both the following conditions are true:</p>
+                     <ulist>
+                        <item><p><code>$i1</code> is an instance of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                           or <code>xs:anyURI</code>.</p></item>
+                        <item><p><code>$i2</code> is an instance of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                           or <code>xs:anyURI</code>.</p></item>
+                     </ulist>
+                     <p>then the function <code>equal-strings($i1, $i2, $collation, $options)</code> returns true.</p>
+                     <p>Otherwise (the items are of some other type), either:</p>
+                     <ulist>
+                        <item><p><code>$i1</code> and <code>$i2</code> are comparable,
+                           and <code>($i1 eq $i2)</code> is <code>true</code>; or</p></item>
+                        <item><p>both <code>$i1</code> and <code>$i2</code> are <code>NaN</code>.</p></item> 
+                     </ulist>
+                     <note><p>If <code>$i1</code> and <code>$i2</code> are not comparable, that is,
+                        if the expression <code>($i1 eq $i2)</code> would raise an error, then the function
+                     returns false; it does not report an error.</p></note>
                   </item>
+                  
                   <item>
                      <p>One of the following conditions is true:</p>
                      <olist>
@@ -12619,7 +12656,7 @@ else if (fn:empty($input))
                         </item>
                         <item>
                            <p>has the same associated value (compared using the <code>fn:deep-equal</code>
-                              function).</p>
+                              function, recursively).</p>
                         </item>
                      </olist>
                   </item>
@@ -12647,8 +12684,8 @@ else if (fn:empty($input))
                   <item><p><code>$i1</code> is a node.</p></item>
                   <item><p><code>$i2</code> is a node.</p></item>
                   <item><p>Both nodes have the same node kind.</p></item>
-                  <item><p>Let <code>significant-children($parent)</code> be the sequence of nodes formed by
-                  filtering the children of <code>$parent</code> as follows:</p>
+                  <item><p>Let <code>significant-children($parent)</code> be the sequence of nodes applying the following
+                  steps to the children of <code>$parent</code>, in turn:</p>
                      <olist>
                         <item><p>Comment nodes are discarded if the option <code>comments</code> is false.</p></item>
                         <item><p>Processing instruction nodes are discarded if the option <code>processing-instructions</code> is false.</p></item>
@@ -12656,14 +12693,7 @@ else if (fn:empty($input))
                         <item><p>Whitespace-only text nodes are discarded if the option <code>whitespace-text-nodes</code> is false,
                            or if <code>$parent</code> is an element node whose type annotation is a complex type with an element-only
                            or empty content model.</p></item>
-                        <item><p>If <code>$parent</code> is an element node and its name is included in the value
-                           of option <code>unordered-elements</code>, then all text nodes are discarded, and element nodes are
-                           sorted first by namespace and then by local-name, retaining the original order when multiple elements
-                           have the same name.</p>
-                           <note><p>It is inadvisable to use this option for mixed-content elements, or for elements
-                           that allow multiple children with the same name. The rules permit this, but the results
-                           might not be intuitive.</p></note>
-                        </item>
+                 
                      </olist>
                   
                   </item>
@@ -12738,17 +12768,37 @@ else if (fn:empty($input))
                                           above), the <code>typed-values</code> option is true, 
                                           and the typed value of <code>$i1</code> is deep-equal
                                           to the typed value of <code>$i2</code>.</p>
+                                       <note><p>The typed value of an element node is used only when the element
+                                       has simple content, which means that no error can occur as a result
+                                       of atomizing a node with no typed value.</p></note>
                                     </item>
                                     <item>
                                        <p>Both element nodes are annotated as having simple content (as defined
                                           above), the <code>typed-values</code> option is false, 
-                                          and the equal-strings relation holds between the string value of <code>$i1</code> 
+                                          and the <code>equal-strings</code> function returns true when
+                                          applied to the string value of <code>$i1</code> 
                                           and the string value of <code>$i2</code>.</p>
                                     </item>
                                     <item>
-                                       <p>Both element nodes have a type annotation that is a complex type, 
+                                       <p>Both element nodes have a type annotation that is a complex type with
+                                          element-only, mixed, or empty content,
+                                          the (common) element name is not present in the <code>unordered-elements</code> option,
                                           and the sequence <code>significant-children($i1)</code> is
                                           deep-equal to the sequence <code>significant-children($i2)</code>.</p>
+                                    </item>
+                                    <item>
+                                       <p>Both element nodes have a type annotation that is a complex type with
+                                          element-only, mixed, or empty content,
+                                          the (common) element name is present in the <code>unordered-elements</code> option,
+                                          and the sequence <code>significant-children($i1)</code> is
+                                          deep-equal to some permutation of the sequence <code>significant-children($i2)</code>.</p>
+                                       <note>
+                                          <p>Elements annotated as <code>xs:untyped</code> fall into this category.</p>
+                                          <p>Including an element name in the <code>unordered-elements</code> list is unlikely
+                                          to be useful except when the relevant elements have element-only content, but
+                                          this is not a requirement: the rules apply equally to elements with mixed content,
+                                          or even (trivially) to elements with empty content.</p>
+                                       </note>
                                     </item>
                                  </olist>
                               </item>
@@ -12772,16 +12822,6 @@ else if (fn:empty($input))
                                  attribute nodes have the same type annotation.</p>
                               </item>
                               <item>
-                                 <p>The option <code>typed-value</code> is true and 
-                                    the typed value of <code>$i1</code> is deep-equal to the typed value of
-                                       <code>$i2</code>.</p>
-                              </item>
-                              <item>
-                                 <p>The option <code>typed-value</code> is false and 
-                                    the equal-strings relation holds between the string value of <code>$i1</code> 
-                                    and the string value of <code>$i2</code>.</p>
-                              </item>
-                              <item>
                                  <p>Either the option <code>id-property</code> is false, or both attribute nodes
                                     have the same value for their <code>is-id</code> property.</p>
                               </item>
@@ -12789,6 +12829,17 @@ else if (fn:empty($input))
                                  <p>Either the option <code>idrefs-property</code> is false, or both attribute nodes
                                     have the same value for their <code>is-idrefs</code> property.</p>
                               </item>
+                              <item>
+                                 <p>Either the option <code>typed-value</code> is false, or 
+                                    the typed value of <code>$i1</code> is deep-equal to the typed value of
+                                       <code>$i2</code>.</p>
+                              </item>
+                              <item>
+                                 <p>Either the option <code>typed-value</code> is true, or 
+                                    the <code>equal-strings</code> function returns true when applied to the string value of <code>$i1</code> 
+                                    and the string value of <code>$i2</code>.</p>
+                              </item>
+                              
                            </olist>
                         </item>
 
@@ -12800,7 +12851,8 @@ else if (fn:empty($input))
                                           node-name($i2))</code>.</p>
                                  </item>
                                  <item>
-                                    <p>The equal-strings relation holds between the string value of <code>$i1</code> 
+                                    <p>The <code>equal-strings</code> function returns true when applied to 
+                                       the string value of <code>$i1</code> 
                                        and the string value of <code>$i2</code>.</p>
                                  </item>
                               </olist>
@@ -12821,15 +12873,17 @@ else if (fn:empty($input))
                            passed explicitly to the <code>fn:deep-equal</code> function.</p></note>
                         </item>
                         <item>
-                           <p>Both nodes are comment nodes, and the equal-strings relation holds
-                              between their string values.</p>
+                           <p>Both nodes are comment nodes, and the <code>equal-strings</code> function 
+                              returns true when applied to their string values.</p>
                         </item>
                         <item>
-                           <p>Both nodes are text nodes, and the equal-strings relation holds
-                              between their string values.</p>
+                           <p>Both nodes are text nodes, and the <code>equal-strings</code> function 
+                              returns true when applied to their string values.</p>
                         </item>
                   </olist>
                   </item>
+                  <item><p>Either the <code>base-uri</code> option is false, or both nodes have the same value
+                     for their base URI property, or both nodes have an absent base URI.</p></item>
                </olist>
             </item>
          </olist>
@@ -12840,6 +12894,9 @@ else if (fn:empty($input))
                /> if either input
             sequence contains a function item <phrase>that is not a map or
                array</phrase>. </p>
+         <p>However, no error is raised if the <code>false-on-error</code> option has the
+         value true; in this case, the function returns false rather than raising an error.</p>
+
       </fos:errors>
       <fos:notes>
          <p>By default, two nodes are not required to have the same type annotation, and they are not
@@ -12858,9 +12915,11 @@ else if (fn:empty($input))
             or processing instruction, if it causes a text node to be split into two text nodes, may
             affect the result.</p>
          <p>Comparing items of different kind (for example, comparing an atomic
-            value to a node, or a map to an array, or an integer to an <code>xs:date</code>) returns false, it does not return an error. So
+            value to a node, or a map to an array, or an integer to an <code>xs:date</code>) returns false, 
+            it does not return an error. So
             the result of <code>fn:deep-equal(1, current-dateTime())</code> is <code>false</code>.</p>
-         <p>Comparing a function (other than a map or array) to any other value raises a type error.</p>
+         <p>Comparing a function (other than a map or array) to any other value raises a type error,
+         unless the error is suppressed using the <code>false-on-error</code> option.</p>
       </fos:notes>
       <fos:examples>
          <fos:variable name="at" id="v-deep-equal-at" as="element()"
@@ -12909,9 +12968,82 @@ else if (fn:empty($input))
                <fos:result>false()</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a xmlns='AA'/>"),
+    parse-xml("<p:a xmlns:p='AA'/>"))]]></eg></fos:expression>
+               <fos:result>true()</fos:result>
+               <fos:postamble>By default, namespace prefixes are ignored</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a xmlns='AA'/>"),
+    parse-xml("<p:a xmlns:p='AA'/>"),
+    options := map{'prefixes':true()})]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>False because the namespace prefixes differ</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a xmlns='AA'/>"),
+    parse-xml("<p:a xmlns:p='AA'/>"),
+    options := map{'in-scope-namespaces':true()})]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>False because the in-scope namespace bindings differ</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a><b/><c/></a>"),
+    parse-xml("<a><c/><b/></a>"))]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>By default, order of elements is significant</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<a><b/><c/></a>"),
+    parse-xml("<a><c/><b/></a>"),
+    options := map{'unordered-elements': fn:QName('a')})]]></eg></fos:expression>
+               <fos:result>true()</fos:result>
+               <fos:postamble>The <code>unordered-elements</code> option means that the ordering of the children
+               of <code>a</code> is ignored.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<para style="bold"><span>x</span></para>"),
+    parse-xml("<para style=" bold"> <span>x</span></para>"))]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>By default, both the leading whitespace in the <code>style</code> attribute
+                  and the whitespace text node preceding the <code>span</code> element are significant.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<para style="bold"><span>x</span></para>"),
+    parse-xml("<para style=" bold"> <span>x</span></para>"),
+    options := map{'normalize-space': true(), 'whitespace-text-nodes': false())]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>The <code>normalize-space</code> option ensures that the leading whitespace
+                  in the attribute value is ignored; the <code>whitespace-text-nodes</code> option
+                  causes the whitespace preceding the <code>span</code> element to be ignored.</fos:postamble>
+            </fos:test>
+         </fos:example>
       </fos:examples>
+      
       <fos:history>
-         <fos:version version="4.0">Options parameter added; not yet reviewed.</fos:version>
+         <fos:version version="4.0">Options parameter added. Approved in principle on 2023-01-31, subject
+            to further review.</fos:version>
       </fos:history>
    </fos:function>
    
@@ -16436,7 +16568,7 @@ else
          <fos:property>deterministic</fos:property>
          <fos:property>context-dependent</fos:property>
          <fos:property>focus-dependent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
@@ -16552,7 +16684,7 @@ else
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns the name of the function identified by a function item.</p>
@@ -16594,7 +16726,7 @@ else
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns the arity of the function identified by a function item.</p>
@@ -16636,7 +16768,7 @@ else
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Applies the function item <code>$action</code> to every item from the sequence <var>$input</var>
@@ -16699,7 +16831,7 @@ declare function fn:for-each($input, $action) {
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns those items from the sequence <code>$input</code> for which the supplied function
@@ -16772,7 +16904,7 @@ declare function fn:filter(
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Processes the supplied sequence from left to right, applying the supplied function
@@ -16899,7 +17031,7 @@ declare function fn:fold-left(
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
@@ -16992,7 +17124,7 @@ declare function fn:fold-right(
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Processes a supplied value repeatedly, continuing while some condition remains true,
@@ -17107,7 +17239,7 @@ return $map?numbers
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Applies the function item <code>$action</code> to successive pairs of items taken one from
@@ -17194,7 +17326,7 @@ declare function fn:for-each-pair($input1, $input2, $action)
          <fos:property>deterministic</fos:property>
          <fos:property dependency="collations">context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
 
 
@@ -17324,7 +17456,7 @@ return fn:sort($in, $SWEDISH)
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Makes a dynamic call on a function with an argument list supplied in the form of an array.</p>
@@ -17371,7 +17503,7 @@ return fn:sort($in, $SWEDISH)
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns a function whose effect is to apply a supplied binary operator to two arguments.</p>
@@ -17422,11 +17554,11 @@ return fn:sort($in, $SWEDISH)
          <fos:version version="4.0">New in 4.0. Accepted 2022-10-11.</fos:version>
       </fos:history>
    </fos:function>
-   <fos:function name="same-key" prefix="op">
+   <fos:function name="atomic-equal" prefix="fn" diff="chg" at="2023-01-25">
       <fos:signatures>
-         <fos:proto name="same-key" return-type="xs:boolean">
-            <fos:arg name="k1" type="xs:anyAtomicType"/>
-            <fos:arg name="k2" type="xs:anyAtomicType"/>
+         <fos:proto name="atomic-equal" return-type="xs:boolean">
+            <fos:arg name="value1" type="xs:anyAtomicType"/>
+            <fos:arg name="value2" type="xs:anyAtomicType"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -17435,15 +17567,21 @@ return fn:sort($in, $SWEDISH)
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Determines whether two atomic values can coexist as separate keys within a map.</p>
+         <p>Determines whether two atomic values are equal, under the rules used for comparing keys in a map.</p>
       </fos:summary>
       <fos:rules>
-         <p>The internal function <code>op:same-key</code> (which is not available at the user level) is used to assess whether two atomic
-            values are considered to be duplicates when used as keys in a map. A map cannot
-         contain two separate entries whose keys are <term>the same</term> as defined by this function. 
-         The function is also used when matching keys in functions such as <code>map:get</code>
-         and <code>map:remove</code>.</p>
-
+         <p>The function <code>fn:atomic-equal</code> is used to compare two atomic values for equality. This function
+         has the following properties (which do not all apply to the <code>eq</code> operator):</p>
+         <ulist>
+            <item><p>Any two atomic values can be compared, regardless of their type.</p></item>
+            <item><p>No dynamic error is ever raised (the result is either true or false).</p></item>
+            <item><p>The result of the comparison never depends on the static or dynamic context.</p></item>
+            <item><p>Every value (including <code>NaN</code>) is equal to itself.</p></item>
+            <item><p>The comparison is symmetric: if <var>A</var> equals <var>B</var>, then <var>B</var> equals <var>A</var>.</p></item>
+            <item><p>The comparison is transitive: if <var>A</var> equals <var>B</var> and <var>B</var> equals <var>C</var>,
+               then <var>A</var> equals <var>C</var>.</p></item>
+         </ulist>
+         
          <p>The function returns true if and only if one of the following conditions is true:</p>
 
          <olist>
@@ -17451,14 +17589,14 @@ return fn:sort($in, $SWEDISH)
                <p>All of the following conditions are true:</p>
                <olist>
                   <item>
-                     <p><code>$k1</code> is an instance of <code>xs:string</code>, <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code></p>
+                     <p><code>$value1</code> is an instance of <code>xs:string</code>, <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code></p>
                   </item>
                   <item>
-                     <p><code>$k2</code> is an instance of <code>xs:string</code>, <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code></p>
+                     <p><code>$value2</code> is an instance of <code>xs:string</code>, <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code></p>
                   </item>
                   <item>
                      <p>
-                        <code>fn:codepoint-equal($k1, $k2)</code>
+                        <code>fn:codepoint-equal($value1, $value2)</code>
                      </p>
                   </item>
                </olist>
@@ -17470,34 +17608,34 @@ return fn:sort($in, $SWEDISH)
                <p>All of the following conditions are true:</p>
                <olist>
                   <item>
-                     <p><code>$k1</code> is an instance of <code>xs:decimal</code>, <code>xs:double</code>, or <code>xs:float</code></p>
+                     <p><code>$value1</code> is an instance of <code>xs:decimal</code>, <code>xs:double</code>, or <code>xs:float</code></p>
                   </item>
                   <item>
-                     <p><code>$k2</code> is an instance of <code>xs:decimal</code>, <code>xs:double</code>, or <code>xs:float</code></p>
+                     <p><code>$value2</code> is an instance of <code>xs:decimal</code>, <code>xs:double</code>, or <code>xs:float</code></p>
                   </item>
                   <item>
                      <p>One of the following conditions is true:</p>
                      <olist>
                         <item>
-                           <p>Both <code>$k1</code> and <code>$k2</code> are <code>NaN</code></p>
+                           <p>Both <code>$value1</code> and <code>$value2</code> are <code>NaN</code></p>
                            <note>
                               <p><code>xs:double('NaN')</code> is the same key as <code>xs:float('NaN')</code></p>
                            </note>
                         </item>
                         <item>
-                           <p>Both <code>$k1</code> and <code>$k2</code> are positive infinity</p>
+                           <p>Both <code>$value1</code> and <code>$value2</code> are positive infinity</p>
                            <note>
                               <p><code>xs:double('INF')</code> is the same key as <code>xs:float('INF')</code></p>
                            </note>
                         </item>
                         <item>
-                           <p>Both <code>$k1</code> and <code>$k2</code> are negative infinity</p>
+                           <p>Both <code>$value1</code> and <code>$value2</code> are negative infinity</p>
                            <note>
                               <p><code>xs:double('-INF')</code> is the same key as <code>xs:float('-INF')</code></p>
                            </note>
                         </item>
                         <item>
-                           <p><code>$k1</code> and <code>$k2</code> when converted to decimal numbers with no rounding or loss of precision
+                           <p><code>$value1</code> and <code>$value2</code> when converted to decimal numbers with no rounding or loss of precision
                            are mathematically equal.</p>
                            <note>
                               <p>Every instance of <code>xs:double</code>, <code>xs:float</code>, and <code>xs:decimal</code> can be represented
@@ -17506,7 +17644,7 @@ return fn:sort($in, $SWEDISH)
                               comparison is transitive.</p>
                            </note>
                            <note>
-                              <p>Positive and negative zero are the same key.</p>
+                              <p>Positive and negative zero compare equal.</p>
                            </note>
                         </item>
                      </olist>
@@ -17514,31 +17652,32 @@ return fn:sort($in, $SWEDISH)
                </olist>
 
             </item>
+
             <item>
                <p>All of the following conditions are true:</p>
                <olist>
                   <item>
-                     <p><code>$k1</code> is an instance of <code>xs:date</code>, <code>xs:time</code>, <code>xs:dateTime</code>,
+                     <p><code>$value1</code> is an instance of <code>xs:date</code>, <code>xs:time</code>, <code>xs:dateTime</code>,
                      <code>xs:gYear</code>, <code>xs:gYearMonth</code>, <code>xs:gMonth</code>, <code>xs:gMonthDay</code>, or <code>xs:gDay</code></p>
                   </item>
                   <item>
-                     <p><code>$k2</code> is an instance of <code>xs:date</code>, <code>xs:time</code>, <code>xs:dateTime</code>,
+                     <p><code>$value2</code> is an instance of <code>xs:date</code>, <code>xs:time</code>, <code>xs:dateTime</code>,
                      <code>xs:gYear</code>, <code>xs:gYearMonth</code>, <code>xs:gMonth</code>, <code>xs:gMonthDay</code>, or <code>xs:gDay</code></p>
                   </item>
                   <item>
                      <p>One of the following conditions is true:</p>
                      <olist>
                         <item>
-                           <p>Both <code>$k1</code> and <code>$k2</code> have a timezone</p>
+                           <p>Both <code>$value1</code> and <code>$value2</code> have a timezone</p>
                         </item>
                         <item>
-                           <p>Neither <code>$k1</code> nor <code>$k2</code> has a timezone</p>
+                           <p>Neither <code>$value1</code> nor <code>$value2</code> has a timezone</p>
                         </item>
                      </olist>
                   </item>
                   <item>
                      <p>
-                        <code>fn:deep-equal($k1, $k2)</code>
+                        <code>fn:deep-equal($value1, $value2)</code>
                      </p>
                      <note>
                         <p>The use of <code>deep-equal</code> rather than <code>eq</code> ensures that comparing values of different
@@ -17547,25 +17686,23 @@ return fn:sort($in, $SWEDISH)
                   </item>
 
                </olist>
-               <note>
-                  <p>Unlike the <code>eq</code> operator, this comparison has no dependency on the implicit timezone, which means that
-                  the question of whether or not a map contains duplicate keys is not dependent on this aspect of the dynamic context.</p>
-               </note>
+               
             </item>
+            
             <item>
                <p>All of the following conditions are true:</p>
                <olist>
                   <item>
-                     <p><code>$k1</code> is an instance of <code>xs:boolean</code>, <code>xs:hexBinary</code>, <code>xs:base64Binary</code>,
+                     <p><code>$value1</code> is an instance of <code>xs:boolean</code>, <code>xs:hexBinary</code>, <code>xs:base64Binary</code>,
                      <code>xs:duration</code>, <code>xs:QName</code>, or <code>xs:NOTATION</code></p>
                   </item>
                   <item>
-                     <p><code>$k2</code> is an instance of <code>xs:boolean</code>, <code>xs:hexBinary</code>, <code>xs:base64Binary</code>,
+                     <p><code>$value2</code> is an instance of <code>xs:boolean</code>, <code>xs:hexBinary</code>, <code>xs:base64Binary</code>,
                      <code>xs:duration</code>, <code>xs:QName</code>, or <code>xs:NOTATION</code></p>
                   </item>
                   <item>
                      <p>
-                        <code>fn:deep-equal($k1, $k2)</code>
+                        <code>fn:deep-equal($value1, $value2)</code>
                      </p>
                      <note>
                         <p>The use of <code>deep-equal</code> rather than <code>eq</code> ensures that comparing values of different
@@ -17579,6 +17716,17 @@ return fn:sort($in, $SWEDISH)
       </fos:rules>
 
       <fos:notes>
+         <p>The internal function <code role="example">op:same-key</code> was introduced in an earlier version of this specification
+            for comparing keys within a map.
+            In this version of the specification, the functionality is unchanged, but the function is exposed so that it
+            is available directly to applications.</p>
+         
+         <p>The function is used to assess whether two atomic
+            values are considered to be duplicates when used as keys in a map. A map cannot
+            contain two separate entries whose keys are <term>the same</term> as defined by this function. 
+            The function is also used when matching keys in functions such as <code>map:get</code>
+            and <code>map:remove</code>.</p>
+         
          <p>The rules for comparing keys in a map are chosen to ensure that the comparison is:</p>
          <ulist>
             <item>
@@ -17592,12 +17740,55 @@ return fn:sort($in, $SWEDISH)
                then <var>A</var> is the same key as <var>C</var>.</p>
             </item>
          </ulist>
+         <p>Two atomic values may be distinguishable even though they are equal under this comparison. For example: they may have
+         different type annotations; dates and times may have different timezones; <code>xs:QName</code> values may have different
+         prefixes.</p>
          <p>As always, any algorithm that delivers the right result is acceptable. For example, when testing whether an <code>xs:double</code>
          value <var>D</var> is the same key as an <code>xs:decimal</code> value that has <var>N</var> significant digits, it is not
          necessary to know all the digits in the decimal expansion of <var>D</var> to establish the result: computing the first <var>N+1</var> 
             significant digits (or indeed, simply knowing that there are more than <var>N</var> significant digits) is sufficient.</p>
       </fos:notes>
-
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>fn:atomic-equal(3, 3)</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal(3, 3e0)</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal(xs:double('NaN'), xs:float('NaN'))</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal("a", "a")</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal("a", "A")</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal("a", xs:untypedAtomic("a"))</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal("https://www.w3.org/", xs:anyURI("https://www.w3.org/"))</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>fn:atomic-equal(12, "12")</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Proposed for 4.0; the function is identical to the internal <code>op:same-key</code>
+         function in 3.1</fos:version>
+      </fos:history>
+      
    </fos:function>
 
    <fos:function name="merge" prefix="map">
@@ -18310,11 +18501,11 @@ map:merge(for $b in //book return map:entry($b/isbn, $b))]]></eg>
             that key value is simply ignored</phrase>.</p>
          <p>The effect of the function call <code>map:remove($MAP, $KEY)</code> can be described more formally as the result of the expression below:</p>
 
-         <eg><![CDATA[
+         <eg diff="chg" at="2023-01-25"><![CDATA[
 map:merge (
     map:for-each (
        $MAP, -> $k, $v { 
-               if (some $key in $KEY satisfies (op:same-key($k, $key)) 
+               if (some $key in $KEY satisfies (fn:atomic-equal($k, $key)) 
                then () 
                else map:entry($k, $v)
              } ) ) ]]></eg>
@@ -18358,7 +18549,7 @@ map:merge (
          <fos:property>nondeterministic-wrt-ordering</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Applies a supplied function to every entry in a map, returning the concatenation of the
@@ -18433,7 +18624,7 @@ return
       <fos:properties>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Selects entries from a map, returning a new map.</p>
@@ -18483,7 +18674,7 @@ return
       <fos:properties>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns a map based on the contents of an existing map, computing a new value to be associated
@@ -18536,7 +18727,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
       <fos:properties>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Applies a supplied function to every entry in a map, returning a map whose entries
@@ -18585,7 +18776,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns a map that typically contains one entry for each item in a supplied input sequence.</p>
@@ -21152,7 +21343,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns an array whose size is the same as <code>array:size($array)</code>, in which
@@ -21204,7 +21395,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns an array containing those members of the <code>$array</code> for which 
@@ -21253,7 +21444,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Evaluates the supplied function cumulatively on successive members of the supplied
@@ -21309,7 +21500,7 @@ else array:fold-left(array:tail($array),
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Evaluates the supplied function cumulatively on successive values of the supplied
@@ -21367,7 +21558,7 @@ else $action( array:head($array),
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns an array obtained by evaluating the supplied function once for each pair of members at the same position in
@@ -21416,7 +21607,7 @@ else array:concat(
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns an array obtained by evaluating the supplied function once for each item in the input sequence.</p>
@@ -21590,7 +21781,7 @@ else array:concat(
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns an array containing all the members of the supplied array, sorted 
@@ -22015,7 +22206,7 @@ return array:sort($in, $SWEDISH)
          <fos:property>deterministic</fos:property>
          <fos:property>context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Provides access to the public functions and global variables of a dynamically loaded XQuery library module.</p>
@@ -22999,7 +23190,7 @@ return $result?output//body
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         <fos:property>higher-order</fos:property>
+         
       </fos:properties>
       <fos:summary>
          <p>Returns a random number generator, which can be used to generate sequences of random numbers.</p>
