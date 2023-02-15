@@ -356,7 +356,6 @@
                 <xsl:if test="@type-ref">
                   <code class="as">as&#160;</code>
                   <code>
-                    <span class="dagger">†</span>
                     <a href="#{@type-ref}">
                       <xsl:value-of select="@type-ref"/>
                     </a>
@@ -394,7 +393,6 @@
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
                   </xsl:when>
                   <xsl:when test="@return-type-ref">
-                    <span class="dagger">†</span>
                     <a href="#{@return-type-ref}">
                       <xsl:value-of select="@return-type-ref"/>
                     </a>
@@ -421,7 +419,6 @@
       <tr>
         <td colspan="2">
           <code id="{$id}" class="return-type-ref">
-            <span class="dagger">†</span>
             <xsl:value-of select="$id"/>
           </code>
           <xsl:text>:</xsl:text>
@@ -449,7 +446,6 @@
             </xsl:if>
             <xsl:if test="@type-ref">
               <code class="as">&#160;as&#160;</code>
-              <span class="dagger">†</span>
               <a href="#{@type-ref}">
                 <xsl:value-of select="@type-ref"/>
               </a>
