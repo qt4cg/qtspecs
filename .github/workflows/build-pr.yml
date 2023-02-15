@@ -4,66 +4,13 @@ on:
     types: [assigned, opened, edited, synchronize, reopened]
     branches:
       - master
-
 jobs:
-  check_branch:
-    runs-on: ubuntu-latest
-    outputs:
-      branch: ${{ steps.check_step.outputs.branch }}
-      reponame: ${{ steps.check_step.outputs.reponame }}
-      tag: ${{ steps.check_step.outputs.tag }}
-      mbase: ${{ steps.get_mb.outputs.mbase }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Get branch name, etc.
-        id: check_step
-        run: |
-          raw=${{ github.repository }}
-          reponame=${raw##*/}
-          echo "reponame=$reponame" >> $GITHUB_OUTPUT
-          raw=$(git branch -r --contains ${{ github.ref }})
-          branch=${raw##*/}
-          echo "branch=$branch" >> $GITHUB_OUTPUT
-          tag=""
-          if [ ${{ github.ref_type }} = "tag" ]; then
-            tag=${{ github.ref_name }}
-            echo "Running in $reponame on $branch for $tag"
-          else
-            echo "Running in $reponame on $branch"
-          fi
-          echo "tag=$tag" >> $GITHUB_OUTPUT
-
-      - name: Get the master branch
-        uses: actions/checkout@v3
-        with:
-          ref: master
-          fetch-depth: 0
-
-      - name: Get the merge base
-        id: get_mb
-        run: |
-          mb=$(git merge-base master ${{ github.event.pull_request.head.sha }})
-          echo "mbase=$mb" >> $GITHUB_OUTPUT
-
   build-and-deploy-pr:
     runs-on: ubuntu-latest
-    needs: check_branch
     env:
       HAVE_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN != '' }}
       AUTODIFF: ${{ secrets.DIFFURI != '' && secrets.DIFFPW != '' }}
       PR_NUMBER: ${{ github.event.number }}
-      CIWORKFLOW: yes
-      CI_SHA1: ${{ github.sha }}
-      CI_BUILD_NUM: ${{ github.run_number }}
-      CI_PROJECT_USERNAME: ${{ github.repository_owner }}
-      CI_PROJECT_REPONAME: ${{ needs.check_branch.outputs.reponame }}
-      CI_BRANCH: ${{ needs.check_branch.outputs.branch }}
-      CI_TAG: ${{ needs.check_branch.outputs.tag }}
-      MBASE: ${{ needs.check_branch.outputs.mbase }}
     steps:
       - name: Install dependencies
         run: sudo apt-get install tidy rsync graphviz
@@ -86,10 +33,8 @@ jobs:
           find /tmp/pr-sources -type f -name "build*.xml" -exec rm {} \;
           find /tmp/pr-sources -type f -name "*.xsl" -exec rm {} \;
 
-      - name: Checkout the merge-base
+      - name: Checkout
         uses: actions/checkout@v3
-        with:
-          ref: ${{ needs.check_branch.outputs.mbase }}
 
       - name: Update XML
         run: rsync -var /tmp/pr-sources/ ./
