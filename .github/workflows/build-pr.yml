@@ -4,9 +4,55 @@ on:
     types: [assigned, opened, edited, synchronize, reopened]
     branches:
       - master
+
 jobs:
+  check_branch:
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.check_step.outputs.branch }}
+      reponame: ${{ steps.check_step.outputs.reponame }}
+      tag: ${{ steps.check_step.outputs.tag }}
+      mbase: ${{ steps.get_mb.outputs.mbase }}
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get branch name, etc.
+        id: check_step
+        run: |
+          raw=${{ github.repository }}
+          reponame=${raw##*/}
+          echo "reponame=$reponame" >> $GITHUB_OUTPUT
+          raw=$(git branch -r --contains ${{ github.ref }})
+          branch=${raw##*/}
+          echo "branch=$branch" >> $GITHUB_OUTPUT
+          tag=""
+          if [ ${{ github.ref_type }} = "tag" ]; then
+            tag=${{ github.ref_name }}
+            echo "Running in $reponame on $branch for $tag"
+          else
+            echo "Running in $reponame on $branch"
+          fi
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+
+      - name: Checkout the pull request
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Get the merge-base for this PR
+        id: get_mb
+        run: |
+          git checkout master
+          mb=$(git merge-base master ${{ github.event.pull_request.head.sha }})
+          echo "mbase=$mb" >> $GITHUB_OUTPUT
+
   build-and-deploy-pr:
     runs-on: ubuntu-latest
+    needs: check_branch
     env:
       HAVE_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN != '' }}
       AUTODIFF: ${{ secrets.DIFFURI != '' && secrets.DIFFPW != '' }}
@@ -33,8 +79,10 @@ jobs:
           find /tmp/pr-sources -type f -name "build*.xml" -exec rm {} \;
           find /tmp/pr-sources -type f -name "*.xsl" -exec rm {} \;
 
-      - name: Checkout
+      - name: Checkout the merge base branch
         uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.check_branch.outputs.mbase }}
 
       - name: Update XML
         run: rsync -var /tmp/pr-sources/ ./
