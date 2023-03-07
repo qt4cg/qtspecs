@@ -24200,7 +24200,8 @@ declare function fn:some(
          In addition to parsing URIs as defined by <bibref ref="rfc3986"/>
          (and <bibref ref="rfc3987"/>), this function also attempts to
          account for strings that are not valid URIs but that often appear
-         in URI-adjacent spaces, such as file names.</p>
+         in URI-adjacent spaces, such as file names. Not all such strings
+         can be successfully parsed as URIs.</p>
 
          <p>This function is described as a series of transformations
          over the input string to identify the parts of a URI that are
@@ -24209,10 +24210,37 @@ declare function fn:some(
          the description clear and unambiguous, it is not implementation
          advice.</p>
 
-         <p>Begin with a <emph>string</emph> that is equal to the <code>$uri</code>.
-         If the <emph>string</emph> contains any backlashes
-         (“<code>\</code>”), replace them with forward slashes
-         (“<code>/</code>”).</p>
+         <p>The following options are available:</p>
+
+         <fos:options>
+            <fos:option key="path-separator">
+               <fos:meaning>Identifies the path separator</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>/</fos:default>
+            </fos:option>
+            <fos:option key="query-separator">
+               <fos:meaning>Identifies the query separator</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>&amp;</fos:default>
+            </fos:option>
+            <fos:option key="allow-deprecated-features">
+               <fos:meaning>Indicates that deprecated URI
+               features should be returned</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+            </fos:option>
+            <fos:option key="omit-default-ports">
+               <fos:meaning>Indicates that a port number that is the same as
+               the default port for a given scheme should be omitted.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+            </fos:option>
+         </fos:options>
+
+         <p>Processing begins with a <emph>string</emph> that is equal
+         to the <code>$uri</code>. If the <emph>string</emph> contains
+         any backlashes (“<code>\</code>”), replace them with forward
+         slashes (“<code>/</code>”).</p>
 
          <p>If the <emph>string</emph> matches <code>^(.*)#([^#]*)$</code>,
          the <emph>string</emph> is the first match group and the
@@ -24248,32 +24276,87 @@ declare function fn:some(
          <p>If the <emph>authority</emph> matches
          <code>(([^@]*)@)(.*)(:([^:]*))?$</code>,
          then the <emph>userinfo</emph> is match group 2, otherwise
-         <emph>userinfo</emph> is the empty sequence.</p>
+         <emph>userinfo</emph> is the empty sequence. If
+         <emph>userinfo</emph> is present and contains a non-empty password, then
+         <emph>userinfo</emph> is discarded and set to the empty sequence
+         unless the <code>allow-deprecated-features</code> option is true.</p>
 
-         <p>If the <emph>authority</emph> matches
-         <code>(([^@]*)@)?(.+)(:([^:]*))?$</code>,
-         then the <emph>host</emph> is match group 3, otherwise
-         <emph>host</emph> is the empty sequence.</p>
+         <p>When parsing the <emph>authority</emph> to find the <emph>host</emph>,
+         there are four possibilities: the host can be a registered name (e.g.,
+         <code>example.com</code>), an IPv4 address (e.g., <code>127.0.0.1</code>),
+         an IPv6 (or IPvFuture) address (e.g., <code>[::1]</code>), or an error
+         if there is an open square bracket (<code>[</code>) not matched by a
+         close square bracket (<code>]</code>). In a properly
+         constructed RFC 3986 URI, the only place where square
+         brackets may occur is around the IPv6/IPvFuture IP address.</p>
 
-         <p>If the <emph>authority</emph> matches
-         <code>(([^@]*)@)?(.*)(:([^:]*))$</code>,
-         then the <emph>port</emph> is match group 5, otherwise
-         <emph>port</emph> is the empty sequence.</p>
+         <olist>
+            <item>
+               <p>If the <emph>authority</emph> matches
+               <code>(([^@]*)@)?(\[[^\]]*\])(:([^:]*))?$</code>,
+               then the <emph>host</emph> is match group 3, otherwise
+               </p>
+            </item>
+            <item>
+               <p>If the <emph>authority</emph> matches
+               <code>(([^@]*)@)?\[.*$</code>
+               then <errorref class="UR" code="0001"/> is raised, otherwise
+               </p>
+            </item>
+            <item>
+               <p>If the <emph>authority</emph> matches
+               <code>(([^@]*)@)?([^:]+)(:([^:]*))?$</code>,
+               then the <emph>host</emph> is match group 3, otherwise
+               </p>
+            </item>
+            <item>
+               <p>the <emph>host</emph> is the empty sequence.</p>
+            </item>
+         </olist>
+
+         <p>This function doesn’t attempt to decode the components of the
+         <emph>host</emph>.</p>
+
+         <p>Similar care must be taken to match the port because an IPv6/IPvFuture
+         address may contain a colon.</p>
+
+         <olist>
+            <item>
+               <p>If the <emph>authority</emph> matches
+               <code>(([^@]*)@)?(\[[^\]]*\])(:([^:]*))?$</code>,
+               then the <emph>port</emph> is match group 5, otherwise
+               </p>
+            </item>
+            <item>
+               <p>If the <emph>authority</emph> matches
+               <code>(([^@]*)@)?([^:]+)(:([^:]*))?$</code>,
+               then the <emph>port</emph> is match group 5, otherwise
+               </p>
+            </item>
+            <item>
+               <p>the <emph>port</emph> is the empty sequence.</p>
+            </item>
+         </olist>
+
+         <p>If the “<code>omit-default-ports</code>” option is true then the port
+         is discarded and set to the empty sequence if the port number is the same
+         as the default port for the given scheme. Implementations <rfc2119>should</rfc2119>
+         recognize the default ports for <code>http</code> (80), <code>https</code> (443),
+         <code>ftp</code> (21), and <code>ssh</code> (22). Exactly which ports are
+         recognized
+         is <termref def="implementation-defined">implementation-defined</termref>.
+         </p>
 
          <p>If the <emph>string</emph> is the empty string, then
          <emph>path</emph> is the empty sequence, otherwise the <emph>path</emph>
          is the whole <emph>string</emph>.</p>
 
-         <p>If the <code>$options</code> map contains a key named
-         “<code>path-separator</code>”, the value of that key is the
-         <emph>path separator</emph> otherwise the separator is
-         a single slash (“<code>/</code>”). It is a dynamic error XXXX if the key
-         is present and it’s value is not a string of length one.</p>
-
-         <p>A <emph>path-segments</emph> array is constructed as follows: tokenize the
-         <emph>string</emph> on the <emph>path separator</emph>,
-         apply <emph>uri decoding</emph> on each token, and convert
-         the result to an array.</p>
+         <p>The <emph>path separator</emph> is the value of the
+         “<code>path-separator</code>” option. A
+         <emph>path-segments</emph> array is constructed as follows:
+         tokenize the <emph>string</emph> on the <emph>path
+         separator</emph>, apply <emph>uri decoding</emph> on each
+         token, and convert the result to an array.</p>
 
          <p>Applying <emph>uri decoding</emph> replaces all occurrences of
          plus (“<code>+</code>”) with spaces and all occurrences of
@@ -24286,13 +24369,9 @@ declare function fn:some(
          codepoint 0xfffd. In other words “<code>A%XYC%Z</code>” becomes
          “<code>A&#xfffd;C&#xfffd;</code>”.</p>
 
-         <p>If the <code>$options</code> map contains a key named
-         “<code>query-separator</code>”, the value of that key is the
-         <emph>query separator</emph> otherwise the separator is
-         a single ampersand (“<code>&amp;</code>”). It is a dynamic error XXXX if the key
-         is present and it’s value is not a string of length one.</p>
-
-         <p>A <emph>query-segments</emph> is constructed as follows: tokenize
+         <p>The <emph>query separator</emph> is the value of the
+         “<code>query-separator</code>” option.
+         A <emph>query-segments</emph> value is constructed as follows: tokenize
          the <emph>query</emph> on the <emph>query separator</emph>. For each
          token, construct a map. If the token contains an equal sign (“=”),
          the map contains a key named <code>key</code> with a value equal to the
@@ -24328,15 +24407,12 @@ declare function fn:some(
          to parse <code>jar:</code> URIs with special rules, for example, since they extend the
          syntax in ways not defined by <bibref ref="rfc3986"/>. Implementations may add
          additional keys to the map. The meaning of those keys is implementation-defined.</p>
-
-         <p>TODO: In order to better support implementation extensibility, should the
-         keys in the map be QNames with the requirement that implementation-defined
-         keys be in a non-empty namespace?</p>
       </fos:rules>
-      
+
       <fos:errors>
-         <p>An error is raised XXXX if the supplied path separator is not a single character.</p>
-         <p>An error is raised XXXX if the supplied query separator is not a single character.</p>
+         <p>A dynamic error is raised <errorref class="UR" code="0001"/> if
+         the URI contains an open square bracket in the authority component that
+         is not followed by a close square bracket.</p>
       </fos:errors>
 
       <fos:notes>
@@ -24349,8 +24425,6 @@ declare function fn:some(
          accept strings that would raise errors if resolution was attempted,
          see <code>fn:build-uri</code>.</p>
       </fos:notes>
-
-      
       
 <fos:examples>
   <fos:example>
@@ -24752,28 +24826,86 @@ fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;sort=relevance",
       </fos:summary>
 
       <fos:rules>
-        <p>A URI is composed from a scheme, authority, path, query, and fragment.
-        These components are derived from the contents of the <code>$parts</code>
+        <p>A URI is composed from a scheme, authority, path, query, and fragment.</p>
+
+        <p>The following options are available:</p>
+
+        <fos:options>
+           <fos:option key="path-separator">
+              <fos:meaning>Identifies the path separator</fos:meaning>
+              <fos:type>xs:string</fos:type>
+              <fos:default>/</fos:default>
+           </fos:option>
+           <fos:option key="query-separator">
+              <fos:meaning>Identifies the query separator</fos:meaning>
+              <fos:type>xs:string</fos:type>
+              <fos:default>&amp;</fos:default>
+           </fos:option>
+           <fos:option key="allow-deprecated-features">
+              <fos:meaning>Indicates that deprecated URI
+              features should be returned</fos:meaning>
+              <fos:type>xs:boolean</fos:type>
+              <fos:default>false()</fos:default>
+           </fos:option>
+           <fos:option key="omit-default-ports">
+              <fos:meaning>Indicates that a port number that is the same as
+              the default port for a given scheme should be omitted.</fos:meaning>
+              <fos:type>xs:boolean</fos:type>
+              <fos:default>false()</fos:default>
+           </fos:option>
+        </fos:options>
+
+        <p>The components are derived from the contents of the <code>$parts</code>
         map in the following way:</p>
 
         <p>If the <code>scheme</code> key is present in the map, the URI begins
-        with the value of that key concatenated with <code>//</code>, otherwise
-        it begins <code>//</code>.</p>
+        with the value of that key. For schemes that are known to be non-hierarchical
+        (<code>urn</code>, <code>mailto</code>, etc.), the scheme is delimited by
+        a trailing <code>:</code>, for all other schemes, it is delimited by
+        a trailing <code>://</code>. Exactly which schemes are known to be
+        non-hierarchical is
+        <termref def="implementation-defined">implementation-defined</termref>.
+        If the <code>scheme</code> key is not present
+        in the map, the URI begins with <code>//</code>.</p>
 
-        <p>If any of <code>userinfo</code>, <code>host</code>, or <code>port</code>
-        are present in the map, the following authority is added to the URI
+        <p>For simplicity of exposition, we take the
+        <code>userinfo</code>, <code>host</code>, and
+        <code>port</code> values from the map and imagine they are
+        stored in variables with the same name. If the key is not
+        present in the map, the value of the variable is set to the
+        empty sequence.</p>
+
+        <p>If <code>$userinfo</code> is non-empty and contains a
+        non-empty password, then <code>$userinfo</code> is set to the
+        empty sequence unless the
+        <code>allow-deprecated-features</code> option is true.</p>
+
+        <p>If the “<code>omit-default-ports</code>” option is true
+        then the <code>$port</code> is set to the empty sequence if
+        the port number is the same as the default port for the given
+        scheme. Implementations <rfc2119>should</rfc2119> recognize
+        the default ports for <code>http</code> (80),
+        <code>https</code> (443), <code>ftp</code> (21), and
+        <code>ssh</code> (22). Exactly which ports are recognized is
+        <termref def="implementation-defined">implementation-defined</termref>.
+        </p>
+
+        <p>If any of <code>$userinfo</code>, <code>$host</code>, or <code>$port</code>
+        exist, the following authority is added to the URI
         under construction:
-        <eg>concat((if (exists($parts?userinfo)) then $parts?userinfo || "@" else ""),
+        <eg>concat((if (exists($userinfo)) then $userinfo || "@" else ""),
        $host,
-       (if (exists($parts?port)) then ":" || $parts?port else ""))</eg></p>
+       (if (exists($port)) then ":" || $port else ""))</eg></p>
 
         <p>If none of <code>userinfo</code>, <code>host</code>, or <code>port</code>
         is present, and <code>authority</code> is present, the value of the
-        <code>authority</code> key is added to the URI.</p>
+        <code>authority</code> key is added to the URI. (In this case, no attempt
+        is made to determine if a password or standard port are present,
+        the <code>authority</code> value is simply added to the string.)</p>
 
         <p>If the <code>path-segments</code> key exists in the map, then the
         path is constructed
-        with <code>string-join($parts?path-segments ! encode-for-uri(.), "/")</code>,
+        with <code>string-join($parts?path-segments ! encode-for-uri(.), $options?path-separator)</code>,
         otherwise the value of the <code>path</code> key is used.
         If the <code>path</code> value is the empty sequence,
         the empty string is used for the path. The path is added to the URI.</p>
@@ -24785,7 +24917,7 @@ fn:parse-uri("https://example.com:8080/path?s=%22hello world%22;sort=relevance",
         an equal sign (“<code>=</code>”), and the value of the <code>value</code>. If it contains
         only one of those keys, then it is the value of that key. If it contains
         neither, it is ignored. The query is constructed by joining the resulting
-        strings into a single string, separated by ampersands (“<code>&amp;</code>”).
+        strings into a single string, separated by <code>$options?query-separator</code>).
         If the <code>query-segments</code> key does not exist in the map, but
         the <code>query</code> key does, then the query is the value of the
         <code>query</code> key. If there’s a query, it is added to the URI with
