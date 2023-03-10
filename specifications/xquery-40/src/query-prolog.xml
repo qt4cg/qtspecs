@@ -1497,42 +1497,76 @@ declare context item as element(env:Envelope) external;</eg>
         with the same name. The type of a function parameter can be any type that can be expressed as
         a <termref def="dt-sequence-type">sequence type</termref>.</p>
       
-      <p diff="add" at="2023-02-27">When a default value is supplied for a function parameter (using the syntax <code>:= ExprSingle</code>),
+      <p diff="add" at="2023-03-10">When a default value is supplied for a function parameter (using the syntax <code>:= ExprSingle</code>),
       the static and dynamic context for evaluating the <code>ExprSingle</code> are the same as the static
       and dynamic context for evaluating the <termref def="dt-initializing-expression"/> of a 
-        <termref def="dt-variable-declaration"/>, with one addition, a zero-arity function named <code>fn:caller-context</code>,
-      defined as follows:</p>
+        <termref def="dt-variable-declaration"/>, with one addition, a variable named <code>context</code>,
+        which holds information about the static and dynamic context of the function call (or function reference)
+        that causes the default value to be evaluated.</p>
       
-      <ulist>
-        <item><p>The name of the function has local part <code>caller-context</code> and namespace
-        <code>http://www.w3.org/2005/xpath-functions</code>.</p></item>
-        <item><p>The type of the function is:</p>
-        <eg>function() as record(
-   context-item? as (function() as item()), 
-   position? as (function() as xs:integer), 
-   last? as (function() as xs:integer),
-   default-collation? as (function() as xs:anyURI),
-   *)</eg></item>
-        <item><p>The function provides access to information about the static and dynamic context of the function
-        call or function reference that caused the function to be invoked. Specifically:</p>
-        <ulist>
-          <item><p><code>$fn:caller-context()?context-item()</code> provides the context item of the caller.</p></item>
-          <item><p><code>$fn:caller-context()?position()</code> provides the context position of the caller.</p></item>
-          <item><p><code>$fn:caller-context()?last()</code> provides the context size of the caller.</p></item>
-          <item><p><code>$fn:caller-context()?default-collation()</code> provides the default collation of the caller.</p></item>
-        </ulist>
-          <p>Note that if any of these values is absent, an attempt to retrieve the value will return an empty sequence.</p>
+      <ednote diff="add" at="2023-03-10"><edtext>I decided to use a magic variable rather than a magic function because (a) there are fewer
+      edge cases that need to be defined in the specification, for example what happens if it's a function and
+      you use function-lookup() to find it, and (b) because it's easy for an implementation to determine
+      statically that a particular default value expression actually uses this feature, which makes it easier
+      to pre-evaluate default value expressions that don't.</edtext></ednote>
+      
+      <p diff="add" at="2023-03-10">More specifically:</p>
+      
+      <ulist diff="add" at="2023-03-10">
+        <item><p>The <termref def="dt-in-scope-variables"/> component of the static context is augmented
+        with a variable whose name is <code>context</code> (in no namespace) and whose type is:</p>
+        <eg>record(
+    item as (function() as item()),
+    default-collation? as (function() as xs:anyURI),
+    *)
+        </eg>
+        <ednote><edtext>I decided, after we reviewed this, to make the fields functions rather than simple values
+        because it is easier to reproduce the behavior of core functions where a dynamic error is raised
+        if the context item in the caller is absent.</edtext></ednote>
+        </item>
+        <item><p>The <termref def="dt-variable-values"/> component of the dynamic context is augmented
+        with a value for this variable. The value is map, whose entries are as follows:</p>
+        <table class="data">
+          <thead>
+            <tr>
+              <th>key</th>
+              <th>value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><p>item</p></td>
+              <td><p>A zero-arity function that returns the <termref def="dt-context-item"/> 
+                from the dynamic context of the caller; if this is absent,
+              the function raises a dynamic error <errorref class="DY" code="0002"/>.</p>
+              <note><p>Using a context item expression (<code>.</code>) in the default
+              value expression is interpreted as a reference to the initial context item
+              of the query, which is not the same thing, and is probably a mistake.</p></note></td>
+            </tr>
+            <tr>
+              <td><p>default&#x2011;collation</p></td>
+              <td><p>A zero-arity function that returns the <termref def="dt-def-collation"/>
+              from the static context of the caller.</p></td>
+            </tr>
+          </tbody>
+        </table>
+        
         </item>
 
       </ulist>
       
-      <p>So, for example, a parameter whose default value is the context item of the caller can be declared as
-      <code>$input as item() := $fn:caller-context()?context-item()</code>.</p>
+      <p diff="add" at="2023-03-10">So, for example, a parameter whose default value is the context item of the caller can be declared as
+      <code>$input as item() := $context?item()</code>.</p>
       
-     <!-- <note diff="add" at="2023-02-27"><p>The initializing expression thus has a fixed value, which does not depend in any way on
-      the static or dynamic context of the caller. It is not possible to replicated the convention used
-      for built-in functions, whereby the default value of a parameter may be taken from the context
-      item or default collation of the caller.</p></note>-->
+      <note diff="add" at="2023-03-10"><p>This capability allows user-defined functions to mimic the behavior of 
+        those core functions that take default argument values from the caller's static or dynamic context. It is not designed to 
+     enable all core functions to be implemented in XQuery. For example (a) it does not provide access
+     to all parts of the caller's context, such as the caller's in-scope namespaces or static base URI, 
+     and (b) it allows access to context information only in an expression used to compute default values 
+     of parameters, not in the body of the function implementation.</p></note>
+      
+      <ednote diff="add" at="2023-03-10"><edtext>The mechanism is extensible, we could easily add more entries to the map. However,
+      providing these two is sufficient for all functions in the core library that have context-dependent default arguments.</edtext></ednote>
       
  
     </div3>
