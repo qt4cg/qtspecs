@@ -1,0 +1,64 @@
+<item>
+   <title>Issue #390 created</title>
+   <pubDate>2023-03-10T17:59:35Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/390</link>
+   <guid>https://qt4cg.org/@qt4cg/2023/#created-390</guid>
+   <description>&lt;div&gt;&lt;p&gt;Should parsing and building URIs attempt to special case Windows URIs for UNC names?&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;Depending on the platform and language APIs involved, we see &lt;code&gt;file:&lt;/code&gt; URIs encoded in a variety of different ways. It doesn't help that there's no official RFC for &lt;code&gt;file:&lt;/code&gt; URIs.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;file:/path/part&lt;/code&gt; is a &lt;code&gt;file:&lt;/code&gt; URI with no host and a path of &lt;code&gt;/path/part&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;file:///path.part&lt;/code&gt; is a &lt;code&gt;file:&lt;/code&gt; URI with an explicitly empty host and a path of &lt;code&gt;/path/part&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;file://path/part&lt;/code&gt; is a &lt;code&gt;file:&lt;/code&gt; URI with an authority of &lt;code&gt;path&lt;/code&gt; and a path of &lt;code&gt;/part&lt;/code&gt;. I think one common way to interpret this is as if it was &lt;code&gt;file:/part&lt;/code&gt;. That is, in &lt;code&gt;file:&lt;/code&gt; URIs, although a different host is possible, it's often just ignored.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;c:\path\part&lt;/code&gt; is most usefully interpreted as &lt;code&gt;file:/c:/path/part&lt;/code&gt;, a &lt;code&gt;file:&lt;/code&gt; URI with no host and a path of &lt;code&gt;/c:/path/part&lt;/code&gt;. These are only going to be useful on a Windows system, so it isn't a problem to treat them the same way on all platforms. (Aside: I don't actually know if the path part should be &lt;code&gt;c:/path/part&lt;/code&gt; instead, but it's currently got the leading slash in &lt;code&gt;fn:parse-uri()&lt;/code&gt;.)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;And then there's this: &lt;code&gt;file:////name/path/part&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;One interpretation is, "look, we accept &lt;code&gt;file:/&lt;/code&gt; and &lt;code&gt;file:///&lt;/code&gt; so let's just accept &lt;code&gt;file://&lt;/code&gt; and &lt;code&gt;file://///////&lt;/code&gt;, etc. as the same." And I think that's generally right, with the single special exception of &lt;code&gt;file:////&lt;/code&gt;. The problem is that on Windows, this is a very common way to encode the URI for a UNC path, that is: &lt;code&gt;\\name\path\part&lt;/code&gt; which is a Windows UNC path for &lt;code&gt;\path\part&lt;/code&gt; on a host named &lt;code&gt;name&lt;/code&gt; (via whatever networking protocol backs UNC).&lt;/p&gt;
+&lt;p&gt;You'd think that this should be &lt;code&gt;file://name/path/part&lt;/code&gt;, but I think because browsers and maybe other tools just discard the authority part of a &lt;code&gt;file:&lt;/code&gt; URI (or maybe because these are &lt;em&gt;paths&lt;/em&gt; in some Windows sense?), that's not how they're encoded.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Aside: Yes, I'm sure you also see &lt;code&gt;file:\\\\name\path\part&lt;/code&gt; and &lt;code&gt;file:c:\path\part&lt;/code&gt; and other forms as well. Those are out of scope, they're simply, flatly, completely wrong. You can't use &lt;code&gt;\&lt;/code&gt; as a delimiter in a URI. RFC 3986 is authoritative on this point. Step one of dealing with random strings we think should be URIs is replacing all &lt;code&gt;\&lt;/code&gt; with &lt;code&gt;/&lt;/code&gt; because RFC 3986.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;It's problematic to deal with &lt;code&gt;file:////&lt;/code&gt; as a special case, but it's also problematic to leave out support for a common pattern on a widely deployed operating system.&lt;/p&gt;
+&lt;p&gt;Recognizing four slashes after &lt;code&gt;file:&lt;/code&gt; and treating that specially isn't hard. The hard part is how do we encode this in the map that &lt;code&gt;fn:parse-uri&lt;/code&gt; produces bearing in mind that the result should round-trip if you push it back through &lt;code&gt;fn:build-uri&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Consider &lt;code&gt;file:////uncname/path/part&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;Today, that is parsed as:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;map {
+  "uri": "file:////uncname/path/part",
+  "scheme": "file",
+  "authority": "uncname",
+  "host": "uncname",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;and that doesn’t round trip. If you feed that to &lt;code&gt;fn:build-uri&lt;/code&gt;, you get &lt;code&gt;file://uncname/path/part&lt;/code&gt; and that absolutely doesn’t mean the same thing on a Windows machine.&lt;/p&gt;
+&lt;p&gt;We could encode the slashes in the &lt;code&gt;authority&lt;/code&gt; in which case we also have to encode them in the &lt;code&gt;host&lt;/code&gt; because in the presence of &lt;code&gt;host&lt;/code&gt;, the &lt;code&gt;authority&lt;/code&gt; isn’t used to by &lt;code&gt;fn:build-uri()&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;map {
+  "uri": "file:////uncname/path/part",
+  "scheme": "file",
+  "authority": "////uncname",
+  "host": "////uncname",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;It kind of works, but it’s really ugly and it means we have a host value that is a complete kludge. It doesn’t match the RFC rules for hostnames at all.&lt;/p&gt;
+&lt;p&gt;The other option that occurs to me is to add a “unc-path” property to the map:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;map {
+  "unc-path": true(),
+  "uri": "file:////uncname/path/part",
+  "scheme": "file",
+  "authority": "uncname",
+  "host": "uncname",
+  "path": "/path/to/file",
+  "path-segments": array { "", "path", "to", "file" }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;That works but it introduces all sorts of possibilities for incoherent data, such as an &lt;code&gt;https:&lt;/code&gt; URI with a &lt;code&gt;unc-path&lt;/code&gt; flag set to &lt;code&gt;true()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;What’s the right answer?&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Ignore the UNC path special case, it’s the users problem to deal with them.&lt;/li&gt;
+&lt;li&gt;Recognize them, encode the details in the &lt;code&gt;authority&lt;/code&gt; and &lt;code&gt;host&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Recognize them, use a special property like &lt;code&gt;unc-path&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;Recognize them, and do this other much better idea I have: ________________&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
