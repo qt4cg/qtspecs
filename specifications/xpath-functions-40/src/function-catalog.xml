@@ -12482,33 +12482,33 @@ else if (fn:empty($input))
                   <fos:type>xs:string?</fos:type>
                   <fos:default>()</fos:default>
                </fos:option>              
-               <fos:option key="normalize-space">
+               <!--<fos:option key="normalize-space">
                   <fos:meaning>The value <code>false</code> indicates that text and attributes are compared <emph>as-is</emph>;
                      the value <code>true</code> indicates that they are compared after normalization using <code>fn:normalize-space</code>.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>true</fos:default>
-               </fos:option>
-               <fos:option key="preserve-space">
+               </fos:option>-->
+               <!--<fos:option key="preserve-space">
                   <fos:meaning>Determines whether text nodes consisting entirely of whitespace are significant.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>true</fos:default>
-               </fos:option>
+               </fos:option>-->
                <fos:option key="processing-instructions">
                   <fos:meaning>Determines whether processing instructions are significant.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
                </fos:option>
-               <fos:option key="text-boundaries">
+               <!--<fos:option key="text-boundaries">
                   <fos:meaning>Determines whether boundaries between text nodes are significant, even when two text
                      nodes are separated by an ignored comment or processing instruction. (This property
                      is provided, with the default <code>true</code>, for compatibility with previous versions.)
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>true</fos:default>
-               </fos:option>
+               </fos:option>-->
                <fos:option key="timezones">
                   <fos:meaning>Determines whether timezones in date/time values are significant.
                   </fos:meaning>
@@ -12535,6 +12535,16 @@ else if (fn:empty($input))
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>true</fos:default>
                </fos:option>
+               <fos:option key="whitespace">
+                  <fos:meaning><phrase diff="chg" at="2023-03-13">Determines the extent to which whitespace is treated as significant. The value
+                     <code>preserve</code> retains all whitespace; <code>strip</code> ignores text nodes
+                     consisting entirely of whitespace; <code>collapse</code> ignores text nodes consisting
+                     entirely of whitespace, and additionally normalizes whitespace within strings and nodes
+                     that contain whitespace alongside non-whitespace characters.</phrase>
+                  </fos:meaning>
+                  <fos:type>enum("preserve", "strip", "collapse")</fos:type>
+                  <fos:default>preserve</fos:default>
+               </fos:option>
                <fos:option key="unordered-elements">
                   <fos:meaning>A list of QNames of elements considered to be unordered: that is, their child
                      elements may appear in any order.
@@ -12553,8 +12563,8 @@ else if (fn:empty($input))
          <p>The rules reference a function <code>equal-strings</code> which compares two strings as follows:</p>
          
          <olist>
-            <item><p>If the <code>normalize-space</code> option is true, each string is processed
-               by calling the <code>fn:normalize-space</code> function.</p></item>
+            <item><p diff="chg" at="2022-03-13">If the <code>whitespace</code> option is set to <code>collapse</code> or <code>strip</code>, 
+               each string is processed by calling the <code>fn:normalize-space</code> function.</p></item>
             <item><p>If the <code>normalization-form</code> option is present, each string is then normalized
             by calling the <code>fn:normalize-unicode</code> function, supplying the specified normalization
             form.</p></item>           
@@ -12568,7 +12578,7 @@ else if (fn:empty($input))
     let $n1 := if (exists($options?normalization-form))
                then fn:normalize-unicode(?, $options?normalization-form) 
                else fn:identity#1,
-        $n2 := if ($options?normalize-space)
+        $n2 := if ($options?whitespace = ("collapse", "strip")
                then fn:normalize-space#1 
                else fn:identity#1               
     }
@@ -12689,10 +12699,13 @@ else if (fn:empty($input))
                      <olist>
                         <item><p>Comment nodes are discarded if the option <code>comments</code> is false.</p></item>
                         <item><p>Processing instruction nodes are discarded if the option <code>processing-instructions</code> is false.</p></item>
-                        <item><p>Adjacent text nodes are merged if the option <code>text-boundaries</code> is false.</p></item>
-                        <item><p>Whitespace-only text nodes are discarded if the option <code>preserve-space</code> is false,
+                        <item><p>Adjacent text nodes are merged.</p></item>
+                        <item><p>Whitespace-only text nodes are discarded <phrase diff="add" at="2023-03-13">if the 
+                           option <code>whitespace</code> is set to <code>strip</code> or <code>collapse</code></phrase>,
                            or if <code>$parent</code> is an element node whose type annotation is a complex type with an element-only
-                           or empty content model.</p></item>
+                           or empty content model. 
+                           <phrase diff="add" at="2023-03-13">However, whitespace-only text nodes are not discarded if they
+                           come within the scope of an element having the attribute <code>xml:space="preserve"</code></phrase>.</p></item>
                  
                      </olist>
                   
@@ -12879,33 +12892,6 @@ else if (fn:empty($input))
                         <item>
                            <p>Both nodes are text nodes, and the <code>equal-strings</code> function 
                               returns true when applied to their string values.</p>
-                           <note>
-                              <p>The handling of whitespace is controlled by a number of options:</p>
-                              <ulist>
-                                 <item><p>Firstly, text nodes consisting entirely of whitespace are considered
-                                 significant by default, unless the parent element has been schema-validated and
-                                 has an element-only content model. This can be overridden by setting the
-                                 <code>preserve-space</code> option to <code>false</code>. The process is not influenced
-                                 by any <code>xml:space</code> attributes that might be present.</p></item>
-                                 <item><p>The decision whether a text node is whitespace is made after
-                                 stripping comments and processing instructions. However, the text nodes
-                                 either side of a comment or processing instruction are merged only if the
-                                 <code>text-boundaries</code> option is true (it is false by default).
-                                 </p></item>
-                                 <item><p>If the <code>preserve-space</code> option and the
-                                 <code>normalize-space</code> option are both true, then a whitespace-only
-                                 text node will be reduced to zero length; this means that all whitespace-only
-                                 text nodes will compare equal regardless of their actual content, but the
-                                 presence of the node is still considered significant.</p></item>
-                                 <item><p>The <code>normalize-space</code> option affects the comparison
-                                 of text nodes, attribute nodes, comments and processing instructions (if not
-                                 stripped): it applies to all such nodes when their string values are
-                                 compared, and to nodes whose typed value is a string when comparing typed
-                                 values. It also affects strings within maps and arrays. It has no effect where
-                                 more specific rules apply, for example when comparing node names, namespace URIs,
-                                 or map keys.</p></item>
-                              </ulist>
-                           </note>
                         </item>
                   </olist>
                   </item>
@@ -13065,11 +13051,23 @@ else if (fn:empty($input))
                <fos:expression><eg><![CDATA[fn:deep-equal(
     parse-xml("<para style="bold"><span>x</span></para>"),
     parse-xml("<para style=" bold"> <span>x</span></para>"),
-    options := map{'normalize-space': true(), 'whitespace-text-nodes': false())]]></eg></fos:expression>
+    options := map{'whitespace':'strip')]]></eg></fos:expression>
                <fos:result>false()</fos:result>
-               <fos:postamble>The <code>normalize-space</code> option ensures that the leading whitespace
-                  in the attribute value is ignored; the <code>whitespace-text-nodes</code> option
-                  causes the whitespace preceding the <code>span</code> element to be ignored.</fos:postamble>
+               <fos:postamble>The <code>whitespace=strip</code> option ensures that 
+                  whitespace preceding the <code>span</code> element is ignored, but the leading whitespace
+                  in the attribute value is still significant.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[fn:deep-equal(
+    parse-xml("<para style="bold"><span>x</span></para>"),
+    parse-xml("<para style=" bold"> <span>x</span></para>"),
+    options := map{'whitespace':'collapse')]]></eg></fos:expression>
+               <fos:result>false()</fos:result>
+               <fos:postamble>The <code>whitespace=collapse</code> option ensures both that the leading whitespace
+                  in the attribute value is ignored, and that the whitespace text node preceding the <code>span</code> 
+                  element is ignored.</fos:postamble>
             </fos:test>
          </fos:example>
       </fos:examples>
