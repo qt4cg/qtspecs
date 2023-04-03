@@ -1,0 +1,1448 @@
+<!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses in 2021</title></head><body><main><article><h1>@qt4cg statuses in 2021</h1><p>This page displays status
+              updates
+              about the QT4 CG project from 2021.</p><p>See also <a href="../">recent statuses</a>.</p><div class="toots">
+<div class="toot" id="created-105"><h2>Issue #105 created<span class="toot-id"> #created-105</span></h2><div class="pubdate">26 Dec at 17:54:17 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/105">https://github.com/qt4cg/qtspecs/issues/105</a></div><details><summary>[XPath] Proposal: Maps with Infinite Number of Keys: Total Maps and Decorated maps</summary><div class="markup"><h1><strong>Maps with Infinite Number of Keys: Total Maps and Decorated maps</strong></h1>
+<h3><strong>1. Total Maps</strong></h3>
+<p>Maps have become one of the most useful tools for creating readable, short and efficient XPath code. However, a significant limitation of this datatype is that a <code>map</code> can have only a finite number of keys. In many cases we might want to implement a map that can have more than a fixed, finite number of arguments.</p>
+<p><strong>Here is a typical example</strong> (<em>Example 1</em>):<br>
+A hotel charges per night differently, depending on how long the customer has been staying. For the first night the price is $100, for the second $90, for the third $80 and for every night after the third $75. We can immediately try to express this pricing data as a map, like this:</p>
+<pre><code class="language-xq">map {
+1 : 100,
+2 : 90,
+3 : 80
+(:  ??? How to express the price for all eventual next nights? :)
+}
+</code></pre>
+<p>We could, if we had a special key, something like "TheRest", which means any other key-value, which is not one of the already specified key-values.</p>
+<p>Here comes the first part of this proposal:</p>
+<ol>
+<li><strong><em>We introduce a special key value, which, when specified in a map means: any possible key, different from the other keys, specified for the map</em></strong>. For this purpose we use the string: <strong><code>"\"</code></strong></li>
+</ol>
+<p>Adding such a "<em>discard symbol</em>" makes the map a <strong><a href="https://en.wikipedia.org/wiki/Partial_function">total function</a></strong> on the set of any possible XPath atomic items.</p>
+<p>Now we can easily express the hotel-price data as a map:</p>
+<pre><code class="language-xq">map {
+1 : 100,
+2 : 90,
+3 : 80
+'\' : 75
+}
+</code></pre>
+<p>Another useful <em>Example (2)</em> is that now we can express any XPath item, or sequence of items as a map. Let's do this for a simple constant, like π:</p>
+<pre><code class="language-xq">let $π := map {
+'\' : math:pi()
+}
+ return $π?*   (: produces 3.141592653589793  :)
+</code></pre>
+<p>the map above is empty (has no regular keys) and specifies that for any other key-value <code>$k</code> it holds that <code>$π($k) eq math:pi()</code></p>
+<p>Going further, we can express even the empty sequence (<em>Example 3</em>) as the following map:</p>
+<pre><code class="language-xq">let $Φ := map {
+'\' : ()
+}
+ return $Φ?*   (: produces the empty sequence :)
+</code></pre>
+<p>Using this representation of the empty sequence, we can provide a solution for the <strong><a href="https://xmlcom.slack.com/archives/C011NLXE4DU/p1616167871037100">"Forgiveness problem"</a></strong> raised by Jarno Jelovirta in the XML.Com <code>#general</code> channel in <em>March 2021</em>:</p>
+<p>This expression will raise an error:</p>
+<pre><code class="language-xq">[map {"k0": 1}, map{"k0": [1, 2, 3]}]?*?("k0")?*
+</code></pre>
+<p><strong><code>[XPTY0004] Input of lookup operator must be map or array: 1.</code></strong></p>
+<p>To prevent ("forgive", thus "Forgiveness Problem") the raising of such errors we could accept the rule that in XPath 4.0 any expression that evaluates to something different than a map or an array, could be coerced to the following map, which returns the empty sequence as the corresponding value for any key requested in a lookup:</p>
+<pre><code class="language-xq">map {
+'\' : ()
+}  (: produces the empty sequence  for any lookup:)
+</code></pre>
+<p><strong>To summarize, what we have achieved so far</strong>:</p>
+<ol>
+<li>The map constructed in Example 1 is now a <strong>total function</strong> over the domain <strong>ℕ</strong> of all natural numbers. Any map with a <code>"\"</code> (discard key) is a total function over the value-space of all <code>xs:anyAtomicType</code> values</li>
+<li>We can represent any XPath 4.0 item or sequence in an easy and intuitive way as a map.</li>
+<li>It is now straight-forward to solve the "Forgiveness Problem" by introducing the natural and intuitive rule for coercing any non-map value to the empty map, and this allows to use anywhere the lookup operator <strong><code>?</code></strong> without raising an error.</li>
+</ol>
+<hr>
+<h3><strong>2. Decorated Maps</strong></h3>
+<p>Although we already achieved a lot in the first part, there are still use-cases for which we don't have an adequate map  solution:</p>
+<ol>
+<li>
+<p>In the example (1) of expressing the hotel prices, we probably shouldn't get <code>$75</code> for a key such as -1 or even <code>"blah-blah-blah"</code>
+But the XPath 4.0 language specification allows any atomic values to be possible keys and thus to be the argument to the <code>map:get()</code> function. <strong>If we want validation for the actually-allowed key-values for a specific given map, we need to have additional processing/functionality.</strong></p>
+</li>
+<li>
+<p>With a discard symbol we can express only one infinite set of possible keys and group them under the same corresponding value. However, <strong>there are problems, the data for which needs several infinite sets of key-values to be projected onto different values</strong>. Here is one such problem:</p>
+</li>
+</ol>
+<p><em>Imagine we are the organizers of a very simple lottery, selling many millions of tickets, identified by their number, which is a unique natural number.</em></p>
+<p><em>We want to grant prizes with this simple strategy.</em></p>
+<ul>
+<li><em>Any ticket number multiple of <strong>10</strong> wins <strong>$10</strong></em>.</li>
+<li><em>Any ticket number multiple of <strong>100</strong> wins <strong>$20</strong></em></li>
+<li><em>Any ticket number multiple of <strong>1000</strong> wins <strong>$100</strong></em></li>
+<li><em>Any ticket number multiple of <strong>5000</strong> wins <strong>$1000</strong></em></li>
+<li><em>Any ticket number which is <strong>a prime number</strong> wins <strong>$25000</strong></em></li>
+<li><em><strong>Any other</strong> ticket number doesn't win a prize (wins <strong>$0</strong>)</em></li>
+</ul>
+<p>None of the sets of key-values for each of the 6 categories above can be conveniently expressed with the <code>map</code> that we have so far, although we have merely 6 different cases!</p>
+<p>How can we solve this kind of problem still using maps?</p>
+<p><strong>Decorators to the rescue</strong>...</p>
+<p>What is decorator, what is the decorator pattern and when it is good to use one? According to <a href="https://en.wikipedia.org/wiki/Decorator_pattern#What_solution_does_it_describe?"><strong><em>Wikipedia</em></strong></a>:</p>
+<blockquote>
+<p><strong>What solution does it describe?</strong>
+Define Decorator objects that</p>
+<ul>
+<li>implement the interface of the extended (decorated) object (Component) transparently by forwarding all requests to it</li>
+<li>perform additional functionality before/after forwarding a request.</li>
+</ul>
+<p>This allows working with different Decorator objects to extend the functionality of an object dynamically at run-time.</p>
+</blockquote>
+<p>The idea is to couple a map with a function (the decorator) which can perform any needed preprocessing, such as validation or projection of a supplied value onto one of a predefined small set of values (that are the actual keys of the map). For simplicity, we are not discussing post-processing here, though this can also be part of a decorator, if needed.</p>
+<p><strong>Let us see how a decorated-map solution to the lottery problem looks like</strong>:</p>
+<pre><code class="language-xq">let $prize-table := map {
+  "ten" : 10,
+  "hundred" : 20,
+  "thousand" : 100,
+  "five-thousand" : 1000,
+  "prime" : 25000,
+ "\" : 0
+},
+$isPrime := function($input as  xs:integer) as xs:boolean
+{
+  exists(index-of((2, 3, 5, 7, 11, 13, 17, 19, 23), $input)) (: simplified primality checker :)
+},
+$decorated-map := function($base-map as map(*), $input as xs:anyAtomicType) as item()*
+{
+  let $raw-result :=
+         (
+          let $key := 
+           if(not($input castable as xs:positiveInteger)) then '\'  (: we can call the error() function here :) 
+             else if($input mod 5000 eq 0) then 'five-thousand'
+             else if($input mod 1000 eq 0) then 'thousand'
+             else if($input mod 100 eq 0) then 'hundred'
+             else if($input mod 10 eq 0) then 'ten'
+             else if($isPrime($input)) then 'prime'
+             else "\"
+          return $base-map($key)
+         ),
+      $post-process := function($x) {$x},  (: using identity here for simplicity :)
+      $post-processed := $post-process($raw-result)
+    return $post-processed
+},
+
+$prizeForTicket := $decorated-map($prize-table, ?),       (: Note: this is exactly the lookup operator  ?    :)
+$ticketNumbers := (1, 10, 100, 1000, 5000, 19, -3, "blah-blah-blah")
+
+return $ticketNumbers ! $prizeForTicket(.)          (: produces 0, 10, 20, 100, 1000, 25000, 0, 0 :)
+</code></pre>
+<p><strong>Conclusion</strong></p>
+<ol>
+<li>
+<p>In the 2nd part of this proposal, a new type/function -- the <strong><code>decorated-map</code></strong>  was described.</p>
+</li>
+<li>
+<p>We defined the signature of a <code>decorated-map</code> and gave an example how to construct and use one in solving a specific problem. In particular, <strong>the proposal is to have a standard function</strong>:</p>
+<p><strong><code>decorated-map ($base-map as map(*), $input as xs:anyAtomicType) as item()*</code></strong></p>
+</li>
+<li>
+<p>Finally, we showed that the lookup operator <strong><code>?</code></strong> on a decorated map $dm is identical to and should be defined as :</p>
+<p><strong><code>$dm($base-map, ?)</code></strong></p>
+</li>
+</ol>
+<p><strong>What remains to be done</strong>?</p>
+<p>The topic of <strong><em>decorators</em></strong> is extremely important, as a decorator may and should be possible to be defined on any function, not just on maps. This would be addressed in one or more new proposals. Stay tuned 😊</p>
+</div></details></div>
+<div class="toot" id="created-104"><h2>Issue #104 created<span class="toot-id"> #created-104</span></h2><div class="pubdate">26 Dec at 11:36:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/104">https://github.com/qt4cg/qtspecs/issues/104</a></div><details><summary>name of map:replace/array:replace</summary><div class="markup"><p>The name of map:replace/array:replace is easily confused with fn:replace. One might think that map:replace applies a regular expression to all the keys of a map (which might be a quite useful replacement for JSON object).</p>
+<p>It might also be confused with the replace function of Java's hashmap, which only inserts a new value if the key already exists in the map.</p>
+<p>One could name it map:put-with-function or map:put-f or map:putf  or map:puf for short</p>
+<p>Or something else: map:change, map:modify, map:alter</p>
+</div></details></div>
+<div class="toot" id="created-103"><h2>Issue #103 created<span class="toot-id"> #created-103</span></h2><div class="pubdate">18 Dec at 21:15:13 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/103">https://github.com/qt4cg/qtspecs/issues/103</a></div><details><summary>fn:all, fn:some</summary><div class="markup"><p>a) the text says the function returns boolean, but the signature says integer*</p>
+<p>b) the text considers a case where the second argument is omitted, but there is no one argument function signature</p>
+<p>c) <code>fn:some</code> is a wrapper around XQuery's <code>some</code> expression, and <code>fn:all</code> is a wrapper around XQuery's <code>every</code> expression. Is this not confusing and people would expect it to be a wrapper around some kind of <code>all</code> expression? Or be called <code>fn:every</code>?</p>
+<p>d) I think it is pointless to have such functions when there are already the <code>some/every</code> XQuery expressions</p>
+</div></details></div>
+<div class="toot" id="created-102"><h2>Issue #102 created<span class="toot-id"> #created-102</span></h2><div class="pubdate">13 Dec at 16:52:25 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/102">https://github.com/qt4cg/qtspecs/issues/102</a></div><details><summary>[xslt30] Meaning of the term "lexical space"</summary><div class="markup"><p>The XSLT 3.0 specification uses the term "lexical space" rather freely, without definition.</p>
+<p>In XSD, the "lexical space" for a data type is the set of lexical representations AFTER any whitespace removal. For example, the lexical space for xs:integer does not allow leading or trailing whitespace. Such whitespace is valid in an instance document, but it is stripped prior to validation by a "pre-lexical" transformation.</p>
+<p>In XSLT, as far as I can see, the intended reading of a phrase such as "a string in the lexical space of xs:integer" is "a string that is castable to xs:integer", which includes strings with leading and trailing whitespace. In some cases the text can only be read this way.</p>
+<p>The F&amp;O spec gets this right. Section 19.2, relating to casting from xs:string, says "The supplied string is mapped to a typed value of the target type as defined in [XML Schema Part 2: Datatypes Second Edition]. Whitespace normalization is applied as indicated by the whiteSpace facet for the datatype. The resulting whitespace-normalized string must be a valid lexical form for the datatype. The semantics of casting follow the rules of XML Schema validation."</p>
+</div></details></div>
+<div class="toot" id="created-101"><h2>Issue #101 created<span class="toot-id"> #created-101</span></h2><div class="pubdate">13 Dec at 13:14:48 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/101">https://github.com/qt4cg/qtspecs/issues/101</a></div><details><summary>fn:serialize line breaks</summary><div class="markup"><p>Normally fn:serialize uses LF for line breaks</p>
+<p>But on Windows you want to have CR LF</p>
+<p>There could be an option for that</p>
+</div></details></div>
+<div class="toot" id="created-100"><h2>Issue #100 created<span class="toot-id"> #created-100</span></h2><div class="pubdate">01 Dec at 09:43:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/100">https://github.com/qt4cg/qtspecs/issues/100</a></div><details><summary>[FO] Typo in §17.5.3</summary><div class="markup"><p>implementation-dependant =&gt; implementation-dependent</p>
+</div></details></div>
+<div class="toot" id="created-99"><h2>Issue #99 created<span class="toot-id"> #created-99</span></h2><div class="pubdate">28 Nov at 01:40:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/99">https://github.com/qt4cg/qtspecs/issues/99</a></div><details><summary>[XPath]Functions that determine equality of two sequences or equality of two arrays</summary><div class="markup"><p>The only standard XPath 3.1 function that compares two arrays or two sequences for equality is the <strong><em><a href="https://www.w3.org/TR/xpath-functions-31/#func-deep-equal">deep-equal()</a></em></strong> function.
+It implements "value-based equality" which may not always be the equality one needs to check for. For example, the standard XPath 3.1 operator <a href="https://www.w3.org/TR/xpath-31/#id-node-comparisons"><strong><em>is</em></strong></a> implements a check for "identity-based equality" on nodes.</p>
+<p>Thus for two nodes <code>$n1</code> and <code>$n2</code> it is possible that:</p>
+<p><strong><em><code>deep-equal($n1, $n2) ne  ($n1 is $n2)</code></em></strong></p>
+<p>The functions defined below can be used to verify a more generic kind of equality between two sequences or between two arrays. These functions accept as a parameter a user-provided function <strong><em><code>$compare()</code></em></strong>, which is used to decide whether or not two corresponding items of the two sequences, or two constituents of the two arrays are "equal".</p>
+<pre><code class="language-xq">fn:sequence-equal($seq1 as item()*, $seq2 as item()*, 
+                  $compare as function(item(), item()) as xs:boolean := deep-equal#2) as xs:boolean
+
+fn:array-equal($ar1 as array(*), $ar2 as array(*), 
+               $compare as function(item()*, item()*) as xs:boolean := deep-equal#2) as xs:boolean
+</code></pre>
+<p><strong>Examples</strong>:</p>
+<pre><code class="language-xq">fn:sequence-equal((1, 2, 3), (1, 2, 3))  (: returns true() :)
+fn:sequence-equal((1, 2, 3), (1, 2, 5))  (: returns false() :)
+fn:sequence-equal((1), (1, 2))  (: returns false() :)
+fn:sequence-equal((), ())  (: returns true() :)
+</code></pre>
+<pre><code class="language-xq">let $compare := function($ arg1 as xs:integer, $arg2 as xs:integer) {$arg1 mod 2 eq $arg2 mod 2}
+   return fn:sequence-equal((1, 2, 3), (5, 6, 7), $compare)  (: returns true() :)
+
+let $compare := function($ arg1 as xs:integer, $arg2 as xs:integer) {$arg1 mod 2 eq $arg2 mod 2}
+   return fn:sequence-equal((1, 2, 3), (5, 6, 8), $compare)  (: returns false() :)
+</code></pre>
+<pre><code class="language-xq">fn:array-equal([1, 2, 3], [1, 2, 3]) (: returns true() :)
+fn:array-equal([1, 2, 3], [1, 2, 5])  (: returns false() :)
+fn:array-equal([1], [1, 2])  (: returns false() :) 
+fn:array-equal([], [])  (: returns true() :)
+fn:array-equal([], [()])  (: returns false() :)
+</code></pre>
+<p><strong>Possible implementations</strong>:</p>
+<ol>
+<li>Here is a pure XPath implementation of <strong><em><code>fn:sequence-equal</code></em></strong>:</li>
+</ol>
+<pre><code class="language-xq">let $compare := function($it1 as item(), $it2 as item()) as xs:boolean 
+                {deep-equal($it1, $it2)},
+    $sequence-equal := function($seq1 as item()*, $seq2 as item()*, 
+                                $compare as function(item(), item()) as xs:boolean, 
+                                $self as function(*)) as xs:boolean
+{
+   let $size1 := count($seq1), $size2 := count($seq2)
+    return
+      if($size1 ne $size2) then false()
+      else
+         $size1 eq 0
+        or
+         $compare(head($seq1), head($seq2)) and $self(tail($seq1), tail($seq2), $compare, $self)
+}
+ return
+   $sequence-equal((1, 2, 3), (1, 2, 3), $compare, $sequence-equal)
+</code></pre>
+<ol start="2">
+<li>Below is a pure XPath implementation of <strong><em><code>fn:array-equal</code></em></strong>:</li>
+</ol>
+<pre><code class="language-xq">let  $compare := function($val1 as item()*, $val2 as item()*) as xs:boolean 
+                {deep-equal($val1, $val2)},
+     $array-equal := function($ar1 as array(*), $ar2 as array(*), 
+                              $compare as function(item()*, item()*) as xs:boolean, 
+                              $self as function(*)) as xs:boolean
+{
+   let $size1 := array:size($ar1), $size2 := array:size($ar2)
+    return
+      if($size1 ne $size2) then false()
+      else
+         $size1 eq 0
+        or
+         $compare(array:head($ar1), array:head($ar2)) and $self(array:tail($ar1), array:tail($ar2), $compare, $self)
+}
+ return
+   $array-equal([], [()], $compare, $array-equal)
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-98"><h2>Issue #98 created<span class="toot-id"> #created-98</span></h2><div class="pubdate">24 Nov at 17:05:47 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/98">https://github.com/qt4cg/qtspecs/issues/98</a></div><details><summary>Support ignoring whitespace/indentation differences in fn:deep-equal.</summary><div class="markup"><h2>Signatures</h2>
+<pre><code>fn:deep-equal( $input1 as&nbsp;item()*,
+               $input2 as&nbsp;item()*,
+               $collation as&nbsp;xs:string? := (),
+               $boundary-space as enum("preserve", "strip") := "preserve")&nbsp;as&nbsp;xs:boolean
+</code></pre>
+<h2>Notes</h2>
+<p>If <code>$boundary-space</code> is "preserve", then any whitespace differences are checked and would result in the function returning <code>false()</code>.</p>
+<p>If <code>$boundary-space</code> is "strip", then any whitespace differences are ignored and would result in the function returning <code>true()</code> if the inputs are otherwise identical.</p>
+<h2>Use Case</h2>
+<p>Comparing two XML fragments in a unit test assertion where you don't care about indentation differences.</p>
+</div></details></div>
+<div class="toot" id="created-97"><h2>Issue #97 created<span class="toot-id"> #created-97</span></h2><div class="pubdate">22 Nov at 18:53:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/97">https://github.com/qt4cg/qtspecs/issues/97</a></div><details><summary>[XPath] Functions symmetric to `head()` and `tail()` for sequences and arrays</summary><div class="markup"><p>In Xpath 3.1 we already have <a href="https://www.w3.org/TR/xpath-functions-31/#func-head"><strong><em><code>head()</code></em></strong></a>, <a href="https://www.w3.org/TR/xpath-functions-31/#func-tail"><strong><em><code>tail()</code></em></strong></a>, and <a href="https://www.w3.org/TR/xpath-functions-31/#func-last"><strong><em><code>last()</code></em></strong></a></p>
+<p>But there is no function that produces the subsequence of all items of a sequence except the last one. There exists such a function in other programming languages. For example, in Haskell this is the <a href="https://hackage.haskell.org/package/base-4.16.0.0/docs/src/GHC.List.html#init"><strong><em>init</em></strong></a> function.</p>
+<p>And the <code>last()</code> function isn't the symmetric opposite of <code>head()</code> -- it doesn't give us the last item in a sequence, just its position. So we need another function: <code>fn:heel()</code> for this.</p>
+<pre><code class="language-xq">fn:init($sequence as item()*) as item()*
+
+fn:heel($sequence as item()*) as item()?
+</code></pre>
+<p><code>init($seq)</code> is a convenient shorthand for <code>subsequence($seq, 1, count($seq) -1)</code></p>
+<p><code>heel($seq)</code> is a convenient shorthand for <code>slice($seq, -1)</code></p>
+<p><strong>Examples</strong>:</p>
+<p><code>fn:init(('a', 'b', 'c'))</code> returns <code>'a', 'b'</code></p>
+<p><code>fn:init(('a', 'b'))</code> returns <code>'a'</code></p>
+<p><code>fn:init('a')</code> returns <code>()</code></p>
+<p><code>fn:init(())</code> returns <code>()</code></p>
+<p><code>fn:heel('a', 'b', 'c')</code> returns <code>'c'</code></p>
+<p><code>('a', 'b', 'c') =&gt; init() =&gt; heel()</code> returns <code>'b'</code></p>
+<p><strong>It makes sense to have <code>fn:init()</code> and <code>fn:heel()</code> defined on arrays, too</strong>.</p>
+<pre><code class="language-xq">array:init($array as array(*)) as array(*)
+
+array:heel($array as array(*)) as item()*
+</code></pre>
+<p><strong>Examples</strong>:</p>
+<p><code>array:init([1, 2, 3, 4, 5])</code>  returns <code>[1, 2, 3, 4]</code></p>
+<p><code>array:init([1])</code>  returns <code>[]</code></p>
+<p><code>array:heel([1, 2, 3, (4, 5)])</code>  returns <code>(4, 5)</code></p>
+<p><code>array:heel([()])</code>  returns <code>()</code> (the empty sequence)</p>
+<p><code>array:init([])</code>  produces <strong>error</strong></p>
+<p><code>array:heel([])</code>  produces <strong>error</strong></p>
+<p><code>[1, 2, 3, (4, 5)] =&gt;array:heel() =&gt; heel()</code>  returns <code>5</code></p>
+<p>I would challenge anyone to re-write the last example in understandable way using <code>fn:slice()</code> 💯</p>
+</div></details></div>
+<div class="toot" id="created-96"><h2>Issue #96 created<span class="toot-id"> #created-96</span></h2><div class="pubdate">22 Nov at 15:56:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/96">https://github.com/qt4cg/qtspecs/issues/96</a></div><details><summary>[XPath] Functions that determine if a given sequence starts with another sequence or ends with another sequence</summary><div class="markup"><p>It is surprising that we are at version 4 and still are missing:</p>
+<pre><code class="language-xq">(1) fn:starts-with-sequence($container as item()*, $maybe-start as item()*, 
+                            $compare as function(item(), item()) as xs:boolean := deep-equal)
+                            ) as xs:boolean
+</code></pre>
+<p>and</p>
+<pre><code class="language-xq">(2) fn:ends-with-sequence($container as item()*, $maybe-end as item()*, 
+                          $compare as function(item(), item()) as xs:boolean := deep-equal)
+                          ) as xs:boolean
+</code></pre>
+<p>(2) above is a shorthand for:</p>
+<pre><code class="language-xq">fn:starts-with-sequence(reverse($container), reverse($maybe-end)) 
+</code></pre>
+<p><strong>Examples</strong>:</p>
+<p><code>fn:starts-with-sequence(('a', 'b', 'c', 'd'), ('a', 'b'))</code>   returns <code>true()</code></p>
+<p><code>fn:starts-with-sequence(('a', 'b', 'c', 'd'), ('a', 'c'))</code>   returns <code>false()</code></p>
+<p><code>fn:ends-with-sequence(('a', 'b', 'c', 'd'), ('c', 'd'))</code>   returns <code>true()</code></p>
+<p><code>fn:ends-with-sequence(('a', 'b', 'c', 'd'), ('b', 'd'))</code>   returns <code>false()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; starts-with-sequence(('a', 'b'))</code> returns <code>true()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; starts-with-sequence(('a', 'c'))</code> returns <code>false()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; ends-with-sequence(('c', 'd'))</code> returns <code>true()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; ends-with-sequence(('b', 'd'))</code> returns <code>false()</code></p>
+<p><strong>One possible implementation</strong>:</p>
+<pre><code class="language-xq">let $starts-with-sequence := function($seq1 as item()*, $seq2 as item()*, $self as function(*))
+{
+   empty($seq2)
+  or
+   head($seq1) eq head($seq2) and $self(subsequence($seq1, 2), subsequence($seq2, 2), $self)
+}
+  return
+    $starts-with-sequence(('a', 'b', 'c', 'd'), ('a', 'b', 'c'), $starts-with-sequence)
+</code></pre>
+</div></details></div>
+<div class="toot" id="closed-95"><h2>Issue #95 closed<span class="toot-id"> #closed-95</span></h2><div class="pubdate">22 Nov at 09:23:55 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/95">https://github.com/qt4cg/qtspecs/issues/95</a></div><p>[XPath] URI validation function</p></div>
+<div class="toot" id="created-95"><h2>Issue #95 created<span class="toot-id"> #created-95</span></h2><div class="pubdate">21 Nov at 18:15:41 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/95">https://github.com/qt4cg/qtspecs/issues/95</a></div><details><summary>[XPath] URI validation function</summary><div class="markup"><p>Apparently there is no function to validate URI syntax against the relevant RFC. I expected that casting to <code>xs:anyURI</code> validates but that seems not to be the case:</p>
+<blockquote>
+<p>Because it is impractical for processors to check that a value is a context-appropriate URI reference, this specification follows the lead of [RFC 2396] (as amended by [RFC 2732]) in this matter: such rules and restrictions are not part of type validity and are not checked by ·minimally conforming· processors. Thus in practice the above definition imposes only very modest obligations on ·minimally conforming· processors.</p>
+</blockquote>
+<p>https://www.w3.org/TR/xmlschema-2/#anyURI</p>
+<p>Valid URIs are quite critical in strict RDF output formats such as RDF/XML.</p>
+</div></details></div>
+<div class="toot" id="created-94"><h2>Issue #94 created<span class="toot-id"> #created-94</span></h2><div class="pubdate">20 Nov at 19:32:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/94">https://github.com/qt4cg/qtspecs/issues/94</a></div><details><summary>[XPath] Functions that determine if a given sequence is a subsequence of another sequence</summary><div class="markup"><p>It is surprising that we are at version 4 and still are missing:</p>
+<pre><code class="language-xq">(1) fn:has-subsequence($container as item()*, $maybe-subsequence as item()*, 
+                       $compare as function(item(), item()) as xs:boolean := deep-equal)
+                       ) as xs:boolean
+</code></pre>
+<p>and</p>
+<pre><code class="language-xq">(2) fn:has-subsequence($container as item()*, $maybe-subsequence as item()*, $contiguous-subsequence := true(),
+                       $compare as function(item(), item()) as xs:boolean := deep-equal)
+                       ) as xs:boolean
+</code></pre>
+<p>and</p>
+<pre><code class="language-xq">(3) fn:has-non-contigous-subsequence($container as item()*, $maybe-subsequence as item()*,
+                                     $compare as function(item(), item()) as xs:boolean := deep-equal)
+                                     ) as xs:boolean
+</code></pre>
+<p>(3) above is a shorthand for:</p>
+<pre><code class="language-xq">fn:has-subsequence(?, ?, false()) 
+</code></pre>
+<p><strong>Examples</strong>:</p>
+<p><code>fn:has-subsequence(('a', 'b', 'c', 'd'), ('b', 'c'))</code>   returns <code>true()</code></p>
+<p><code>fn:has-subsequence(('a', 'b', 'c', 'd'), ('b', 'd'))</code>   returns <code>false()</code></p>
+<p><code>fn:has-non-contigous-subsequence(('a', 'b', 'c', 'd'), ('b', 'd'))</code>   returns <code>true()</code></p>
+<p><code>fn:has-non-contigous-subsequence(('a', 'b', 'c', 'd'), ('d', 'b'))</code>   returns <code>false()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; has-subsequence(('b', 'c'))</code> returns <code>true()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; has-subsequence(('b', 'd'))</code> returns <code>false()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; has-non-contigous-subsequence(('b', 'd'))</code> returns <code>true()</code></p>
+<p><code>('a', 'b', 'c', 'd') =&gt; has-non-contigous-subsequence(('d, 'b'))</code> returns <code>false()</code></p>
+</div></details></div>
+<div class="toot" id="created-93"><h2>Issue #93 created<span class="toot-id"> #created-93</span></h2><div class="pubdate">20 Nov at 16:10:04 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/93">https://github.com/qt4cg/qtspecs/issues/93</a></div><details><summary>[XQuery] Support order by ascending/descending from a string value.</summary><div class="markup"><h3>Use Case</h3>
+<p>It is a common pattern to have a sort key and direction on requests that support listing or searching an object (e.g. authors).</p>
+<p>Currently, in order to switch between ascending/descending in a FLWOR expression two separate expressions need to be written. For example:</p>
+<pre><code>if ($sort-order eq "ascending") then
+    for $name in $authors order by $name ascending return $name
+else
+    for $name in $authors order by $name descending return $name
+</code></pre>
+<p>It would be cleaner if this could be rewritten as:</p>
+<pre><code>for $name in $authors
+order by $name in $sort-order order
+return $name
+</code></pre>
+<h3>Syntax</h3>
+<pre><code>OrderModifier ::= ("ascending"  |  "descending"  |  OrderDirection)?
+                  ("empty"  ("greatest"  |  "least"))?
+                  ("collation" URILiteral)?
+OrderDirection ::= "in" ExprSingle "order"
+</code></pre>
+<h3>Semantics</h3>
+<p>If OrderDirection is used, the expression is evaluated.</p>
+<ol>
+<li>If the expression is not a single atomic value, an XQST#### error is raised.</li>
+<li>If the expression evaluates to the string "ascending", this is the same as using the <code>ascending</code> keyword.</li>
+<li>If the expression evaluates to the string "descending", this is the same as using the <code>descending</code> keyword.</li>
+<li>Otherwise, an XQST#### error is raised.</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-92"><h2>Issue #92 created<span class="toot-id"> #created-92</span></h2><div class="pubdate">24 Oct at 13:58:58 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/92">https://github.com/qt4cg/qtspecs/issues/92</a></div><details><summary>[XSLT] Simplify rule for attribute values on Extension Instructions used to invoke named templates</summary><div class="markup"><p>Regarding the rule in the current proposal for <a href="https://qt4cg.org/branch/master/xslt-40/Overview.html#invoking-named-templates">Invoking Named Templates with Extension Instructions</a>:</p>
+<blockquote>
+<p>The way in which attribute values are handled depends on the type declaration of the template parameter...</p>
+</blockquote>
+<p>I have some problems with this dependency on parameter type (to control whether value is an AVT or XPath expression):</p>
+<ol>
+<li>In many cases, a <code>xs:string</code> or <code>xs:boolean</code> type passed as a param will be a variable reference so a coder needs to enter <code>name="{$myName}"</code> instead of <code>name="$myName"</code> in their XSLT editor.</li>
+<li>If passing a literal <code>xs:string</code> type, the syntax: <code>name="first"</code> would be easy for a human reader to misinterpret as a <code>NameTest</code> instead of a <code>StringLiteral</code>.</li>
+<li>The dependency on param type means more effort (and thus poorer performance) for a tokenizer or syntax-highlighter as it may need to get type information from included/imported XSLT stylesheet modules or from extension elements declared later in the same XSLT module.</li>
+</ol>
+<p>The third point above is most important from my viewpoint as maintainer of an XSLT editor, but I believe the first two points are also valid.</p>
+<p>For these reasons, I propose that: all attribute-values on extension instructions used to invoke named templates are treated as XPath expressions.</p>
+</div></details></div>
+<div class="toot" id="created-91"><h2>Issue #91 created<span class="toot-id"> #created-91</span></h2><div class="pubdate">17 Sep at 17:58:23 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/91">https://github.com/qt4cg/qtspecs/issues/91</a></div><details><summary>name of map:substitute</summary><div class="markup"><p><a href="https://qt4cg.org/branch/master/xpath-functions-40/Overview-diff.html#func-map-substitute">map:substitute</a> is a weird name for the function. It sounds as it would change just one value with a new value like map:put</p>
+<p>Actually it is mapping all values. <code>map:map</code> or <code>map:map-values</code> would be more fitting</p>
+<p>Or <code>map:for-each</code> would have been logical.  Unfortunately it is already taken. <code>fn:for-each</code> takes a sequence and returns a sequence, <code>array:for-each</code> takes an array and returns an array. <code>map:for-each</code> takes a map and returns a ~map~ sequence. makes no sense. Anyways, <code>map:for-each-value</code> would also be a good name</p>
+<p><a href="https://en.wikipedia.org/wiki/Map_(higher-order_function)#Language_comparison">Other languages</a> have other names. It could also be called  <code>map:transform</code> like C++, or <code>map:apply</code> like pari/gp</p>
+</div></details></div>
+<div class="toot" id="created-90"><h2>Issue #90 created<span class="toot-id"> #created-90</span></h2><div class="pubdate">16 Sep at 11:35:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/90">https://github.com/qt4cg/qtspecs/issues/90</a></div><details><summary>Simplified simplified stylesheets</summary><div class="markup"><p>A couple of suggestions for making "simplified stylesheets" more useful:</p>
+<p>(a) Allow the xsl:version (and therefore the XSLT namespace declaration) to be omitted; the default is supplied by the processor. So this becomes a valid stylesheet:</p>
+<pre><code>&lt;out id="{/*/@id}"&gt;
+  &lt;x&gt;{/thing/foo[1]/x}&lt;/x&gt;
+  &lt;y&gt;{/thing/foo[2]/x}&lt;/y&gt;
+&lt;/out&gt;
+</code></pre>
+<p>(b) Allow "single-template" stylesheets as an intermediate form between simplified stylesheets and full stylesheets:</p>
+<pre><code>&lt;xsl:xslt xmlns:xsl="http://www.w3.org/1999/XSL/Transform"&gt;
+  &lt;xsl:strip-space elements="*"/&gt;
+  &lt;xsl:param name="id"/&gt;
+  &lt;out id="{$id}"&gt;
+    &lt;x&gt;{/thing/foo[1]/x}&lt;/x&gt;
+    &lt;y&gt;{/thing/foo[2]/x}&lt;/y&gt;
+  &lt;/out&gt; 
+&lt;/xsl:xslt&gt;
+</code></pre>
+<p>The last child element of xsl:xslt, if not in the XSLT namespace, is implicitly wrapped in <code>&lt;xsl:template match="/"&gt;</code></p>
+</div></details></div>
+<div class="toot" id="created-89"><h2>Issue #89 created<span class="toot-id"> #created-89</span></h2><div class="pubdate">02 Sep at 18:58:07 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/89">https://github.com/qt4cg/qtspecs/issues/89</a></div><details><summary>[XQuery] DirPIConstructor permits ':' in the PI name.</summary><div class="markup"><h2>Overview</h2>
+<p>The <code>PITarget</code> symbol allows a colon in the grammar, but the rest of the spec and XQuery implementations (tested on BaseX, Saxon, and MarkLogic) disalow <code>:</code> in <code>DirPIConstructor</code> productions.</p>
+<h2>Details</h2>
+<p>The <code>DirPIConstructor</code> construct is defined as:</p>
+<pre><code>[151] DirPIConstructor ::= "&lt;?"  PITarget  (S DirPIContents)?  "?&gt;" | /* ws: explicit */
+[232] PITarget ::= [http://www.w3.org/TR/REC-xml#NT-PITarget]XML /* xgc: xml-version */
+</code></pre>
+<p>with XML defining <code>PITarget</code> as:</p>
+<pre><code>[17] PITarget ::= Name - (('X' \| 'x') ('M' \| 'm') ('L' \| 'l'))
+</code></pre>
+<p>The "excluding 'xml' in any case insensitive form" part is covered by the <em>3.9.2 Other Direct Constructors</em> section.</p>
+<p>While the XML specification states:</p>
+<blockquote>
+<p>The Namespaces in XML Recommendation [XML Names] assigns a meaning to names containing colon characters. Therefore, authors should not use the colon in XML names except for namespace purposes, but XML processors must accept the colon as a name character.</p>
+</blockquote>
+<p>various XQuery processors disallow a colon here in line with the rest of the XQuery specification.</p>
+<h2>Proposal</h2>
+<p>Change <code>PITarget</code> to:</p>
+<pre><code>[232] PITarget ::= NCName
+</code></pre>
+<p>to reflect actual usage and align it with the rest of the XQuery specification.</p>
+</div></details></div>
+<div class="toot" id="created-88"><h2>Issue #88 created<span class="toot-id"> #created-88</span></h2><div class="pubdate">16 Aug at 10:06:55 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/88">https://github.com/qt4cg/qtspecs/issues/88</a></div><details><summary>[XPATH] breaking ancestor or descendant axes</summary><div class="markup"><p>A common issue that I often have to deal with in Xpath (within xslt most of the time) is to be able to break descendants or ancestors axes. To do that I have to use predicates which are sometimes quite complicated, because it has to appen to every encountered nodes, which force to think really globally. Maybe this is proper to functionnal langages but maybe it would be possible to add simple feature for this common use-case.</p>
+<p>An really simple example (no difficult to resolve here, but it's sometimes much more complex) :</p>
+<p>Let's say I want to get all "doc" elements that have a table <em>as content</em> :</p>
+<pre><code class="language-xml">&lt;doc id="doc1"&gt;
+  &lt;header/&gt;
+  &lt;table/&gt;
+  &lt;doc id="doc2"&gt;
+    &lt;p/&gt;
+    &lt;doc id="doc3"&gt;
+      &lt;table/&gt;
+    &lt;/doc&gt;
+  &lt;/doc&gt;
+  &lt;footer&gt;
+    &lt;doc id="doc4"&gt;
+      &lt;table/&gt;
+    &lt;/doc&gt;
+  &lt;/footer&gt;
+&lt;/doc&gt;
+</code></pre>
+<p>In this example doc1, doc3 and doc4 all have a table "as content", but doc2 doesn't, though it has a table as descendant.</p>
+<p>The xpath to get all doc that have a table as content would be something like :</p>
+<pre><code>//doc[let $self := . return exists (descendant::table[ancestor::doc[1] is $self])]
+</code></pre>
+<p>I don't really have any idea on how to express a new way to break this axis, let's suggest a predicate on the axis itself, something like :</p>
+<pre><code>//doc[descendant[break-axis-on-matching='self::doc']::table]
+</code></pre>
+<p>This syntax is really not nice, but I guess you see the idea ?
+Maybe I missed a way to achieve this in Xpath 3.1 ?</p>
+</div></details></div>
+<div class="toot" id="created-87"><h2>Issue #87 created<span class="toot-id"> #created-87</span></h2><div class="pubdate">16 Aug at 09:16:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/87">https://github.com/qt4cg/qtspecs/issues/87</a></div><details><summary>[XSL] Support for "master files"</summary><div class="markup"><p>Oxygen allows to set one or more "master files" on a project. This is quite usefull when validating or searching for references while editing XSLT "modules" that depends on a main XSLT.</p>
+<p>The main use-case is when I have an big XSLT that I want to split into modules (typically on module per mode). I could off course gather each global variable / parameters / function into the same module, but then I have to import it from each module if I want every XSLT to be valid. It would make more sens to import it once from the main XSLT, but then none of the other modules are valid anymore.</p>
+<p>Being able to set master files would help in validation as a common XSLT feature. It would have no incidence on compilation but only as validation feature.</p>
+<p>What do you think ?</p>
+</div></details></div>
+<div class="toot" id="created-86"><h2>Issue #86 created<span class="toot-id"> #created-86</span></h2><div class="pubdate">09 Aug at 09:14:09 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/86">https://github.com/qt4cg/qtspecs/issues/86</a></div><details><summary>[fo3.1] Fallback for named timezones </summary><div class="markup"><p>§9.8.4.6 says "If no timezone name can be identified, the timezone offset is output using the fallback format +01:01." But "+01:01" is not a valid format. It should say either "01:01" or (preferably, I think) "00:00t".</p>
+</div></details></div>
+<div class="toot" id="closed-85"><h2>Issue #85 closed<span class="toot-id"> #closed-85</span></h2><div class="pubdate">08 Aug at 16:07:15 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/85">https://github.com/qt4cg/qtspecs/issues/85</a></div><p>New separators (apply-templates, for-each) vs attribute, value-of, serialization's item-separator</p></div>
+<div class="toot" id="created-85"><h2>Issue #85 created<span class="toot-id"> #created-85</span></h2><div class="pubdate">08 Aug at 15:32:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/85">https://github.com/qt4cg/qtspecs/issues/85</a></div><details><summary>New separators (apply-templates, for-each) vs attribute, value-of, serialization's item-separator</summary><div class="markup"><p>Don't know if the new separator attributes for apply-templates and for-each are designed to work differently than the existing separator functionality in XSLT 3. According to one of the examples, if the instruction produces sibling text nodes then separators are included between the text nodes. In XSLT 3, sibling text nodes are always merged and separators ignored. Perhaps this inconsistency should be reconsidered, or at least a note added for clarification.</p>
+</div></details></div>
+<div class="toot" id="created-84"><h2>Issue #84 created<span class="toot-id"> #created-84</span></h2><div class="pubdate">30 Jul at 13:26:48 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/84">https://github.com/qt4cg/qtspecs/issues/84</a></div><details><summary>Proposal : allow ignorable &lt;xsl:div&gt; wrapper for documentation or organize the code</summary><div class="markup"><p>Hi,</p>
+<p>It's a long time I'm missing a way to organize XSLT code. Using <a href="https://qt4cg.org/branch/master/xslt-40/Overview-diff.html#enclosed-modes">enclosed mode</a> will help a lot, but it's not its main purpose and it's not enought I guess to be able :</p>
+<ul>
+<li>Group templates or function that go together (according to the author)</li>
+<li>easily comments blocks of code for debugging purpose</li>
+<li>add documentation on any XSLT elements : not only top level elements as with oxygen "xd" elements</li>
+<li>add foreign xml structures that can help for static analysing of the code (ex : informations to help with xslt schematron validation, that need autocompletion with a specific xml schema, that means processing instructions are not engough here)</li>
+</ul>
+<p>What about a <code>xsl:div</code> element (for division), this is a well known element's name, used in HTML but also Relax NG.
+That element might have a <code>process-content</code> attribute with 2 possible values:</p>
+<ul>
+<li><code>true</code> (default): to say the content should be "applied" as <code>xsl:div</code> might be nested  with different process-content attribute values</li>
+<li><code>false</code>: to say the content has to be completely skipped at compilation</li>
+</ul>
+<p>Example:</p>
+<pre><code class="language-xml">&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;xsl:stylesheet 
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:xd="http://www.oxygenxml.com/ns/doc/xsl"
+  xmlns:local="local"
+  xmlns:xslq="https://github.com/mricaud/xsl-quality"
+  xmlns:a="http://my-annotations.org"
+  version="4.0"&gt;
+  
+  &lt;xsl:div&gt;
+    &lt;xsl:div process-content="false"&gt;
+      &lt;p&gt;This block is about "foo"&lt;/p&gt;
+    &lt;/xsl:div&gt;
+    
+    &lt;xsl:function name="local:has-foo-child" as="xs:boolean"&gt;
+      &lt;xsl:param name="e"&gt;
+        &lt;xsl:div process-content="false"&gt;&lt;xd:doc&gt;Any elements&lt;/xd:doc&gt;&lt;/xsl:div&gt;
+      &lt;/xsl:param&gt;
+      &lt;xsl:sequence select="exists($e/foo)"/&gt;
+    &lt;/xsl:function&gt;
+    
+    &lt;xsl:template match="foo"&gt;
+        &lt;xsl:div process-content="false"&gt;
+           &lt;xslq:schematron ignore-rule="mode-name-must-be-namepace-prefixed"/&gt;
+         &lt;xsl:div&gt;
+        &lt;xsl:value-of select="normalize-space(.)"&gt;&lt;xsl:div process-content="false"&gt;&lt;xd:doc&gt;Normalization is needed here&lt;/xd:doc&gt;&lt;/xsl:div&gt;
+    &lt;/xsl:template&gt;
+    
+  &lt;/xsl:div&gt;
+  
+&lt;/xsl:stylesheet&gt;
+</code></pre>
+<p>Writing this example let me see that it's a bit verbose. Another proposal would be to declare a set of namespaces that are to be ignored at compilation time, wether by skipping it or by apply what's inside of it.
+The same example would give something like this:</p>
+<pre><code class="language-xml">&lt;xsl:stylesheet 
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xmlns:xd="http://www.oxygenxml.com/ns/doc/xsl"
+  xmlns:local="local"
+  xmlns:xslq="https://github.com/mricaud/xsl-quality"
+  xmlns:a="http://my-annotations.org"
+  version="4.0"&gt;
+  
+  &lt;xsl:ignore-namespaces select="map{
+    'http://www.oxygenxml.com/ns/doc/xsl' : 'skip', 
+    'http://my-annotations.org' : 'apply',
+    'https://github.com/mricaud/xsl-quality' : 'skip'
+    }"/&gt;
+    
+  
+  &lt;a:div label="This block is about foo"&gt;
+    
+    &lt;xsl:function name="local:has-foo-child" as="xs:boolean"&gt;
+      &lt;xsl:param name="e"&gt;&lt;xd:doc&gt;Any elements&lt;/xd:doc&gt;&lt;/xsl:param&gt;
+      &lt;xsl:sequence select="exists($e/foo)"/&gt;
+    &lt;/xsl:function&gt;
+    
+    &lt;xsl:template match="foo" mode="bar"&gt;
+      &lt;xslq:schematron ignore-rule="mode-name-must-be-namepace-prefixed"/&gt;
+      &lt;xsl:value-of select="normalize-space(.)" xd:doc="normalization is needed here"/&gt;
+    &lt;/xsl:template&gt;
+    
+  &lt;/a:div&gt;
+  
+&lt;/xsl:stylesheet&gt;
+</code></pre>
+<p>Well, there are probably multiple ways to achieve this need.</p>
+<p>I would be really happy to have such possiblilities, but I don't know if some of you have the same need.</p>
+<p>Thanks for any comments / replies / ideas / feedbacks</p>
+</div></details></div>
+<div class="toot" id="created-83"><h2>Issue #83 created<span class="toot-id"> #created-83</span></h2><div class="pubdate">29 Jul at 15:08:06 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/83">https://github.com/qt4cg/qtspecs/issues/83</a></div><details><summary>[XPath]Proposal: Notation for using an operator as a function</summary><div class="markup"><p>In this thread of (XML slack)#general:
+https://app.slack.com/client/T011VK9115Z/C011NLXE4DU/thread/C011NLXE4DU-1627497085.455200?cdn_fallback=2
+there is this expression:</p>
+<pre><code class="language-xq">for-each-pair($aa, $bb, function($x, $y) {$x ne $y}) 
+           =&gt; index-of(true())
+</code></pre>
+<p>Notice the long and unreadable: <code>function($x, $y) {$x ne $y}</code></p>
+<p>Writing, understanding and maintaining XPath code, would be enhanced if we had a better way of expressing the use of an operator as a function.
+In Haskell one simply writes:</p>
+<pre><code class="language-haskell">(/)  4, 2
+half   = (/2)
+(-) 4, 2
+negate = (0-)
+ne = (/=)
+</code></pre>
+<p>We could accept a similar convention, so the original expression above is written simply as:</p>
+<pre><code class="language-xq">for-each-pair($aa, $bb, (ne)) 
+           =&gt; index-of(true())
+</code></pre>
+<p>Or we could use something less overloaded than parenthesis, for example:</p>
+<pre><code class="language-xq">`ne`
+</code></pre>
+<p>Then the original expression looks like this:</p>
+<pre><code class="language-xq">for-each-pair($aa, $bb, `ne`) 
+           =&gt; index-of(true())
+</code></pre>
+<p>Regardless which lexical representation is chosen, being able to represent an operator as a function leads to significant code simplification, and improves its readability.</p>
+<p>Please, share your thoughts/questions on this proposal.</p>
+</div></details></div>
+<div class="toot" id="created-82"><h2>Issue #82 created<span class="toot-id"> #created-82</span></h2><div class="pubdate">29 Jul at 12:25:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/82">https://github.com/qt4cg/qtspecs/issues/82</a></div><details><summary>Should the mode attribute for apply-templates in templates of enclosed modes default to #current?</summary><div class="markup"><p>XSLT 4 with enclosed modes allows to nest <code>xsl:template</code> declarations inside of an <code>xsl:mode</code> declaration, to kind of wrap all templates belonging to a certain mode.</p>
+<p>On XmlSlack, it was suggested, that for such templates, if they have an <code>xsl:apply-templates</code> instruction without a <code>mode</code> attribute, the mode should implicitly default to <code>#current</code>, meaning the enclosed mode, and not to the default mode of the stylesheet.</p>
+<p>So the section in https://qt4cg.org/branch/master/xslt-40/Overview-diff.html#using-modes saying about the optional <code>mode</code> attribute of <code>xsl:apply-templates</code> that "If the attribute is omitted, the default mode for the stylesheet module is used." needs to be adjusted to say that the enclosed mode is used if the template containing the <code>xsl:apply-templates</code>  is declared inside of such a mode.</p>
+</div></details></div>
+<div class="toot" id="created-81"><h2>Issue #81 created<span class="toot-id"> #created-81</span></h2><div class="pubdate">27 Jul at 09:20:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/81">https://github.com/qt4cg/qtspecs/issues/81</a></div><details><summary>[xslt30] Typo in §4.4</summary><div class="markup"><p>The text of the first Note in §4.4 reads</p>
+<p>This list excludes documents passed as the values of stylesheet parameters or parameters of the initial named template or initial function, trees created by functions such as parse-xml, parse-xml-fragment, analyze-string, or json-to-xml, nor values returned from extension functions.</p>
+<p>"nor" should be "and".</p>
+</div></details></div>
+<div class="toot" id="created-80"><h2>Issue #80 created<span class="toot-id"> #created-80</span></h2><div class="pubdate">14 Jun at 11:25:12 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/80">https://github.com/qt4cg/qtspecs/issues/80</a></div><details><summary>[FO] fn:while (before: fn:until)</summary><div class="markup"><h3>Motivation</h3>
+<p>Similar to <code>fold-left</code>, the function allows for an alternative writing of code that would otherwise be solved recursively, and that would possibly cause stack overflows without tail call optimizations.</p>
+<p>In contrast to sequence-processing functions (fold functions, <code>for-each</code>, <code>filter</code>, others), the initial input of <code>fn:while</code> can be arbitrary and will not determine the number of maximum iterations.</p>
+<h3>Summary</h3>
+<p>Applies the predicate function <code>$test</code> to <code>$input</code>. If the result is <code>false</code>, <code>$action</code> is invoked with the start value – or, subsequently, with the result of this function – until the predicate function returns <code>false</code>.</p>
+<h3>Signature</h3>
+<p><strong>Edit:</strong> The <code>$input</code> argument (before: <code>$zero</code>) is now defined as first parameter.</p>
+<pre><code class="language-xquery">fn:while(
+  $input  as item()*,
+  $test   as function(item()*) as xs:boolean,
+  $action as function(item()*) as item()*
+) as item()*
+</code></pre>
+<h3>Examples / Use Cases</h3>
+<p>Calculate the square root of a number by iteratively improving an initial guess:</p>
+<pre><code class="language-xquery">let $input := 3936256
+return fn:while(
+  $input,
+  function($result) { abs($result * $result - $input) &gt;= 0.0000000001 },
+  function($guess) { ($guess + $input div $guess) div 2 }
+)
+</code></pre>
+<p>Find the first number that does not occur in a sequence:</p>
+<pre><code class="language-xquery">let $values := (1 to 999, 1001 to 2000)
+return while(1, -&gt; { . = $values }, -&gt; { . + 1 })
+</code></pre>
+<h3>Equivalent Expression</h3>
+<pre><code class="language-xquery">declare function local:while(
+  $input  as item()*,
+  $test   as function(item()*) as xs:boolean,
+  $action as function(item()*) as item()*
+) {
+  if($test($input)) then (
+    local:while($action($input), $test, $action)
+  ) else (
+    $input
+  )
+};
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-79"><h2>Issue #79 created<span class="toot-id"> #created-79</span></h2><div class="pubdate">04 Jun at 07:46:43 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/79">https://github.com/qt4cg/qtspecs/issues/79</a></div><details><summary>[FO] New function fn:deep-normalize-space($e as node())</summary><div class="markup"><p>Summary: removes redundant whitespace within the content of a given node, leaving the element structure intact.</p>
+<p>Example:</p>
+<pre><code> &lt;p&gt;  My &lt;i&gt;crazy&lt;/i&gt;
+&lt;b&gt; content&lt;/b&gt;.
+&lt;/p&gt; 
+</code></pre>
+<p>becomes</p>
+<p><code>&lt;p&gt;My &lt;i&gt;crazy&lt;/i&gt; &lt;b&gt;content&lt;/b&gt;.&lt;/p&gt; </code>
+Rules (expressed informally, and may need refining):</p>
+<ul>
+<li>The string value of the result is the normalize-space() of the string-value of the input.</li>
+<li>Every non-whitespace character in the result has the same ancestor path as the corresponding character in the input (for example if it was in an <code>i</code> element in the input, then it will be in an <code>i</code> element in the output).</li>
+<li>When several adjacent whitespace characters from different elements in the input are combined into a single space in the output, the resulting space will be in a text node whose parent is the result node corresponding to the common ancestor of those different elements.</li>
+</ul>
+<p>For example <code>&lt;i&gt;easy &lt;/i&gt;&lt;b&gt; peasy&lt;/b&gt;</code> becomes <code>&lt;i&gt;easy&lt;/i&gt; &lt;b&gt;peasy&lt;/b&gt;</code></p>
+<p>Could perhaps also add an option to word-wrap to a given line length.</p>
+</div></details></div>
+<div class="toot" id="created-78"><h2>Issue #78 created<span class="toot-id"> #created-78</span></h2><div class="pubdate">30 May at 00:33:20 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/78">https://github.com/qt4cg/qtspecs/issues/78</a></div><details><summary>[XPath]Specify strict order of evaluation for a subexpression </summary><div class="markup"><p>As discussed in a related issue #71, given an XPath expression such as (1):</p>
+<pre><code>for $d in  ( 10, 2, 3 , current-date())
+  return
+     $d[. castable as xs:date][xs:date(.) le current-date()]
+</code></pre>
+<p>anyone who expects this expression to be evaluated without errors and to produce as result a sequence of one item, will be disappointed to get an error (as per BaseX 9.5.2):</p>
+<p><strong>Error</strong>:
+<em>Stopped at C:/W3C-XPath/DupsSolutions/file, 3/39:
+[XPTY0004] Cannot convert xs:integer to <code>xs:date</code>: 10</em>.</p>
+<p>At present the recommended solution to the problem is to write an expression of this kind instead (2):</p>
+<pre><code>for $d in  ( 10, 2, 3, current-date() )
+  return
+     if($d[. castable as xs:date] eq $d)
+       then $d[xs:date(.) le current-date()]
+       else()
+</code></pre>
+<p>Evaluating this produces the expected result (a sequence of one item, which is the <code>current-date()</code> ).</p>
+<p>There are many challenges with such a recommendation:</p>
+<ol>
+<li>The expression above is unreadable.</li>
+<li>It is very difficult and error-prone to convert manually (1) to (2)</li>
+<li>It would be nearly impossible to transform a more complex expression and it would be tremendously difficult to read, understand and maintain such code.</li>
+</ol>
+<p><strong>Proposed solution</strong>:</p>
+<p>Introduce the <strong><em>strict-order evaluation</em></strong> operator <strong>~</strong></p>
+<p>Then achieving a strict-order evaluation for the subexpression (of (1) above): <code>[xs:date(.) le current-date()]</code> would be  simply (3):</p>
+<pre><code>for $d in  ( 10, 2, 3 , current-date())
+  return
+     $d[. castable as xs:date]~[xs:date(.) le current-date()]
+</code></pre>
+<p>In this particular case the XPath processor will rewrite the above expression into:</p>
+<pre><code>for $d in  ( 10, 2, 3, current-date() )
+  return
+     $d[. castable as xs:date] =&gt; 
+                                  (function($x) {
+                                                 $x[xs:date($x) le current-date()]
+                                                 }
+                                  ) ()
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-77"><h2>Issue #77 created<span class="toot-id"> #created-77</span></h2><div class="pubdate">25 May at 22:00:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/77">https://github.com/qt4cg/qtspecs/issues/77</a></div><details><summary>[XQUF] Allow manipulation of maps and arrays</summary><div class="markup"><p>As discussed in the xml.com Slack workspace's xpath-ng channel, there is interest in extending the XQuery Update Facility to allow manipulation of maps and arrays—in effect, to facilitate the editing of large, deep JSON documents.</p>
+<p>For example, @DrRataplan provided this use case (the first code snippet can be viewed at <a href="https://xpath.playground.fontoxml.com/?mode=0&amp;variables=%7B%7D&amp;xml=%3Cxml%3E%0A%3C%2Fxml%3E&amp;xpath=let+%24theMap+%3A%3D+map%7B%27key%27%3Amap%7B%27deeperKey%27%3A+%5B1%2C2%2C3%5D%7D%7D%0A%0Areturn%0A%0A%24theMap+%3D%3E+map%3Aput%28%27key%27%2C+%24theMap%3Fkey+%3D%3E+map%3Aput%28%27deeperKey%27%2C+array%3Aappend%28%24theMap%3Fkey%3FdeeperKey%2C+42%29%29%29&amp;context=">fontoxml's playground</a>):</p>
+<blockquote>
+<p>I think XQUF for JSON may have its merit. Editing larger JSON documents using XQuery is not the most elegant. I mean, in JavaScript, changing a value in a deep map is <code>theMap['key']['deeperKey'].push(42)</code>. In XPath, it is more like:</p>
+<pre><code class="language-xquery">$theMap 
+=&gt; map:put('key', $theMap?key)
+=&gt; map:put('deeperKey', array:append($theMap?key?deeperKey, 42)))
+</code></pre>
+<p>In XQUF terms, I think this would look a bit like:</p>
+<pre><code class="language-xquery">insert 42 as last into $theMap?key?deeperKey
+</code></pre>
+<p>... which is at least a lot shorter.</p>
+<p>At some point when working on a project that tried to edit some JSON metadata objects in XQuery I implemented a function that accepted a map, a path of keys, a value and some semantics, such as inserting at the start vs. at the end. It did not work too great in the end and we went for JavaScript functions instead. Just too explicit and hard to debug.</p>
+</blockquote>
+<p>See also <a href="https://stackoverflow.com/questions/67652693/is-xquery-3-1-designed-for-advanced-json-editing/67653949#67653949">this discussion at StackOverflow</a>, where a user was struggling to use <code>map:put</code> or <code>map:remove</code> on deeper entries in a map; asked, "Is XQuery 3.1 designed for advanced JSON editing?"; and worried that XQuery "might not be the right choice" for his use case. Highlights from the responses:</p>
+<p>@michaelhkay wrote:</p>
+<blockquote>
+<p>You're correct that doing what I call deep update of a map is quite difficult with XQuery 3.1 (and indeed XSLT 3.0) as currently defined. And it's not easy to define language constructs with clean semantics. I attempted to design a construct as an XSLT extension instruction - see https://saxonica.com/documentation10/index.html#!extensions/instructions/deep-update -- but I don't think its anywhere near a perfect solution.</p>
+</blockquote>
+<p>@ChristianGruen wrote:</p>
+<blockquote>
+<p>Updates primitives had been defined for JSONiq (https://www.jsoniq.org/docs/JSONiqExtensionToXQuery/html-single/index.html#section-json-updates), but I believe they haven’t made it into the reference implementation. They could also be considered for XQuery 4.</p>
+</blockquote>
+<p>@michaelhkay responded:</p>
+<blockquote>
+<p>If I'm not mistaken, maps in JSONiq have object identity, which is not true of XQuery maps (which are pure functional data structures). That makes the semantics of deep update much easier to define, but makes it more difficult to make simple operations such as <code>put()</code> and <code>remove()</code> efficient.</p>
+</blockquote>
+<p>In Slack @liamquin also wrote:</p>
+<blockquote>
+<p>the proposals i've seen for this in the past required that maps and arrays be given identity in some way, but then you have the problem that e.g. <code>map:insert</code> returns a new map, which is not how an XQuery update expression works</p>
+</blockquote>
+<p>@jonathanrobie also wrote:</p>
+<blockquote>
+<p>Yes, but the first question is this: how much will is there to support JSON updates in XQuery update?</p>
+<p>I would love to have this.  I no longer work for an implementation of XQuery.</p>
+</blockquote>
+<p>@adamretter added:</p>
+<blockquote>
+<p>Sounds like a nice idea</p>
+</blockquote>
+</div></details></div>
+<div class="toot" id="created-76"><h2>Issue #76 created<span class="toot-id"> #created-76</span></h2><div class="pubdate">24 May at 22:00:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/76">https://github.com/qt4cg/qtspecs/issues/76</a></div><details><summary>[FO] non-deterministic time</summary><div class="markup"><p>The <code>current-date/Time</code> functions are deterministic, so they always return the same time, which is very confusing to everyone</p>
+<p>There could be <code>actual-current-date/Time</code> functions that return the actual time non-deterministically. Or call it <code>wall-date/Time</code>  or <code>system-date/Time</code></p>
+</div></details></div>
+<div class="toot" id="created-75"><h2>Issue #75 created<span class="toot-id"> #created-75</span></h2><div class="pubdate">14 May at 20:10:41 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/75">https://github.com/qt4cg/qtspecs/issues/75</a></div><details><summary>[XPath] [XQuery] [XSLT] Support processing HTML 5 template element content</summary><div class="markup"><h1>The Problem</h1>
+<p>The HTML 5 specification introduces a <code>template</code> element [1], [2] where the content of that element doesn't represent children of it, but are part of a content property. The root node of the content property is a DocumentFragment which is a light-weight document node. These specifications provide some non-normative guidelines for interacting with XSLT and XPath [3].</p>
+<p>The DocumentFragment interface is defined in the HTML DOM 4.1 [4] as an instance of a Node. Within the HTML 5 specification, it is only referenced in relation to the <code>template</code> element.</p>
+<p>This affects the proposed <code>fn:parse-html</code> (issue #74) function as well as databases and query processors that support storing and accessing HTML5 content via <code>fn:doc</code> and other APIs.</p>
+<h1>Requirements</h1>
+<ol>
+<li>Accurately represent the contents of the <code>template</code> element in the DOM/data model.</li>
+<li>Allow a conforming implementation to process the <code>template</code> content as if it was XML content -- i.e. using the child:: axis to access the content.</li>
+<li>Allow a conforming implementation to process the <code>template</code> content separately from child content -- e.g. if the implementation has support for the HTML DOM.</li>
+<li>Allow authors to select the content of a <code>template</code> element.</li>
+<li>Minimize changes to the data model specification. [*]</li>
+</ol>
+<p>[*] I don't believe it is possible to support this without some changes to the data model (see the Design section below).</p>
+<h1>Design</h1>
+<h2>Storing the content of the template</h2>
+<p>There are 3 options to handling the content of a <code>template</code> element.</p>
+<h3>1. As children</h3>
+<blockquote>
+<p>Store the content as child elements of the <code>template</code> element.</p>
+</blockquote>
+<p>This is how conforming processors that only understand XML content will process and view the document.</p>
+<h3>2. As a document node</h3>
+<blockquote>
+<p>Store the content as children of a <code>document</code> node, where the parent of the document node is the <code>template</code> element.</p>
+</blockquote>
+<p>This would be the minimal amount of changes needed to make the HTML5 model work. The only change I can see is that this won't conform to section <em>6.1.2 Accessors</em> of the data model, in that:</p>
+<blockquote>
+<p><code>dm:parent</code>
+Returns the empty sequence</p>
+</blockquote>
+<p>becomes:</p>
+<blockquote>
+<p><code>dm:parent</code>
+If this is a document fragment for a <code>template</code> element, returns the <code>template</code> element. Otherwise, returns the empty sequence.</p>
+</blockquote>
+<p>Implementors using the HTML DOM would need to map DocumentFragment nodes to <code>document-node()</code>.</p>
+<h3>3. As a new document-fragment node</h3>
+<blockquote>
+<p>Store the content as children of a new <code>document-fragment</code> node type, where the parent of the document-fragment node is the <code>template</code> element.</p>
+</blockquote>
+<p>This is the option that is most compatible with the HTML DOM as it mirrors the <code>DocumentFragment</code> interface from that, but is also the one that is the most invasive. It will require (among other things):</p>
+<ol>
+<li>Defining rules in section <em>6. Nodes</em> of the data model for <em>Document Fragment Nodes</em> -- accessors, construction from infoset and PSVI, and infoset mapping.</li>
+<li>Adding a new <code>document-fragment()</code> <code>KindTest</code> to the supported node/item types.</li>
+<li>Adding <code>subtype-itemtype</code> rules for the document fragment nodes.</li>
+<li>Adding a new <code>document-fragment { ... }</code> computed constructor for XQuery.</li>
+</ol>
+<h2>Selecting template content</h2>
+<p>A new forward axis should be added that supports selecting fragment nodes. Some of the possible names include:</p>
+<ol>
+<li><code>fragment::</code> -- following the pattern defined by the <code>attribute::</code> axis; or</li>
+<li><code>content::</code> -- following the nomenclature from the HTML specification for the <code>template</code> element contents.</li>
+</ol>
+<p>The behaviour will depend on which of the 3 options above is selected for storing the content type:</p>
+<ol>
+<li>If an implementation only supports XML (option 1), the new axis will work the same as <code>child::</code>. The principle node kind is <em>element</em>.</li>
+<li>If option 2 is chosen (reuse the document node), the new axis will match document nodes whose parent is a <code>template</code> element. The principle node kind is <em>document</em>. <strong>Note:</strong> This has an ambiguity with the reverse axes, as it is checking the parent of the node as well as the node type.</li>
+<li>If option 3 is chosen (create a document fragment node), the new axis will match any document fragment nodes. The principle node kind is <em>document fragment</em>. <strong>Note:</strong> This makes more sense when the <code>fragment::</code> name is used for the axis, and would be more generally applicable, such as for computed constructor created fragments, or HTML DocumentFragments created from a JavaScript or web browser XPath/XSLT/XQuery binding such as Saxon-JS.</li>
+</ol>
+<h1>References</h1>
+<p>[1] https://www.w3.org/TR/html52/semantics-scripting.html#the-template-element
+[2] https://html.spec.whatwg.org/#the-template-element
+[3] https://www.w3.org/TR/html52/semantics-scripting.html#interaction-of-template-elements-with-xslt-and-xpath
+[4] https://www.w3.org/TR/dom41/#documentfragment</p>
+</div></details></div>
+<div class="toot" id="created-74"><h2>Issue #74 created<span class="toot-id"> #created-74</span></h2><div class="pubdate">14 May at 15:09:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/74">https://github.com/qt4cg/qtspecs/issues/74</a></div><details><summary>[FO] Support parsing HTML</summary><div class="markup"><p>It is common for applications that use an XQuery database engine to want to parse HTML documents when adding content from HTML pages into a database, or in other applications like generating epub documents from HTML source files. Vendors like MarkLogic (<code>xdmp:tidy</code> via HTML Tidy for HTML4), BaseX (<code>html:parse</code> via TagSoup), Saxon (<code>saxon:parse-html</code> via TagSoup), and eXist-db (<code>util:parse-html</code> via Neko) have provided custom methods to support this.</p>
+<p>Q: Should there also be functions to list the supported methods and character encodings?</p>
+<h1>fn:parse-html</h1>
+<h2>Summary</h2>
+<p>Parses HTML-based input into an XML document.</p>
+<h2>Signature</h2>
+<pre><code>fn:parse-html($input as union(xs:string, xs:hexBinary, xs:base64Binary),
+              $options as map(*) := map { "method": "html5" }) as document-node()
+</code></pre>
+<h2>Properties</h2>
+<p>This function is ·deterministic·, ·context-independent·, and ·focus-independent·.</p>
+<h2>Rules</h2>
+<p>The $options map conforms to <code>record(method as union(enum("html5"), xs:string), encoding as xs:string?, *)</code>. A vendor may provide ·implementation-dependent· options that may vary between the different <code>method</code> values.</p>
+<p>The <code>method</code> property of $options defines the approach used to convert the HTML document to XML. This specification supports <code>html5</code> for using the HTML5 parsing rules for HTML content. The exact version of HTML5 used is ·implementation-dependent·.</p>
+<p>The <code>encoding</code> property of $options defines the character encoding used to decode binary data. By default, this is an empty sequence. Implementations must support at least <code>utf-8</code>, <code>utf8</code>, <code>ascii</code>, and <code>latin1</code>. Other encoding values are ·implementation-dependent·, but it is recommended that the encodings documented in the WHATWG Encoding specification [3] are supported.</p>
+<p>If $input is an <code>xs:string</code>, no character decoding is performed as the input is already decoded.</p>
+<p>If $input is an <code>xs:hexBinary</code> or <code>xs:base64Binary</code>, the character encoding used to decode the binary data is determined as follows:</p>
+<ol>
+<li>if the binary data has a valid Unicode Byte Order Mark (BOM), the character encoding specified by that BOM is used.</li>
+<li>if <code>encoding</code> is specified in $options, that value is used;</li>
+<li>if prescanning the first 1024 bytes of data contains a character encoding (using the rules from https://html.spec.whatwg.org/multipage/parsing.html#prescan-a-byte-stream-to-determine-its-encoding), the detected encoding is used;</li>
+<li>if ·implementation-dependent· heuristics (in line with the HTML5 rules) detect a character encoding, that encoding is used;</li>
+<li>otherwise, the encoding is "utf-8".</li>
+</ol>
+<p>If the detected character encoding name is not supported, an <code>FO######</code> error is raised. Otherwise, the character encoding method associated with the character encoding is used.</p>
+<p>If the parsing method is not supported, an <code>FO######</code> error is raised.</p>
+<p>The $input is then parsed according to the specified parsing method, building an intermediate HTML Document object. The XML <code>document-node</code> is then constructed by mapping the HTML document, element, attribute, text, and comment nodes to their XML equivalents.</p>
+<p>If a HTML document contains a <code>template</code> element, the contents of that element are added as children of the <code>template</code> element. It is ·implementation-dependent· whether or not a processor ignores this content when evaluating path expressions on these <code>template</code> elements, and how they are represented in any DOM interfaces.</p>
+<h2>Notes</h2>
+<blockquote>
+<p>The character encoding logic follows the https://html.spec.whatwg.org/multipage/parsing.html#encoding-sniffing-algorithm rules.</p>
+<p>HTML does not support processing instructions. They are treated as comments in the HTML5 specification.</p>
+<p>The HTML <code>template</code> element is complex as the HTML specification defines its content as being part of a separate document that is associated with the template contents property of that element, not its children. The WHATWG specification provides a non-normative guide for XSLT and XPath interacting with these elements (https://html.spec.whatwg.org/#template-XSLT-XPath).</p>
+<p>A conforming implementation may choose to parse and return the HTML into a HTML-based data model (e.g. the HTML DOM) instead of generating an XML infoset or PSVI. This is valid as long as the accessor functions (https://www.w3.org/TR/xpath-datamodel-31/#accessors) and the various syntax that works with XML nodes also works for the HTML nodes. That is, expressions like <code>$html/html/body/p instance of element(p)</code> are supported.</p>
+</blockquote>
+<h2>Examples</h2>
+<blockquote>
+<p>The expression <code>fn:parse-html("&lt;html&gt;")</code> returns an empty html document constructed using the HTML5 document construction rules.</p>
+<p>The expression <code>fn:parse-html($html, encoding: "latin2")</code> uses the <code>latin2</code> character encoding to parse $html, or generates an FO###### error if the processor does not support that encoding.</p>
+<p>The expression <code>fn:parse-html($html, method: "html5", encoding: ())</code> is equivalent to <code>fn:parse-html($html)</code>.</p>
+<p>The expression <code>fn:parse-html($html, method: "tidy")</code> uses the <code>tidy</code> method (e.g. from the HTML Tidy application) to parse $html into an XML document if supported by the implementation. Otherwise an <code>FO######</code> error is raised.</p>
+<p>The expression <code>fn:parse-html($html, method: "tagsoup", nons: true())</code> uses the <code>tagsoup</code> method (e.g. from the TagSoup application) to parse $html into an XML document if supported by the implementation, passing the <code>--nons</code> attribute. Otherwise an <code>FO######</code> error is raised.</p>
+</blockquote>
+<h2>References</h2>
+<ol>
+<li><a href="https://www.w3.org/TR/html52/">HTML 5.2</a>, W3C.</li>
+<li><a href="https://html.spec.whatwg.org/multipage/">HTML Living Standard</a>, WHATWG.</li>
+<li><a href="https://encoding.spec.whatwg.org/">Encoding Living Standard</a>, WHATWG.</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-73"><h2>Issue #73 created<span class="toot-id"> #created-73</span></h2><div class="pubdate">07 May at 07:33:59 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/73">https://github.com/qt4cg/qtspecs/issues/73</a></div><details><summary>[FO] Split a string by graphemes</summary><div class="markup"><p>The new <code>fn:characters</code> function is useful, but doesn't solve a problem of manipulating strings where multiple codepoints correspond to a single grapheme. For example:</p>
+<ol>
+<li>characters with one or more combining characters;</li>
+<li>emoji with skin tone variant selectors;</li>
+<li>emoji with gender variant selectors;</li>
+<li>multi-sequence emoji -- family, wales flag, etc.;</li>
+<li>region indicator pairs for flags.</li>
+</ol>
+<p>Getting this right is complex, and implementing it as a regular expression is easy to get wrong/make mistakes.</p>
+<h1>fn:graphemes</h1>
+<h2>Summary</h2>
+<p>Splits the supplied string into a sequence of single-grapheme (one or more character) strings.</p>
+<h2>Signature</h2>
+<p><code>fn:graphemes($value as xs:string?) as xs:string*</code></p>
+<h2>Properties</h2>
+<p>This function is ·deterministic·, ·context-independent·, and ·focus-independent·.</p>
+<h2>Rules</h2>
+<p>The function returns a sequence of strings, containing the corresponding ·grapheme· in $value. These are determined by the corresponding Unicode rules for what constitutes a ·grapheme·. The version of Unicode and the Unicode Emoji standards is ·implementation-dependent·.</p>
+<p>If $value is a zero-length string or the empty sequence, the function returns the empty sequence.</p>
+<h2>Examples</h2>
+<blockquote>
+<p>The expression <code>fn:graphemes("Thérèse")</code> returns <code>("T", "h", "é", "r", "è", "s", "e")</code>, irrespective of whether the e characters use combining characters or not.</p>
+<p>The expression <code>fn:graphemes("")</code> returns <code>()</code>.</p>
+<p>The expression <code>fn:graphemes(())</code> returns <code>()</code>.</p>
+<p>The expression <code>fn:graphemes("👋🏻👋🏼👋🏽👋🏾👋🏿")</code> returns <code>("👋🏻", "👋🏼", "👋🏽", "👋🏾", "👋🏿")</code>.</p>
+<p>The expression <code>fn:graphemes("👪")</code> returns <code>("👪")</code>.</p>
+<p>The expression <code>fn:graphemes("👨‍🔬👩‍🔬")</code> returns <code>("👨‍🔬", "👩‍🔬")</code>.</p>
+<p>The expression <code>fn:graphemes("🇪🇪🇩🇪🇫🇷🏴󠁧󠁢󠁷󠁬󠁳󠁿🇮🇸")</code> returns <code>("🇪🇪", "🇩🇪", "🇫🇷", "🏴󠁧󠁢󠁷󠁬󠁳󠁿", "🇮🇸")</code>.</p>
+</blockquote>
+</div></details></div>
+<div class="toot" id="created-72"><h2>Issue #72 created<span class="toot-id"> #created-72</span></h2><div class="pubdate">04 May at 07:38:50 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/72">https://github.com/qt4cg/qtspecs/issues/72</a></div><details><summary>[FO] Provide better support for URI processing within an expression</summary><div class="markup"><blockquote>
+<p>Use Case 1: Decode an encoded URI string.</p>
+</blockquote>
+<p>This is difficult to implement correctly, and is a commonly asked question/request on sites like stackoverflow. Vendors have even implemented their own functions, like <code>xdmp:uri-decode</code>.</p>
+<blockquote>
+<p>Use Case 2: Extracting the hash/parameters from a URI string.</p>
+</blockquote>
+<p>This is common when manipulating URI strings and not using something like RESTXQ to bind the query parameters to function parameters. The API should:</p>
+<ol>
+<li>extract the hash as a string, and the parameters as a name/value map;</li>
+<li>combine parameters with the same name into the same map entry;</li>
+<li>decode the values where necessary.</li>
+</ol>
+<blockquote>
+<p>Use Case 3: Extract the other parts of a URI string.</p>
+</blockquote>
+<p>This can be useful if writing a RESTXQ or similar implementation in XSLT/XQuery. It can also be useful for generating response headers such as Origin, or doing HTTP to HTTPS redirects.</p>
+<p>It is easy to make mistakes and the wrong assumptions when writing a URI parser by hand. Additionally, it is not easy to implement in XSLT/XQuery as functions like <code>analyse-string</code> and <code>tokenize</code> are not powerful enough to implement a lexer, and manipulating codepoints is difficult without stateful logic.</p>
+</div></details></div>
+<div class="toot" id="created-71"><h2>Issue #71 created<span class="toot-id"> #created-71</span></h2><div class="pubdate">13 Apr at 08:42:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/71">https://github.com/qt4cg/qtspecs/issues/71</a></div><details><summary>[XSLT] Use of multiple predicates: order of evaluation</summary><div class="markup"><p>I notice I added an example pattern to the draft XSLT4 spec <code>match=".[. castable as xs:date][xs:date(.) le current-date()]"</code> which is incorrect because processors are allowed to change the order of predicates, so you can't use the first predicate as a guard to stop the second predicate throwing an error. I've seen users fall over this (Saxon does sometimes reorder predicates). My instinct is to ban reordering of predicates; if you want to allow it, you can use the "and" operator. An alternative would be an "and" operator (say "and-also") with explicit ordering semantics, as in XPath 1.0.</p>
+</div></details></div>
+<div class="toot" id="created-70"><h2>Issue #70 created<span class="toot-id"> #created-70</span></h2><div class="pubdate">12 Apr at 16:47:00 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/70">https://github.com/qt4cg/qtspecs/issues/70</a></div><details><summary>[FO] Built-in function changes to support default values</summary><div class="markup"><p>This issue tracks the changes needed to the built-in functions to allow them to combine the declarations into a single definition with default parameter values.</p>
+<p>The general approach to this is to make required arguments optional if they are for a function signature that is not the lowest argument count signature, and move any associated logic into the function.</p>
+<h2>array:subarray</h2>
+<ol>
+<li>Change <code>array:subarray</code>/<code>$length</code> from <code>xs:integer</code> to <code>xs:integer?</code>.</li>
+</ol>
+<p><strong>Rules</strong></p>
+<p>Except in error cases, the result of the function is the value of the expression op:A2S($array) =&gt; fn:subsequence($start, $length) =&gt; op:S2A().</p>
+<p><strong>Error Conditions</strong></p>
+<p>A dynamic error is raised [err:FOAY0001] if $start is less than one or greater than array:size($array) + 1.</p>
+<p>A dynamic error is raised [err:FOAY0002] if $length is not an empty sequence and is less than zero.</p>
+<p>A dynamic error is raised [err:FOAY0001] if $length is not an empty sequence and $start + $length is greater than array:size($array) + 1.</p>
+<h2>fn:concat</h2>
+<p>This should be modified to use a sequence-variadic signature, either as a 1 parameter function (taking an <code>xs:anyAtomicType*</code> value, allowing 0 and 1 arguments), or a 3 parameter function with the last parameter having the type <code>xs:anyAtomicType*</code>.</p>
+<h2>fn:differences</h2>
+<p>The <code>$options</code> parameter should be moved to the end of the parameter list in order to make the function a map-variadic function when default values are applied. This then makes it possible to specify the collation argument using a keyword argument in addition to specifying options as keyword arguments.</p>
+<h2>fn:resolve-uri</h2>
+<ol>
+<li>Change <code>fn:resolve-uri</code>/<code>$base</code> from <code>node()</code> to <code>node()?</code>.</li>
+</ol>
+<pre><code>- If the $base argument is not supplied,
++ If the $base argument is the empty sequence,
+</code></pre>
+<h2>fn:subsequence</h2>
+<ol>
+<li>Change <code>fn:subsequence</code>/<code>$length</code> from <code>xs:double</code> to <code>xs:double?</code>.</li>
+</ol>
+<p>When $length is the empty sequence, this function returns:</p>
+<pre><code>$input[fn:round($start) le position()]
+</code></pre>
+<p>When $length is not the empty sequence, this function returns:</p>
+<pre><code>$input[fn:round($start) le position() 
+         and position() lt fn:round($start) + fn:round($length)]
+</code></pre>
+<h2>fn:substring</h2>
+<ol>
+<li>Change <code>fn:subsequence</code>/<code>$length</code> from <code>xs:double</code> to <code>xs:double?</code>.</li>
+</ol>
+<p>More specifically, when $length is not the empty sequence the function returns the characters in $value whose position $p satisfies:</p>
+<pre><code>fn:round($start) &lt;= $p and $p &lt; fn:round($start) + fn:round($length)
+</code></pre>
+<p>When $length is the empty sequence the function assumes that $length is infinite and thus returns the ·characters· in $value whose position $p satisfies:</p>
+<pre><code>fn:round($start) &lt;= $p
+</code></pre>
+<h2>fn:tokenize</h2>
+<ol>
+<li>Change <code>fn:tokenize</code>/<code>$pattern</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+</ol>
+<p>If $pattern is the empty sequence, the $value argument is set to <code>fn:normalize-space($value)</code> and $pattern is set to <code>' '</code>.</p>
+<h2>fn:unparsed-text / fn:unparsed-text-available</h2>
+<ol>
+<li>Change <code>fn:unparsed-text</code>/<code>$encoding</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:unparsed-text-available</code>/<code>$encoding</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+</ol>
+<h2>fn:unparsed-text-lines</h2>
+<ol>
+<li>Change <code>fn:unparsed-text-lines</code>/<code>$encoding</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+</ol>
+<p>The result of the function is the same as the result of the expression <code>fn:tokenize(fn:unparsed-text($href, $encoding), '\r\n|\r|\n')[not(position()=last() and .='')]</code>.</p>
+<h2>Collations</h2>
+<ol>
+<li>Change <code>fn:collation-key</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:compare</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:contains</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:contains-token</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:deep-equal</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:differences</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:distinct-values</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:ends-with</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:index-of</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:max</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:min</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:starts-with</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:substring-after</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:substring-before</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:uniform</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+<li>Change <code>fn:unique</code>/<code>$collation</code> from <code>xs:string</code> to <code>xs:string?</code>.</li>
+</ol>
+<p>Passing the empty sequence to the $collation argument is equivalent to supplying the default collation to that argument.</p>
+</div></details></div>
+<div class="toot" id="created-69"><h2>Issue #69 created<span class="toot-id"> #created-69</span></h2><div class="pubdate">12 Apr at 16:46:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/69">https://github.com/qt4cg/qtspecs/issues/69</a></div><details><summary>[XSLT] Built-in function changes to support default values</summary><div class="markup"><p>This issue tracks the changes needed to the built-in functions to allow them to combine the declarations into a single definition with default parameter values.</p>
+<p>The general approach to this is to make required arguments optional if they are for a function signature that is not the lowest argument count signature, and move any associated logic into the function.</p>
+<h2>fn:document</h2>
+<ol>
+<li>Change <code>fn:document</code>/<code>$base-node</code> from <code>node()</code> to <code>node()?</code>.</li>
+</ol>
+<pre><code>- If $base-node is supplied,
++ If $base-node is not empty,
+</code></pre>
+<h2>fn:function-available</h2>
+<ol>
+<li>Change <code>fn:function-available</code>/<code>$arity</code> from <code>xs:integer</code> to <code>xs:integer?</code>.</li>
+</ol>
+<p>If $arity is the empty sequence, the function-available function returns true if and only if there is at least one available function (with some arity) whose name matches the value of the $name argument.</p>
+<p>If $arity is not the empty sequence, the function-available function returns true if and only if there is an available function whose name matches the value of the $function-name argument and whose arity matches the value of the $arity argument.</p>
+</div></details></div>
+<div class="toot" id="closed-68"><h2>Issue #68 closed<span class="toot-id"> #closed-68</span></h2><div class="pubdate">12 Apr at 14:25:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/68">https://github.com/qt4cg/qtspecs/pull/68</a></div><p>Don't attempt to upgrade the host</p></div>
+<div class="toot" id="created-68"><h2>Pull request #68 created<span class="toot-id"> #created-68</span></h2><div class="pubdate">12 Apr at 14:25:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/68">https://github.com/qt4cg/qtspecs/pull/68</a></div><details><summary>Don't attempt to upgrade the host</summary><div class="markup"><p>The CI script shouldn't attempt to upgrade the host. CircleCI have customized some of the packages so upgrading doesn't work. And it shouldn't really be necessary anyway.</p>
+</div></details></div>
+<div class="toot" id="created-67"><h2>Issue #67 created<span class="toot-id"> #created-67</span></h2><div class="pubdate">09 Apr at 09:59:18 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/67">https://github.com/qt4cg/qtspecs/issues/67</a></div><details><summary>[XPath] [XQuery] Allow optional parameters and keyword arguments on map and sequence variadic functions.</summary><div class="markup"><p>These proposed draft changes seek to address the following issues with, and limitations of, the current draft specification:</p>
+<ol>
+<li>A <code>%variadic("sequence")</code> function where the sequence type uses the <code>+</code> occurrence indicator should not have an implicit default value. That would mean passing <code>()</code> to the sequence, which would generate a coercion error.</li>
+<li>Map-variadic and sequence-variadic functions cannot have user-specified default parameter values with the current draft wording. In this case the map/sequence last parameter need to be given a default in the function declaration. This allows those to be defaulted to something other than an empty map/sequence, as well as specifying the defaults for other parameters (e.g. in the case where a map is the last of several parameters).</li>
+<li>It should be possible to allow parameters to be specified as keyword arguments for map-variadic functions. For map-variadic functions, a keyword argument will be bound to a parameter if it matches the parameter, or added to the map if not.</li>
+</ol>
+<blockquote>
+<p>Design Note:</p>
+<p>It would be nice to support keyword arguments for sequence-variadic functions. The other design notes detail a possible way to implement this logic. This would resolve issue #26, and make the features (keyword arguments in this case) usable in all cases.</p>
+</blockquote>
+<h2>Proposal</h2>
+<p>There are two orthogonal concepts related to variadic functions:</p>
+<ol>
+<li><em>arity bounds</em> -- the number of required and optional parameters a function has;</li>
+<li><em>variadic type</em> -- how the function behaves in relation to its last parameter.</li>
+</ol>
+<h3>Arity Bounds</h3>
+<p>[Definition: The <em>declared arity</em> of a function is the number of parameters defined in the function declaration.] The declared arity includes both required and optional parameters.</p>
+<p>[Definition: An <em>optional parameter</em> is a parameter with a default value.] The default value may either be specified in the function declaration, or determined by the logic described below.</p>
+<p>[Definition: A <em>declared optional parameter</em> is an optional parameter specified in the function declaration.] TODO: Define a syntax for specifying declared optional parameters. [Note: see issue #64 for a proposal on doing this.]</p>
+<p>The property <code>A</code> is the <em>declared arity</em> of a function.</p>
+<p>The property <code>D</code> is the number of optional parameters. This is determined as follows:</p>
+<ol>
+<li>If there are any declared optional parameters, <code>D</code> is the number of declared optional parameters.</li>
+<li>If the last parameter is a <code>MapTest</code> or <code>RecordTest</code>, <code>D</code> is 1.</li>
+<li>If the last parameter is a sequence type with a minimum item occurrence of 0 (e.g. using the <code>*</code> occurrence indicator), <code>D</code> is 1.</li>
+<li>If none of the above apply, <code>D</code> is 0.</li>
+</ol>
+<p>The property <code>R</code> is the number of required parameters, and is determined by evaluating <code>A-D</code>.</p>
+<h3>Variadic Type</h3>
+<p>The <em>variadic type</em> is given by the <code>%variadic(enum("no", "map", "sequence"))</code> annotation. It is determined as follows:</p>
+<ol>
+<li>If the last parameter is a <code>MapTest</code> or <code>RecordTest</code>, <code>%variadic("map")</code> is specified.</li>
+<li>If the last parameter is a sequence type with an unbounded maximum item occurrence (e.g. using the <code>*</code> or <code>+</code> occurrence indicator), <code>%variadic("sequence")</code> is specified.</li>
+<li>If none of the above apply, <code>%variadic("no")</code> is specified.</li>
+</ol>
+<p>[Definition: The <em>variadic parameter</em> of a function refers to the last parameter of a map-variadic or sequence-variadic function.]</p>
+<p>The values of the MinA/MaxA, MinP/MaxP, and MinK/MaxK properties are given by the following table, where <code>A</code> and <code>R</code> are defined in the <em>arity bounds</em> section.</p>
+<p>| <code>%variadic</code>    | MinA | MaxA      | MinP | MaxP      | MinK | MaxK      |
+|----------------|------|-----------|------|-----------|------|-----------|
+| <code>no</code>           | R    | A         | 0    | A         | 0    | A         |
+| <code>map</code>          | R    | unbounded | 0    | A         | 0    | unbounded |
+| <code>sequence</code>     | R    | unbounded | R    | unbounded | 0    | 0         |</p>
+<p>For <code>%variadic("no")</code> and <code>%variadic("map")</code> functions, positional and keyword arguments can be mixed, or the arguments can be specified as either all positional arguments, or all keyword arguments.</p>
+<blockquote>
+<p>Note:</p>
+<p>If a keyword argument has the name of the variadic parameter for a map-variadic function, it is used to specify the value of that map, and not a key in a constructed map. In this case, the other keyword arguments must specify parameter names as the value of the variadic parameter has already been specified, and would result in a conflicting value if any of the keyword arguments were specifying keys in the variadic parameter.</p>
+</blockquote>
+<p>For <code>%variadic("sequence")</code> functions, only positional parameters are allowed.</p>
+<blockquote>
+<p>Design Note:</p>
+<p>Keyword arguments <em>could</em> be supported for sequence-variadic functions if the presence of a keyword argument makes it function like <code>%variadic("no")</code>. That is, it is not unbounded in this case. This would work, as keyword arguments occur after positional arguments, and the variadic parameter would need to be specified as a keyword argument.</p>
+<p>The tricky part of this is that MinA/MaxA would no longer be statically determinable, in that they would depend on whether the function call used keyword arguments.</p>
+<p>The <code>sequence</code> row would be modified as follows:</p>
+<p>| <code>%variadic</code>    | MinA | MaxA      | MinP | MaxP      | MinK | MaxK      |
+|----------------|------|-----------|------|-----------|------|-----------|
+| <code>sequence</code>     | R    | variable [1] | 0    | unbounded | 0    | A         |</p>
+<p>[1] If the function call has at least one keyword argument, <code>MaxA</code> is <code>A</code>. Otherwise, <code>MaxA</code> is <code>unbounded</code>.</p>
+</blockquote>
+<h3>Evaluating Static Function Calls</h3>
+<p>...</p>
+<ol start="3">
+<li>
+<p>Positional argument values are mapped to parameters in the function declaration as follows:
+Let the number of declared parameters be N.</p>
+<ol>
+<li>A positional argument with position M, (M &lt; N) corresponds to the parameter in position M.</li>
+<li>For sequence-variadic functions, the values of arguments in positions greater than or equal to N are concatenated into a sequence, and the resulting sequence is supplied as the value of parameter N. If there are no such arguments (that is, if N-1 arguments are supplied), then the value supplied for parameter N is an empty sequence.</li>
+</ol>
+</li>
+<li>
+<p>Keyword argument values are mapped to parameters in the function declaration as follows:
+Let the keyword corresponding to a keyword argument be K.</p>
+<ol>
+<li>If there is a parameter with name K, the keyword argument corresponds to the named parameter K.</li>
+<li>For map-variadic functions, the keyword argument is assembled into a map. For each keyword argument, the map has an entry whose name is the keyword (as an instance of <code>xs:string</code>) and whose corresponding value is the argument value.</li>
+<li>For non-variadic functions, an XPST#### error is raised if there is no parameter with name K.</li>
+</ol>
+</li>
+</ol>
+<blockquote>
+<p>Design Note:</p>
+<p>If supporting keyword arguments for sequence-variadic functions, 4/iii would handle them. That is, an error is raised if the keyword name does not match a parameter name.</p>
+</blockquote>
+<ol start="5">
+<li>
+<p>If no argument corresponds to a parameter in the function declaration:</p>
+<ol>
+<li>If the parameter has a default value, then that value is used.
+TODO: define how the default value is evaluated, i.e. what context is used.</li>
+<li>For sequence-variadic functions, the value supplied for parameter N is an empty sequence.</li>
+<li>For map-variadic functions, the value supplied for parameter N is the map constructed in step 4. If no keyword arguments were used to construct the map, and empty map is used.</li>
+<li>If none of the above apply, an XPST#### error is raised.</li>
+</ol>
+</li>
+<li>
+<p>If more than one argument corresponds to a parameter in the function declaration, an XPST#### error is raised.</p>
+</li>
+</ol>
+<p>...</p>
+</div></details></div>
+<div class="toot" id="created-66"><h2>Issue #66 created<span class="toot-id"> #created-66</span></h2><div class="pubdate">30 Mar at 18:28:55 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/66">https://github.com/qt4cg/qtspecs/issues/66</a></div><details><summary>[XPath] [XQuery] ThinArrowTarget should use FunctionBody</summary><div class="markup"><p>For consistency with <code>FunctionDecl</code> and <code>InlineFunctionExpr</code> (both of which use <code>FunctionBody</code> for the function body instead of <code>EnclosedExpr</code>), <code>ThinArrowTarget</code> should also use <code>FunctionBody</code> for the inline function call version (e.g. <code>2 -&gt; { . + 1 }</code>):</p>
+<pre><code>ThinArrowTarget ::= "-&gt;" ( (ArrowStaticFunction ArgumentList) |
+                           (ArrowDynamicFunction PositionalArgumentList) |
+                           FunctionBody )
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-65"><h2>Issue #65 created<span class="toot-id"> #created-65</span></h2><div class="pubdate">29 Mar at 17:13:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/65">https://github.com/qt4cg/qtspecs/issues/65</a></div><details><summary>[XQuery] Support using different input/output element namespaces</summary><div class="markup"><h2>Use Case</h2>
+<p>There have been requests for specifying the output namespace in XQuery akin to the <code>@xpath-default-namespace</code> element in XSLT. With the element and type namespaces now being able to be set independently, it would be a good idea to make this change as well, splitting the input and output default XML namespaces.</p>
+<h2>Grammar</h2>
+<pre><code>DefaultNamespaceDecl ::= "declare"  "default"  ((("input" | "output")? "element")  |  "type"  |  "function")
+                         "namespace"  URILiteral
+</code></pre>
+<h2>New Semantics</h2>
+<p>The <em>default element namespace</em> static context item is split into a <em>default input element namespace</em> that applies to input element contexts (e.g. path steps), and a <em>default output element namespace</em> that applies to output element contexts (e.g. direct/constructed elements).</p>
+<p>The <em>scope</em> of the default namespace declaration is the <code>element</code>, <code>function</code>, <code>input element</code>, <code>output element</code>, or <code>type</code> namespace specified in the declaration.</p>
+<p>A default namespace declaration with the <em>element</em> scope will set any of the <em>input element</em>, <em>output element</em>, and <em>type</em> namespaces that have not been set by a corresponding <em>input element</em>, <em>output element</em>, or <em>type</em> scoped default namespace declaration.</p>
+<blockquote>
+<p>Example:</p>
+<p>Given <code>declare default input element namespace "A"; declare default element namespace "B";</code>, the <em>output element</em> and <em>type</em> namespaces will be specified by the <em>element</em> scope default namespace declaration "B", and the <em>input element</em> namespace will be specified by the <em>input element</em> scope default namespace declaration "A".</p>
+</blockquote>
+<h2>TODO</h2>
+<p>Map all element symbols/contexts as using either the <em>input element</em> or <em>output element</em> default namespace for NCName EQNames.</p>
+</div></details></div>
+<div class="toot" id="created-64"><h2>Issue #64 created<span class="toot-id"> #created-64</span></h2><div class="pubdate">12 Mar at 08:55:43 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/64">https://github.com/qt4cg/qtspecs/issues/64</a></div><details><summary>[XPath] [XQuery] Add a syntax for specifying optional parameters to create bounded variadic functions.</summary><div class="markup"><p>The current Editor's Draft for XPath and XQuery define a <code>%variadic("bounded")</code> function type, but does not define a syntax for specifying these.</p>
+<h2>Grammar</h2>
+<pre><code>ParamList ::= RequiredParamList ( "," OptionalParamList )?
+RequiredParamList ::= Param ("," Param)*
+Param ::= "$" EQName TypeDeclaration?
+OptionalParamList ::= OptionalParam ("," OptionalParam)*
+OptionalParam ::= Param ":=" ExprSingle
+</code></pre>
+<blockquote>
+<p>Note:</p>
+<p>I've followed the structure of positional and keyword arguments here, so the optional parameters are only valid at the end of the function. If it is decided that optional parameters can be declared anywhere in the parameter list, the grammar simplifies to:</p>
+<pre><code>ParamList ::= Param ("," Param)*
+Param ::= "$" EQName TypeDeclaration? ( ":=" ExprSingle )?
+</code></pre>
+</blockquote>
+<h2>Semantics</h2>
+<p>[Definition: a parameter is an <em>optional parameter</em> if it has a default value specified using the <code>:= ExprSingle</code> syntax.] Optional parameters affect the value of R (the number of parameters that do not have a default value) in the <em>4.4.1 Static Functions</em> section.</p>
+<h2>Notes</h2>
+<p>There are open questions on what to allow in the default value expression. Specifically, how to support things like the context item for functions such as <code>fn:data#0</code> that use the context item if not specified (e.g. when used at the end of a path expression).</p>
+<p>An investigation should be done on the standard functions and vendor built-in functions to see what values they take as defaults.</p>
+</div></details></div>
+<div class="toot" id="created-63"><h2>Issue #63 created<span class="toot-id"> #created-63</span></h2><div class="pubdate">02 Mar at 16:02:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/63">https://github.com/qt4cg/qtspecs/issues/63</a></div><details><summary>[FO] fn:slice, array:slice: Signatures, Examples</summary><div class="markup"><p><strong>EDIT:</strong> 1. is obsolete, 2. and 3. are still up-to-date:</p>
+<p>1.&nbsp;The current specification for <code>fn:slice</code> has only one signature.</p>
+<p>It might be recommendable to also provide signatures with 1 and 2 arguments (especially for users who don’t want to use the new syntax for specifying optional arguments).</p>
+<p>2.&nbsp;The last examples look wrong; I would expect the input as results:</p>
+<blockquote>
+<p>The expression fn:slice(("a", "b", "c", "d"), 0) returns ().
+The expression array:slice(["a", "b", "c", "d"], 0) returns [].</p>
+</blockquote>
+<p>3.&nbsp;The first argument of <code>array:slice</code> should be renamed from <code>$input</code> to <code>$array</code>.</p>
+</div></details></div>
+<div class="toot" id="created-62"><h2>Issue #62 created<span class="toot-id"> #created-62</span></h2><div class="pubdate">19 Feb at 13:04:37 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/62">https://github.com/qt4cg/qtspecs/issues/62</a></div><details><summary>[FO] The parameter types for fn:unique and array:partition are incorrectly specified.</summary><div class="markup"><ol>
+<li>In both signatures of <code>fn:unique</code> the <code>$values</code> parameter has the type <code>xs:anyAtomicType**</code> which should be <code>xs:anyAtomicType*</code>.</li>
+<li>In <code>array:partition</code> the <code>$input</code> parameter is <code>item(*)*</code> which should be <code>item()*</code>.</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-61"><h2>Issue #61 created<span class="toot-id"> #created-61</span></h2><div class="pubdate">19 Feb at 13:01:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/61">https://github.com/qt4cg/qtspecs/issues/61</a></div><details><summary>[FO] fn:all and fn:some have an xs:integer* return type, but describe an xs:boolean return type</summary><div class="markup"><p>The <code>fn:all</code> function states:</p>
+<blockquote>
+<p>The result of the function is true if and only if the expression every $i in $input satisfies $predicate($i) is true.</p>
+</blockquote>
+<p>but the return type is specified as <code>xs:integer*</code>. -- It should have a return type of <code>xs:boolean</code>.</p>
+<p>A similar issue occurs with <code>fn:some</code>.</p>
+</div></details></div>
+<div class="toot" id="created-60"><h2>Issue #60 created<span class="toot-id"> #created-60</span></h2><div class="pubdate">19 Feb at 12:58:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/60">https://github.com/qt4cg/qtspecs/issues/60</a></div><details><summary>[FO] fn:namespace-uri-for-prefix no longer supports passing a prefix by string</summary><div class="markup"><p>The type signature of the <code>$prefix</code> variable has changed from <code>xs:string?</code> to <code>union(xs:NCName, enum(''))?</code>. This means that passing a prefix like <code>"fn"</code> will no longer work as it is not an <code>xs:NCName</code> and is not a zero-length string (<code>enum('')</code>).</p>
+<p><strong>Note:</strong> The only other affected function is the new <code>fn:in-scope-namespaces</code> method. It would be useful in some cases to be able to pass the value as an <code>xs:string</code> (e.g. <code>"fn"</code>) without having to cast the value.</p>
+</div></details></div>
+<div class="toot" id="created-59"><h2>Issue #59 created<span class="toot-id"> #created-59</span></h2><div class="pubdate">19 Feb at 12:48:10 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/59">https://github.com/qt4cg/qtspecs/issues/59</a></div><details><summary>[FO] fn:replace no longer has the 3 an 4 argument variants</summary><div class="markup"><p>The signature for fn:replace in FO 4.0 [1] only has the new 5 argument variant, whereas FO 3.1 has 3 and 4 argument variants.</p>
+<ol>
+<li>https://qt4cg.org/branch/master/xpath-functions-40/Overview-diff.html#func-replace</li>
+<li>https://www.w3.org/TR/xpath-functions-31/#func-replace</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-58"><h2>Issue #58 created<span class="toot-id"> #created-58</span></h2><div class="pubdate">15 Feb at 12:06:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/58">https://github.com/qt4cg/qtspecs/issues/58</a></div><details><summary>[XQuery] String Value Templates</summary><div class="markup"><p>A <em>string value template</em> (SVT) is a StringLiteral that supports enclosed expression values and entities. It is written as either <code>T"..."</code> or <code>T'...'</code>, where the <code>T</code> stands for "template".</p>
+<blockquote>
+<p><strong>Note:</strong> An SVT is similar to an attribute value template or text value template in XSLT.</p>
+</blockquote>
+<p>For instance, the following expression:</p>
+<pre><code>for $s in ("one", "two", "red", "blue")
+return T"{$s} fish"
+</code></pre>
+<p>evaluates to the sequence <code>("one fish", "two fish", "red fish", "blue fish")</code>.</p>
+<blockquote>
+<p><strong>Note:</strong> A string value template <code>T"xyz"</code> is equivalent to the expression <code>&lt;svt t="xyz"/&gt;/@t/string()</code>.</p>
+</blockquote>
+<h3>Grammar</h3>
+<pre><code>PrimaryExpr ::= ... | StringValueTemplate
+StringValueTemplate ::= ('T"' (EscapeQuot | QuotAttrValueContent)* '"')
+                      | ("T'" (EscapeApos | AposAttrValueContent)* "'")
+</code></pre>
+<blockquote>
+<p><strong>Note:</strong> The <code>T"</code> and <code>T'</code> are a single token/unit (i.e. no whitespace/comments are allowed between the characters), just like the <code>Q{</code> in BracedURILiterals.</p>
+</blockquote>
+</div></details></div>
+<div class="toot" id="created-57"><h2>Issue #57 created<span class="toot-id"> #created-57</span></h2><div class="pubdate">04 Feb at 21:09:21 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/57">https://github.com/qt4cg/qtspecs/issues/57</a></div><details><summary>[XPath] [XQuery] The item-type(T) syntax is not defined.</summary><div class="markup"><p>Section 3.7.2 <em>The judgement subtype-itemtype(A, B)</em> of the XPath 4.0 and XQuery 4.0 specifications mention <code>item-type(N)</code>, as does section 5.19 <em>Item Type Declarations</em> of the XQuery 4.0 specification. It is also not in the EBNF grammar -- searching for <code>"item-type"</code> only finds the <code>ItemTypeDecl</code> symbol in the XQuery 4.0 EBNF.</p>
+<p>This should be defined in section 3.6 <em>Item Types</em>.</p>
+</div></details></div>
+<div class="toot" id="created-56"><h2>Issue #56 created<span class="toot-id"> #created-56</span></h2><div class="pubdate">04 Feb at 20:59:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/56">https://github.com/qt4cg/qtspecs/issues/56</a></div><details><summary>[XQuery] Allow item-type to be matched within its definition scope.</summary><div class="markup"><p>In https://qt4cg.org/branch/master/xpath-functions-40/Overview-diff.html#func-random-number-generator, the <code>rng</code> item type is defined as:</p>
+<pre><code>record(
+    number   as xs:double,
+    next     as (function() as record(number, next, permute, *)),
+    permute  as (function(item()*) as item()*),
+    *
+)
+</code></pre>
+<p>It would be helpful and more type specific if this could be defined as:</p>
+<pre><code>record(
+    number   as xs:double,
+    next     as (function() as rng),
+    permute  as (function(item()*) as item()*),
+    *
+)
+</code></pre>
+<p>where the <code>next</code> field references the <code>rng</code> type being defined -- this is like how structures in other languages (C/C++, Java, C#) can reference themselves as property types.</p>
+<p>This would also provide an alternative for the <code>..</code> (self reference) specifier.</p>
+<blockquote>
+<p><strong>Note:</strong> the <code>..</code> syntax is still useful in the case of anonymous record types.</p>
+</blockquote>
+</div></details></div>
+<div class="toot" id="created-55"><h2>Issue #55 created<span class="toot-id"> #created-55</span></h2><div class="pubdate">04 Feb at 19:45:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/55">https://github.com/qt4cg/qtspecs/issues/55</a></div><details><summary>[FO] Provide an XML version of the stack trace.</summary><div class="markup"><p>While the string version of <code>fn:stack-trace()</code> is useful for debugging and including in log messages, being able to process that (from an XML representation) is also useful.</p>
+<h3>Use Cases</h3>
+<ol>
+<li>providing extended functionality, like implementing a <code>current-function-name()</code> helper function -- e.g. <code>fn:stack-trace("json")[1]?function-name</code>;</li>
+<li>customizing the format of the stack trace (e.g. standardizing it across different implementations);</li>
+<li>using the information in libraries/IDEs/editors that call the queries -- e.g. by returning the XML and processing it in the library/IDE/editor, such as mapping the data to stack frames in the IDE/editor. <strong>Note:</strong> This is what I'm doing in my IntelliJ plugin with the MarkLogic stack XML to process query exceptions and the stack when debugging a query.</li>
+</ol>
+<h3>fn:stack-trace</h3>
+<pre><code>fn:stack-trace($format as enum("text", "xml", "json") := "text") as item()
+</code></pre>
+<p>Like the current specification version of this function (with the same default semantics), but also supports XML and JSON formats. The "text" format returns an instance of <code>xs:string</code> in an implementation-defined format, the "xml" format returns an instance of <code>element(fn:stack-trace)</code>, and the "json" format returns an instance of <code>array(fn:stack-frame)</code>.</p>
+<p>Here, <code>fn:stack-frame</code> is defined as:</p>
+<pre><code>declare type fn:stack-frame as record(
+    uri: xs:string,
+    function-name: xs:QName?,
+    line-number: xs:integer?,
+    column-number: xs:integer?,
+    *
+);
+</code></pre>
+<p>The XML version has the same information as elements in the <code>fn:</code> namespace (e.g. <code>fn:uri</code>).</p>
+<h3>fn:format-stack-trace</h3>
+<pre><code>fn:format-stack-trace($stack as item(),
+                      $format as enum("text", "xml", "json") := "text") as item()
+</code></pre>
+<p>If <code>$stack</code> is an instance of <code>element(fn:stack-trace)</code>, it is converted into the desired output format. (If the output format is "xml", no processing is performed.)</p>
+<p>If <code>$stack</code> is an instance of <code>array(fn:stack-frame)</code>, it is converted into the desired output format. (If the output format is "json", no processing is performed.)</p>
+<p>Otherwise, an <code>err:XPTY0004</code> error is raised.</p>
+<h3>fn:parse-stack-trace</h3>
+<pre><code>fn:parse-stack-trace($stack as xs:string,
+                     $format as enum("xml", "json")) as item()
+</code></pre>
+<p>This function takes a stack trace in the implementation-defined format and parses it to XML or JSON. The "xml" format returns an instance of <code>element(fn:stack-trace)</code>, and the "json" format returns an instance of <code>array(fn:stack-frame)</code>.</p>
+<p>If <code>$stack</code> is not in the correct format, an error (error code TBD) is raised.</p>
+<blockquote>
+<p><strong>Note:</strong> This could be useful when processing log messages or similar output.</p>
+</blockquote>
+</div></details></div>
+<div class="toot" id="created-54"><h2>Issue #54 created<span class="toot-id"> #created-54</span></h2><div class="pubdate">26 Jan at 08:55:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/54">https://github.com/qt4cg/qtspecs/issues/54</a></div><details><summary>[XPath] [XQuery] Keyword arguments don't work with all parameters/keys in static functions.</summary><div class="markup"><p>The KeywordArgument symbol restricts the argument name to an NCName. This has two issues:</p>
+<ol>
+<li>for non-variadic and bounded-variadic functions, a parameter can be a QName, so may be in a different namespace, or there can be ambiguity if there are multiple parameters with the same local-name in different namespaces;</li>
+<li>for map-variadic functions, a parameter key can contain spaces, so cannot be expressed as an NCName.</li>
+</ol>
+<h3>Syntax</h3>
+<pre><code>KeywordArgument ::= KeywordArgumentName  ":"  ExprSingle
+KeywordArgumentName ::= EQName | StringLiteral
+</code></pre>
+<p><strong>NOTE:</strong> I'm using the favoured map-based syntax here. If that is not used, then the <code>":"</code> should be <code>":="</code> as it is in the current draft.</p>
+<h3>Semantics</h3>
+<p>For non-variadic and bounded-variadic functions, a KeywordArgumentName is matched as follows:</p>
+<ol>
+<li>An <em>EQName</em> matches against the expanded QName of the parameter;</li>
+<li>A <em>StringLiteral</em> is cast to an NCName (with an XPTY0004 error if it is not a valid NCName), which is in no namespace (like other variables such as VarName symbols); the resulting expanded QName then matches against the expanded QName of the parameter.</li>
+</ol>
+<p>For map-variadic functions, a KeywordArgumentName is matched as follows:</p>
+<ol>
+<li>An <em>NCName</em> uses the local-name as the key in the constructed map cast to the key type of the map. This follows the XQFO casting rules with the source type of the local-name being <code>xs:NCName</code> and the target type being the map's key type.;</li>
+<li>A <em>QName</em> or <em>URIQualifiedName</em> results in an XPTY0004 error as it does not form a valid key name;</li>
+<li>A <em>StringLiteral</em> uses the value of the string as the key in the constructed map.</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-53"><h2>Issue #53 created<span class="toot-id"> #created-53</span></h2><div class="pubdate">23 Jan at 10:43:02 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/53">https://github.com/qt4cg/qtspecs/issues/53</a></div><details><summary>[XPath] [XQuery] Allow function keyword inline functions without parameters</summary><div class="markup"><p>The current draft InlineFunctionExpr adds <code>-&gt;</code> as a shorthand. This shorthand allows optional parameter lists (e.g. <code>-&gt; { true() }</code>), but the <code>function</code> keyword version of this requires a parameter list. For consistency, the <code>function</code> keyword version should also have an optional parameter list.</p>
+<p>This means that the syntax for InlineFunctionExpr can be simplified to:</p>
+<pre><code>InlineFunctionExpr ::= ("function" | "-&gt;")  FunctionSignature?  FunctionBody
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-52"><h2>Issue #52 created<span class="toot-id"> #created-52</span></h2><div class="pubdate">21 Jan at 12:29:14 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/52">https://github.com/qt4cg/qtspecs/issues/52</a></div><details><summary>[XPath] [XQuery] Allow record(*) based RecordTests</summary><div class="markup"><p>The other ItemTypes that support specifying information about the type allow <code>type(*)</code> to represent any instance of the type. The new RecordTest ItemType should support this.</p>
+<h3>Syntax</h3>
+<p>The:</p>
+<pre><code>RecordTest ::= "record"  "("  FieldDeclaration  (","  FieldDeclaration)*  ExtensibleFlag?  ")"
+</code></pre>
+<p>symbol should be changed to:</p>
+<pre><code>RecordTest ::= AnyRecordTest | TypedRecordTest
+AnyRecordTest ::= "record"  "("  "*"  ")"
+TypedRecordTest ::= "record"  "("  FieldDeclaration  (","  FieldDeclaration)*  ExtensibleFlag?  ")"
+</code></pre>
+<p><strong>NOTE:</strong> This follows the structure of the other any/typed tests (e.g. <code>MapTest</code>).</p>
+<h3>Semantics</h3>
+<p>The <code>record(*)</code> item type test is equivalent to <code>map(*)</code>.</p>
+</div></details></div>
+<div class="toot" id="created-51"><h2>Issue #51 created<span class="toot-id"> #created-51</span></h2><div class="pubdate">18 Jan at 11:07:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/51">https://github.com/qt4cg/qtspecs/issues/51</a></div><details><summary>[XPath] Generalize lookup operator for function items</summary><div class="markup"><p>The current lookup operator is a specialized expression for maps and arrays. All kinds of data structures can be realized with functions, and maps and arrays are functions as well, so it would be pretty straightforward to extend the lookup operator to arbitrary function items:</p>
+<h3>Use Cases</h3>
+<h4>Return name elements whose string values contain supplied substrings</h4>
+<pre><code class="language-xquery">declare variable $DOC := &lt;xml&gt;
+  &lt;name&gt;Jack Daniels&lt;/name&gt;
+  &lt;name&gt;Jim Beam&lt;/name&gt;
+  &lt;name&gt;Johnny Walker&lt;/name&gt;
+&lt;/xml&gt;;
+
+let $names := function($key) {
+  $DOC//name[contains(string(), $key)]
+}
+return $names?('Jack', 'Jim', 'Johnny')
+
+(: result :)
+&lt;name&gt;Jack Daniels&lt;/name&gt;,
+&lt;name&gt;Jim Beam&lt;/name&gt;,
+&lt;name&gt;Johnny Walker&lt;/name&gt;
+</code></pre>
+<h4>Return squares of supplied integers</h4>
+<pre><code class="language-xquery">let $square := math:pow(?, 2)
+return $square?(1 to 5)
+
+(: result :)
+1, 4, 9, 16, 25
+</code></pre>
+<h3>Remarks</h3>
+<ul>
+<li><code>XPTY0004</code> must be raised if the wildcard <code>*</code> is specified as key, and if the input is neither a map nor an array.</li>
+<li>The extension could easily be combined with the extension for sequences (see #50).</li>
+</ul>
+</div></details></div>
+<div class="toot" id="created-50"><h2>Issue #50 created<span class="toot-id"> #created-50</span></h2><div class="pubdate">16 Jan at 21:06:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/50">https://github.com/qt4cg/qtspecs/issues/50</a></div><details><summary>[XPath] Introduce the lookup operator for sequences</summary><div class="markup"><p>In XPath 3.1 it is convenient to use the <code>?</code> lookup operator on arrays and maps.</p>
+<p>It is easy and readable to construct expressions, such as:</p>
+<pre><code>  [10, 20, 30]?(2, 3, 1, 1, 2)
+</code></pre>
+<p>And this understandably produces the sequence:</p>
+<pre><code>20, 30, 10, 10, 20
+</code></pre>
+<p>However, it is not possible to write:</p>
+<pre><code>(10, 20, 30)[2, 3, 1, 1, 2]
+</code></pre>
+<p>or</p>
+<pre><code>(10, 20, 30)(2, 3, 1, 1, 2)
+</code></pre>
+<p>or</p>
+<pre><code>(10, 20, 30)?(2, 3, 1, 1, 2)
+</code></pre>
+<p>This proposal is to allow the use on <code>sequences</code> of the postfix lookup operator <code>?</code>  with the same syntax as it is now used for <code>arrays</code>.</p>
+<p>The <code>?</code> lookup operator will be applied on sequences whose first item isn't an array or a map. The only change would be to allow the type of the left-hand side to be a <code>sequence</code>,  in addition to the currently allowed <code>map</code> and <code>array</code> types. At present, applying <code>?</code> on any such sequence results in error. In case the first item of the LHS sequence is an array or a map, then the current XPath 3.1 semantics is in force, which applies the RHS to each item in the sequence.</p>
+<p>The restriction in the above paragraph can be eliminated if we decide to use a different than <code>?</code> symbol for this operator, for example <code>^</code></p>
+<p><strong>The goal of this feature is achieving conciseness, readability, understandability and convenience.</strong></p>
+<p>For example, now one could easily produce from a sequence a projection / rearrangement with any desired multiplicity and ordering.</p>
+<p>Thus, it would be easy to express the function <code>reverse()</code> as simply:</p>
+<pre><code>$seq?($len to 1 by -1)
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-49"><h2>Issue #49 created<span class="toot-id"> #created-49</span></h2><div class="pubdate">16 Jan at 11:42:44 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/49">https://github.com/qt4cg/qtspecs/issues/49</a></div><details><summary>[XQuery] The 'member' keyword is still present on ForMemberBinding</summary><div class="markup"><p>The latest editor's draft (13 January 2021) moves the <code>member</code> keyword to a new <code>ForMemberClause</code> symbol:</p>
+<pre><code>ForMemberClause           ::=          "for" "member" ForMemberBinding ("," ForMemberBinding)*
+</code></pre>
+<p>With this change, the <code>ForMemberBinding</code> syntax has retained the optional <code>member</code> keyword from the previous change to <code>ForBinding</code>:</p>
+<pre><code>ForMemberBinding          ::=          "member"? "$" VarName TypeDeclaration? PositionalVar? "in" ExprSingle
+</code></pre>
+<p>This means that <code>for member member ...</code> and <code>for member $a in [], member $b in [] ...</code> are valid with the current grammar.</p>
+<p>The <code>ForMemberBinding</code> grammar should be:</p>
+<pre><code>ForMemberBinding          ::=          "$" VarName TypeDeclaration? PositionalVar? "in" ExprSingle
+</code></pre>
+</div></details></div>
+<div class="toot" id="closed-44"><h2>Issue #44 closed<span class="toot-id"> #closed-44</span></h2><div class="pubdate">16 Jan at 11:30:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/44">https://github.com/qt4cg/qtspecs/issues/44</a></div><p>[XPath] [XQuery] Support RecordTest self references without occurrence indicators</p></div>
+<div class="toot" id="created-48"><h2>Pull request #48 created<span class="toot-id"> #created-48</span></h2><div class="pubdate">14 Jan at 16:11:06 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/48">https://github.com/qt4cg/qtspecs/pull/48</a></div><details><summary>Create a schema-for-xslt40.xsd file for the current draft spec.</summary><div class="markup"><p>Note: schema-for-xslt30.xsd is still referenced by other source files, such as xslt-first-cut.xml, so it has not been removed.</p>
+</div></details></div>
+<div class="toot" id="closed-38"><h2>Issue #38 closed<span class="toot-id"> #closed-38</span></h2><div class="pubdate">14 Jan at 15:59:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/38">https://github.com/qt4cg/qtspecs/pull/38</a></div><p>Create a schema-for-xslt40.xsd file.</p></div>
+<div class="toot" id="created-47"><h2>Issue #47 created<span class="toot-id"> #created-47</span></h2><div class="pubdate">13 Jan at 07:50:56 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/47">https://github.com/qt4cg/qtspecs/issues/47</a></div><details><summary>[XPath] [XQuery] Allow argument placeholders on keyword arguments</summary><div class="markup"><p>This would allow a user to name the arguments that are used as placeholders, making the code more readable. For example:</p>
+<pre><code>let $pow2 := math:pow(2, y: ?)
+</code></pre>
+<h3>Syntax</h3>
+<p>This proposal would change <code>KeywordArgument</code> from:</p>
+<pre><code>KeywordArgument ::= NCName  ":="  ExprSingle
+</code></pre>
+<p>to:</p>
+<pre><code>KeywordArgument ::= NCName  ":="  Argument
+</code></pre>
+<p>or (using the proposed <code>:</code> syntax) to:</p>
+<pre><code>KeywordArgument ::= NCName  ":"  Argument
+</code></pre>
+<h3>Semantics</h3>
+<p>A function call with N argument placeholders will create an N-arity function. The order of the argument placeholders correspond to the order of the parameters in that new function. Those parameters map to the corresponding parameter in the target (partially applied) function, which can be in a different order, or bind to keys in an options map (in the case of functions like <code>fn:serialize</code>). For example:</p>
+<pre><code>math:pow(y: ?, x: ?)
+</code></pre>
+<p>would create a function that calculates <code>y^x</code> instead of <code>x^y</code> as the arguments are reversed.</p>
+</div></details></div>
+<div class="toot" id="created-46"><h2>Issue #46 created<span class="toot-id"> #created-46</span></h2><div class="pubdate">13 Jan at 00:36:15 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/46">https://github.com/qt4cg/qtspecs/issues/46</a></div><details><summary>[XSLT] wider support  as attribute</summary><div class="markup"><p>I'd like to see@as on xsl:sequence. That way i can write, e.g.</p>
+<pre><code>&lt;xsl:function name="dc:slice-count" as="xs:integer"&gt;
+  &lt;xsl:param name="toast" as="element(toast)" /&gt;
+  &lt;xsl:for-each select="$toast" as="xs:integer"&gt;
+    &lt;xsl:sequence select="@cooked-slices + @raw-slices"  as="xs:integer" /&gt;
+  &lt;/xsl:for-each&gt;
+&lt;/xsl:function&gt;
+</code></pre>
+<p>It would be an error for the for-each to have other than exactly one integer as its result, and the same for the <code>@sequence</code>. In this simple example there's not much scope for that to happen of course,</p>
+<p>Maybe on anything with a <code>select</code>  attribute?</p>
+<p>Parenthetically, a context-item attribute on xsl:sequence would obviate the XSLT1-ish xsl:for-each there, although $toast/(@a, @b) =&gt; sum() would work as well and be XSLT  3-ish.</p>
+</div></details></div>
+<div class="toot" id="created-45"><h2>Issue #45 created<span class="toot-id"> #created-45</span></h2><div class="pubdate">12 Jan at 12:56:55 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/45">https://github.com/qt4cg/qtspecs/issues/45</a></div><details><summary>Second parameter of fn:sum must be neutral element for +</summary><div class="markup"><p>Currently fn:sum specifies the intent of the second parameter in a note:</p>
+<blockquote>
+<p>The second argument allows an appropriate value to be defined to represent the sum of an empty sequence. For example, when summing a sequence of durations it would be appropriate to return a zero-length duration of the appropriate type. This argument is necessary because a system that does dynamic typing cannot distinguish "an empty sequence of integers", for example, from "an empty sequence of durations".</p>
+</blockquote>
+<p>When implementing fn:sum on sequences of billions of items (numerics, or durations, etc), another aspect arises: this second parameter must also be, for this to work and for optimizations to be possible, a neutral element for +.</p>
+<p>Indeed, a distributed system like Spark will produce intermediate sums for (possibly empty) subsets, and will naturally use <code>$zero</code> for the sum of an empty subset. Intermediate totals are aggregated in a treewise fashion. For the result to be correct, it must be the case that <code>$zero + $x eq $x</code> for any item in the sequence provided as the first parameter. It is fully aligned with the idea of the note above, but I would suggest to make this requirement a bit stricter.</p>
+</div></details></div>
+<div class="toot" id="created-44"><h2>Issue #44 created<span class="toot-id"> #created-44</span></h2><div class="pubdate">06 Jan at 17:35:41 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/44">https://github.com/qt4cg/qtspecs/issues/44</a></div><details><summary>[XPath] [XQuery] Support RecordTest self references without occurrence indicators</summary><div class="markup"><p>This would be useful for defining things like binary trees, where the fields are optional but (if supplied) the values are not. So it is more logical to define them as:</p>
+<pre><code>declare item-type binary-tree as record(
+    left? as ..,
+    right? as ..,
+    value as item()*
+);
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-43"><h2>Issue #43 created<span class="toot-id"> #created-43</span></h2><div class="pubdate">06 Jan at 15:37:58 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/43">https://github.com/qt4cg/qtspecs/issues/43</a></div><details><summary>[XSLT] [XQuery] Support standard and user-defined composite values using item type definitions.</summary><div class="markup"><p>The composite values defined in <em>4.14.4 Composite Atomic Values</em> are currently specified as a table. This means that it is not possible for users to define their own properties for custom types. It is also harder for editors/IDEs, or other tools to implement as there is an element of hard-coding the logic.</p>
+<p>These could be implemented as a properties/values record associated with the defined type. The values of the record could then be arity-1 functions that are called with the supplied value when accessed via maps. For example, in XQuery:</p>
+<pre><code>declare %composite-values("composite-values") type xs:date external; (: built-in :)
+declare type date-composite-values := record(
+    year: fn:year-from-date#1,
+    (: ... :)
+);
+</code></pre>
+<p>and XSLT:</p>
+<pre><code>&lt;xsl:item-type name="xs:date" composite-values="date-composite-values"/&gt;
+&lt;xsl:item-type name="date-composite-values" as="record(
+    year: fn:year-from-date#1,
+    (: ... :)
+)"/&gt;
+</code></pre>
+<p>So <code>xs:date("1999-10-15")?year</code> would be evaluated as <code>date-composite-values?year(xs:date("1999-10-15"))</code>.</p>
+</div></details></div>
+<div class="toot" id="created-42"><h2>Issue #42 created<span class="toot-id"> #created-42</span></h2><div class="pubdate">05 Jan at 09:49:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/42">https://github.com/qt4cg/qtspecs/issues/42</a></div><details><summary>Relax type incompatibility in order by clause (impl. dep. instead of XPST0004)</summary><div class="markup"><p>In the case where XQuery is used with very large sequences (billions/trillions of items or of tuples) with a parallel evaluation [1], the order by clause in its current state is costly to evaluate, because checking the primitive types for compatibility requires an extra step and materialization (in the case of Spark: an additional action to perform this check).</p>
+<p>Relaxing this by making the order between different primitive types implementation-dependent (for the purpose of order by) rather than throwing XPST0004, in case of several incompatible primitive types in the comparison keys, would make parallel implementations more efficient.</p>
+<p>[1] <a href="http://www.vldb.org/pvldb/vol14/p498-muller.pdf">http://www.vldb.org/pvldb/vol14/p498-muller.pdf</a></p>
+</div></details></div></div></article></main></body></html>

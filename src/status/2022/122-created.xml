@@ -1,0 +1,105 @@
+<item>
+   <title>Issue #122 created</title>
+   <pubDate>2022-08-09T12:20:01Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/122</link>
+   <guid>https://qt4cg.org/@qt4cg/2022/#created-122</guid>
+   <description>&lt;div&gt;&lt;p&gt;[XPath] [XQuery] Support general union sequence types&lt;/p&gt;&lt;div class="markup"&gt;&lt;h1&gt;Use Case&lt;/h1&gt;
+&lt;p&gt;There are a number of cases where it is beneficial to define a type more precisely (specifically in parameters and return types) as a union of item or sequence types, for example:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;a binary type over &lt;code&gt;xs:hexBinary&lt;/code&gt; and &lt;code&gt;xs:base64Binary&lt;/code&gt;;&lt;/li&gt;
+&lt;li&gt;an element that accepts &lt;code&gt;ol&lt;/code&gt; or &lt;code&gt;ul&lt;/code&gt; html list element names;&lt;/li&gt;
+&lt;li&gt;an options parameter that accepts strings (&lt;code&gt;xs:string*&lt;/code&gt;) an element (&lt;code&gt;element(options)&lt;/code&gt;) or a map;&lt;/li&gt;
+&lt;li&gt;a function that takes JSON types (map, array, xs:integer, xs:decimal, xs:string).&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;There are a number of MarkLogic APIs that make use of this. Several EXPath and EXQuery specifications can take advantage of this. I've also used this in my XQuery IntelliJ plugin when defining vendor APIs that have changed over the different versions.&lt;/p&gt;
+&lt;h1&gt;Examples&lt;/h1&gt;
+&lt;pre&gt;&lt;code&gt;(: BaseX API change in 8.5 :)
+declare function archive:options($archive as xs:base64Binary)
+     as (element(archive:options) | map(*)) external;
+
+declare function html:list($list as (element(ol) | element(ul))) { ... };
+
+(: https://docs.marklogic.com/cts:classify -- MarkLogic defines this as `(element() | map:map)?` :)
+declare function cts:classify($data-nodes as node()*,
+                              $classifier as element(cts:classifier),
+                              $options as (element()? | map:map?))
+     as element(cts:label)* external;
+
+(: https://docs.marklogic.com/cts:search :)
+declare function cts:search($expression as node()*,
+                            $query as cts:query?,
+                            $options as (cts:order* | xs:string*))
+     as node()* external;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h1&gt;Existing Support&lt;/h1&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;a href="https://qt4cg.org/branch/master/xquery-40/xquery-40.html#id-local-union-types"&gt;Local Union Types&lt;/a&gt; -- This handles support for unions over atomic types.&lt;/li&gt;
+&lt;li&gt;https://github.com/qt4cg/qtspecs/issues/23 -- This provides a more concise syntax for unions over element or attribute names.&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://www.w3.org/TR/xquery-semantics/#doc-fs-Type"&gt;Types&lt;/a&gt; -- The Formal Semantics specification defines union types.&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://rhdunn.github.io/xquery-intellij-plugin/specifications/XQuery%20IntelliJ%20Plugin%20XQuery.html#2126-sequence-types"&gt;Sequence Type Union&lt;/a&gt; -- This is the definition in my XQuery IntelliJ plugin.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;Note: Due to &lt;code&gt;SequenceTypeUnion&lt;/code&gt; being present in typeswitch expressions XQuery implementations will have existing code to handle matching these unioned types.&lt;/p&gt;
+&lt;h1&gt;Syntax&lt;/h1&gt;
+&lt;h2&gt;3.4 Sequence Types&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;SequenceTypeUnion ::= SequenceType  ("|"  SequenceType)*
+SequenceType ::= EmptySequenceType | (ItemType OccurrenceIndicator?) | ParenthesizedSequenceType
+EmptySequenceType ::= "empty-sequence" "(" ")"
+ParenthesizedSequenceType ::= "(" SequenceTypeUnion ")"
+ItemType ::= AnyItemTest | TypeName | KindTest | FunctionTest | MapTest | ArrayTest |
+             AtomicOrUnionType | RecordTest | LocalUnionType | EnumerationType
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Design Note: &lt;code&gt;SequenceTypeUnion&lt;/code&gt; is an existing BNF symbol used in typeswitch expressions that is unchanged in this issue.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;3.6 Item Types&lt;/h2&gt;
+&lt;pre&gt;&lt;code&gt;ItemTypeUnion ::= ItemType  ("|"  ItemType)*
+ParenthesizedItemType ::= "("  ItemTypeUnion  ")"
+ParenthesizableItemType ::= ItemType | ParenthesizedItemType
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Design Note: &lt;code&gt;ItemTypeUnion&lt;/code&gt; mirrors &lt;code&gt;SequenceTypeUnion&lt;/code&gt;, allowing the non-sequence unions to be used in the contexts where only item types are allowed. Implementations can make use of the &lt;code&gt;SequenceTypeUnion&lt;/code&gt; logic after the syntax/parser validates the item type restriction in those contexts.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Design Note: An alternative to this -- in order to minimize grammar changes -- would be to replace the &lt;code&gt;ItemType&lt;/code&gt; with an &lt;code&gt;ItemTypeBase&lt;/code&gt; symbol (or appropriately named alternative), and then define &lt;code&gt;ItemType&lt;/code&gt; accordingly:
+&lt;code&gt;ItemTypeBase ::= AnyItemTest | TypeName | KindTest | ...&lt;/code&gt;
+&lt;code&gt;ItemTypeUnion ::= ItemTypeBase  ("|"  ItemTypeBase)*&lt;/code&gt;
+&lt;code&gt;ItemType ::= ItemTypeBase | ParenthesizedItemType&lt;/code&gt;
+&lt;code&gt;SequenceType ::= EmptySequenceType | (ItemTypeBase OccurrenceIndicator?) | ParenthesizedSequenceType&lt;/code&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;Other Changes&lt;/h2&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Design Notes: If &lt;code&gt;ItemType&lt;/code&gt; is changed to &lt;code&gt;ParenthesizableItemType&lt;/code&gt;, these are the other areas in the current XPath/XQuery 4.0 grammar that need changing.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;ContextItemDecl ::= "declare"  "context"  "item"  ("as"  ParenthesizableItemType)?
+                    ((":="  VarValue)  |  ("external"  (":="  VarDefaultValue)?))
+ItemTypeDecl ::= "item-type" EQName "as" ParenthesizableItemType
+TypedMapTest ::= "map" "(" ParenthesizableItemType "," SequenceType ")"
+LocalUnionType ::= "union" "(" ParenthesizableItemType ("," ParenthesizableItemType)* ")"
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h1&gt;Text&lt;/h1&gt;
+&lt;h2&gt;4.22.2 Typeswitch&lt;/h2&gt;
+&lt;p&gt;The &lt;em&gt;effective case&lt;/em&gt; definition is defined as:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;The effective case in a typeswitch expression is the first case clause in which the value of the operand expression matches a &lt;a href="https://www.w3.org/TR/xquery-31/#doc-xquery31-SequenceType"&gt;SequenceType&lt;/a&gt; in the &lt;a href="https://www.w3.org/TR/xquery-31/#doc-xquery31-SequenceType"&gt;SequenceTypeUnion&lt;/a&gt; of the case clause, using the rules of &lt;a href="https://www.w3.org/TR/xquery-31/#dt-sequencetype-matching"&gt;SequenceType matching&lt;/a&gt;.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;In order to make that fit this proposal, the wording should be updated to something like:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;The effective case in a typeswitch expression is the first case clause in which the value of the operand expression matches the &lt;a href="https://www.w3.org/TR/xquery-31/#doc-xquery31-SequenceType"&gt;SequenceTypeUnion&lt;/a&gt; of the case clause, using the rules of &lt;a href="https://www.w3.org/TR/xquery-31/#dt-sequencetype-matching"&gt;SequenceType matching&lt;/a&gt;.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;3.7.2 The judgement subtype-itemtype(A, B)&lt;/h2&gt;
+&lt;p&gt;Section (2) &lt;em&gt;Conditions for atomic and union types:&lt;/em&gt; should add the following rules:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;A&lt;/code&gt; is an &lt;code&gt;ItemTypeUnion&lt;/code&gt; in the form &lt;code&gt;(T1 | T2 | ...)&lt;/code&gt; and every type &lt;code&gt;T&lt;/code&gt; in (&lt;code&gt;T1&lt;/code&gt;, &lt;code&gt;T2&lt;/code&gt;, ...) satisfies &lt;code&gt;subtype-itemType(T, B)&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;B&lt;/code&gt; is an &lt;code&gt;ItemTypeUnion&lt;/code&gt; in the form &lt;code&gt;(T1 | T2 | ...)&lt;/code&gt; and any type &lt;code&gt;T&lt;/code&gt; in (&lt;code&gt;T1&lt;/code&gt;, &lt;code&gt;T2&lt;/code&gt;, ...) satisfies &lt;code&gt;subtype-itemType(A, T)&lt;/code&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2&gt;3.7.1 The judgement subtype(A, B)&lt;/h2&gt;
+&lt;p&gt;The first paragraph in this section shall be replaced by:&lt;/p&gt;
+&lt;p&gt;The judgement &lt;code&gt;subtype(A, B)&lt;/code&gt; determines if the &lt;a href="https://qt4cg.org/branch/master/xquery-40/xquery-40-diff.html#dt-sequence-type"&gt;sequence type&lt;/a&gt; &lt;code&gt;A&lt;/code&gt; is a &lt;a href="https://qt4cg.org/branch/master/xquery-40/xquery-40-diff.html#dt-subtype"&gt;subtype&lt;/a&gt; of the sequence type &lt;code&gt;B&lt;/code&gt;. &lt;code&gt;A&lt;/code&gt; can either be &lt;code&gt;empty-sequence()&lt;/code&gt;, &lt;code&gt;xs:error&lt;/code&gt;, an &lt;a href="https://qt4cg.org/branch/master/xquery-40/xquery-40-diff.html#doc-xquery40-ItemType"&gt;ItemType&lt;/a&gt;, &lt;code&gt;Ai&lt;/code&gt;, possibly followed by an occurrence indicator, or a &lt;code&gt;SequenceTypeUnion&lt;/code&gt;. Similarly &lt;code&gt;B&lt;/code&gt; can either be &lt;code&gt;empty-sequence()&lt;/code&gt;, &lt;code&gt;xs:error&lt;/code&gt;, an &lt;a href="https://qt4cg.org/branch/master/xquery-40/xquery-40-diff.html#doc-xquery40-ItemType"&gt;ItemType&lt;/a&gt;, &lt;code&gt;Bi&lt;/code&gt;, possibly followed by an occurrence indicator, or a &lt;code&gt;SequenceTypeUnion&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The result of the &lt;code&gt;subtype(A, B)&lt;/code&gt; judgement can be determined as follows:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;If &lt;code&gt;A&lt;/code&gt; is a &lt;code&gt;SequenceTypeUnion&lt;/code&gt; in the form &lt;code&gt;(T1 | T2 | ...)&lt;/code&gt; and every type &lt;code&gt;T&lt;/code&gt; in (&lt;code&gt;T1&lt;/code&gt;, &lt;code&gt;T2&lt;/code&gt;, ...) satisfies &lt;code&gt;subtype(T, B)&lt;/code&gt;, then &lt;code&gt;subtype(A, B)&lt;/code&gt; is true.&lt;/li&gt;
+&lt;li&gt;If &lt;code&gt;B&lt;/code&gt; is a &lt;code&gt;SequenceTypeUnion&lt;/code&gt; in the form &lt;code&gt;(T1 | T2 | ...)&lt;/code&gt; and any type &lt;code&gt;T&lt;/code&gt; in (&lt;code&gt;T1&lt;/code&gt;, &lt;code&gt;T2&lt;/code&gt;, ...) satisfies &lt;code&gt;subtype(A, T)&lt;/code&gt;, then &lt;code&gt;subtype(A, B)&lt;/code&gt; is true.&lt;/li&gt;
+&lt;li&gt;Otherwise, the result of the subtype(A, B) judgement can be determined from the table below, which makes use of the auxiliary judgement subtype-itemtype(Ai, Bi) defined in &lt;a href="https://qt4cg.org/branch/master/xquery-40/xquery-40-diff.html#id-itemtype-subtype"&gt;3.7.2 The judgement subtype-itemtype(A, B) &lt;/a&gt;.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>

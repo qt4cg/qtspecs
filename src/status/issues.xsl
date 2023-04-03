@@ -56,8 +56,14 @@
                   select="ext:commonmark($issue?body)
                           =&gt; replace('&lt;hr&gt;', '&lt;hr/&gt;')
                           =&gt; replace('&lt;br&gt;', '&lt;br/&gt;')"/>
-              <xsl:sequence
-                  select="parse-xml('&lt;div class=''markup''&gt;'||$body||'&lt;/div&gt;')"/>
+              <xsl:try>
+                <xsl:sequence
+                    select="parse-xml('&lt;div class=''markup''&gt;'||$body||'&lt;/div&gt;')"/>
+                <xsl:catch>
+                  <xsl:message select="'Markup not well formed:', $issue?number"/>
+                  <xsl:sequence select="'…failed to parse issue text…'"/>
+                </xsl:catch>
+              </xsl:try>
             </xsl:if>
           </div>
         </xsl:variable>

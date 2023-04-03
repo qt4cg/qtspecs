@@ -1,0 +1,71 @@
+<item>
+   <title>Issue #75 created</title>
+   <pubDate>2021-05-14T20:10:41Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/75</link>
+   <guid>https://qt4cg.org/@qt4cg/2021/#created-75</guid>
+   <description>&lt;div&gt;&lt;p&gt;[XPath] [XQuery] [XSLT] Support processing HTML 5 template element content&lt;/p&gt;&lt;div class="markup"&gt;&lt;h1&gt;The Problem&lt;/h1&gt;
+&lt;p&gt;The HTML 5 specification introduces a &lt;code&gt;template&lt;/code&gt; element [1], [2] where the content of that element doesn't represent children of it, but are part of a content property. The root node of the content property is a DocumentFragment which is a light-weight document node. These specifications provide some non-normative guidelines for interacting with XSLT and XPath [3].&lt;/p&gt;
+&lt;p&gt;The DocumentFragment interface is defined in the HTML DOM 4.1 [4] as an instance of a Node. Within the HTML 5 specification, it is only referenced in relation to the &lt;code&gt;template&lt;/code&gt; element.&lt;/p&gt;
+&lt;p&gt;This affects the proposed &lt;code&gt;fn:parse-html&lt;/code&gt; (issue #74) function as well as databases and query processors that support storing and accessing HTML5 content via &lt;code&gt;fn:doc&lt;/code&gt; and other APIs.&lt;/p&gt;
+&lt;h1&gt;Requirements&lt;/h1&gt;
+&lt;ol&gt;
+&lt;li&gt;Accurately represent the contents of the &lt;code&gt;template&lt;/code&gt; element in the DOM/data model.&lt;/li&gt;
+&lt;li&gt;Allow a conforming implementation to process the &lt;code&gt;template&lt;/code&gt; content as if it was XML content -- i.e. using the child:: axis to access the content.&lt;/li&gt;
+&lt;li&gt;Allow a conforming implementation to process the &lt;code&gt;template&lt;/code&gt; content separately from child content -- e.g. if the implementation has support for the HTML DOM.&lt;/li&gt;
+&lt;li&gt;Allow authors to select the content of a &lt;code&gt;template&lt;/code&gt; element.&lt;/li&gt;
+&lt;li&gt;Minimize changes to the data model specification. [*]&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;[*] I don't believe it is possible to support this without some changes to the data model (see the Design section below).&lt;/p&gt;
+&lt;h1&gt;Design&lt;/h1&gt;
+&lt;h2&gt;Storing the content of the template&lt;/h2&gt;
+&lt;p&gt;There are 3 options to handling the content of a &lt;code&gt;template&lt;/code&gt; element.&lt;/p&gt;
+&lt;h3&gt;1. As children&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Store the content as child elements of the &lt;code&gt;template&lt;/code&gt; element.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;This is how conforming processors that only understand XML content will process and view the document.&lt;/p&gt;
+&lt;h3&gt;2. As a document node&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Store the content as children of a &lt;code&gt;document&lt;/code&gt; node, where the parent of the document node is the &lt;code&gt;template&lt;/code&gt; element.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;This would be the minimal amount of changes needed to make the HTML5 model work. The only change I can see is that this won't conform to section &lt;em&gt;6.1.2 Accessors&lt;/em&gt; of the data model, in that:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;dm:parent&lt;/code&gt;
+Returns the empty sequence&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;becomes:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;&lt;code&gt;dm:parent&lt;/code&gt;
+If this is a document fragment for a &lt;code&gt;template&lt;/code&gt; element, returns the &lt;code&gt;template&lt;/code&gt; element. Otherwise, returns the empty sequence.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Implementors using the HTML DOM would need to map DocumentFragment nodes to &lt;code&gt;document-node()&lt;/code&gt;.&lt;/p&gt;
+&lt;h3&gt;3. As a new document-fragment node&lt;/h3&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Store the content as children of a new &lt;code&gt;document-fragment&lt;/code&gt; node type, where the parent of the document-fragment node is the &lt;code&gt;template&lt;/code&gt; element.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;This is the option that is most compatible with the HTML DOM as it mirrors the &lt;code&gt;DocumentFragment&lt;/code&gt; interface from that, but is also the one that is the most invasive. It will require (among other things):&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Defining rules in section &lt;em&gt;6. Nodes&lt;/em&gt; of the data model for &lt;em&gt;Document Fragment Nodes&lt;/em&gt; -- accessors, construction from infoset and PSVI, and infoset mapping.&lt;/li&gt;
+&lt;li&gt;Adding a new &lt;code&gt;document-fragment()&lt;/code&gt; &lt;code&gt;KindTest&lt;/code&gt; to the supported node/item types.&lt;/li&gt;
+&lt;li&gt;Adding &lt;code&gt;subtype-itemtype&lt;/code&gt; rules for the document fragment nodes.&lt;/li&gt;
+&lt;li&gt;Adding a new &lt;code&gt;document-fragment { ... }&lt;/code&gt; computed constructor for XQuery.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2&gt;Selecting template content&lt;/h2&gt;
+&lt;p&gt;A new forward axis should be added that supports selecting fragment nodes. Some of the possible names include:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;fragment::&lt;/code&gt; -- following the pattern defined by the &lt;code&gt;attribute::&lt;/code&gt; axis; or&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;content::&lt;/code&gt; -- following the nomenclature from the HTML specification for the &lt;code&gt;template&lt;/code&gt; element contents.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The behaviour will depend on which of the 3 options above is selected for storing the content type:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;If an implementation only supports XML (option 1), the new axis will work the same as &lt;code&gt;child::&lt;/code&gt;. The principle node kind is &lt;em&gt;element&lt;/em&gt;.&lt;/li&gt;
+&lt;li&gt;If option 2 is chosen (reuse the document node), the new axis will match document nodes whose parent is a &lt;code&gt;template&lt;/code&gt; element. The principle node kind is &lt;em&gt;document&lt;/em&gt;. &lt;strong&gt;Note:&lt;/strong&gt; This has an ambiguity with the reverse axes, as it is checking the parent of the node as well as the node type.&lt;/li&gt;
+&lt;li&gt;If option 3 is chosen (create a document fragment node), the new axis will match any document fragment nodes. The principle node kind is &lt;em&gt;document fragment&lt;/em&gt;. &lt;strong&gt;Note:&lt;/strong&gt; This makes more sense when the &lt;code&gt;fragment::&lt;/code&gt; name is used for the axis, and would be more generally applicable, such as for computed constructor created fragments, or HTML DocumentFragments created from a JavaScript or web browser XPath/XSLT/XQuery binding such as Saxon-JS.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h1&gt;References&lt;/h1&gt;
+&lt;p&gt;[1] https://www.w3.org/TR/html52/semantics-scripting.html#the-template-element
+[2] https://html.spec.whatwg.org/#the-template-element
+[3] https://www.w3.org/TR/html52/semantics-scripting.html#interaction-of-template-elements-with-xslt-and-xpath
+[4] https://www.w3.org/TR/dom41/#documentfragment&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>

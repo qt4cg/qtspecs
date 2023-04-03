@@ -1,0 +1,77 @@
+<item>
+   <title>Issue #99 created</title>
+   <pubDate>2021-11-28T01:40:19Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/99</link>
+   <guid>https://qt4cg.org/@qt4cg/2021/#created-99</guid>
+   <description>&lt;div&gt;&lt;p&gt;[XPath]Functions that determine equality of two sequences or equality of two arrays&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;The only standard XPath 3.1 function that compares two arrays or two sequences for equality is the &lt;strong&gt;&lt;em&gt;&lt;a href="https://www.w3.org/TR/xpath-functions-31/#func-deep-equal"&gt;deep-equal()&lt;/a&gt;&lt;/em&gt;&lt;/strong&gt; function.
+It implements "value-based equality" which may not always be the equality one needs to check for. For example, the standard XPath 3.1 operator &lt;a href="https://www.w3.org/TR/xpath-31/#id-node-comparisons"&gt;&lt;strong&gt;&lt;em&gt;is&lt;/em&gt;&lt;/strong&gt;&lt;/a&gt; implements a check for "identity-based equality" on nodes.&lt;/p&gt;
+&lt;p&gt;Thus for two nodes &lt;code&gt;$n1&lt;/code&gt; and &lt;code&gt;$n2&lt;/code&gt; it is possible that:&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;&lt;code&gt;deep-equal($n1, $n2) ne  ($n1 is $n2)&lt;/code&gt;&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
+&lt;p&gt;The functions defined below can be used to verify a more generic kind of equality between two sequences or between two arrays. These functions accept as a parameter a user-provided function &lt;strong&gt;&lt;em&gt;&lt;code&gt;$compare()&lt;/code&gt;&lt;/em&gt;&lt;/strong&gt;, which is used to decide whether or not two corresponding items of the two sequences, or two constituents of the two arrays are "equal".&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;fn:sequence-equal($seq1 as item()*, $seq2 as item()*, 
+                  $compare as function(item(), item()) as xs:boolean := deep-equal#2) as xs:boolean
+
+fn:array-equal($ar1 as array(*), $ar2 as array(*), 
+               $compare as function(item()*, item()*) as xs:boolean := deep-equal#2) as xs:boolean
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Examples&lt;/strong&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;fn:sequence-equal((1, 2, 3), (1, 2, 3))  (: returns true() :)
+fn:sequence-equal((1, 2, 3), (1, 2, 5))  (: returns false() :)
+fn:sequence-equal((1), (1, 2))  (: returns false() :)
+fn:sequence-equal((), ())  (: returns true() :)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $compare := function($ arg1 as xs:integer, $arg2 as xs:integer) {$arg1 mod 2 eq $arg2 mod 2}
+   return fn:sequence-equal((1, 2, 3), (5, 6, 7), $compare)  (: returns true() :)
+
+let $compare := function($ arg1 as xs:integer, $arg2 as xs:integer) {$arg1 mod 2 eq $arg2 mod 2}
+   return fn:sequence-equal((1, 2, 3), (5, 6, 8), $compare)  (: returns false() :)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;fn:array-equal([1, 2, 3], [1, 2, 3]) (: returns true() :)
+fn:array-equal([1, 2, 3], [1, 2, 5])  (: returns false() :)
+fn:array-equal([1], [1, 2])  (: returns false() :) 
+fn:array-equal([], [])  (: returns true() :)
+fn:array-equal([], [()])  (: returns false() :)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Possible implementations&lt;/strong&gt;:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;Here is a pure XPath implementation of &lt;strong&gt;&lt;em&gt;&lt;code&gt;fn:sequence-equal&lt;/code&gt;&lt;/em&gt;&lt;/strong&gt;:&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $compare := function($it1 as item(), $it2 as item()) as xs:boolean 
+                {deep-equal($it1, $it2)},
+    $sequence-equal := function($seq1 as item()*, $seq2 as item()*, 
+                                $compare as function(item(), item()) as xs:boolean, 
+                                $self as function(*)) as xs:boolean
+{
+   let $size1 := count($seq1), $size2 := count($seq2)
+    return
+      if($size1 ne $size2) then false()
+      else
+         $size1 eq 0
+        or
+         $compare(head($seq1), head($seq2)) and $self(tail($seq1), tail($seq2), $compare, $self)
+}
+ return
+   $sequence-equal((1, 2, 3), (1, 2, 3), $compare, $sequence-equal)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ol start="2"&gt;
+&lt;li&gt;Below is a pure XPath implementation of &lt;strong&gt;&lt;em&gt;&lt;code&gt;fn:array-equal&lt;/code&gt;&lt;/em&gt;&lt;/strong&gt;:&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let  $compare := function($val1 as item()*, $val2 as item()*) as xs:boolean 
+                {deep-equal($val1, $val2)},
+     $array-equal := function($ar1 as array(*), $ar2 as array(*), 
+                              $compare as function(item()*, item()*) as xs:boolean, 
+                              $self as function(*)) as xs:boolean
+{
+   let $size1 := array:size($ar1), $size2 := array:size($ar2)
+    return
+      if($size1 ne $size2) then false()
+      else
+         $size1 eq 0
+        or
+         $compare(array:head($ar1), array:head($ar2)) and $self(array:tail($ar1), array:tail($ar2), $compare, $self)
+}
+ return
+   $array-equal([], [()], $compare, $array-equal)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>

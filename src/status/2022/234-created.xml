@@ -1,0 +1,66 @@
+<item>
+   <title>Issue #234 created</title>
+   <pubDate>2022-11-08T20:56:21Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/234</link>
+   <guid>https://qt4cg.org/@qt4cg/2022/#created-234</guid>
+   <description>&lt;div&gt;&lt;p&gt;If Without Else&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;This is based on the discussions in today's QT4CG meeting, as suggested by @dnovatchev.&lt;/p&gt;
+&lt;h2&gt;Use Case&lt;/h2&gt;
+&lt;p&gt;It is common to have an if condition where the &lt;code&gt;else&lt;/code&gt; branch does nothing (i.e. yields the empty sequence). In BaseX, this requirement has lead to them making the else branch optional.&lt;/p&gt;
+&lt;p&gt;It can also be conceivable to want to elide the &lt;code&gt;then&lt;/code&gt; branch as a way of not negating the if condition expression.&lt;/p&gt;
+&lt;p&gt;In the XSLT 4.0 draft, both of these are possible in the changes to support optional &lt;code&gt;@then&lt;/code&gt; (or possibly &lt;code&gt;@select&lt;/code&gt;) and &lt;code&gt;@else&lt;/code&gt; attributes. Part of this is due to requiring backward compatibility with XSLT 3.0 that only allows the then branch within child elements. It would be nice to be able to support this in XPath and XQuery for parity between the languages.&lt;/p&gt;
+&lt;h2&gt;Design&lt;/h2&gt;
+&lt;p&gt;The rationale for not allowing an optional &lt;code&gt;else&lt;/code&gt; is to avoid the dangling else problem from C and other languages that have optional else statements. That is:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($c) then
+    if ($d)
+    then 1
+    else 2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;is ambiguous as the else could be part of the &lt;code&gt;$d&lt;/code&gt; if statement or the &lt;code&gt;$c&lt;/code&gt; if statement. This would require parenthesis around the if statement to resolve the ambiguity, but the syntax should not require that. -- That is, it should be clear to the reader what the if statement will do.&lt;/p&gt;
+&lt;p&gt;As such, I propose the following variants:&lt;/p&gt;
+&lt;p&gt;(1) An if statement with a then and else expression -- currently supported:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($c) then 1 else 2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(2) An if statement with an else expression, but not a then expression -- new, should be unambiguous:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($c) else 2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(3) An if statement with a then expression, but not an else expression -- to resolve the dangling else, I propose to use &lt;code&gt;return&lt;/code&gt; instead of &lt;code&gt;then&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($c) return 1
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This works analogously to the existing FLWOR, switch, typeswitch and other expressions that use &lt;code&gt;return&lt;/code&gt; to denote the return/result expression.&lt;/p&gt;
+&lt;p&gt;For the dangling else, both cases are clear:&lt;/p&gt;
+&lt;p&gt;(a) when the &lt;code&gt;$c&lt;/code&gt; (outer) if has the elided else expression:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($c) return
+    if ($d)
+    then 1
+    else 2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(b) when the &lt;code&gt;$d&lt;/code&gt; (inner) if has the elided else expression:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($c)
+then if ($d) return 1
+else 2
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;Syntax&lt;/h2&gt;
+&lt;p&gt;Replace:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;IfExpr ::= "if"  "("  Expr  ")"  "then"  ExprSingle  "else"  ExprSingle
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;with:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;IfExpr ::= IfClause (( ThenClause? ElseCause ) | ReturnClause)
+IfClause ::= "if"  "("  Expr  ")"
+ThenClause ::= "then"  ExprSingle
+ElseClause ::= "else"  ExprSingle
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;em&gt;Design note:&lt;/em&gt; There is a &lt;code&gt;ReturnClause&lt;/code&gt; symbol that is defined as &lt;code&gt;"return"  ExprSingle&lt;/code&gt;. Because of this, and to indicate that the &lt;code&gt;then&lt;/code&gt; and &lt;code&gt;else&lt;/code&gt; parts are not expressions, I've opted for the term clause. -- This matches the use in FLWORExpr, SwitchExpr, TypeswitchExpr, etc. that all use the term clause. I've also separated them out to make the &lt;code&gt;IfExpr&lt;/code&gt; more readable now that it has optional parts.&lt;/p&gt;
+&lt;h2&gt;Semantics&lt;/h2&gt;
+&lt;p&gt;Replace:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;The expression following the if keyword is called the test expression, and the expressions following the then and else keywords are called the then-expression and else-expression, respectively.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;with:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;The expression between the parenthesis after the &lt;code&gt;if&lt;/code&gt; keyword is called the &lt;em&gt;test expression&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;The expression after the &lt;code&gt;then&lt;/code&gt; or &lt;code&gt;return&lt;/code&gt; keyword is called the &lt;em&gt;then-expression&lt;/em&gt;. If this is missing, it defaults to the empty sequence.&lt;/p&gt;
+&lt;p&gt;The expression after the &lt;code&gt;else&lt;/code&gt; keyword is called the &lt;em&gt;else-expression&lt;/em&gt;. If this is missing, it defaults to the empty sequence.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Those should be the only required changes.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
