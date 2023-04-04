@@ -14216,9 +14216,38 @@ and <code>version="1.0"</code> otherwise.</p>
                <p>In this example it is possible to use the expression <code>$array?*</code> to convert an array to a sequence.
                This works because the members of the array are all single items. In the more general case (a member
                of the array might be an empty sequence, corresponding to the JSON value <code>null</code>, or it
-               might be a sequence containing several items), the function <code>array:members</code> can be
-               used to deliver the contents of the array as a sequence of <emph>parcels</emph>, and the contents
-               of each parcel can be extracted (as a sequence) using the <function>unparcel</function> function.</p>
+               might be a sequence containing several items), <phrase diff="chg" at="2023-04-04">the function <code>array:members</code> can be
+               used to deliver the contents of the array as a sequence of <emph>value records</emph>. This is 
+               illustrated in the next example.</phrase></p>
+            </example>
+            <example diff="chg" at="2022-11-01">
+               <head>Using <elcode>xsl:for-each</elcode> to process an array containing nulls</head>
+               <p>Consider a JSON document of the form:</p>
+               <eg>[
+   { "city": "London", "data": [12.3, 15.6, null, 18.2] },
+   { "city": "Paris",  "data": [7.9, 19.1, 23.0, null] },
+   { "city": "Berlin", "data": [5.6, null, 14.6, 9.5] }                  
+]</eg>
+               <p>The requirement is to convert this to the following XML:</p>
+               <eg><![CDATA[<cities>
+  <city name="London" Q1="12.3" Q2="15.6" Q3="" Q4="18.2"/>
+  <city name="Paris" Q1="7.9" Q2="19.1" Q3="23.0" Q4=""/>
+  <city name="Berlin" Q1="5.6" Q2="" Q3="14.6" Q4="9.5"/>
+</cities>]]></eg>
+               <p>The following code achieves this transformation:</p>
+               <eg><![CDATA[<xsl:for-each select="json-doc('input.json')?*">
+   <city name="{?city}">
+     <xsl:for-each select="array:members(?data)">
+       <xsl:attribute name="Q{position()}" select="?value"/>
+     </xsl:for-each>
+   </city>  
+</xsl:for-each>]]></eg>
+               <p>In this example the expression <code>$array?*</code> cannot be used on the inner arrays
+                  because JSON nulls (which translate to an empty sequence in XDM) would be lost. Instead
+                  the function <xfunction>array:members</xfunction> is used to create a sequence of
+                  value records: a non-null entry is represented by a value such as <code>map{'value':12.3}</code>,
+                  while a null entry would be <code>map{'value':()}</code>.</p>
+                 
             </example>
             <example diff="add" at="2022-11-01">
                <head>Using <elcode>xsl:for-each</elcode> to process a map</head>
@@ -34529,6 +34558,14 @@ the same group, and the-->
                compatible types. The type of a map (for example <code>map(xs:integer,
                   xs:string)</code>) is descriptive of the entries it currently contains, but is not
                a constraint on how the map may be combined with other maps.</p>
+            
+            <note diff="add" at="2023-04-04">
+               <p>A common coding pattern is to supply the input as a set of singleton maps, that is,
+               maps containing a single entry. Moreover, it is often convenient to construct these
+               using the <elcode>xsl:map-entry</elcode> instruction. However, it is not required that
+               the input maps should be singletons, nor is it required that they should be constructed
+               using this instruction.</p>
+            </note>
 
             <p><error spec="XT" class="TE" code="3375" type="type">
                   <p>A type error occurs if the result of evaluating the sequence constructor
@@ -34616,6 +34653,33 @@ the same group, and the-->
 </eg>
             </example>
             
+            <example diff="add" at="2023-04-04">
+               <head>Modifying the keys in a map</head>
+               <p>The following example modifies a supplied map <code>$input</code> by changing
+                  all the keys to upper case. A dynamic error occurs if this results in duplicate
+                  keys:</p>
+               <eg role="xslt-declaration" xml:space="preserve">&lt;xsl:map&gt;
+  &lt;xsl:for-each select="map:key-value-pairs($map)"&gt;
+    &lt;xsl:map-entry key="upper-case(?key)" select="?value"/&gt;
+  &lt;/xsl:for-each&gt;
+&lt;/xsl:map&gt; 
+</eg>
+            </example>
+            
+            <example diff="add" at="2023-04-04">
+               <head>Modifying the values in a map</head>
+               <p>The following example modifies a supplied map <code>$input</code> by wrapping
+                  each of the values in an array:</p>
+               <eg role="xslt-declaration" xml:space="preserve">&lt;xsl:map&gt;
+  &lt;xsl:for-each select="map:key-value-pairs($map)"&gt;
+    &lt;xsl:map-entry key="?key"&gt;
+       &lt;xsl:array select="?value"/&gt;
+    &lt;/xsl:map-entry>
+  &lt;/xsl:for-each&gt;
+&lt;/xsl:map&gt; 
+</eg>
+            </example>
+            
             <div3 id="duplicate-keys" diff="add" at="2022-01-01">
                <head>Handling of duplicate keys</head>
                
@@ -34681,7 +34745,9 @@ the same group, and the-->
                      </tr>
                      <tr>
                         <td><code>function($a, $b){$a, $b}</code></td>
-                        <td>The sequence-concatenation of the duplicate values is used.</td>
+                        <td>The sequence-concatenation of the duplicate values is used. 
+                           <phrase diff="add" at="2023-04-04">This could
+                        also be expressed as <code>on-duplicates="op(',')"</code>.</phrase></td>
                      </tr>
                      <tr>
                         <td><code>function($a, $b){max(($a, $b))}</code></td>
@@ -34694,6 +34760,12 @@ the same group, and the-->
                      <tr>
                         <td><code>function($a, $b){string-join(($a, $b), ', ')}</code></td>
                         <td>The comma-separated string concatenation of the duplicate values is used.</td>
+                     </tr>
+                     <tr diff="add" at="2023-04-04">
+                        <td><code>function($a, $b){$a + $b)}</code></td>
+                        <td>The sum of the duplicate values is used.
+                           This could also be expressed as <code>on-duplicates="op('+')"</code>
+                        </td>
                      </tr>
                      <tr>
                         <td><code>function($a, $b){error()}</code></td>
@@ -34716,11 +34788,12 @@ the same group, and the-->
                   <eg><![CDATA[{"A23": [12, 2], "A24": [5], "A23": [9]}]]></eg>
                   <p>The logic is:</p>
                   <eg><![CDATA[<xsl:template match="data">
-   <xsl:map on-duplicates="function($a, $b){array:join(($a, $b))}">
-     <xsl:for-each select="event">
-        <xsl:map-entry key="@id" select="[xs:integer(@value)]"/>
-     </xsl:for-each>
-   </xsl:map>]]></eg>
+  <xsl:map on-duplicates="function($a, $b){array:join(($a, $b))}">
+    <xsl:for-each select="event">
+      <xsl:map-entry key="@id" select="[xs:integer(@value)]"/>
+    </xsl:for-each>
+  </xsl:map>
+</xsl:template>]]></eg>
                </example>
                
                
