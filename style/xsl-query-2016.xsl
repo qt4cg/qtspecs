@@ -827,7 +827,7 @@
       <xsl:when test="contains(@spec, 'XP') and not($nt)">
         <!-- XP and XQ are a special case -->
         <xsl:variable name="ref2" select="concat('doc-xpath40-',@ref)"/>
-        <xsl:variable name="nt2" select="$doc//nt[@def=$ref2]"/>
+        <xsl:variable name="nt2" select="($doc//nt[@def=$ref2])[1]"/>
         <xsl:choose>
           <xsl:when test="$uri">
             <a href="{$uri}#{$ref2}">
@@ -853,7 +853,7 @@
       <xsl:when test="contains(@spec, 'XQ') and not($nt)">
         <!-- XP and XQ are a special case -->
         <xsl:variable name="ref2" select="concat('doc-xquery40-',@ref)"/>
-        <xsl:variable name="nt2" select="$doc//nt[@def=$ref2]"/>
+        <xsl:variable name="nt2" select="($doc//nt[@def=$ref2])[1]"/>
 
         <xsl:choose>
           <xsl:when test="$uri">
