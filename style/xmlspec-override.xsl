@@ -138,15 +138,27 @@
 
   <xsl:template name="link-text-with-check">
     <xsl:param name="ref-id"/>
+
     <xsl:variable name="role" 
       select="ancestor-or-self::*[@role='xpath' 
               or @role='xquery']/@role"/>
     <xsl:variable name="num-val" select="string(ancestor-or-self::prod/@num)"/>
     <xsl:variable name="idFound1" select="//*/@id[.=$ref-id]"/>
+
+    <xsl:variable name="alt-id"
+                  select="if (starts-with($ref-id, 'doc-x'))
+                          then 'prod-' || substring-after($ref-id, '-')
+                          else if (starts-with($ref-id, 'prod-x'))
+                               then 'doc-' || substring-after($ref-id, '-')
+                               else ()"/>
+
+    <xsl:variable name="idFound2" select="//*/@id[.=$alt-id]"/>
+
     <xsl:choose>
       <!-- The tests for "(XQuery)", etc. are a hack... this should be driven from 
            the prep stylesheets, but I'm not sure how at the moment. -->
-      <xsl:when test="($idFound1) or contains($num-val, '(XQuery)') or contains($num-val, '(XPath)')">
+      <xsl:when test="($idFound1 or $idFound2)
+                      or contains($num-val, '(XQuery)') or contains($num-val, '(XPath)')">
         <a>
           <xsl:attribute name="href">
             <xsl:choose>

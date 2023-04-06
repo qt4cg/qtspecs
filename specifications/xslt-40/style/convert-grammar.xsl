@@ -42,6 +42,10 @@
   <xsl:template match="g:ref[@name=('LocalPart')]">
     <xnt spec="XP40" ref="prod-xpath40-NCName">NCName</xnt>
   </xsl:template>
+
+  <xsl:template match="g:ref[@name=('StringLiteral')]">
+    <xnt spec="XP40" ref="prod-xpath40-StringLiteral">StringLiteral</xnt>
+  </xsl:template>
   
   <xsl:template match="g:ref">
     <!--<xsl:message>** NT <xsl:value-of select="@name"/></xsl:message>-->
