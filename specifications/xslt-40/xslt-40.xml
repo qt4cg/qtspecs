@@ -8100,9 +8100,27 @@
 &lt;/xsl:for-each&gt;</eg><p>In this example it is possible to use the expression <code>$array?*</code> to convert an array to a sequence.
                This works because the members of the array are all single items. In the more general case (a member
                of the array might be an empty sequence, corresponding to the JSON value <code>null</code>, or it
-               might be a sequence containing several items), the function <code>array:members</code> can be
-               used to deliver the contents of the array as a sequence of <emph>parcels</emph>, and the contents
-               of each parcel can be extracted (as a sequence) using the <function>unparcel</function> function.</p></example><example diff="add" at="2022-11-01"><head>Using <elcode>xsl:for-each</elcode> to process a map</head><p>Consider a JSON document of the form:</p><eg xml:space="preserve">{
+               might be a sequence containing several items), <phrase diff="chg" at="2023-04-04">the function <code>array:members</code> can be
+               used to deliver the contents of the array as a sequence of <emph>value records</emph>. This is 
+               illustrated in the next example.</phrase></p></example><example diff="chg" at="2022-11-01"><head>Using <elcode>xsl:for-each</elcode> to process an array containing nulls</head><p>Consider a JSON document of the form:</p><eg xml:space="preserve">[
+   { "city": "London", "data": [12.3, 15.6, null, 18.2] },
+   { "city": "Paris",  "data": [7.9, 19.1, 23.0, null] },
+   { "city": "Berlin", "data": [5.6, null, 14.6, 9.5] }                  
+]</eg><p>The requirement is to convert this to the following XML:</p><eg xml:space="preserve">&lt;cities&gt;
+  &lt;city name="London" Q1="12.3" Q2="15.6" Q3="" Q4="18.2"/&gt;
+  &lt;city name="Paris" Q1="7.9" Q2="19.1" Q3="23.0" Q4=""/&gt;
+  &lt;city name="Berlin" Q1="5.6" Q2="" Q3="14.6" Q4="9.5"/&gt;
+&lt;/cities&gt;</eg><p>The following code achieves this transformation:</p><eg xml:space="preserve">&lt;xsl:for-each select="json-doc('input.json')?*"&gt;
+   &lt;city name="{?city}"&gt;
+     &lt;xsl:for-each select="array:members(?data)"&gt;
+       &lt;xsl:attribute name="Q{position()}" select="?value"/&gt;
+     &lt;/xsl:for-each&gt;
+   &lt;/city&gt;  
+&lt;/xsl:for-each&gt;</eg><p>In this example the expression <code>$array?*</code> cannot be used on the inner arrays
+                  because JSON nulls (which translate to an empty sequence in XDM) would be lost. Instead
+                  the function <xfunction>array:members</xfunction> is used to create a sequence of
+                  value records: a non-null entry is represented by a value such as <code>map{'value':12.3}</code>,
+                  while a null entry would be <code>map{'value':()}</code>.</p></example><example diff="add" at="2022-11-01"><head>Using <elcode>xsl:for-each</elcode> to process a map</head><p>Consider a JSON document of the form:</p><eg xml:space="preserve">{
   "London": {"latitude": 51.5099, "longitude": -0.1181 },
   "Paris":  {"latitude": 48.8647, "longitude": 2.3488 },
   "Berlin": {"latitude": 52.5200, "longitude": 13.4049 }                  
@@ -8120,7 +8138,7 @@
                sequence other than the last.</p><p>For example, the following instruction:</p><eg xml:space="preserve">
 &lt;xsl:for-each select="6, 3, 9" separator="|"&gt;
    &lt;xsl:sort select="."/&gt;
-   &lt;xsl:sequence select="., .+1"/&gt;
+   &lt;xsl:sequence-of select="., .+1"/&gt;
 &lt;/xsl:for-each&gt;</eg><p>produces a sequence comprising, in order: the integer 3, the integer 4, a text node with string value <code>"|"</code>,
                the integer 6, the integer 7, another text node with string value <code>"|"</code>,
             the integer 9, and the integer 10.</p><p>The node identity of any text nodes that are inserted is <termref def="dt-implementation-dependent"/>. Specifically,
@@ -19028,9 +19046,13 @@ for $i in 1 to count($V) return
       </p></item><item><p>
          <code>map:get(I, A, A)</code>
       </p></item><item><p>
+         <code>map:key-value-pairs(I)</code>
+      </p></item><item><p>
          <code>map:keys(I)</code>
       </p></item><item><p>
          <code>map:merge(I, I)</code>
+      </p></item><item><p>
+         <code>map:of(I, I)</code>
       </p></item><item><p>
          <code>map:put(I, A, N)</code>
       </p></item><item><p>
@@ -20266,7 +20288,11 @@ for $i in 1 to count($V) return
                   the union of the map entries from the supplied sequence of maps.</p></note><p>The handling of duplicate keys is described in <specref ref="duplicate-keys"/> below.</p><p>There is no requirement that the supplied input maps should have the same or
                compatible types. The type of a map (for example <code>map(xs:integer,
                   xs:string)</code>) is descriptive of the entries it currently contains, but is not
-               a constraint on how the map may be combined with other maps.</p><p><error spec="XT" class="TE" code="3375" type="type"><p>A type error occurs if the result of evaluating the sequence constructor
+               a constraint on how the map may be combined with other maps.</p><note diff="add" at="2023-04-04"><p>A common coding pattern is to supply the input as a set of singleton maps, that is,
+               maps containing a single entry. Moreover, it is often convenient to construct these
+               using the <elcode>xsl:map-entry</elcode> instruction. However, it is not required that
+               the input maps should be singletons, nor is it required that they should be constructed
+               using this instruction.</p></note><p><error spec="XT" class="TE" code="3375" type="type"><p>A type error occurs if the result of evaluating the sequence constructor
                         <error.extra>within an <elcode>xsl:map</elcode> instruction</error.extra> is
                      not an instance of the required type <code>map(*)*</code>.</p></error></p><note><p>In practice, the effect of this rule is that the sequence
                   constructor contained in the <elcode>xsl:map</elcode> instruction is severely
@@ -20325,6 +20351,21 @@ for $i in 1 to count($V) return
     &lt;/xsl:for-each&gt;
   &lt;/xsl:map&gt;
 &lt;/xsl:variable&gt;  
+</eg></example><example diff="add" at="2023-04-04"><head>Modifying the keys in a map</head><p>The following example modifies a supplied map <code>$input</code> by changing
+                  all the keys to upper case. A dynamic error occurs if this results in duplicate
+                  keys:</p><eg role="xslt-declaration" xml:space="preserve">&lt;xsl:map&gt;
+  &lt;xsl:for-each select="map:key-value-pairs($map)"&gt;
+    &lt;xsl:map-entry key="upper-case(?key)" select="?value"/&gt;
+  &lt;/xsl:for-each&gt;
+&lt;/xsl:map&gt; 
+</eg></example><example diff="add" at="2023-04-04"><head>Modifying the values in a map</head><p>The following example modifies a supplied map <code>$input</code> by wrapping
+                  each of the values in an array:</p><eg role="xslt-declaration" xml:space="preserve">&lt;xsl:map&gt;
+  &lt;xsl:for-each select="map:key-value-pairs($map)"&gt;
+    &lt;xsl:map-entry key="?key"&gt;
+       &lt;xsl:array select="?value"/&gt;
+    &lt;/xsl:map-entry&gt;
+  &lt;/xsl:for-each&gt;
+&lt;/xsl:map&gt; 
 </eg></example><div3 id="duplicate-keys" diff="add" at="2022-01-01"><head>Handling of duplicate keys</head><p>This section describes what happens when two or more maps returned by the sequence constructor
                within an <elcode>xsl:map</elcode> instruction contain duplicate keys: that is, when one of these
                maps contains an entry with key <var>K</var>, and another contains an entry with key <var>L</var>,
@@ -20347,7 +20388,11 @@ for $i in 1 to count($V) return
                for a given key <var>K</var>, in that order, the evaluation is as follows:</p><olist><item><p><code>F(A, B)</code> is called; let its return value be <var>X</var>.</p></item><item><p><code>F(X, C)</code> is called; let its return value be <var>Y</var>.</p></item><item><p><code>F(Y, D)</code> is called; let its return value be <var>Z</var>.</p></item><item><p>The value that is associated with key <var>K</var> in the final map
                   will be <var>Z</var>.</p></item></olist><p>Thus, if the values are all singleton items (which is not necessarily the case), and if the sequence
                of values is <var>S</var>, then the final result is <code>fold-left(tail(S), head(S), F)</code>.</p><p>For example, the following table shows some useful callback functions that might be supplied,
-                  and explains their effect:</p><table border="1" cellpadding="5" width="100%"><thead><tr><th rowspan="1" colspan="1" align="left" valign="top">Function</th><th rowspan="1" colspan="1" align="left" valign="top">Effect</th></tr></thead><tbody><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$a}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The first of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$b}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The last of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$a, $b}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The sequence-concatenation of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){max(($a, $b))}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The highest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){min(($a, $b))}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The lowest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){string-join(($a, $b), ', ')}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The comma-separated string concatenation of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){error()}</code></td><td rowspan="1" colspan="1" align="left" valign="top">Duplicates are rejected as an error (this is the default in the absence of a
+                  and explains their effect:</p><table border="1" cellpadding="5" width="100%"><thead><tr><th rowspan="1" colspan="1" align="left" valign="top">Function</th><th rowspan="1" colspan="1" align="left" valign="top">Effect</th></tr></thead><tbody><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$a}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The first of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$b}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The last of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$a, $b}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The sequence-concatenation of the duplicate values is used. 
+                           <phrase diff="add" at="2023-04-04">This could
+                        also be expressed as <code>on-duplicates="op(',')"</code>.</phrase></td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){max(($a, $b))}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The highest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){min(($a, $b))}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The lowest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){string-join(($a, $b), ', ')}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The comma-separated string concatenation of the duplicate values is used.</td></tr><tr diff="add" at="2023-04-04"><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){$a + $b)}</code></td><td rowspan="1" colspan="1" align="left" valign="top">The sum of the duplicate values is used.
+                           This could also be expressed as <code>on-duplicates="op('+')"</code>
+                        </td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code>function($a, $b){error()}</code></td><td rowspan="1" colspan="1" align="left" valign="top">Duplicates are rejected as an error (this is the default in the absence of a
                            callback function).</td></tr></tbody></table><example id="map-with-duplicates-into-array"><head>Combining Duplicates into an Array</head><p>This example takes as input an XML document such as:</p><eg xml:space="preserve">&lt;data&gt;
    &lt;event id="A23" value="12"/&gt;
    &lt;event id="A24" value="5"/&gt;
