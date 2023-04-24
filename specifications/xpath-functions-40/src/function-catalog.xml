@@ -22245,7 +22245,7 @@ return array:sort($in, $SWEDISH)
 
    <fos:function name="partition" prefix="array">
       <fos:signatures>
-         <fos:proto name="partition" return-type="array(*)+">
+         <fos:proto name="partition" return-type="array(item())*">
             <fos:arg name="input" type="item()*"/>
             <fos:arg name="break-when" type="function(item()*, item()) as xs:boolean"/>
          </fos:proto>
@@ -22256,21 +22256,24 @@ return array:sort($in, $SWEDISH)
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Partitions a sequence of items into a sequence of arrays containing the same items,
+         <p>Partitions a sequence of items into a sequence of non-empty arrays containing the same items,
          starting a new partition when a supplied condition is true.</p>
       </fos:summary>
       <fos:rules>
-         <p>Informally, the function processes the items in the input sequence in order, and for each item
-         it calls the supplied <code>$break-when</code> function with two arguments: the contents of the
-         current partition (initially an empty sequence), and the current item in the input sequence. If
-         the <code>$break-when</code> function returns true, the current partition is added to the result
-            and a new current partition is created, initially containing the current item. If the <code>$break-when</code> 
-            function returns false, the current item is added to the current partition.</p>
+         <p>Informally, the function starts by creating a partition containing the first item in the input sequence,
+            if any. For each of the remaining item <var>J</var> in the input sequence,
+            other than the first, it calls the supplied <code>$break-when</code> function with two 
+            arguments: the contents of the current partition, and the item <var>J</var>.</p>
+         <p>Each partition is a sequence of items; the function result wraps each partition as an array, and returns
+            the sequence of arrays.</p>
+         <p>If the <code>$break-when</code> function returns true, the current partition is wrapped as an array and added to the result,
+            and a new current partition is created, initially containing the item <var>J</var> only. If the <code>$break-when</code> 
+            function returns false, the item <var>J</var> is added to the current partition.</p>
          <p>More formally, the function returns the result of the expression:</p>
-         <eg>fn:fold-left($input, (), function($a, $b) {
-   if (empty($a) or $break-when(array:slice($a, start:-1)?*, $b))
-   then ($a, [$b])
-   else array:replace($a, array:size($a), function($m){$m, $b})
+         <eg>fn:fold-left($input, (), function($partitions, $next) {
+   if (empty($partitions) or $break-when($partitions[last()]?*, $next))
+   then ($partitions, [$next])
+   else (fn:trunk($partitions), array{$partitions[last()], $next}) 
 }   
          </eg>  
       </fos:rules>
@@ -22285,34 +22288,38 @@ return array:sort($in, $SWEDISH)
                starts a new group whenever an item is encountered whose value is less than
                the value of the previous item.</p></item>
          </ulist>
+         <p>The callback function is not called to process the first item in the input sequence, because this will
+         always start a new partition. The first argument to the callback function (the current partition) is always
+         a non-empty sequence.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
                <fos:expression>array:partition(("Anita", "Anne", "Barbara", "Catherine", "Christine"), 
-                  ->($x, $y){fn:substring($x[last()],1,1) ne fn:substring($y,1,1)})</fos:expression>
+                  function($partition, $next){fn:substring($partitions[1],1,1) ne fn:substring($next,1,1)})</fos:expression>
                <fos:result>(["Anita", "Anne"], ["Barbara"], ["Catherine", "Christine"])</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:partition((1, 2, 3, 4, 5, 6), function($a, $b){count($a) eq 2})</fos:expression>
-               <fos:result>([1, 2], [3, 4], [5, 6])</fos:result>
+               <fos:expression>array:partition((1, 2, 3, 4, 5, 6, 7), function($partition, $next){count($partition) eq 2})</fos:expression>
+               <fos:result>([1, 2], [3, 4], [5, 6], [7])</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:partition((1, 4, 6, 3, 1, 1), function($a, $b){sum($a) ge 5})</fos:expression>
+               <fos:expression>array:partition((1, 4, 6, 3, 1, 1), function($partition, $next){sum($partition) ge 5})</fos:expression>
                <fos:result>([1, 4], [6], [3, 1, 1])</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:partition(tokenize("In the beginning was the word"), function($a, $b){sum(($a,$b)!string-length() gt 10)}</fos:expression>
+               <fos:expression>array:partition(tokenize("In the beginning was the word"), 
+                                               function($partition, $next){sum(($partition, $next)!string-length()) gt 10}</fos:expression>
                <fos:result>(["In", "the"], ["beginning"], ["was", "the", "word"])</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:partition((1, 2, 3, 6, 7, 9, 10), function($a, $b){$a ne $b[last()]+1})</fos:expression>
+               <fos:expression>array:partition((1, 2, 3, 6, 7, 9, 10), function($partition, $next){$next ne $partition[last()]+1})</fos:expression>
                <fos:result>([1, 2, 3], [6, 7], [9, 10])</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
       <fos:history>
-         <fos:version version="4.0">Proposed for 4.0. Not yet reviewed?</fos:version>
+         <fos:version version="4.0">Proposed for 4.0</fos:version>
       </fos:history>
    </fos:function>
 
