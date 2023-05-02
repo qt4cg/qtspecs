@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><!--{xml-fix} XSLT Processor: Saxonica--><!--This document was created at (not provided)--><html xmlns="http://www.w3.org/1999/xhtml" lang="EN"><head><title>XQuery 4.0: An XML Query Language </title><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/><link rel="stylesheet" type="text/css" href="https://www.w3.org/StyleSheets/TR/2016/W3C-REC.css"/><link rel="stylesheet" href="css/qtspecs.css"/><link rel="stylesheet" href="css/xquery-40.css"/></head><body><div class="head"><p><a href="https://www.w3.org/"><img src="https://www.w3.org/StyleSheets/TR/2016/logos/W3C" alt="W3C" height="48" width="72"/></a></p>
 <h1><a id="title"/>XQuery 4.0: An XML Query Language </h1>
-<h2><a id="w3c-doctype"/>W3C Editor's Draft 27 February 2023</h2><dl><dt>This version:</dt><dd><a href="https://qt4cg.org/pr/375/xquery-40//">https://qt4cg.org/pr/375/xquery-40/</a></dd><dt>Most recent version of XQuery:</dt><dd>
+<h2><a id="w3c-doctype"/>W3C Editor's Draft 2 May 2023</h2><dl><dt>This version:</dt><dd><a href="https://qt4cg.org/pr/375/xquery-40//">https://qt4cg.org/pr/375/xquery-40/</a></dd><dt>Most recent version of XQuery:</dt><dd>
          <a href="https://qt4cg.org/specifications/xquery-40/">https://qt4cg.org/specifications/xquery-40/</a>
       </dd><dt>Most recent Recommendation of XQuery:</dt><dd>
          <a href="https://www.w3.org/TR/2017/REC-xquery-31-20170321/">https://www.w3.org/TR/2017/REC-xquery-31-20170321/</a>
@@ -8461,20 +8461,42 @@ declare context item as element(env:Envelope) external;</pre></div></li><li><p>D
         a <a title="sequence type" class="termref" href="#dt-sequence-type">sequence type</a>.</p><p>When a default value is supplied for a function parameter (using the syntax <code>:= ExprSingle</code>),
       the static and dynamic context for evaluating the <code>ExprSingle</code> are the same as the static
       and dynamic context for evaluating the <a title="initializing expression" class="termref" href="#dt-initializing-expression">initializing expression</a> of a 
-        <a title="variable declaration" class="termref" href="#dt-variable-declaration">variable declaration</a>, with one addition, a zero-arity function named <code>fn:caller-context</code>,
-      defined as follows:</p><ul><li><p>The name of the function has local part <code>caller-context</code> and namespace
-        <code>http://www.w3.org/2005/xpath-functions</code>.</p></li><li><p>The type of the function is:</p><div class="exampleInner"><pre>function() as record(
-   context-item? as (function() as item()), 
-   position? as (function() as xs:integer), 
-   last? as (function() as xs:integer),
-   default-collation? as (function() as xs:anyURI),
-   *)</pre></div></li><li><p>The function provides access to information about the static and dynamic context of the function
-        call or function reference that caused the function to be invoked. Specifically:</p><ul><li><p>
-                              <code>$fn:caller-context()?context-item()</code> provides the context item of the caller.</p></li><li><p>
-                              <code>$fn:caller-context()?position()</code> provides the context position of the caller.</p></li><li><p>
-                              <code>$fn:caller-context()?last()</code> provides the context size of the caller.</p></li><li><p>
-                              <code>$fn:caller-context()?default-collation()</code> provides the default collation of the caller.</p></li></ul><p>Note that if any of these values is absent, an attempt to retrieve the value will return an empty sequence.</p></li></ul><p>So, for example, a parameter whose default value is the context item of the caller can be declared as
-      <code>$input as item() := $fn:caller-context()?context-item()</code>.</p></div><div class="div3">
+        <a title="variable declaration" class="termref" href="#dt-variable-declaration">variable declaration</a>, with one addition, a variable named <code>context</code>,
+        which holds information about the static and dynamic context of the function call (or function reference)
+        that causes the default value to be evaluated.</p><table class="ednote" caption="Editorial note"><tr><td style="text-align: left; vertical-align:top; width: 50%;"><b>Editorial note</b></td><td style="text-align: right; vertical-align:top; width: 50%;"> </td></tr><tr style="text-align: left; vertical-align: top;"><td colspan="2">I decided to use a magic variable rather than a magic function because (a) there are fewer
+      edge cases that need to be defined in the specification, for example what happens if it's a function and
+      you use function-lookup() to find it, and (b) because it's easy for an implementation to determine
+      statically that a particular default value expression actually uses this feature, which makes it easier
+      to pre-evaluate default value expressions that don't.</td></tr></table><p>More specifically:</p><ul><li><p>The <a title="in-scope variables" class="termref" href="#dt-in-scope-variables">in-scope variables</a> component of the static context is augmented
+        with a variable whose name is <code>context</code> (in no namespace) and whose type is:</p><div class="exampleInner"><pre>record(
+    item as (function() as item()),
+    default-collation? as (function() as xs:anyURI),
+    *)
+        </pre></div><table class="ednote" caption="Editorial note"><tr><td style="text-align: left; vertical-align:top; width: 50%;"><b>Editorial note</b></td><td style="text-align: right; vertical-align:top; width: 50%;"> </td></tr><tr style="text-align: left; vertical-align: top;"><td colspan="2">I decided, after we reviewed this, to make the fields functions rather than simple values
+        because it is easier to reproduce the behavior of core functions where a dynamic error is raised
+        if the context item in the caller is absent.</td></tr></table></li><li><p>The <a title="variable values" class="termref" href="#dt-variable-values">variable values</a> component of the dynamic context is augmented
+        with a value for this variable. The value is map, whose entries are as follows:</p><table class="data"><thead><tr><th>key</th><th>value</th></tr></thead><tbody><tr><td>
+                                 <p>item</p>
+                              </td><td>
+                                 <p>A zero-arity function that returns the <a title="context item" class="termref" href="#dt-context-item">context item</a> 
+                from the dynamic context of the caller; if this is absent,
+              the function raises a dynamic error [<a href="#ERRXPDY0002" title="err:XPDY0002">err:XPDY0002</a>].</p>
+                                 <div class="note"><p class="prefix"><b>Note:</b></p><p>Using a context item expression (<code>.</code>) in the default
+              value expression is interpreted as a reference to the initial context item
+              of the query, which is not the same thing, and is probably a mistake.</p></div>
+                              </td></tr><tr><td>
+                                 <p>default‑collation</p>
+                              </td><td>
+                                 <p>A zero-arity function that returns the <a title="default collation" class="termref" href="#dt-def-collation">default collation</a>
+              from the static context of the caller.</p>
+                              </td></tr></tbody></table></li></ul><p>So, for example, a parameter whose default value is the context item of the caller can be declared as
+      <code>$input as item() := $context?item()</code>.</p><div class="note"><p class="prefix"><b>Note:</b></p><p>This capability allows user-defined functions to mimic the behavior of 
+        those core functions that take default argument values from the caller's static or dynamic context. It is not designed to 
+     enable all core functions to be implemented in XQuery. For example (a) it does not provide access
+     to all parts of the caller's context, such as the caller's in-scope namespaces or static base URI, 
+     and (b) it allows access to context information only in an expression used to compute default values 
+     of parameters, not in the body of the function implementation.</p></div><table class="ednote" caption="Editorial note"><tr><td style="text-align: left; vertical-align:top; width: 50%;"><b>Editorial note</b></td><td style="text-align: right; vertical-align:top; width: 50%;"> </td></tr><tr style="text-align: left; vertical-align: top;"><td colspan="2">The mechanism is extensible, we could easily add more entries to the map. However,
+      providing these two is sufficient for all functions in the core library that have context-dependent default arguments.</td></tr></table></div><div class="div3">
 <h4><a id="id-function-properties"/>5.18.2 Function Properties</h4><p>The properties of the <a title="function definition" class="termref" href="#dt-function-definition">function definition</a>
                   <var>F</var> are derived from the syntax of the
       function declaration as follows:</p><ul><li><p>The name of <var>F</var> is the <a title="expanded QName" class="termref" href="#dt-expanded-qname">expanded QName</a> obtained by expanding the <code>EQName</code>
@@ -8593,7 +8615,7 @@ defaults to an empty map:</p><div class="exampleInner"><pre>declare function loc
 <h3><a id="id-item-type-declaration"/>5.19 Item Type Declarations</h3><p>An item type declaration defines a name for an item type. Defining a name for an item type
     allows it to be referenced (using the syntax <code>item-type(name)</code> rather than repeating
     the item type definition in full.</p>
-<a id="d3e29993"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="noid_d4e26268.doc-xquery40-AnnotatedDecl"/>[26]   </td><td><code>AnnotatedDecl</code></td><td>   ::=   </td><td><code>"declare"  <a href="#doc-xquery40-Annotation">Annotation</a>*  (<a href="#doc-xquery40-VarDecl">VarDecl</a>  |  <a href="#doc-xquery40-FunctionDecl">FunctionDecl</a>  |  <a href="#doc-xquery40-ItemTypeDecl">ItemTypeDecl</a>)</code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="noid_d4e26269.doc-xquery40-Annotation"/>[27]   </td><td><code>Annotation</code></td><td>   ::=   </td><td><code>"%"  <a href="#doc-xquery40-EQName">EQName</a>  ("("  <a href="#doc-xquery40-Literal">Literal</a>  (","  <a href="#doc-xquery40-Literal">Literal</a>)*  ")")?</code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="doc-xquery40-ItemTypeDecl"/>[41]   </td><td><code><a href="#prod-xquery40-ItemTypeDecl">ItemTypeDecl</a></code></td><td>   ::=   </td><td><code>"item-type"  <a href="#doc-xquery40-EQName">EQName</a>  "as"  <a href="#doc-xquery40-ItemType">ItemType</a>
+<a id="d3e30022"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="noid_d4e26297.doc-xquery40-AnnotatedDecl"/>[26]   </td><td><code>AnnotatedDecl</code></td><td>   ::=   </td><td><code>"declare"  <a href="#doc-xquery40-Annotation">Annotation</a>*  (<a href="#doc-xquery40-VarDecl">VarDecl</a>  |  <a href="#doc-xquery40-FunctionDecl">FunctionDecl</a>  |  <a href="#doc-xquery40-ItemTypeDecl">ItemTypeDecl</a>)</code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="noid_d4e26298.doc-xquery40-Annotation"/>[27]   </td><td><code>Annotation</code></td><td>   ::=   </td><td><code>"%"  <a href="#doc-xquery40-EQName">EQName</a>  ("("  <a href="#doc-xquery40-Literal">Literal</a>  (","  <a href="#doc-xquery40-Literal">Literal</a>)*  ")")?</code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="doc-xquery40-ItemTypeDecl"/>[41]   </td><td><code><a href="#prod-xquery40-ItemTypeDecl">ItemTypeDecl</a></code></td><td>   ::=   </td><td><code>"item-type"  <a href="#doc-xquery40-EQName">EQName</a>  "as"  <a href="#doc-xquery40-ItemType">ItemType</a>
                   </code></td><td/></tr></tbody></table><p>An item-type declaration adds a named item type to the <a title="item type aliases" class="termref" href="#dt-item-type-aliases">item type aliases</a>
     of the containing module. This enables the item type to be referred to using a simple name.</p><div class="example"><p>For example, given the declaration:</p><div class="exampleInner"><pre>declare item-type app:invoice as map("xs:string", element(inv:paid-invoice))</pre></div><p>It becomes possible to declare a variable containing a sequence of such items as:</p><div class="exampleInner"><pre>declare variable $invoices as app:invoice*</pre></div><p>The definition can also be used within another item-type declaration:</p><div class="exampleInner"><pre>declare item-type app:overdue-invoices as map("xs:date", app:invoice*)</pre></div></div><p>If the name of the item type is written as an (unprefixed) NCName, then 
       it is interpreted as being in no namespace.</p><p>All item type names declared in a library module must (when expanded) be in the target namespace of the 
@@ -8620,7 +8642,7 @@ defaults to an empty map:</p><div class="exampleInner"><pre>declare function loc
           declaration</b> declares an option that affects the behavior of a particular
         implementation. Each option consists of an identifying EQName and a StringLiteral.]
             </p>
-<a id="d3e30112"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="doc-xquery40-OptionDecl"/>[42]   </td><td><code><a href="#prod-xquery40-OptionDecl">OptionDecl</a></code></td><td>   ::=   </td><td><code>"declare"  "option"  <a href="#doc-xquery40-EQName">EQName</a>
+<a id="d3e30141"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="doc-xquery40-OptionDecl"/>[42]   </td><td><code><a href="#prod-xquery40-OptionDecl">OptionDecl</a></code></td><td>   ::=   </td><td><code>"declare"  "option"  <a href="#doc-xquery40-EQName">EQName</a>
                      <a href="#doc-xquery40-StringLiteral">StringLiteral</a>
                   </code></td><td/></tr></tbody></table><p>Typically, a particular option will be recognized by some implementations and not by others.
       The syntax is designed so that option declarations can be successfully parsed by all
@@ -9270,7 +9292,7 @@ defaults to an empty map:</p><div class="exampleInner"><pre>declare function loc
       full <a href="#XML1.1">[XML 1.1]</a> character set <a title="should" class="termref" href="#should">SHOULD</a>, for purposes
       of interoperability, provide a mode that follows only the <a href="#XML">[XML 1.0]</a> and <a href="#XMLNAMES">[XML Names]</a> lexical rules.</p><p>When tokenizing, the longest possible match that is consistent with the EBNF is used.</p><p>All keywords are case sensitive. Keywords are not reserved—that is, any <a title="lexical QName" class="termref" href="#dt-qname">lexical QName</a> may duplicate a keyword except as noted in <a href="#id-reserved-fn-names"><b>A.3 Reserved Function Names</b></a>.</p><div class="div3">
 <h4><a id="terminal-symbols"/>A.2.1 Terminal Symbols</h4>
-<a id="d3e33998"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-IntegerLiteral"/>[253]   </td><td><code><a href="#doc-xquery40-IntegerLiteral">IntegerLiteral</a></code></td><td>   ::=   </td><td><code>
+<a id="d3e34027"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-IntegerLiteral"/>[253]   </td><td><code><a href="#doc-xquery40-IntegerLiteral">IntegerLiteral</a></code></td><td>   ::=   </td><td><code>
                         <a href="#prod-xquery40-Digits">Digits</a>
                      </code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-DecimalLiteral"/>[254]   </td><td><code><a href="#doc-xquery40-DecimalLiteral">DecimalLiteral</a></code></td><td>   ::=   </td><td><code>("."  <a href="#prod-xquery40-Digits">Digits</a>)  |  (<a href="#prod-xquery40-Digits">Digits</a>  "."  [0-9]*)</code></td><td><i>/* 
                         <a href="#ws-explicit">ws: explicit</a>
@@ -9318,7 +9340,7 @@ defaults to an empty map:</p><div class="exampleInner"><pre>declare function loc
                         <a href="#parse-note-xml-version">xgc: xml-version</a>
                       */</i></td></tr></tbody></table><p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-<a id="d3e34230"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-Digits"/>[272]   </td><td><code><a href="#doc-xquery40-Digits">Digits</a></code></td><td>   ::=   </td><td><code>[0-9]+</code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-CommentContents"/>[273]   </td><td><code><a href="#doc-xquery40-CommentContents">CommentContents</a></code></td><td>   ::=   </td><td><code>(<a href="#prod-xquery40-Char">Char</a>+ - (Char* ('(:' | ':)') Char*))</code></td><td/></tr></tbody></table></div><div class="div3">
+<a id="d3e34259"/><table class="scrap"><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-Digits"/>[272]   </td><td><code><a href="#doc-xquery40-Digits">Digits</a></code></td><td>   ::=   </td><td><code>[0-9]+</code></td><td/></tr></tbody><tbody><tr style="vertical-align:baseline;"><td><a id="prod-xquery40-CommentContents"/>[273]   </td><td><code><a href="#doc-xquery40-CommentContents">CommentContents</a></code></td><td>   ::=   </td><td><code>(<a href="#prod-xquery40-Char">Char</a>+ - (Char* ('(:' | ':)') Char*))</code></td><td/></tr></tbody></table></div><div class="div3">
 <h4><a id="id-terminal-delimitation"/>A.2.2 Terminal Delimitation</h4><p>XQuery 4.0 expressions consist of <a href="#terminal-symbols">terminal symbols</a> and
           <a title="symbol separators" class="termref" href="#symbolseparators">symbol separators</a>.</p><p>Terminal symbols that are not used exclusively in <a href="#ws-explicit">/* ws: explicit
           */</a> productions are of two kinds: delimiting and non-delimiting.</p><p>
