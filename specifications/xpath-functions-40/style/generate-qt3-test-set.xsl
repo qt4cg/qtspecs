@@ -23,7 +23,9 @@
   <xsl:import-schema namespace="http://www.w3.org/xpath-functions/spec/namespace"
     schema-location="../src/fos.xsd"/>
   <xsl:import-schema namespace="http://www.w3.org/2010/09/qt-fots-catalog"
-    schema-location="file:/Users/mike/w3c/qt3t/QT3-test-suite/catalog-schema.xsd"/>
+    schema-location="/Users/mike/GitHub/qt4cg/qt4tests/catalog-schema.xsd"/>
+  <xsl:import-schema namespace="http://www.w3.org/2005/xpath-functions"
+    schema-location="../src/xpath-functions.xsd"/>
   
   <xsl:param name="run-by" select="'Michael Kay'"/>
 
