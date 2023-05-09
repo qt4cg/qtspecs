@@ -12,6 +12,9 @@
   examples are correct.
   
   It is derived from the old generate-test-stylesheet.xsl stylesheet.
+  
+  Typical invocation, in directory qtspecs/specifications/xpath-functions-40 :
+  -t -xsl:style/generate-qt3-test-set.xsl -s:src/function-catalog.xml -val -o:/Users/mike/GitHub/qt4cg/qt4tests/app/fo-spec-examples.xml
 -->
 
   <xsl:namespace-alias result-prefix="xsl" stylesheet-prefix="x"/>
@@ -19,11 +22,15 @@
 
   <xsl:output method="xml" indent="yes" saxon:double-space="test-case"
     cdata-section-elements="assert-xml"/>
+  
+  <xsl:param name="qt4tests-dir" static="yes" select="'file:/Users/mike/GitHub/qt4cg/qt4tests/'"/>
 
   <xsl:import-schema namespace="http://www.w3.org/xpath-functions/spec/namespace"
     schema-location="../src/fos.xsd"/>
+  <xsl:import-schema namespace="http://www.w3.org/2005/xpath-functions"
+    schema-location="../src/xpath-functions.xsd"/>
   <xsl:import-schema namespace="http://www.w3.org/2010/09/qt-fots-catalog"
-    schema-location="file:/Users/mike/w3c/qt3t/QT3-test-suite/catalog-schema.xsd"/>
+    _schema-location="{$qt4tests-dir}catalog-schema.xsd"/>
   
   <xsl:param name="run-by" select="'Michael Kay'"/>
 
