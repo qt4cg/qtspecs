@@ -12,6 +12,9 @@
   examples are correct.
   
   It is derived from the old generate-test-stylesheet.xsl stylesheet.
+  
+  Typical invocation, in directory qtspecs/specifications/xpath-functions-40 :
+  -t -xsl:style/generate-qt3-test-set.xsl -s:src/function-catalog.xml -val -o:/Users/mike/GitHub/qt4cg/qt4tests/app/fo-spec-examples.xml
 -->
 
   <xsl:namespace-alias result-prefix="xsl" stylesheet-prefix="x"/>
@@ -19,11 +22,15 @@
 
   <xsl:output method="xml" indent="yes" saxon:double-space="test-case"
     cdata-section-elements="assert-xml"/>
+  
+  <xsl:param name="qt4tests-dir" static="yes" select="'file:/Users/mike/GitHub/qt4cg/qt4tests/'"/>
 
   <xsl:import-schema namespace="http://www.w3.org/xpath-functions/spec/namespace"
     schema-location="../src/fos.xsd"/>
+  <xsl:import-schema namespace="http://www.w3.org/2005/xpath-functions"
+    schema-location="../src/xpath-functions.xsd"/>
   <xsl:import-schema namespace="http://www.w3.org/2010/09/qt-fots-catalog"
-    schema-location="file:/Users/mike/w3c/qt3t/QT3-test-suite/catalog-schema.xsd"/>
+    _schema-location="{$qt4tests-dir}catalog-schema.xsd"/>
   
   <xsl:param name="run-by" select="'Michael Kay'"/>
 
@@ -36,7 +43,7 @@
         <xsl:text>&#xa;</xsl:text>
       </xsl:for-each>
       <test-set name="app-spec-examples">
-        <description>Tests the example code in the F+O 3.1 specification</description>
+        <description>Tests the example code in the F+O 4.0 specification</description>
 
         <environment name="global">
           <namespace prefix="math" uri="http://www.w3.org/2005/xpath-functions/math"/>
@@ -46,7 +53,7 @@
           <decimal-format name="fortran" exponent-separator="E"/>
         </environment>
 
-        <dependency type="spec" value="XP31+ XQ31+"/>
+        <dependency type="spec" value="XP40+ XQ40+"/>
 
         <xsl:apply-templates
           select="//fos:function[not(@prefix = 'op')]//fos:test[not(@implicit-timezone)]"/>
@@ -74,39 +81,14 @@
             <xsl:if test="@default-collation">
               <collation uri="{@default-collation}" default="true"/>
             </xsl:if>
-            <!--<xsl:for-each select="../preceding-sibling::fos:variable">
-              <xsl:choose>
-                <xsl:when test="@select">
-                  <param name="{@name}" select="{@select}"/>
-                </xsl:when>
-                <xsl:otherwise>
-                  <source uri="{@name}.xml"
-                    file="fo-spec-examples/{generate-id($fos-test)}/{@name}.xml"/>
-                  <xsl:result-document href="fo-spec-examples/{generate-id($fos-test)}/{@name}.xml">
-                    <xsl:try>
-                      <xsl:copy-of select="parse-xml(.)"/>
-                      <xsl:catch errors="*">
-                        <xsl:message>Failed to parse test in function {$fos-function/@name}:
-                          {.}</xsl:message>
-                      </xsl:catch>
-                    </xsl:try>
-                  </xsl:result-document>
-                  <param name="{@name}-doc" source="{@name}.xml"/>
-                  <param name="{@name}" select="${@name}-doc/*"/>
-                </xsl:otherwise>
-              </xsl:choose>
-            </xsl:for-each>-->
           </environment>
         </xsl:when>
         <xsl:otherwise>
           <environment ref="global"/>
         </xsl:otherwise>
       </xsl:choose>
-      <xsl:if test="$fos-function//fos:property = 'higher-order'">
-        <dependency type="feature" value="higherOrderFunctions"/>
-      </xsl:if>
       <xsl:if test="@use">
-        <dependency type="spec" value="XQ31"/>
+        <dependency type="spec" value="XQ40+"/>
       </xsl:if>
       <test>
         <xsl:for-each select="id(@use)">
@@ -155,102 +137,6 @@
     </test-case>
   </xsl:template>
 
-  <!--<xsl:template
-    match="fos:function//fos:test[not(@xslt-version and number(@xslt-version) gt number(system-property('xsl:version')))]">
-    <xsl:variable name="tztest"
-      select="
-        if (@implicit-timezone) then
-          concat('implicit-timezone() eq xs:duration(''', @implicit-timezone, ''') and ')
-        else
-          ''"/>
-    <xsl:choose>
-      <xsl:when test="fos:error-result">
-        <x:try select="{fos:expression}">
-          <x:catch
-            errors="{if (contains(fos:error-result/@error-code), ':') then '' else 'err:'}{fos:error-result/@error-code}"
-          />
-        </x:try>
-      </xsl:when>
-      <xsl:when test="fos:result[2]">
-        <x:if
-          test="{$tztest}not(some $r in ({string-join(fos:result/concat('(',normalize-space(.),')'), ',')}) satisfies deep-equal({normalize-space(fos:expression)}, $r))">
-          <xsl:copy-of select="@default-collation"/>
-          <err>Failure running <xsl:value-of select="normalize-space(fos:expression)"/>: actual
-            result is <x:try><x:copy-of select="({fos:expression})[not(. instance of function(*))]"
-                /><x:catch errors="*">error (<x:value-of select="$err:description"
-              />)</x:catch></x:try></err>
-        </x:if>
-      </xsl:when>
-      <xsl:when test="fos:result/@approx = 'true'">
-        <x:if
-          test="{$tztest}abs(number({normalize-space(fos:expression)}) - number({normalize-space(fos:result)})) gt 1e-5">
-          <xsl:copy-of select="@default-collation"/>
-          <err>Failure running <xsl:value-of select="normalize-space(fos:expression)"/>: actual
-            result is <x:try><x:copy-of select="({fos:expression})[not(. instance of function(*))]"
-                /><x:catch errors="*">error (<x:value-of select="$err:description"
-              />)</x:catch></x:try></err>
-        </x:if>
-      </xsl:when>
-      <xsl:when test="fos:result/@allow-permutation = 'true'">
-        <x:if
-          test="not({$tztest}count({normalize-space(fos:expression)}) eq count({normalize-space(fos:result)}) and (every $v in ({normalize-space(fos:expression)}) satisfies $v = ({normalize-space(fos:result)})))">
-          <xsl:copy-of select="@default-collation"/>
-          <err>Failure running <xsl:value-of select="normalize-space(fos:expression)"/>: actual
-            result is <x:try><x:copy-of select="({fos:expression})[not(. instance of function(*))]"
-                /><x:catch errors="*">error (<x:value-of select="$err:description"
-              />)</x:catch></x:try></err>
-        </x:if>
-      </xsl:when>
-      <xsl:when test="fos:result/@as">
-        <x:variable name="var.{generate-id()}" as="{fos:result/@as}">
-          <xsl:value-of select="fos:result" disable-output-escaping="yes"/>
-        </x:variable>
-        <x:if
-          test="{$tztest}not(saxon:deep-equal({normalize-space(fos:expression)}, $var.{generate-id()}, (), 'w'))">
-          <xsl:copy-of select="@default-collation"/>
-          <err>Failure running <xsl:value-of select="normalize-space(fos:expression)"/>: actual
-            result is <x:try><x:copy-of select="({fos:expression})[exists(data(.))]"/><x:catch
-                errors="*">error (<x:value-of select="$err:description"/>)</x:catch></x:try></err>
-        </x:if>
-      </xsl:when>
-      <xsl:otherwise>
-        <x:if
-          test="{$tztest}not(deep-equal({normalize-space(fos:expression)}, {normalize-space(fos:result)}))">
-          <xsl:copy-of select="@default-collation"/>
-          <err>Failure running <xsl:value-of select="normalize-space(fos:expression)"/>: actual
-            result is <x:try><x:copy-of select="({fos:expression})[exists(data(.))]"/><x:catch
-                errors="*">error (<x:value-of select="$err:description"/>)</x:catch></x:try></err>
-        </x:if>
-      </xsl:otherwise>
-    </xsl:choose>
-  </xsl:template>
--->
-
-  <!-- <xsl:template match="fos:variable">
-    <x:variable name="{@name}">
-      <xsl:copy-of select="@select, @as"/>
-      <xsl:value-of select="child::node()" disable-output-escaping="yes"/>
-    </x:variable>
-  </xsl:template>-->
-
-
-  <!-- <xsl:template match="fos:function[fos:opermap]">
-    <xsl:variable name="return-type" select="fos:signatures/fos:proto/@return-type"/>
-    <x:function name="op:{@name}"
-      as="{if ($return-type='numeric') then 'xs:anyAtomicType' else $return-type}">
-      <xsl:for-each select="fos:signatures/fos:proto/fos:arg">
-        <x:param name="{@name}" as="{if (@type='numeric') then 'xs:anyAtomicType' else @type}"/>
-      </xsl:for-each>
-      <x:sequence
-        select="{if (count(fos:signatures/fos:proto/fos:arg)=2)
-	                     then concat('$', fos:signatures/fos:proto/fos:arg[1]/@name,
-						             ' ', tokenize(fos:opermap/@operator, ' ')[1], ' ',
-									 '$', fos:signatures/fos:proto/fos:arg[2]/@name)
-						 else concat(tokenize(fos:opermap/@operator, ' ')[1], ' ',
-									 '$', fos:signatures/fos:proto/fos:arg[1]/@name)}"
-      />
-    </x:function>
-  </xsl:template>-->
   
   <xsl:mode name="strip-space" on-no-match="shallow-copy"/>
   <xsl:template match="text()[not(normalize-space())][not(parent::fn:match)][not(parent::fn:non-match)]" mode="strip-space"/>
