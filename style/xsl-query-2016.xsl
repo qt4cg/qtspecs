@@ -818,9 +818,20 @@
   </xsl:template>
 
   <xsl:template match="xnt">
-    <xsl:variable name="ref" select="@ref"/>
+    <xsl:variable name="ref" select="normalize-space(@ref)"/>
     <xsl:variable name="doc" select="document(concat('../build/etc/', @spec, '.xml'))"/>
-    <xsl:variable name="nt" select="$doc//nt[@def=$ref]"/>
+    <!-- 2023-04-06, ndw changed extract.xsl to store the prod elements, not the nt elements
+         in the /etc files. There can be many nt's but they are all supposed to point to a
+         production. I don't know why the nt's were being put in the etc files instead of
+         the productions. Note that we still have to look for nt's as well because old
+         etc files (e.g., for XML 1.0) are still coded the old way. 
+
+         There's also some variation in how xnt is coded. The @ref is supposed to be the
+         ID value referenced, but sometimes it's just the name of the nonterminal. 
+         Since we can work out the ID from the name, let's not fuss at the authors
+         about that...
+    -->
+    <xsl:variable name="nt" select="($doc//prod[@id=$ref], $doc//prod[.=$ref], $doc//nt[@def=$ref])[1]"/>
     <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
 
     <xsl:choose>

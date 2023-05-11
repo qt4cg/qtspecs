@@ -22,7 +22,7 @@
   <xsl:apply-templates select="header/title"/>
   <xsl:apply-templates select="body/div1|back/div1|back/inform-div1"/>
   <xsl:apply-templates select="//termdef"/>
-  <xsl:apply-templates select="//nt"/>
+  <xsl:apply-templates select="//prod"/>
   <xsl:apply-templates select="//error"/>
 </xsl:template>
 
@@ -105,10 +105,13 @@
   </xsl:copy>
 </xsl:template>
 
-<xsl:template match="nt">
-  <xsl:copy copy-namespaces="no">
-    <xsl:copy-of select="@*, node()"/>
-  </xsl:copy>
+<xsl:template match="prod">
+  <xsl:if test="not(starts-with(@id, 'noid_'))">
+    <xsl:copy copy-namespaces="no">
+      <xsl:copy-of select="@*"/>
+      <xsl:sequence select="normalize-space(lhs)"/>
+    </xsl:copy>
+  </xsl:if>
 </xsl:template>
 
 <xsl:template match="elcode | xfunction">

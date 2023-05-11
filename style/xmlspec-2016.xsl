@@ -694,7 +694,18 @@
             <xsl:value-of select="@diff"/>
           </xsl:attribute>
         </xsl:if>
-        <xsl:apply-templates/>
+
+        <!-- Remove trailing whitespace if we can... -->
+        <xsl:apply-templates select="node()[position() lt last()]"/>
+        <xsl:variable name="last-node" select="node()[last()]"/>
+        <xsl:choose>
+          <xsl:when test="$last-node/self::text()">
+            <xsl:value-of select="replace($last-node, '\s+$', '')"/>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:apply-templates select="$last-node"/>
+          </xsl:otherwise>
+        </xsl:choose>
       </pre>
     </xsl:variable>
     <xsl:choose>

@@ -868,134 +868,140 @@ constructor. These elements are:</p>
 </div>
 </xsl:template>
   
-  <xsl:template match="example[proto and count(*)=1]">
-    <xsl:apply-templates select="proto"/>
-  </xsl:template>
+<xsl:template match="example[proto and count(*)=1]">
+  <xsl:apply-templates select="proto"/>
+</xsl:template>
 
-  <!-- note: a note about the spec -->
+<!-- note: a note about the spec -->
+<!-- rfc 2119 keywords (must, may, should, ...) -->
   
-  <!-- rfc 2119 keywords (must, may, should, ...) -->
-  
-  <xsl:template match="rfc2119">
-    <!-- now available in xmlspec19.xsl, which uses <strong> rendition -->
-    <span class="verb"><xsl:apply-templates/></span>
-  </xsl:template>
-
+<xsl:template match="rfc2119">
+  <!-- now available in xmlspec19.xsl, which uses <strong> rendition -->
+  <span class="verb"><xsl:apply-templates/></span>
+</xsl:template>
 
 <xsl:template match="proto">
-    
-  <xsl:variable name="prefix" select="concat(@prefix, ':')"/>
-
-  <xsl:variable name="stringvalue">
-    <xsl:apply-templates select="." mode="stringify"/>
+  <xsl:variable name="prefix">
+    <xsl:choose>
+      <xsl:when test="@prefix"><xsl:value-of select="@prefix"/>:</xsl:when>
+      <xsl:when test="@isOp='yes'">op:</xsl:when>
+      <xsl:when test="@isSchema='yes'">xs:</xsl:when>
+      <xsl:when test="@isDatatype='yes'">xdt:</xsl:when>
+      <xsl:when test="@isSpecial='yes'"></xsl:when>     
+      <xsl:otherwise>fn:</xsl:otherwise>
+    </xsl:choose>
   </xsl:variable>
 
-  <!-- If the prototype is going to be "too long", use a tabular presentation -->
-
   <div class="proto">
-    <!-- MHK addition -->
     <xsl:choose>
-      <!--<xsl:when test="not(../preceding-sibling::*[1][self::example]/proto[@name=current()/@name])">-->
-      <xsl:when test="not(preceding-sibling::proto or ../preceding-sibling::*/proto)">
-        <a id="function-{@name}"/>
+      <xsl:when test="empty(arg)">
+        <table class="proto" border="0">
+          <tr class="name return-type">
+	          <td colspan="3">
+              <code class="function">
+                <xsl:value-of select="$prefix"/>
+                <xsl:value-of select="@name"/>
+              </code>
+              <xsl:text>(</xsl:text>
+              <xsl:text>)</xsl:text>
+              <code class="as">&#160;as&#160;</code>
+              <xsl:choose>
+                <xsl:when test="@returnVaries = 'yes'">
+                  <code class="return-varies">
+                    <xsl:value-of select="@return-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </code>
+                </xsl:when>
+                <xsl:otherwise>
+                  <code class="return-type">
+                    <xsl:value-of select="@return-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </code>
+                </xsl:otherwise>
+              </xsl:choose>
+            </td>
+          </tr>
+        </table>
       </xsl:when>
       <xsl:otherwise>
-        <!--<p>&#xa0;</p>-->
-      </xsl:otherwise>
-    </xsl:choose>
-    <!-- end MHK addition -->
-    <xsl:choose>
-      <!--<xsl:when test="string-length($stringvalue) &gt; 70">-->
-      <xsl:when test="count(arg) gt 1">
-        <table style="border:0; border-spacing:0">
-          <tr>
-            <td style="padding:0; vertical-align:top">
-              <xsl:if test="count(arg) &gt; 1">
-                <xsl:attribute name="rowspan">
-                  <xsl:value-of select="count(arg)"/>
-                </xsl:attribute>
-              </xsl:if>
-
+        <table class="proto" border="0">
+          <tr class="name">
+	          <td colspan="3">
               <code class="function">
                 <xsl:value-of select="$prefix"/>
                 <xsl:value-of select="@name"/>
               </code>
               <xsl:text>(</xsl:text>
             </td>
-
-            <xsl:choose>
-              <xsl:when test="arg">
-                <xsl:apply-templates select="arg[1]" mode="tabular"/>
-              </xsl:when>
-              <xsl:otherwise>
-                <td valign="baseline">
-                  <xsl:text>)</xsl:text>
-
-                  <xsl:if test="@return-type != 'none'">
-                    <code class="as">&#160;as&#160;</code>
-                    <code class="return-type">
-                      <xsl:choose>
-                        <xsl:when test="id(@return-type)">
-                          <a>
-                            <xsl:attribute name="href">
-                              <xsl:call-template name="href.target">
-                                <xsl:with-param name="target"
-                                                select="id(@return-type)"/>
-                              </xsl:call-template>
-                            </xsl:attribute>
-                            <xsl:value-of select="@return-type"/>
-                          </a>
-                        </xsl:when>
-                        <xsl:otherwise>
-                          <xsl:value-of select="@return-type"/>
-                        </xsl:otherwise>
-                      </xsl:choose>
-                      <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-                      <xsl:if test="@returnSeq='yes'">*</xsl:if>
-                    </code>
-                  </xsl:if>
-                </td>
-              </xsl:otherwise>
-            </xsl:choose>
           </tr>
-          <xsl:for-each select="arg[position() &gt; 1]">
-            <tr>
-              <xsl:apply-templates select="." mode="tabular"/>
+
+          <xsl:for-each select="arg">
+            <xsl:variable name="last" select="position() eq last()"/>
+            <tr class="arg">
+              <td>
+                <code>$<xsl:sequence select="@name/string()"/></code>
+                <xsl:if test="not(@type) and not(@type-ref) and not($last)">,</xsl:if>
+              </td>
+              <td>
+                <xsl:if test="@type">
+                  <code class="as">as&#160;</code>
+                  <code class="type"><xsl:apply-templates select="@type" mode="render-type"/></code>
+                  <xsl:if test="not (@default) and not($last)">,</xsl:if>
+                </xsl:if>
+                <xsl:if test="@type-ref">
+                  <code class="as">as&#160;</code>
+                  <code>
+                    <a href="#{@type-ref}">
+                      <xsl:value-of select="@type-ref"/>
+                    </a>
+                  </code>
+                  <xsl:if test="not (@default) and not($last)">,</xsl:if>
+                </xsl:if>
+              </td>
+              <td>
+                <xsl:if test="@default">
+                  <code class="assign">:= </code>
+                  <code><xsl:sequence select="@default/string()"/></code>
+                  <xsl:if test="not($last)">,</xsl:if>
+                </xsl:if>
+              </td>
             </tr>
           </xsl:for-each>
+
+          <tr class="return-type">
+	          <td colspan="3">
+              <xsl:text>)</xsl:text>
+              <code class="as">&#160;as&#160;</code>
+              <code>
+                <xsl:if test="@returnVaries = 'yes' or @return-type-ref">
+                  <xsl:attribute name="class"
+                                 select="if (@returnVaries = 'yes' and @return-type-ref)
+                                         then 'return-varies return-type-ref'
+                                         else if (@returnVaries = 'yes')
+                                              then 'return-varies'
+                                              else 'return-type-ref'"/>
+                </xsl:if>
+
+                <xsl:choose>
+                  <xsl:when test="@return-type">
+                    <xsl:apply-templates select="@return-type" mode="render-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </xsl:when>
+                  <xsl:when test="@return-type-ref">
+                    <a href="#{@return-type-ref}">
+                      <xsl:value-of select="@return-type-ref"/>
+                    </a>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </xsl:when>
+                  <!--<xsl:otherwise>
+                    <xsl:apply-templates select="@return-type" mode="render-type"/>
+                    <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
+                  </xsl:otherwise>-->
+                </xsl:choose>
+              </code>
+            </td>
+          </tr>
         </table>
-      </xsl:when>
-      <xsl:otherwise>
-        <code class="function">
-          <xsl:value-of select="$prefix"/>
-          <xsl:value-of select="@name"/>
-        </code>
-        <xsl:text>(</xsl:text>
-        <xsl:apply-templates/>
-        <xsl:text>)</xsl:text>
-        <xsl:if test="@return-type != 'none'">
-          <code class="as">&#160;as&#160;</code>
-          <code class="return-type">
-            <xsl:choose>
-              <xsl:when test="id(@return-type)">
-                <a>
-                  <xsl:attribute name="href">
-                    <xsl:call-template name="href.target">
-                      <xsl:with-param name="target"
-                                      select="id(@return-type)"/>
-                    </xsl:call-template>
-                  </xsl:attribute>
-                  <xsl:value-of select="@return-type"/>
-                </a>
-              </xsl:when>
-              <xsl:otherwise>
-                <xsl:value-of select="@return-type"/>
-              </xsl:otherwise>
-            </xsl:choose>
-            <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
-            <xsl:if test="@returnSeq='yes'">*</xsl:if>
-          </code>
-        </xsl:if>
       </xsl:otherwise>
     </xsl:choose>
   </div>
