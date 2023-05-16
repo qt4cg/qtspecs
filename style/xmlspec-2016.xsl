@@ -621,6 +621,11 @@
     <em><xsl:apply-templates/></em>
   </xsl:template>
 
+  <xsl:template match="quote/emph">
+    <em><xsl:apply-templates/></em>
+    <xsl:text> </xsl:text>
+  </xsl:template>
+
   <!-- rfc2119: identifies RFC 2119 keywords -->
   <xsl:template match="rfc2119">
     <strong><xsl:apply-templates/></strong>
@@ -1602,9 +1607,9 @@
   <!-- it would be nice to use HTML <q> elements, but browser support
        is abysmal -->
   <xsl:template match="quote">
-    <xsl:text>"</xsl:text>
+    <xsl:text>“</xsl:text>
     <xsl:apply-templates/>
-    <xsl:text>"</xsl:text>
+    <xsl:text>”</xsl:text>
   </xsl:template>
 
   <!-- raises: -->
