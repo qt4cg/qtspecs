@@ -474,7 +474,7 @@
   <xsl:template match="processing-instruction('glossary')">
     <dl>
       <xsl:apply-templates select="//termdef" mode="glossary-list">
-        <xsl:sort select="@term" data-type="text" order="ascending"/>
+        <xsl:sort select="@term" data-type="text" order="ascending" lang="en"/>
       </xsl:apply-templates>
     </dl>
   </xsl:template>
