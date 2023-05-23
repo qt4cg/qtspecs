@@ -18548,6 +18548,7 @@ return fold-left($MAPS, map{},
       <fos:signatures>
          <fos:proto name="keys" return-type="xs:anyAtomicType*">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
+            <fos:arg name="predicate" type="function(item()*) as xs:boolean" default="true#0"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -18556,25 +18557,31 @@ return fold-left($MAPS, map{},
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a sequence containing all the keys present in a map</p>
+         <p>Returns a sequence containing keys present in a map</p>
       </fos:summary>
       <fos:rules>
          <p>The function <code>map:keys</code> takes any <termref def="dt-map"
                >map</termref>
-            as its <code>$map</code> argument and returns the keys that are present in the map as
-            a sequence of atomic values, in <termref
+            as its <code>$map</code> argument. The <code>$predicate</code> function, if
+            supplied, takes the value of the corresponding map entry as an argument, and the
+            result is a sequence containing the keys of those entries for which the function
+            returns <code>true</code> in <termref
                def="implementation-dependent">implementation-dependent</termref> order.</p>
          <p>The function is <term>non-deterministic with respect to ordering</term>
             (see <specref
                ref="properties-of-functions"
             />). This means that two calls with the same argument
             are not guaranteed to produce the results in the same order.</p>
-         <p>The effect of the function is equivalent to <code>map:for-each($map, ($k, $v) -> {$k})</code>.</p>
+         <p>More formally, the function returns the result of the following expression:</p>
+         <eg>
+map:for-each(
+   $map,
+   function($key, $value) {
+      if($predicate($value)) { $key }
+   }
+)
+         </eg>
       </fos:rules>
-      <fos:notes>
-         <p>The number of items in the result will be the same as the number of
-            entries in the map, and the result sequence will contain no duplicate values.</p>
-      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -18584,55 +18591,35 @@ return fold-left($MAPS, map{},
                      >implementation-dependent</termref> order.</fos:postamble>
             </fos:test>
          </fos:example>
-      </fos:examples>
-   </fos:function>
-   
-   <fos:function name="keys-where" prefix="map">
-      <fos:signatures>
-         <fos:proto name="keys-where" return-type="xs:anyAtomicType*">
-            <fos:arg name="map" type="map(*)"/>
-            <fos:arg name="predicate" type="function(item()*)"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>nondeterministic-wrt-ordering</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns keys of map entries for which the value matches a supplied predicate.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function <code>map:keys</code> takes any <termref def="dt-map"
-               >map</termref>
-            as its <code>$map</code> argument and applies the supplied function to the value
-               of each map entry. The function supplied as <code>$predicate</code> takes the
-               value of the corresponding map entry as an argument, and the result is a
-               sequence containing the keys of those entries for which the function returns
-               <code>true</code>.</p>
-         <p>The function is <term>non-deterministic with respect to ordering</term>
-            (see <specref
-               ref="properties-of-functions"
-            />). This means that two calls with the same argument
-            are not guaranteed to produce the results in the same order.</p>
-         <p>More formally, the function returns the result of the following expression:</p>
-         <eg>
-            map:for-each(
-               $map,
-               function($key, $value) {
-                  if($predicate($value)) then $key else ()
-               }
-            )
-         </eg>
-      </fos:rules>
-      <fos:examples>
          <fos:example>
             <fos:test>
                <fos:expression><eg>
 let $numbers := map { 0: 'zero', 1: 'one', 2: 'two', 3: 'three' }
-return map:keys-where($numbers, function($string) { $string = 'two' })
+return map:keys($numbers, function($string) { $string = ('two', 'three') })
                </eg></fos:expression>
-               <fos:result>2</fos:result>
+               <fos:result>(2, 3)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+let $square := map:merge((1 to 5) ! map:entry(., . * .))
+return map:keys($square, function($n) { $n &gt; 5 and $n &lt; 20 })
+               </eg></fos:expression>
+               <fos:result>(3, 4)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+let $birthdays := map {
+  'jack': xs:date('1980-12-31'),
+  'joel': xs:date('1973-08-01'),
+  'john': xs:date('2001-05-05')
+}
+return map:keys($birthdays, function($date) { year-from-date($date) = 1973 })
+               </eg></fos:expression>
+               <fos:result>"joel"</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -19269,7 +19256,7 @@ return
 
    <fos:function name="filter" prefix="map">
       <fos:signatures>
-         <fos:proto name="filter" return-type="item()*">
+         <fos:proto name="filter" return-type="map(*)">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
             <fos:arg name="predicate" type="function(xs:anyAtomicType, item()*) as map(*)"
                usage="inspection"/>
@@ -19299,14 +19286,14 @@ return
                <fos:expression><eg>map:filter(map{1: "Sunday", 2: "Monday", 3: "Tuesday", 4:"Wednesday",
                5: "Thursday", 6: "Friday", 7: "Saturday"},
            ->($k, $v){$k = (1, 7)})</eg></fos:expression>
-               <fos:result>map:filter(map{1:"Sunday", 7:"Saturday"}</fos:result>
+               <fos:result>map{1:"Sunday", 7:"Saturday"}</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
 map:filter(map{1: "Sunday", 2: "Monday", 3: "Tuesday", 4: "Wednesday",
                5: "Thursday", 6:"Friday", 7:"Saturday"},
            ->($k, $v){$v = ("Saturday", "Sunday")})</eg></fos:expression>
-               <fos:result>map:filter(map{1:"Sunday", 7:"Saturday"}</fos:result>
+               <fos:result>map{1:"Sunday", 7:"Saturday"}</fos:result>
             </fos:test>
 
          </fos:example>
