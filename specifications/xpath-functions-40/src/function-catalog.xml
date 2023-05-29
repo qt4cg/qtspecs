@@ -22691,9 +22691,9 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       </fos:notes>
    </fos:function>
    
-   <fos:function name="json" prefix="fn">
+   <fos:function name="xdm-to-json" prefix="fn">
       <fos:signatures>
-         <fos:proto name="json" return-type="xs:string">
+         <fos:proto name="xdm-to-json" return-type="xs:string">
             <fos:arg name="input" type="xs:string?"/>
             <fos:arg name="options" type="map(*)" usage="inspection"  default="map{}"/>
          </fos:proto>
@@ -22730,7 +22730,36 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                   </fos:value>
                </fos:values>
             </fos:option>
-            <fos:option key="element-map">
+            <fos:option key="strip-space">
+               <fos:meaning>Determines whether whitespace-only text nodes are retained in the output, when
+                  outputting element nodes using array format.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="false">
+                     In the array format of element content, whitespace-only text nodes are included.
+                  </fos:value>
+                  <fos:value value="true">
+                     In the array format of element content, whitespace-only text nodes are omitted.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="use-value-format">
+               <fos:meaning>Identifies elements whose content should be output using value format.</fos:meaning>
+               <fos:type>xs:QName*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="use-map-format">
+               <fos:meaning>Identifies elements whose content should be output using map format.</fos:meaning>
+               <fos:type>xs:QName*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="use-array-format">
+               <fos:meaning>Identifies elements whose content should be output using array format.</fos:meaning>
+               <fos:type>xs:QName*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <!--<fos:option key="element-map">
                <fos:meaning>Determines whether elements whose children are element nodes with distinct
                   names should be treated specially.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
@@ -22744,7 +22773,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                      as JSON property names.
                   </fos:value>
                </fos:values>
-            </fos:option>
+            </fos:option>-->
          </fos:options>
          
          
@@ -22764,7 +22793,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <ulist>
                   <item><p>An <code>xs:boolean</code> value is output as the JSON value <code>true</code> or <code>false</code>.</p></item>
                   <item><p>A numeric value, other than <code>INF</code>, <code>-INF</code>, or <code>NaN</code>,
-                  is output as a JSON number.</p></item>
+                  is output as a JSON number. The format of the number follows the rules for casting the number to
+                  a string.</p></item>
                   <item><p>Any other atomic value is cast to <code>xs:string</code>, and the result is output as a JSON string,
                   escaped as described below.</p></item>
                </ulist>
@@ -22774,12 +22804,18 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <ulist>
                   <item>
                      <p><emph>Document nodes</emph></p>
-                     <p>A document node is output as a JSON object with two properties, in order:</p>
+                     <p>A document node is output as a JSON object with the following properties, in order:</p>
                      <ulist>
-                        <item><p>A property <code>#document</code> set to the value of the base URI of the document
+                        <item><p>A property <code>#document</code> set to the value of the document URI of the document
                            if available, or an empty string otherwise..</p></item>
-                        <item><p>A property <code>#content</code> whose value follows the rules for
-                        outputting the content of an element node, given below.</p></item>                       
+                        <item><p>A property <code>#base-uri</code> set to the value of the base URI of the document
+                           if available; the property is absent if this is not available.</p></item>
+                        <item><p>A property <code>#content</code>. If the document node has exactly one child node and this
+                           is an element node, then the value of the <code>#content</code> property is the
+                           representation of that element child. If the document node has no children, the 
+                           <code>#content</code> property is absent. In all other cases the value of the 
+                           <code>#content</code> property follows the rules for the content of element nodes
+                           using array representation.</p></item>                       
                      </ulist>
                   </item>
                   <item>
@@ -22787,15 +22823,14 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                      <p>An element node is output as a JSON object with the following properties, in order:</p>
                      <ulist>
                         <item>
-                           <p><code>#element</code> set to the local name of the element.</p>
-                        </item>
-                        <item>
-                           <p>If the element name has a prefix, <code>#prefix</code>, set to the value of the prefix.</p>
-                        </item>
-                     
-                        <item>
-                           <p>If the element name is in a namespace, <code>#namespace</code>, set to the value of the 
-                           namespace URI.</p>
+                           <p><code>#element</code> indicates the name of the element. For a top-level element
+                              (one that has no parent element within the content being converted) the local name
+                              is used unqualified if the element is in no namespace, and the form 
+                              <code>Q{uri}local</code> is used otherwise. In other cases (for child elements),
+                              if the element is in the same
+                           namespace as its parent, or if both are in no namespace, then the local name of the 
+                           element is used without qualification; otherwise the format <code>Q{uri}local</code> is used, where
+                           <code>uri</code> may be a zero-length string in the case of an element in no namespace.</p>
                         </item>
                         <item>
                            <p>For each attribute of the element, in arbitrary order, a property whose
@@ -22810,38 +22845,69 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                                  </ulist>
                               
                                  <p>The property value is the result of atomizing the attribute node and applying the
-                                 <code>fn:json</code> function to the result. (For untyped attributes, the result
+                                 <code>fn:xdm-to-json</code> function to the result. (For untyped attributes, the result
                                  will always be a single string.)</p>
                               
                            
                         </item>
                         <item>
-                           <p>The children of the element are processed as follows:</p>
+                           <p>The children of the element are processed using one of four formats:
+                           empty format, value format, map format, and array format.</p>
+                           <p>If the parent element name is listed in one of the option parameters
+                           <code>use-value-format</code>, <code>use-map-format</code>, or
+                           <code>use-array-format</code>, then this determines the format that
+                           is used.</p>
+                           <p>If the element name is not listed in any of these parameters:</p>
+                           <ulist>
+                              <item><p>Empty format is used if the element has no children.</p></item>
+                              <item><p>Value format is used if the element has a type annotation that is
+                              a simple type or a complex type with simple content, or if it is untyped and
+                              the content comprises a single text node.</p></item>
+                              <item><p>Array format is used in all other cases.</p></item>
+                           </ulist>
+                           <p>The four formats are as follows:</p>
                            <ulist>
                               <item>
-                                 <p>If there are no children, nothing is output.</p>
+                                 <p>In <term>empty format</term>, nothing is output.</p>
                               </item>
                               <item>
-                                 <p>If the element has a type annotation that is a simple type, or if its content
-                                 comprises a single text node, then a property <code>#value</code> set to the result
-                                 of atomizing the element node and applying the <code>fn:json</code> function
-                                 to the result.</p>
+                                 <p>In <term>value format</term>, a property <code>#value</code> is output containing the result
+                                    of atomizing the element node and applying the <code>fn:xdm-to-json</code> function
+                                    to the result.</p>
+                                 <note><p>In value format, comments and processing instructions in the content are discarded.</p></note>
                               </item>
                               <item>
-                                 <p>If (a) the children consist exclusively of elements and whitespace-only
-                                 text nodes, and (b) the child element nodes are all in the same namespace, or all in no
-                                 namespace, and (c) each child element has a local name that is distinct from the local
-                                 name of any other child, and (d) the <code>element-map</code> option is not
-                                    present in <code>$options</code> with the value <code>false()</code>,
-                                    then a property <code>#content</code> whose value is a JSON
-                                 object having one property for each child element node. The name of this property
-                                 is the local name of the element, and the value of the property is obtained by applying
-                                 these rules recursively, except that for an empty element, the value is represented
-                                 as JSON <code>null</code>.</p>
+                                 <p>In <term>array format</term>, a property <code>#content</code> is output whose value is an array;
+                                 the array contains the JSON representation of each child node, in order. Whitespace-only text
+                                 nodes are omitted if the <code>strip-space</code> option is set to true.</p>
                               </item>
-                              <item><p>Otherwise, a property <code>#content</code> whose value is an array, with
-                              one member for each child node (including whitespace-only text nodes), obtained
-                              by applying the <code>fn:json</code> function to that child node.</p></item>
+                              <item>
+                                 <p>In <term>map format</term>, one property is output for each child element node, in order.
+                                 </p>
+                                 <p>The key of the property is in two parts, concatenated together:</p>
+                                 <ulist>
+                                    <item><p>The first part is the name of the child element. If the child
+                                       element is in the same namespace as its parent (or if both are in no namespace)
+                                       then the local part of
+                                    the name is used without qualification. Otherwise, the format <code>Q{uri}local</code>
+                                    is used, where <code>uri</code> is a zero-length string if the element is in no namespace.</p>
+                                    </item>
+                                    <item><p>The second part is included only for element names that would otherwise
+                                    appear more than once: it takes the form <code>[index]</code> where <code>index</code>
+                                    is a positive integer allocated sequentially to elements having the same name, starting at 1 (one). 
+                                    For example
+                                    if there is one <code>author</code> element child then the key will be <code>"author"</code>;
+                                       if there are two, then the keys will be <code>"author[1]"</code> and <code>"author[2]"</code>.
+                                    </p></item>
+                                 </ulist>
+                                 <p>The value of the property is a map obtained by applying these rules recursively to the
+                                    child element, but omitting the <code>#element</code> property.</p>
+                                 <p>Note that when map format is used, information about the order of child elements is retained
+                                    in the generated JSON, but will typically be lost when the JSON is subsequently parsed (except in the
+                                 case of multiple children with the same name); in addition, text nodes, comments, and processing
+                                 instructions are discarded.</p>
+                              </item>
+                              
                            </ulist>
                         </item>
                      </ulist>
@@ -22858,7 +22924,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                   </item>
                   <item>
                      <p><emph>Processing instruction nodes</emph></p>
-                     <p>A JSON object with a two properties (in order): <code>#processing-instruction</code> set to the
+                     <p>A JSON object with two properties (in order): <code>#processing-instruction</code> set to the
                         name of the processing instruction, and <code>#data</code> set to the
                         string value of the processing instruction node.</p>
                   </item>
@@ -22866,18 +22932,23 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                      <p><emph>Attribute nodes</emph></p>
                      <p>Attribute nodes that are reached via an element node are output as described
                         under “element nodes”, above.</p>
-                     <p>Free-standing attribute nodes are output as JSON objects with properties
-                     <code>#attribute</code> set to the local name of the attribute, <code>#prefix</code>
-                     (if non-empty) set to the prefix of the attribute’s name, <code>#namespace</code>
-                     (if non-empty) set to the namespace URI, and <code>#value</code> set to
-                        the result of atomizing the attribute value and applying the
-                        <code>fn:json</code> function to the result.</p>
+
+                     <p>Free-standing attribute nodes are output as JSON objects with properties:</p>
+                     <ulist>
+                        <item><p><code>#attribute</code> set to the name of the attribute, as a local name
+                        in the case of an attribute in no namespace, or in <code>Q{uri}local</code> format
+                        otherwise.</p></item>
+                        <item><p><code>#value</code> set to
+                           the result of atomizing the attribute value and applying the
+                           <code>fn:xdm-to-json</code> function to the result.</p></item>
+                     </ulist>
                   </item>
-                  <item><p><emph>Namespace nodes</emph></p></item>
-                  <item><p>Namespace nodes that are reached via an element node result in no output.</p></item>
-                  <item><p>Free-standing namespace nodes are output as JSON objects with properties
+                  <item><p><emph>Namespace nodes</emph></p>
+                  <p>Namespace nodes that are reached via an element node result in no output.</p>
+                  <p>Free-standing namespace nodes are output as JSON objects with properties
                   <code>#namespace</code> set to the namespace prefix (<code>""</code> for the default
-                  namespace) and <code>#uri</code> set to the namespace URI.</p></item>
+                  namespace) and <code>#uri</code> set to the namespace URI.</p>
+                  </item>
                </ulist>            
             </item>
             <item>
@@ -22885,9 +22956,9 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <p>An XDM map is output as a JSON object with one property for each entry in the map.</p>
                <p>The property name is derived from the key value by converting the value to a string
                and applying escaping rules. If the property name thus generated is the same as a previously output
-               property name, then it is made unique by appending <code>"(N)"</code> where <var>N</var> is the smallest
-               positive integer that makes the resulting value unique.</p>
-               <p>The property value is derived by applying the <code>fn:json</code> function to the value in the map entry.</p>
+               property name, then it is made unique by appending <code>"[N]"</code> where <var>N</var> is the smallest
+               positive integer, starting at 2, that makes the resulting value unique.</p>
+               <p>The property value is derived by applying the <code>fn:xdm-to-json</code> function to the value in the map entry.</p>
                
                <note><p>Conflicts between property names can arise because the XDM model allows keys of different types,
                   for example the <code>xs:date</code> value <code>2020-12-31</code> and the string value 
@@ -22901,17 +22972,15 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             <item>
                <p><emph>Arrays</emph></p>
                <p>An XDM array is output as a JSON array. Each member of the XDM array generates one entry in the
-                  JSON array, in order, obtained by applying the <code>fn:json</code> function to the XDM array member.</p>              
+                  JSON array, in order, obtained by applying the <code>fn:xdm-to-json</code> function to the XDM array member.</p>              
             </item>
             <item>
                <p><emph>Functions</emph></p>
-               <p>An XDM function, other than a map or array, is output as a JSON object with the following
-               properties:</p>
+               <p>An XDM function, other than a map or array, is output as a JSON object with the following properties:</p>
                <ulist>
-                  <item><p><code>#function</code>, set to the local name of the function
+                  <item><p><code>#function</code>, set to the name of the function
+                     in the format <code>Q{uri}local</code>
                   if it has a name, or the empty string otherwise.</p></item>
-                  <item><p><code>#namespace</code>, set to the namespace URI of the function. The property
-                  is omitted for an anonymous function.</p></item>
                   <item><p><code>#arity</code>, set to the arity of the function as a JSON number.</p></item>
                   <item><p><code>#arguments</code> whose value is an array
                   of strings, which identify the names and types of the function arguments,
@@ -22923,75 +22992,76 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                   <item><p><code>#result</code> whose value is a string 
                      identifying the type of the function result, using the same conventions as for <code>#arguments</code>.</p></item>
                   <item><p>Optionally at implementer discretion, <code>#implementation</code> whose value is a string 
-                     representing the function’s implementation in implementation-defined format.</p></item>
                </ulist>
-               <p>Strings are escaped as follows:</p>
-               <olist>
-                  <item>
-                     <p>Any occurrence of backslash is replaced by <code>\\</code></p>
-                  </item>
-                  
-                  <item>
-                     <p>Any occurrence of quotation mark, backspace, form-feed, newline, carriage return, or tab is 
-                        replaced by <code>\"</code>, <code>\b</code>, <code>\f</code>, <code>\n</code>, <code>\r</code>, or <code>\t</code> respectively; </p>
-                  </item>
-                  
-                  <item>
-                     <p>Any other codepoint in the range 1-31 or 127-159 is replaced by an escape in 
-                        the form <code>\uHHHH</code> where <code>HHHH</code> is the upper-case hexadecimal representation of the codepoint value.</p>
-                  </item>
-               </olist>
+               
             </item>
-         </ulist>        
+         </ulist>
+         <p>Strings are escaped as follows:</p>
+         <olist>
+            <item>
+               <p>Any occurrence of backslash is replaced by <code>\\</code></p>
+            </item>
+            
+            <item>
+               <p>Any occurrence of quotation mark, backspace, form-feed, newline, carriage return, or tab is 
+                  replaced by <code>\"</code>, <code>\b</code>, <code>\f</code>, <code>\n</code>, <code>\r</code>, or <code>\t</code> respectively; </p>
+            </item>
+            
+            <item>
+               <p>Any other codepoint in the range 1-31 or 127-159 is replaced by an escape in 
+                  the form <code>\uHHHH</code> where <code>HHHH</code> is the upper-case hexadecimal representation of the codepoint value.</p>
+            </item>
+         </olist>
       </fos:rules>
+      <fos:errors>
+         <p>A dynamic error is raised if any element name appears in more than one of the options
+            <code>use-value-format</code>, <code>use-map-format</code>, and <code>use-array-format</code>: <errorref
+               class="JS" code="0005"/>.</p>
+      </fos:errors>
       <fos:notes>
-         <p>In the JSON output, names of properties defined in this specification are prefixed with <code>#</code>;
-         names not so prefixed are derived from names appearing in the input.</p>
-         <p>Namespace information may be lost (specifically, namespaces that are declared but not used are
-         not retained in the output).</p>
+         <p>The namespace URI and local name of all elements and attributes is available in the JSON output.
+            Prefixes are not retained, and namespaces that are declared but not used are not retained.</p>
          <p>The distinction between sequences and arrays is lost.</p>
-         <p>The distinction between different atomic types is lost, except for the boolean / number / string
+         <p>The distinction between different atomic types is lost, except for the boolean/number/string
          distinction present in JSON.</p>
-         <p>In elements whose children are elements with distinct names, whitespace text nodes are lost,
-         and the namespace URIs and prefixes of the child elements are lost.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>json(())</fos:expression>
+               <fos:expression>xdm-to-json(())</fos:expression>
                <fos:result>'null'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json(12)</fos:expression>
+               <fos:expression>xdm-to-json(12)</fos:expression>
                <fos:result>'12'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json((12, "December"))</fos:expression>
+               <fos:expression>xdm-to-json((12, "December"))</fos:expression>
                <fos:result>'[12,"December"]'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json(true())</fos:expression>
+               <fos:expression>xdm-to-json(true())</fos:expression>
                <fos:result>'true'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
+               <fos:expression>xdm-to-json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
                <fos:result>'{"a":1,"b":"NaN","c":[1,2,3]}'</fos:result>
                <fos:postamble>(or some permutation thereof)</fos:postamble>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a x="2">banana</a>)]]></fos:expression>
+               <fos:expression><![CDATA[xdm-to-json(<a x="2">banana</a>)]]></fos:expression>
                <fos:result>'{"#element":"a","@x":"2","#value":"banana"}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a><b/><c>2</c></a>)]]></fos:expression>
+               <fos:expression><![CDATA[xdm-to-json(<a><b/><c>2</c></a>)]]></fos:expression>
                <fos:result>'{"#element":"a","#content":{"b":null,"c":"2"}}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a><b/><b/><c/></a>)]]></fos:expression>
+               <fos:expression><![CDATA[xdm-to-json(<a><b/><b/><c/></a>)]]></fos:expression>
                <fos:result>'{"#name":"a","#content":[{"#name":"b"},{"#name":"b"},{"#name":"c}]}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a>A <i>nice</i> one!</a>)]]></fos:expression>
+               <fos:expression><![CDATA[xdm-to-json(<a>A <i>nice</i> one!</a>)]]></fos:expression>
                <fos:result>'{"#name":"a","#content":["A ",{"#name":"i", "#value":"nice"}," one!"]}'</fos:result>
             </fos:test>
          </fos:example>
