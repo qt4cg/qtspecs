@@ -4,7 +4,7 @@
 <!ENTITY bsp   " ">
 ]>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-  version="1.0"
+  version="3.0"
   xmlns:g="http://www.w3.org/2001/03/XPath/grammar"
   xmlns:xalan="http://xml.apache.org/xslt"
   exclude-result-prefixes="g xalan">
@@ -188,10 +188,101 @@
   <!-- EXPORT -->
   <xsl:template name="show-defined-tokens">
     <xsl:param name="type"/>
-    <xsl:call-template name="show-dt">
-      <xsl:with-param name="type" select="$type"/>
-    </xsl:call-template>
+    <xsl:choose>
+      <xsl:when test="$type = 'literal-terminals'">
+        <xsl:call-template name="show-literal-terminals"/>
+      </xsl:when>
+      <xsl:when test="$type = 'variable-terminals'">
+        <xsl:call-template name="show-variable-terminals"/>
+      </xsl:when>
+      <xsl:when test="$type = 'complex-terminals'">
+        <xsl:call-template name="show-complex-terminals"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:call-template name="show-dt">
+          <xsl:with-param name="type" select="$type"/>
+        </xsl:call-template>
+      </xsl:otherwise>
+    </xsl:choose>   
   </xsl:template>
+  
+  <xsl:template name="show-literal-terminals">
+    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
+    <xsl:variable name="grammar" select="document($fn,.)"/>
+    <xsl:variable name="ordinary-rules" select="$grammar//(g:production|g:exprProduction)[not(@whitespace-spec='explicit')][not(@show='no')]"/>
+    <xsl:variable name="inline-tokens" select="$grammar//g:token[not(@inline='false')][not(@delimiter-type='hide')][@name=$ordinary-rules//g:ref/@name]"/>
+    <xsl:variable name="tokens" select="distinct-values(($ordinary-rules|$inline-tokens)//g:string)"/>
+    <xsl:for-each select="$tokens">
+      <xsl:sort select="matches(., '[-A-Za-z]+')"/>
+      <xsl:sort select="lower-case(.)"/>
+      <code><xsl:value-of select="."/></code>
+      <xsl:text> </xsl:text>
+    </xsl:for-each>
+  </xsl:template>
+  
+  <xsl:template name="show-variable-terminals">
+    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
+    <xsl:variable name="grammar" select="document($fn,.)"/>
+    <xsl:for-each select="Q{grammar2spec}variable-terminals($grammar)">
+      <xsl:sort select="@name" lang="en"/>
+      <xsl:choose>
+        <xsl:when test="@name = 'NCName'">
+          <code><xsl:value-of select="@name"/></code>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:variable name="prefix" select="'prod'"/>
+          <nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+        </xsl:otherwise>
+      </xsl:choose>
+      <xsl:text> </xsl:text>
+    </xsl:for-each>
+  </xsl:template>
+  
+  <xsl:template name="show-complex-terminals">
+    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
+    <xsl:variable name="grammar" select="document($fn,.)"/>
+    <xsl:variable name="variable-terminals" select="Q{grammar2spec}variable-terminals($grammar)"/>
+    <xsl:variable name="ordinary-rules" select="$grammar//g:production[not(@whitespace-spec='explicit')][not(@show='no')]"/>
+    <xsl:for-each select="Q{grammar2spec}variable-terminals($grammar)">
+      <xsl:sort select="@name" lang="en"/>
+      <xsl:variable name="indirect-references" select="Q{grammar2spec}transitive-closure(., 
+        function($node){$grammar//g:production[@name = $node//g:ref/@name]}) except ."/>
+      <!--<xsl:message select="@name || ': ' || string-join($indirect-references/@name, ', ')"></xsl:message>-->
+      <xsl:if test="$indirect-references intersect $ordinary-rules">
+        <!--<code><xsl:value-of select="@name"/></code>-->
+        <xsl:variable name="prefix" select="if (@name = 'NCName') then 'doc' else 'prod'"/>
+        <nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+        <xsl:text> </xsl:text>
+      </xsl:if>
+    </xsl:for-each>
+  </xsl:template>
+  
+  <xsl:function name="Q{grammar2spec}variable-terminals" as="node()*">
+    <xsl:param name="grammar" as="document-node()"/>
+    <xsl:variable name="ordinary-rules" select="$grammar//g:production
+      [not(@whitespace-spec='explicit')]
+      [not(@show='no')]"/>
+    <xsl:variable name="unordinary-rules" select="$grammar//g:production[not(@exposition-name)] except $ordinary-rules"/>
+    <xsl:variable name="inline-tokens" select="$grammar//g:token
+      (:[not(@inline='false')]:)
+      [not(@delimiter-type='hide')]
+      [not(g:string and count(*)=1)]
+      [@name=$ordinary-rules//g:ref/@name]"/>
+    
+    <!--<xsl:message select="'All rules: ' || string-join($grammar//g:production/@name, ', ')"/>
+    <xsl:message select="'Ordinary rules: ' || string-join($ordinary-rules/@name, ', ')"/>
+    <xsl:message select="'Unordinary rules: ' || string-join($unordinary-rules/@name, ', ')"/>-->
+    <xsl:sequence select="($unordinary-rules|$inline-tokens)[@name = $ordinary-rules//g:ref/@name]"/>
+  </xsl:function>
+  
+  <xsl:function name="Q{grammar2spec}transitive-closure" as="node()*">
+    <xsl:param name="start" as="node()*"/>
+    <xsl:param name="step" as="function(node()) as node()*"/>
+    <xsl:variable name="next-iteration" select="$start / $step(.)"/>
+    <xsl:sequence select="if (empty($next-iteration except $start)) 
+                          then $start 
+                          else Q{grammar2spec}transitive-closure($start | $next-iteration, $step)"/>
+  </xsl:function>
 
   <xsl:template name="show-dt">
     <xsl:param name="type"/>
@@ -204,6 +295,8 @@
     <xsl:message>DEBUG: template show-dt ~~ $type = <xsl:value-of select="$type"/>. </xsl:message>
     -->
     <xsl:for-each select="document($tokens-file,.)/token-list/token[@type = $type]">
+      <xsl:sort select="@expo-name"/>
+      <xsl:sort select="lower-case(.)"/>
       <xsl:choose>
         <xsl:when test="@expo-name and string-length(.) = 0">
           <xsl:variable name="expo-name" select="@expo-name"/>
@@ -216,37 +309,12 @@
         </xsl:when>
         <xsl:otherwise>
           <xsl:variable name="c" select="substring(self::node(), 1, 1)"/>
-          <xsl:choose>
-            <xsl:when test="string-length(self::node()) = 1">
-              <xsl:choose>
-                <xsl:when test="$c = ','">(comma)</xsl:when>
-                <xsl:when test="$c = '.'">(dot)</xsl:when>
-                <xsl:when test="$c = ':'">(colon)</xsl:when>
-                <xsl:when test="$c = ';'">(semi-colon)</xsl:when>
-                <xsl:otherwise>
-                  <xsl:text>"</xsl:text>
-                  <xsl:value-of select="."/>
-                  <xsl:text>"</xsl:text>
-                </xsl:otherwise>
-              </xsl:choose>
-            </xsl:when>
-            <xsl:otherwise>
-              <xsl:text>"</xsl:text>
-              <xsl:value-of select="."/>
-              <xsl:text>"</xsl:text>
-            </xsl:otherwise>
-          </xsl:choose>
+          <code><xsl:value-of select="."/></code>
+          <xsl:text> </xsl:text>
         </xsl:otherwise>
       </xsl:choose>
-
-      <xsl:if test="position() != last()">
-        <xsl:text>, </xsl:text>
-      </xsl:if>
     </xsl:for-each>
 
-    <!--
-    <xsl:message>DEBUG: Exiting template show-dt. </xsl:message>
-    -->
   </xsl:template>
 
   <!-- ===================================================================== -->

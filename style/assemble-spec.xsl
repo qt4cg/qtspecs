@@ -267,6 +267,39 @@
     <xsl:message>DEBUG: Exiting template phrase[@role='defined-tokens-nondelimiting']. </xsl:message>
     -->
   </xsl:template>
+  
+  <!-- This template "fills in" a paragraph in the EBNF section of document source files -->
+  <xsl:template match="phrase[@role='literal-terminals']">
+    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
+    <xsl:variable name="grammar" select="document($fn,.)"/>
+    <xsl:for-each select="$grammar">
+      <xsl:call-template name="show-defined-tokens">
+        <xsl:with-param name="type" select="'literal-terminals'"/>
+      </xsl:call-template>
+    </xsl:for-each>
+  </xsl:template>
+  
+  <!-- This template "fills in" a paragraph in the EBNF section of document source files -->
+  <xsl:template match="phrase[@role='variable-terminals']">
+    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
+    <xsl:variable name="grammar" select="document($fn,.)"/>
+    <xsl:for-each select="$grammar">
+      <xsl:call-template name="show-defined-tokens">
+        <xsl:with-param name="type" select="'variable-terminals'"/>
+      </xsl:call-template>
+    </xsl:for-each>
+  </xsl:template>
+  
+  <!-- This template "fills in" a paragraph in the EBNF section of document source files -->
+  <xsl:template match="phrase[@role='complex-terminals']">
+    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
+    <xsl:variable name="grammar" select="document($fn,.)"/>
+    <xsl:for-each select="$grammar">
+      <xsl:call-template name="show-defined-tokens">
+        <xsl:with-param name="type" select="'complex-terminals'"/>
+      </xsl:call-template>
+    </xsl:for-each>
+  </xsl:template>
 
   <!--========= Language phrase substitution ========== -->
 
