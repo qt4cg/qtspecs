@@ -6016,6 +6016,692 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                   <code>fn:json-to-xml</code> function is <termref def="implementation-dependent">implementation-dependent</termref>.</p>
             </div3>
          </div2>
+         <div2 id="xml-to-json-mappings" diff="add" at="2023-05-30">
+            <head>JSON Representation of XML</head>
+            <p>The section describes the JSON representations of XML element and attribute nodes supported by the 
+               <code>fn:xdm-to-json</code> function.</p>
+            
+            <p>This mapping is designed with three objectives:</p>
+            <ulist>
+               <item><p>It should be possible to represent any XML content in JSON.</p></item>
+               <item><p>The resulting JSON should be intuitive and easy to use.</p></item>
+               <item><p>The JSON should be consistent and stable: small changes in the input should not result
+               in large changes in the output.</p></item>
+            </ulist>
+            
+            <p>Achieving all three objectives requires design compromises. It also requires sacrificing some other
+            desiderata. In consequence:</p>
+            <ulist>
+               <item><p>The conversion is not lossless.</p></item>
+               <item><p>The conversion is not streamable.</p></item>
+               <item><p>The results are not necessarily compatible with those produced by other popular libraries.</p></item>
+            </ulist>
+            
+            <div3 id="json-element-layouts">
+               <head>JSON Element Layouts</head>
+           
+            
+               <p>The key challenge in mapping XML to JSON is in deciding how element content is to be represented. To 
+                  illustrate the variety of mappings that are possible, the following table
+               lists some examples of typical XML elements and their potential JSON equivalents:</p>
+               
+               <table role="data" >
+                  <thead>
+                     <tr>
+                        <th>XML element</th>
+                        <th>Potential JSON equivalent</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     <tr>
+                        <td><eg><![CDATA[<hr/>]]></eg></td>
+                        <td><eg><![CDATA["hr": null]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<age>23</age>]]></eg></td>
+                        <td><eg><![CDATA["age": 23]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<box width="5" height="10"/>]]></eg></td>
+                        <td><eg><![CDATA["box": {"width":5, "height":10}]]></eg></td>                    
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<label id="t41">Warning!</label>]]></eg></td>
+                        <td><eg><![CDATA["label": {"@id": "t41", "#content":"Warning!"}]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<box>
+    <width>5</width>
+    <height>10</height>
+</box>]]></eg></td>
+                        <td><eg><![CDATA["box": {
+    "@width":5, 
+    "@height":10
+}]]></eg></td>                    
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<polygon>
+    <point x="0" y="0"/>
+    <point x="1" y="0"/>
+    <point x="1" y="1"/>
+    <point x="0" y="1"/>
+</polygon>]]></eg></td>
+                        <td><eg><![CDATA["polygon": [
+    {"x":0, "y":0}, 
+    {"x":1, "y":0}, 
+    {"x":1, "y":1}, 
+    {"x":0, "y":1}
+]    ]]></eg></td>                    
+                     </tr>
+                  </tbody>
+               </table>
+             
+               <p>To accommodate the variety of possible mappings of XML elements to JSON, this specification defines a
+               number of named mappings, called <term>layouts</term>, and allows the layout to be selected in three different
+               ways:</p>
+               
+               <ulist>
+                  <item><p>The layout to be used for a specific element name can be explicitly selected in the options
+                  to the <code>fn:xdm-to-json</code> function.</p></item>
+                  <item><p>Otherwise, if the data has been schema-validated, the layout is inferred from the content model
+                  for the element type as defined in the schema.</p></item>
+                  <item><p>Otherwise (that is, when the data is untyped and no specific layout has been selected), 
+                     a default layout is chosen based on the properties of the individual element instance.</p></item>              
+               </ulist>
+               
+               <p>The advantage of using schema information is that it gives a consistent representation for all
+               elements of a particular type, even if they vary in content: for example if an element type allows optional
+               attributes, the JSON representation will be consistent between those elements that have attributes and those
+               without.</p>
+               
+               <p>The different layouts available are defined in the following sections. For each layout
+               there is a table showing:</p>
+               
+               <ulist>
+                  <item><p><term>Layout name</term>: the name to be used to select this layout in
+                  the options parameter of the <code>fn:xdm-to-json</code> function.</p></item>
+                  <item><p><term>Usage</term>: the situations for which this layout is designed.</p></item>
+                  <item><p><term>XML example</term>: an example of a typical XML element for which this layout is appropriate.</p></item>
+                  <item><p><term>JSON equivalent</term>: the JSON representation of this example. The JSON
+                  equivalent is always shown as a key-value pair suitable for use within a JSON object; the way
+                  this is used depends on the context in which the element appears.</p></item>
+                  <item><p><term>XSD conditions</term>: the properties of the XSD type definition that cause this
+                  layout to be selected. The first layout that meets these conditions will be chosen.</p></item>
+                  <item><p><term>Match pattern</term>: an XSLT 4.0 pattern defining the elements for which
+                  this layout will be selected. The first layout whose pattern matches will be chosen.</p>
+                  </item>
+                  <item><p><term>Mapping rules</term>: The rules for mapping the XML element to a JSON
+                  representation.</p></item>
+                  <item><p><term>Mapping for nilled elements</term>: special rules that apply to an
+                  element having the attribute <code>xsi:nil="true"</code>. These rules only apply if the
+                  element has been schema-validated.</p></item>
+                  <item><p><term>Notes</term>: General observations, especially concerning what information is retained
+                  by this mapping and what information is lost.</p></item>
+               </ulist>
+               
+               <p>Note that it is possible to use any layout for any element. Use of an inappropriate layout
+               may result in information being discarded; but in some cases, discarding information may be the 
+               desired outcome.</p>
+               
+               <note><p>Acknowledgements for this categorization: see <bibref ref="Goessner"/>. Although
+               Goessner's categories have been used, the actual mappings vary from his proposal.</p></note>
+               
+               
+               <div4 id="empty-json-layout">
+                  <head>Empty Layout</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>empty</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that have no content and no attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<hr/>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"hr":""</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with variety empty, or a simple type with
+                           variety list and <code>maxLength="0"</code>, or a type derived from <code>xs:string</code>
+                              with an <code>enumeration</code> or <code>length</code> or <code>maxLength</code>
+                              facet that restricts it to be zero-length; the type does not allow any attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[not(*|text()|@*)]</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>The content is represented by the JSON string <code>""</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The content is represented by the JSON value <code>null</code>, for example
+                              <code>&lt;hr xsi:nil="true"/></code> becomes <code>"hr":null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>If any child nodes or attributes are present, they are discarded. (This can happen
+                           when this layout is explicitly selected for elements that are not actually empty.)</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="empty-plus-json-layout">
+                  <head>Empty Layout with Attributes</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>empty-plus</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that have no content but may have attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<hr id="zzz"/>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"hr":{"@id":"zzz"}</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with variety empty, or a simple type with
+                              variety list and <code>maxLength="0"</code>, or a type derived from <code>xs:string</code>
+                              with an <code>enumeration</code> or <code>length</code> or <code>maxLength</code>
+                              facet that restricts it to be zero-length; 
+                              the type allows attributes to appear.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[@* and not(*|text())]</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>The content is represented by a JSON object containing one entry for each
+                              attribute in the XML element; if there are no attributes, the content
+                              is represented as an empty JSON object: <code>{}</code>. 
+                              The mapping rules for attributes are
+                           defined in <specref ref="attributes-in-json"/>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>An additional property <code>"#content":null</code> is added, for example
+                              <code>&lt;hr id="x" xsi:nil="true"/></code> becomes 
+                              <code>"hr":{"@id":"x", "#content":null}</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>If any child nodes are present in the element, they are discarded.
+                              (This can happen
+                              when this layout is explicitly selected for elements that are not actually empty.)</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="simple-json-layout">
+                  <head>Simple Layout</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>simple</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that have simple content and no attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<date>2023-05-30</date>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"date":"2023-05-30"</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a simple type.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[not(*|@*)]</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>The element is atomized and the JSON representation is obtained by applying
+                              the <code>fn:xdm-to-json</code> function to the atomized value.</p>
+                           <p>If the element is untyped, the result will always be a JSON string.</p>
+                           <p>If the element has been schema-validated, the result may instead be a number,
+                           a boolean, or an array. If the element is nilled, the result will be the JSON value
+                           <code>null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The content is represented using the JSON value <code>null</code>, for example
+                              <code><![CDATA[<date xsi:nil="true"/>]]></code> becomes 
+                              <code>"date":null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>If any attributes are present, they are discarded. If the element has a type
+                           annotation that is a complex type with element-only content, atomization will fail and
+                           a dynamic error occurs. In the case of mixed content, if child elements are present, 
+                           atomization means that they will not appear in the result.</p>
+                           <p>Comments and processing instructions in the content are discarded. Whitespace is
+                           retained.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="simple-plus-json-layout">
+                  <head>Simple Layout with Attributes</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>simple-plus</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that have simple content and (optionally) attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<price currency="USD">23.50</date>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"date":{"@currency":"USD", "#content":23.50}</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with simple content.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[not(*)]</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>The content is represented by a JSON object containing one entry for each
+                              attribute in the XML element, plus a property named <code>"#content"</code>
+                              containing the resuult of atomizing the element and obtaining its JSON representation by applying
+                              the <code>fn:xdm-to-json</code> function to the atomized value.</p>
+                              <p>The mapping rules for attributes are
+                                 defined in <specref ref="attributes-in-json"/>.</p>
+                              <p>If the element is untyped, the value of each attribute, and of <code>"#content"</code>,
+                                 will always be a JSON string.</p>
+                              <p>If the element has been schema-validated, the values of each property may instead be a number,
+                                 a boolean, or an array.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The <code>"#content"</code> property takes the JSON value <code>null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>In the case of mixed content, if child elements are present, 
+                              atomization means that they will not appear in the result.</p>
+                              <p>Comments and processing instructions in the content are discarded. Whitespace is
+                                 retained.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="list-json-layout">
+                  <head>List Layout</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>list</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that act as wrappers for a list of child elements,
+                              all having the same element name. The wrapper element may or may not have attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<dates id="x">
+  <date>2023-03-20</date>
+  <date>2023-04-12</date>
+  <date>2023-05-30</date>
+</dates>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"dates": {"@id":"x", date": ["2023-03-20", "2023-04-12", "2023-05-30"]}</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with element-only content, containing a single
+                              element particle, whose <code>maxOccurs</code> value is greater than one (including
+                              <code>maxOccurs="unbounded"</code>).</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[*[2] and all-equal(*!node-name()) and not(text()[normalize-space()])]</code></p>
+                           <p>That is, there are at least two child elements; all child elements have the same name; and
+                           there are no text node children other than whitespace-only text nodes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>If the element has element children with names that are not all equal, or
+                              if it has non-whitespace text node children, then it is output
+                              as if <term>mixed</term> layout were chosen. This is fallback behavior for use
+                              when this layout is chosen inappropriately.</p>
+                              <p>In other cases,
+                              The content is represented by a JSON object containing one entry for each
+                              attribute in the XML element, plus a property named after the 
+                              child elements (the <term>content property</term>), whose value is an array 
+                                 containing the results of formatting the content
+                              of each child element according to the rules for that element.</p> 
+                             
+                              <p>If there are no children and the element is untyped (which can occur when 
+                              this layout is chosen explicitly via the options to <code>fn:xdm-to-json</code>)
+                              then the content property is omitted (since the child element name is unknown).
+                              But if the element is typed, then the content property is included and set to
+                              an empty JSON array.</p>
+                              
+                              </td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The content property is included and takes the JSON value <code>null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>Comments and processing instructions in the content are discarded.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="record-json-layout">
+                  <head>Record Layout</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>record</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that contain multiple child elements, with different
+                              names, where the order of the child elements is not significant. 
+                              The element may or may not have attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<employee id="x">
+  <date-of-birth>1984-03-20</date>
+  <location>Germany</location>
+  <position>Janitor</position>
+</employee>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"employee": {"@id":"x", "date-of-birth":"1984-03-20", "location":"Germany", "position":"Janitor"}</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with element-only content, whose particle contains
+                              a single term, whose compositor is <term>all</term>.</p>
+                           <p>(That is, the element is validated against a complex type defined using <code>xs:all</code>.)</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[*[2] and all-different(*!node-name()) and not(text()[normalize-space()])]</code></p>
+                              <p>That is, there are at least two child elements; all child elements have different names; and
+                                 there are no text node children other than whitespace-only text nodes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>If the element has non-whitespace text node children, then it is output
+                              as if <term>mixed</term> layout were chosen. This is fallback behavior for use
+                              when this layout is chosen inappropriately.</p>
+                              <p>In other cases,
+                                 the content is represented by a JSON object containing one entry for each
+                                 attribute in the XML element, plus one property for each
+                                 child element, whose value is formatted according to the rules for that element.</p>
+                              
+                              <p>The properties representing child elements are named after the child element name,
+                              as described in <specref ref="element-names-in-json"/>, except 
+                                 that if the multiple child elements have the same name,
+                              then each is made unique by adding a suffix in the form <code>[index]</code>, containing
+                              a sequential number starting at 1. For example, if there are two children named <code>author</code>,
+                              the properties are named <code>author[1]</code> and <code>author[2]</code>.</p>
+                             
+                              <p>The order of child elements in the XML is retained in the JSON output, though it
+                              will typically be lost once the JSON is parsed by the recipient.</p>
+                              
+                              <p>If the element is nilled, the JSON representation must include the
+                                 property <code>"#content":null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>Alongside any attributes, the value includes the additional property
+                               <code>"#content":null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>Although this layout is intended primarily for elements whose children are unordered
+                              and uniquely named, it is also viable to use it in cases where elements can repeat, so
+                              long as order relative to other elements is not significant. Indeed, 
+                              with XSD 1.1, a complex type defined using
+                              <code>xs:all</code> can allow elements to appear more than once, and this will cause
+                              this layout to be selected.</p>
+                              <p>Comments and processing instructions in the content are discarded.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="sequence-json-layout">
+                  <head>Sequence Layout</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>sequence</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that contain a sequence of element node children,
+                              whose order is significant. 
+                              The element may or may not have attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<section id="x">
+   <head>Introduction</head>
+   <p>Lorem ipsum.</p>
+   <p>Dolor sit amet.</p>
+</section>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"section": {
+   "@id":"x", 
+   "#content": [
+      {"head":"Introduction"},
+      {"p":"Lorem ipsum"},
+      {"p":"Dolor sit amet"}]
+   }</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with element-only content that does not meet
+                              the criteria for list or record layout.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[not(text()[normalize-space()])</code></p>
+                           <p>That is, the element has no text node children other than whitespace nodes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>The mapping rules are identical to the rules for mixed layout (see 
+                              <specref ref="mixed-json-layout"/>) except that whitespace-only text nodes
+                              are discarded.</p>
+                           </td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The value of the <code>#content</code> property is present with the value <code>null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>Because whitespace text nodes are stripped, this layout should not normally be used
+                              with mixed content.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+               <div4 id="mixed-json-layout">
+                  <head>Mixed Layout</head>
+                  
+                  <table role="data" >
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>mixed</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that contain mixed content. 
+                              The element may or may not have attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<para id="x">This is a <i>fine</i> mess!</para>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"para": {
+         "@id":"x", 
+         "#content": [
+            "This is a ",
+            {"i":"fine"},
+            "mess!"]
+   }</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type that does not satisfy the criteria for any other
+                              layout to be used.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>The content is represented by a JSON object containing one entry for each
+                                 attribute in the XML element, plus one property named <code>"#content</code>for the content. 
+                                 The value of
+                                 the <code>"#content"</code> property is an array containing one entry for each child node, 
+                              in order. But if the element is nilled, the <code>"#content"</code> property has the JSON value 
+                              <code>null</code>.</p>
+                              <p>Child nodes are represented within this array as follows:</p>
+                              <ulist>
+                                 <item><p>A text node child is represented as a JSON string.</p></item>
+                                 <item><p>An element node child is represented as a JSON object containing a single
+                                 entry, with the key representing the element name and the value representing the
+                                 element's content, formatted according to the chosen layout for that element.</p></item>
+                                 <item><p>A comment node is represented as a JSON object containing a single
+                                 entry whose key is the string <code>"#comment</code>, and whose corresponding
+                                 value is a string containing the text of the comment.</p></item>
+                                 <item><p>A processing instruction node is represented as a JSON object containing two
+                                    entries: the first has the key <code>"#processing-instruction"</code> and its value is the name
+                                    of the processing instruction as a string; the second has the key <code>"#data"</code> and its
+                                    value is a JSON string containing the string value of the processing instruction node.</p></item>
+                              </ulist>
+                              
+                              <p>Whitespace text nodes are retained.</p>
+                               
+                            
+                           </td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The value of the <code>#content</code> property is present with the value <code>null</code>.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>This is the only layout that retains information about all child nodes, including
+                           text nodes (both whitespace and non-whitespace), elements, comments, and processing instructions.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+               </div4>
+            </div3>
+            <div3 id="element-names-in-json">
+               <head>Representing Element Names in JSON</head>
+               <p>The following rules apply to the JSON representation of a top-level element: that is, an element that has
+               no parent, or whose parent is not included in the subtree being converted to JSON representation:</p>
+               
+               <ulist>
+                  <item><p>If the element name is in no namespace, it is represented as a JSON string containing the
+                  local part of the element name.</p></item>
+                  <item><p>If the element name is in a namespace, it is represented as a JSON string in the format
+                     <code>Q{uri}local</code>, where <code>uri</code> is the namespace, and <code>local</code>
+                  is the local part of the element name.</p></item>
+               </ulist>
+               
+               <p>For a non-top-level element, that is an element having a parent element that is also represented
+               in the JSON output, the following rules apply:</p>
+               
+               <ulist>
+                  <item><p>If the element name is in the same namespace as its parent, or if both are
+                     in no namespace, then it is represented as a JSON string containing the
+                     local part of the element name.</p></item>
+                  <item><p>Otherwise, it is represented as a JSON string in the format
+                     <code>Q{uri}local</code>, where <code>uri</code> is the namespace (or the empty string
+                     to represent no namespace), and <code>local</code> is the local part of the element name.</p></item>
+               </ulist>
+               
+               <p>Note that prefixes used in element names are not retained; neither are the prefix-to-uri mappings
+               represented by namespace nodes in the XDM tree.</p>
+               
+               <p>Where an element appears as a child of an element formatted using record layout
+               (see <specref ref="record-json-layout"/>), its name is when necessary suffixed by an index such as <code>"[1]"</code>
+               or <code>"[2]"</code> to make it unique.</p>
+            </div3>
+            <div3 id="attributes-in-json">
+               <head>Representing Attributes in JSON</head>
+               <p>When attribute nodes are output in JSON as a result of formatting the containing element, they are generally
+               represented as key-value pairs within a JSON object.</p>
+               <p>For an attribute in no namespace, the key is represented as an <code>"@"</code> character followed by the local
+               name of the attribute.</p>
+               <p>For an attribute in the XML namespace, the key is represented as <code>"@xml:"</code> followed by the local
+                  name of the attribute.</p>
+               <p>For an attribute in any other namespace, the key is represented in the form <code>"@Q{uri}local"</code> where
+                  <code>uri</code> is the namespace and <code>local</code> is the local part of the attribute name.</p>
+               <p>The corresponding value is obtained by atomizing the attribute value and formatting the result by applying
+               the rules of the <code>fn:xdm-to-json</code> function recursively. For untyped data the result will always be
+               a JSON string. For typed data the result may be a JSON number or boolean, or (if the type has variety 
+                  <code>list</code>), an array.</p>
+            </div3>
+         </div2>
          <div2 id="html">
             <head>XDM Mapping from HTML DOM Nodes</head>
 
@@ -10738,6 +11424,9 @@ ISBN 0 521 77752 6.</bibl>
                <bibl  id="HTML40" key="HTML 4.0">HTML 4.01 Recommendation, 24 December
 1999. Available at:
 <loc href="http://www.w3.org/TR/REC-html40/">http://www.w3.org/TR/REC-html40/</loc>.
+               </bibl>
+               <bibl id="Goessner" key="Goessner">Converting Between XML and JSON. Stefan Goessner, 31 May 2006. 
+                  <loc href="https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html">https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html</loc>.
                </bibl>
                <bibl id="ICU" key="ICU">ICU - International Components for Unicode. Available at <loc href="http://site.icu-project.org">http://site.icu-project.org</loc>.
                </bibl>
