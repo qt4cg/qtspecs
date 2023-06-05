@@ -6037,6 +6037,17 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                <item><p>The results are not necessarily compatible with those produced by other popular libraries.</p></item>
             </ulist>
             
+            <p>The requirement for consistency and stability is particularly challenging. An element such as 
+            <code><![CDATA[<name>John</name>]]></code> maps naturally to the JSON object property <code>"name":"John"</code>;
+               but adding an attribute (so it becomes <code><![CDATA[<name role="first">John</name>]]></code>)
+            then requires an incompatible change in the JSON representation. The format can be made extensible
+            by converting <code><![CDATA[<name>John</name>]]></code> to <code>"name":{"#content":"John"}</code>
+               and <code><![CDATA[<name role="first">John</name>]]></code> to <code>"name":{"@role":"first", "#content":"John"}</code>,
+               but this imposes unwanted complexity on the simplest cases. The solution is to provide some user
+            control over the mappings that are chosen.</p>
+            
+            
+            
             <div3 id="json-element-layouts">
                <head>JSON Element Layouts</head>
            
@@ -6095,24 +6106,34 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                      </tr>
                   </tbody>
                </table>
+
+               
              
-               <p>To accommodate the variety of possible mappings of XML elements to JSON, this specification defines a
+               <p>This specification defines a
                number of named mappings, called <term>layouts</term>, and allows the layout to be selected in three different
                ways:</p>
                
                <ulist>
                   <item><p>The layout to be used for a specific element name can be explicitly selected in the options
                   to the <code>fn:xdm-to-json</code> function.</p></item>
-                  <item><p>Otherwise, if the data has been schema-validated, the layout is inferred from the content model
-                  for the element type as defined in the schema.</p></item>
-                  <item><p>Otherwise (that is, when the data is untyped and no specific layout has been selected), 
-                     a default layout is chosen based on the properties of the individual element instance.</p></item>              
+                  <item><p>In the absence of an explicit selection, if the data has been schema-validated, the layout is 
+                     inferred from the content model for the element type as defined in the schema.</p></item>
+                  <item>
+                     <p>Otherwise (that is, when the data is untyped and no specific layout has been selected), 
+                     a default layout is chosen based on the properties of the individual element instance.</p>
+                     <p>If the <code>uniform</code> option is set to <code>true</code>, then the same layout
+                     must be used for all elements with a given name. This means that all elements must be
+                     examined before any element is processed. The layout chosen is the first one (in the order of
+                     presentation in the following sections) whose match pattern matches every element with
+                     the relevant name.</p>
+                  </item>              
                </ulist>
                
                <p>The advantage of using schema information is that it gives a consistent representation for all
                elements of a particular type, even if they vary in content: for example if an element type allows optional
                attributes, the JSON representation will be consistent between those elements that have attributes and those
-               without.</p>
+               without. In the absence of a schema, consistency can be achieved either by using the <code>uniform</code>
+               option, or by selecting a layout explicitly in the <code>layouts</code> option.</p>
                
                <p>The different layouts available are defined in the following sections. For each layout
                there is a table showing:</p>
@@ -6377,7 +6398,88 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         <tr>
                            <th>Usage</th>
                            <td><p>Intended for XML elements that act as wrappers for a list of child elements,
-                              all having the same element name. The wrapper element may or may not have attributes.</p></td>
+                              all having the same element name. The wrapper element should not have any attributes.
+                              The name of the child elements is not retained in the JSON output.</p></td>
+                        </tr>
+                        <tr>
+                           <th>XML example</th>
+                           <td><eg><![CDATA[<dates>
+  <date>2023-03-20</date>
+  <date>2023-04-12</date>
+  <date>2023-05-30</date>
+</dates>]]></eg></td>
+                        </tr>
+                        <tr>
+                           <th>JSON equivalent</th>
+                           <td><eg>"dates": ["2023-03-20", "2023-04-12", "2023-05-30"]</eg></td>
+                        </tr>
+                        <tr>
+                           <th>XSD conditions</th>
+                           <td><p>The element has a complex type with element-only content, containing a single
+                              element particle, whose <code>maxOccurs</code> value is greater than one (including
+                              <code>maxOccurs="unbounded"</code>); the type does not allow any attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Match pattern</th>
+                           <td><p><code>*[*[2] and all-equal(*!node-name()) and not(text()[normalize-space()]) and not(@*) ]</code></p>
+                           <p>That is, there are at least two child elements; all child elements have the same name; 
+                           there are no text node children other than whitespace-only text nodes; and there
+                           are no attributes.</p></td>
+                        </tr>
+                        <tr>
+                           <th>Mapping rules</th>
+                           <td><p>If the element has element children with names that are not all equal, or
+                              if it has non-whitespace text node children, then it is output
+                              as if <term>mixed</term> layout were chosen. This is fallback behavior for use
+                              when this layout is chosen inappropriately.</p>
+                              <p>In other cases,
+                              the content is represented by a JSON array
+                                 containing the results of formatting the content
+                              of each child element according to the rules for that element.</p> 
+                             
+                              <p>If there are no children then the content is represented by an empty array.</p>
+                              
+                              </td>
+                        </tr>
+                        <tr>
+                           <th>Mapping for nilled elements</th>
+                           <td><p>The array is replaced by the JSON value <code>null</code> (for example <code>"dates":null</code>).</p></td>
+                        </tr>
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>Comments and processing instructions in the content are discarded.</p></td>
+                        </tr>
+                     </tbody>
+                  </table>
+                  
+                  <example>
+                     <head>Conversion of a list of elements with complex content</head>
+                     <p>Consider the following XML:</p>
+                     <eg><![CDATA[<items>
+  <item nr="n1"><p>One</p></item>
+  <item nr="n2"><p>Two</p></item>
+</items>]]></eg>
+                     <p>When this is converted using list layout, the result is:</p>
+                     <eg><![CDATA["items":[
+   {"@nr":"n1", "p":"One"},
+   {"@nr":"n2", "p":"Two"}
+]   ]]></eg>
+                  </example>
+               </div4>
+               <div4 id="list-plus-json-layout">
+                  <head>List Layout with Attributes</head>
+                  
+                  <table role="data">
+                     <tbody>
+                        <tr>
+                           <th>Layout name</th>
+                           <td><p><code>list-plus</code></p></td>
+                        </tr>
+                        <tr>
+                           <th>Usage</th>
+                           <td><p>Intended for XML elements that act as wrappers for a list of child elements,
+                              all having the same element name. The wrapper element may have attributes,
+                              and the name of the child elements is retained in the JSON output.</p></td>
                         </tr>
                         <tr>
                            <th>XML example</th>
@@ -6389,7 +6491,7 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                         <tr>
                            <th>JSON equivalent</th>
-                           <td><eg>"dates": {"@id":"x", date": ["2023-03-20", "2023-04-12", "2023-05-30"]}</eg></td>
+                           <td><eg>"dates": {"@id":"x", "date": ["2023-03-20", "2023-04-12", "2023-05-30"]}</eg></td>
                         </tr>
                         <tr>
                            <th>XSD conditions</th>
@@ -6400,8 +6502,8 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         <tr>
                            <th>Match pattern</th>
                            <td><p><code>*[*[2] and all-equal(*!node-name()) and not(text()[normalize-space()])]</code></p>
-                           <p>That is, there are at least two child elements; all child elements have the same name; and
-                           there are no text node children other than whitespace-only text nodes.</p></td>
+                              <p>That is, there are at least two child elements; all child elements have the same name; and
+                                 there are no text node children other than whitespace-only text nodes.</p></td>
                         </tr>
                         <tr>
                            <th>Mapping rules</th>
@@ -6410,23 +6512,24 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                               as if <term>mixed</term> layout were chosen. This is fallback behavior for use
                               when this layout is chosen inappropriately.</p>
                               <p>In other cases,
-                              The content is represented by a JSON object containing one entry for each
-                              attribute in the XML element, plus a property named after the 
-                              child elements (the <term>content property</term>), whose value is an array 
+                                 The content is represented by a JSON object containing one entry for each
+                                 attribute in the XML element, plus a property named after the 
+                                 child elements (the <term>content property</term>), whose value is an array 
                                  containing the results of formatting the content
-                              of each child element according to the rules for that element.</p> 
-                             
-                              <p>If there are no children and the element is untyped (which can occur when 
-                              this layout is chosen explicitly via the options to <code>fn:xdm-to-json</code>)
-                              then the content property is omitted (since the child element name is unknown).
-                              But if the element is typed, then the content property is included and set to
-                              an empty JSON array.</p>
+                                 of each child element according to the rules for that element.</p> 
                               
-                              </td>
+                              <p>If there are no children and the element is untyped (which can occur when 
+                                 this layout is chosen explicitly via the options to <code>fn:xdm-to-json</code>)
+                                 then the content property is omitted (since the child element name is unknown).
+                                 But if the element is typed, then the content property is included and set to
+                                 an empty JSON array.</p>
+                              
+                           </td>
                         </tr>
                         <tr>
                            <th>Mapping for nilled elements</th>
-                           <td><p>The content property is included and takes the JSON value <code>null</code>.</p></td>
+                           <td><p>The array is replaced by the JSON value <code>null</code>, for example
+                              <code>"dates": {"@id":"x", "date":null}</code>.</p></td>
                         </tr>
                         <tr>
                            <th>Notes</th>
@@ -6434,6 +6537,19 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                      </tbody>
                   </table>
+                  <example>
+                     <head>Conversion of a list of elements with complex content</head>
+                     <p>Consider the following XML:</p>
+                     <eg><![CDATA[<items format="bullets">
+  <item nr="1"><p>One</p></item>
+  <item nr="2"><p>Two</p></item>
+</items>]]></eg>
+                     <p>When this is converted using list layout, the result is:</p>
+                     <eg><![CDATA["items": {"@format":"bullets", "item": [
+   {"@nr":"1, "p":"One"},
+   {"@nr":"2, "p":"Two"}
+]   ]]></eg>
+                  </example>
                </div4>
                <div4 id="record-json-layout">
                   <head>Record Layout</head>
@@ -6547,13 +6663,12 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                         <tr>
                            <th>JSON equivalent</th>
-                           <td><eg>"section": {
-   "@id":"x", 
-   "#content": [
+                           <td><eg>"section": [
+      {"@id":"x"},                        
       {"head":"Introduction"},
       {"p":"Lorem ipsum"},
-      {"p":"Dolor sit amet"}]
-   }</eg></td>
+      {"p":"Dolor sit amet"}
+   ]</eg></td>
                         </tr>
                         <tr>
                            <th>XSD conditions</th>
@@ -6574,7 +6689,8 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                         <tr>
                            <th>Mapping for nilled elements</th>
-                           <td><p>The value of the <code>#content</code> property is present with the value <code>null</code>.</p></td>
+                           <td><p>A nilled element is indicated by a property value of <code>null</code> in place
+                              of the array, for example <code>"section": null</code>.</p></td>
                         </tr>
                         <tr>
                            <th>Notes</th>
@@ -6604,13 +6720,12 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                         <tr>
                            <th>JSON equivalent</th>
-                           <td><eg>"para": {
-         "@id":"x", 
-         "#content": [
+                           <td><eg>"para": [
+            {"@id":"x"},
             "This is a ",
             {"i":"fine"},
-            "mess!"]
-   }</eg></td>
+            "mess!"
+   ]</eg></td>
                         </tr>
                         <tr>
                            <th>XSD conditions</th>
@@ -6623,13 +6738,14 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                         <tr>
                            <th>Mapping rules</th>
-                           <td><p>The content is represented by a JSON object containing one entry for each
-                                 attribute in the XML element, plus one property named <code>"#content</code>for the content. 
-                                 The value of
-                                 the <code>"#content"</code> property is an array containing one entry for each child node, 
-                              in order. But if the element is nilled, the <code>"#content"</code> property has the JSON value 
-                              <code>null</code>.</p>
-                              <p>Child nodes are represented within this array as follows:</p>
+                           <td><p>The content is represented by a JSON array containing one entry for each
+                                 attribute in the XML element, and one entry for each child node, 
+                              in order. </p>
+                              <p>Each attribute node is represented within this array by a JSON object
+                              containing a single property, with the key representing the attribute name
+                              and the value representing the attribute value, formatted as described
+                              in <specref ref="attributes-in-json"/>.</p>
+                              <p>Child nodes are represented within the array as follows:</p>
                               <ulist>
                                  <item><p>A text node child is represented as a JSON string.</p></item>
                                  <item><p>An element node child is represented as a JSON object containing a single
@@ -6651,7 +6767,8 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                         </tr>
                         <tr>
                            <th>Mapping for nilled elements</th>
-                           <td><p>The value of the <code>#content</code> property is present with the value <code>null</code>.</p></td>
+                           <td><p>A nilled element is indicated by a property value of <code>null</code> in place
+                              of the array, for example <code>"para": null</code>.</p></td>
                         </tr>
                         <tr>
                            <th>Notes</th>
@@ -6714,6 +6831,175 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                <note><p>This is because these attributes can appear even when the schema does not allow the element
                   to have attributes, which means that a JSON layout might be chosen that does not accommodate attributes.</p>
                </note>
+            </div3>
+            <div3 id="xdm-to-json-examples">
+               <head>Examples</head>
+               <p>The following examples show the effect of transforming some simple XML documents with default options,
+               except that <code>indent</code> is set to <code>true</code>. The actual indentation is implementation
+               dependent.</p>
+               
+               <table class="data">
+                  <thead>
+                     <tr>
+                        <th>XDM</th>
+                        <th>JSON</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     <tr>
+                        <td><eg><![CDATA[1 to 5]]></eg></td>
+                        <td><eg><![CDATA[[1, 2, 3, 4, 5]]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[map{'x':1,'y':2}]]></eg></td>
+                        <td><eg><![CDATA[{"x":1,"y":2}]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[()]]></eg></td>
+                        <td><eg><![CDATA[null]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<a x='1' b='2'/>]]></eg></td>
+                        <td><eg><![CDATA[{ "a":{
+    "@x": "1",
+    "@b": "2"
+  } }]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<a><x>1</x><y>2</y></a>]]></eg></td>
+                        <td><eg><![CDATA[{ "a":{
+    "x": "1",
+    "y": "2"
+  } }]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<polygon> 
+   <point x='0' y='0'/> 
+   <point x='0' y='1'/> 
+   <point x='1' y='1'/> 
+   <point x='1' y='0'/>
+</polygon>]]></eg></td>
+                        <td><eg><![CDATA[{ "polygon":[
+       {"@x": "0", "@y": "0"},
+       {"@x": "0", "@y": "1"},
+       {"@x": "1", "@y": "1"},
+       {"@x": "1", "@y": "0"}
+  ] ] }]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[<cities>
+   <city id="LDN">
+      <name>London</name>
+      <size>18.2</size>
+   </city>
+   <city id="PRS">
+      <name>Paris</name>
+      <size>19.1</size>
+   </city>
+   <city id="BLN">
+      <name>Berlin</name>
+      <size>14.6</size>
+   </city>
+</cities>]]></eg></td>
+                        <td><eg><![CDATA[{ "cities":[
+    {
+      "@id": "LDN",
+      "name": "London",
+      "size": "18.2"
+    },
+    {
+      "@id": "PRS",
+      "name": "Paris",
+      "size": "19.1"
+    },
+    {
+      "@id": "BLN",
+      "name": "Berlin",
+      "size": "14.6"
+    }
+  ] }]]></eg></td>
+                     </tr>
+                     <!--<tr>
+                        <td><eg><![CDATA[]]></eg></td>
+                        <td><eg><![CDATA[]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[]]></eg></td>
+                        <td><eg><![CDATA[]]></eg></td>
+                     </tr>
+                     <tr>
+                        <td><eg><![CDATA[]]></eg></td>
+                        <td><eg><![CDATA[]]></eg></td>
+                     </tr>-->
+                  </tbody>
+               </table>
+               <p>The following more complex example demonstrates a case where the default conversion is
+               inadequate (for example, it wrongly assumes that for the third production, the order of child
+               elements is immaterial). A better result, shown below, can be achieved by
+               using a schema-aware conversion.</p>
+               <table class="data">
+                  <thead>
+                     <tr>
+                        <th>XDM</th>
+                        <th>JSON</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     <tr>
+                        <td><eg><![CDATA[<g:grammar language="xquery"
+     xmlns:g="http://www.w3.org/XPath/grammar">
+   <g:production name="FunctionBody">
+      <g:ref name="EnclosedExpr"/>
+      <g:ref name="Block"/>
+   </g:production>
+   
+   <g:production name="EnclosedExpr">
+      <g:ref name="Lbrace"/>
+      <g:ref name="Expr"/>
+      <g:optional>
+         <g:ref name="Expr"/>
+      </g:optional>
+      <g:ref name="Rbrace"/>
+   </g:production>
+   
+   <g:production name="SimpleReturnClause">
+      <g:string>return</g:string>
+      <g:ref name="ExprSingle"/>
+   </g:production>
+</g:grammar>]]></eg></td>
+                        <td><eg><![CDATA[[{ "Q{http://www.w3.org/XPath/grammar}grammar":[
+    { "@language":"xquery" },
+    { "production":[
+        { "@name":"FunctionBody" },
+        { "ref":{"@name": "EnclosedExpr"} },
+        { "ref":{"@name": "Block"} }
+      ] },
+    { "production":[
+        { "@name":"EnclosedExpr" },
+        { "ref":{"@name": "Lbrace"} },
+        { "ref":{"@name": "Expr"} },
+        { "optional":[
+            { "ref":{"@name": "Expr"} }
+          ] },
+        { "ref":{"@name": "Rbrace"} }
+      ] },
+    { "production":[
+        { "@name":"SimpleReturnClause" },
+        { "string":"return" },
+        { "ref":{"@name": "ExprSingle"} }
+      ] }
+  ] }]]]></eg></td>
+                     </tr>
+                  </tbody>
+               </table>
+               <note><p>In the above example, the schema used to validate the source document was simplified to eliminate
+               options that do not actually arise in this input instance (such as the <code>g:string</code>
+               element having attributes). This is a legitimate technique that may be useful when trying to obtain 
+               the simplest possible JSON representation.</p>
+               <p>Further improvements to the usability of the JSON output could be achieved by doing some
+               simple transformation of the XML prior to conversion. For example, the <code>name</code>
+               attribute of various productions could be converted to a child element, and 
+                  <code>&lt;ref name="x"/&gt;</code> could be transformed to <code>&lt;ref&gt;x"&lt;/ref&gt;</code>.</p></note>
             </div3>
          </div2>
          <div2 id="html">
