@@ -154,7 +154,19 @@
 					<label>Examples</label>
 					<def role="example">
 						<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
-						<xsl:apply-templates select="$fspec/fos:examples/node()"/>
+						<table role="medium">
+							<xsl:if test="$fspec/fos:examples//fos:result">
+								<thead>
+									<tr>
+										<th>Expression</th>
+										<th>Result</th>
+									</tr>
+								</thead>
+							</xsl:if>
+							<tbody>
+								<xsl:apply-templates select="$fspec/fos:examples/node()"/>
+							</tbody>
+						</table>						
 					</def>
 				</gitem>
 			</xsl:if>
@@ -259,102 +271,90 @@
 		<xsl:apply-templates/>
 	</xsl:template>
 
-	<xsl:template match="fos:variable">
-		<eg>
+	<xsl:template match="fos:variable" priority="5">
+		<tr>
+			<td colspan="2">
+				<eg>
+					<xsl:copy-of select="@diff, @at"/>
+					<xsl:value-of select="concat('let $', @name, ' := ')"/>
+					<xsl:if test="@select">
+						<xsl:value-of select="@select"/>
+					</xsl:if>
+					<xsl:if test="child::node()">
+						<xsl:apply-templates/>
+					</xsl:if>
+				</eg>
+			</td>
+		</tr>
+	</xsl:template>
+	
+	<xsl:template match="fos:example/*" priority="4">
+		<tr>
 			<xsl:copy-of select="@diff, @at"/>
-			<xsl:value-of select="concat('let $', @name, ' := ')"/>
-			<xsl:if test="@select">
-				<xsl:value-of select="@select"/>
-			</xsl:if>
-			<xsl:if test="child::node()">
-				<xsl:apply-templates/>
-			</xsl:if>
-		</eg>
+			<td colspan="2">
+				<xsl:copy-of select="." copy-namespaces="no"/>
+			</td>
+		</tr>
 	</xsl:template>
 
-	<xsl:template match="fos:test">
-		<p>
+	<xsl:template match="fos:test" priority="5">
+		<tr>
 			<xsl:copy-of select="@diff, @at"/>
-			<xsl:choose>
-				<xsl:when test="fos:preamble">
-					<xsl:copy-of select="fos:preamble/node()" copy-namespaces="no"/>
-				</xsl:when>
-				<xsl:otherwise>The expression </xsl:otherwise>
-			</xsl:choose>
-
-			<xsl:choose>
-				<xsl:when test="fos:expression/@xml:space = 'preserve'">
-					<code><xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/></code>
-				</xsl:when>
-				<xsl:when test="fos:expression/eg">
-					<xsl:apply-templates select="fos:expression/node()"/>
-				</xsl:when>
-				<xsl:otherwise>
-					<code><xsl:value-of select="fos:expression"/></code>
-				</xsl:otherwise>
-			</xsl:choose>
-			
-			<xsl:choose>
-				<xsl:when test="fos:result[2]">
-					<xsl:text> returns one of the following: </xsl:text>
-					<xsl:for-each select="fos:result">
-						<xsl:if test="position() ne 1">
-							<xsl:text> or </xsl:text>
-						</xsl:if>
-						<code>
-							<xsl:value-of select="."/>
-						</code>
-					</xsl:for-each>
-				</xsl:when>
-				<xsl:when test="fos:result[@normalize-space = 'true']">
-					<xsl:text> returns (with whitespace added for legibility):</xsl:text>
-				</xsl:when>
-				<xsl:when test="fos:result">
-					<xsl:text> returns </xsl:text>
-					<xsl:if test="fos:result/@allow-permutation = 'true'">
-						<xsl:text>some permutation of </xsl:text>
-					</xsl:if>
+			<td>
+				<xsl:if test="fos:preamble">
+					<p><xsl:copy-of select="fos:preamble/node()" copy-namespaces="no"/></p>
+				</xsl:if>
+				<p>
 					<xsl:choose>
-						<xsl:when test="fos:result/eg">
-							<xsl:apply-templates select="fos:result/node()"/>
+						<xsl:when test="fos:expression/@xml:space = 'preserve'">
+							<code><xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/></code>
+						</xsl:when>
+						<xsl:when test="fos:expression/eg">
+							<xsl:apply-templates select="fos:expression/node()"/>
 						</xsl:when>
 						<xsl:otherwise>
-							<code>
-								<xsl:value-of select="fos:result"/>
-							</code>
+							<code><xsl:value-of select="fos:expression"/></code>
 						</xsl:otherwise>
 					</xsl:choose>
-					<xsl:if test="fos:result/@approx = 'true'">
-						<xsl:text> (approximately)</xsl:text>
-					</xsl:if>
-				</xsl:when>
-				<xsl:when test="fos:error-result">
-					<xsl:text> raises error </xsl:text>
-					<code>
-						<xsl:value-of select="fos:error-result/@error-code"/>
-					</code>
-				</xsl:when>
-			</xsl:choose>
-
-			<xsl:choose>
-				<xsl:when test="fos:result[@normalize-space = 'true']"/>
-				<xsl:when test="fos:postamble">
-					<xsl:text>. </xsl:text>
-					<emph>
+				</p>
+			</td>
+			<td>
+				<xsl:if test="fos:result[2]"><p>One of the following:</p></xsl:if>
+				<xsl:apply-templates select="fos:result|fos:error-result"/>
+				<xsl:if test="fos:result[@normalize-space = 'true']">
+					<p>(with whitespace added for legibility)</p>
+				</xsl:if>
+				<xsl:if test="fos:result[@allow-permutation = 'true']">
+					<p>(or some permutation thereof)</p>
+				</xsl:if>
+				<xsl:if test="fos:result[@approx = 'true']">
+					<p>(approximately)</p>
+				</xsl:if>
+				<xsl:if test="fos:postamble">
+					<p><emph>
 						<xsl:text>(</xsl:text>
 						<xsl:copy-of select="fos:postamble/node()" copy-namespaces="no"/>
 						<xsl:text>)</xsl:text>
 						<xsl:if test="not(ends-with(fos:postamble, '.'))">.</xsl:if>
-					</emph>
-				</xsl:when>
-				<xsl:otherwise>.</xsl:otherwise>
-			</xsl:choose>
-		</p>
-		<xsl:if test="fos:result[@normalize-space = 'true']">
-			<eg>
-				<xsl:value-of select="fos:result"/>
-			</eg>
-		</xsl:if>
+					</emph></p>
+				</xsl:if>
+			</td>
+		</tr>
+	</xsl:template>
+	
+	<xsl:template match="fos:result">
+		<xsl:choose>
+			<xsl:when test="contains(., codepoints-to-string(10))">
+				<eg><xsl:value-of select="."/></eg>
+			</xsl:when>
+			<xsl:otherwise>
+				<p><code><xsl:value-of select="."/></code></p>
+			</xsl:otherwise>
+		</xsl:choose>
+	</xsl:template>
+	
+	<xsl:template match="fos:error-result">
+		<p>Raises error <xsl:value-of select="@error-code"/>.</p>
 	</xsl:template>
 
 	<xsl:template match="text()" mode="summary">
