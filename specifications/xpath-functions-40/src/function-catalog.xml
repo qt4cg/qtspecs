@@ -17790,9 +17790,10 @@ return sort($in, $SWEDISH)
    
    <fos:function name="transitive-closure" prefix="fn">
       <fos:signatures>
-         <fos:proto name="transitive-closure" return-type="node()*">
-            <fos:arg name="input" type="node()*"/> 
+         <fos:proto name="transitive-closure" return-type="node()*"> 
             <fos:arg name="step" type="function(node()) as node()*"/>
+            <fos:arg name="min" type="xs:nonNegativeInteger?" default="1"/>
+            <fos:arg name="max" type="xs:positiveInteger?" default="()"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -17802,74 +17803,93 @@ return sort($in, $SWEDISH)
          
       </fos:properties>
       <fos:summary>
-         <p>Given a set of start nodes and a function that navigates from one node to other nodes, 
-            returns all nodes that can be reached by applying this function repeatedly.</p>
+         <p>Given a function <var>F</var> that navigates from one node to other nodes, 
+            returns a function that applies <var>F</var> repeatedly.</p>
       </fos:summary>
       <fos:rules>
-         <p>The first argument is a set of nodes (it is supplied as a sequence, but the order of nodes is immaterial, and
-         duplicates are ignored).</p>
          
          <p>The argument is a function <code>$step</code> that takes a single node as input, and returns a set of nodes as its result. 
-            Again, the result is returned as a sequence, but the order is immaterial, and duplicates are ignored.</p>
+            The result of the <code>fn:transitive-closure</code> function is a function <var>TC</var> that takes a 
+            single node <var>N</var> as input, and returns all nodes that can be reached from
+            <var>N</var> by applying <code>$step</code> repeatedly between <code>$min</code> and <code>$max</code> times (inclusive).</p>
          
-         <p>The result of the <code>fn:transitive-closure</code> function is the set of nodes that can be reached by applying
-         the <code>$step</code> function to <code>$input</code> one or more times. The function terminates when no new nodes
-            are selected by further application of the <code>$step</code> function.</p>
+         <p>Although <code>$step</code> may return any sequence of nodes, the result is treated as a set: the order of nodes
+            in the sequence is ignored, and duplicates are ignored. The result of calling <var>TC</var> will always be
+         a sequence of nodes in document order with no duplicates.</p>
          
-         <p>The result is returned as a sequence of nodes in document order with no duplicates.</p>
+         <p>The default value of <code>$min</code>, if the argument is not supplied or is set to an empty sequence,
+            is 1 (one). If <code>$min</code> is zero, the result of calling <var>TC</var> will include the argument node
+            <var>N</var>. If <code>$min</code> is greater than zero, the result will include <var>N</var> only if 
+            <var>N</var> is reachable by a cyclic path involving between <code>$min</code> and <code>$max</code> steps.</p>
          
-         <p>More formally, the result of calling <code>transitive-closure($step)</code> is:</p>
+         <p>The default value of <code>$max</code>, if the argument is not supplied or is set to an empty sequence,
+            is unbounded. In this situation the function <var>TC</var> continues execution until no further nodes
+            are added to the result set. Note that if the <code>$step</code> function constructs new nodes, this
+            can lead to non-termination. Specifying an explicit value for <code>$max</code> guarantees termination.</p>
          
-         <eg><![CDATA[let $closure-0 := function($input as node()*, $step as function(node()) as node()*) {
-    let $n1 := $input/$step(.)
-    return
-        if (exists($n1 except $input))
-        then $input | $n1 | transitive-closure($n1 except $input, $step)
-        else $input
-}        
-return $closure-0($input/$step(.), $step)]]></eg>
-         
-         <note><p>The local function <code>$closure-0</code> returns a result that includes the starting nodes;
-         the initial call on <code>$input/$step(.)</code> is designed to ensure that the only nodes returned
-         are those reachable by one or more steps, excluding the start nodes (unless they are
-         themselves reachable).</p></note>
-
+ 
     
       </fos:rules>
       <fos:notes>
-         <p>If the <code>$step</code> function creates and returns new nodes (for example by calling the
-            <code>fn:doc</code> function), it is possible that the <code>transitive-closure</code>
-            function will not terminate.</p>
-         <p>Cycles in the data, however, are not a problem; the function stops searching when it finds no new nodes.</p>
+         <p>Cycles in the data are not a problem, even if <code>$max</code> is unbounded; 
+            the function stops searching when it finds no new nodes.</p>
       </fos:notes>
       <fos:examples>
-         <fos:variable name="data" id="transitive-closure-data"><![CDATA[
-            <doc>
-               <person id="0"/>
-               <person id="1" manager="0"/>
-               <person id="2" manager="0"/>
-               <person id="3" manager="2"/>
-               <person id="4" manager="2"/>
-               <person id="5" manager="1"/>
-               <person id="6" manager="3"/>
-            </doc>]]>
+         <fos:variable name="data" id="transitive-closure-data"><![CDATA[document-node{<doc>
+   <person id="0"/>
+   <person id="1" manager="0"/>
+   <person id="2" manager="0"/>
+   <person id="3" manager="2"/>
+   <person id="4" manager="2"/>
+   <person id="5" manager="1"/>
+   <person id="6" manager="3"/>
+   <person id="7" manager="6"/>
+   <person id="8" manager="6"/>
+</doc>}]]>
          </fos:variable>
+         <fos:variable name="direct-reports" id="transitive-closure-reports"><![CDATA[function($p as element(person)) as element(person)* {
+   $p//person[@manager=$p/@id]
+}]]>
+         </fos:variable>          
          <fos:example>
             <fos:test use="transitive-closure-data">
-               <fos:expression>transitive-closure($data//person[@id=2], function{//person[@manager]=@id})/string(@id)</fos:expression>
-               <fos:result>("3", "4", "6")</fos:result>
+               <fos:expression><eg>let $tc := transitive-closure($direct-reports)
+return $tc($data//person[@id="2"])/string(@id)</eg>                   
+               </fos:expression>
+               <fos:result>("3", "4", "6", "7", "8")</fos:result>
             </fos:test>
             <fos:test use="transitive-closure-data">
-               <fos:expression>transitive-closure($data, function{child::*})/@id/string()</fos:expression>
-               <fos:result>("0", "1", "2", "3", "4", "5", "6")</fos:result>
+               <fos:expression><eg>let $tc := transitive-closure($direct-reports, min:=0)
+return $tc($data//person[@id="2"])/string(@id)</eg>                   
+               </fos:expression>
+               <fos:result>("2", "3", "4", "6", "7", "8")</fos:result>
+            </fos:test>   
+            <fos:test use="transitive-closure-data">
+               <fos:expression><eg>let $tc := transitive-closure($direct-reports, max:=2)
+return $tc($data//person[@id="2"])/string(@id)</eg>                   
+               </fos:expression>
+               <fos:result>("3", "4", "6")</fos:result>
+            </fos:test>               
+            <fos:test use="transitive-closure-data">
+               <fos:expression><eg>let $tc := transitive-closure(function{child::*})
+return $tc($data)/@id/string()</eg></fos:expression>
+               <fos:result>("0", "1", "2", "3", "4", "5", "6", "7","8")</fos:result>
+               <fos:postamble>The transitive closure of the child axis is the ancestor axis
+               if <code>min=1</code>, or the ancestor-or-self axis if <code>min=0</code>.</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
             <p>The following example, given <code>$root</code> as the root of an XSLT stylesheet module, returns the URIs
             of all stylesheet modules reachable using <code>xsl:import</code> and <code>xsl:include</code> declarations:</p>
-            <eg><![CDATA[transitive-closure($root, function{document(//(xsl:import|xsl:include)/@href)}) 
-                       =!> document-uri()]]></eg>
+            <eg>let $tc := transitive-closure(function{document(//(xsl:import|xsl:include)/@href)}) 
+return $tc($root) =!> document-uri()</eg>
             <p>This example uses the XSLT-defined <code>document()</code> function.</p>
+         </fos:example>
+         <fos:example>
+            <p>The following example, given <code>$doc</code> as the root of a document consisting of nested sections with paths
+               such as <code>article/section/section/section</code>, returns the headings of all level-2 and level-3 sections:</p>
+            <eg>let $tc := transitive-closure(function{child::section}, min:=2, max:=3) 
+return $tc($doc/article)/head</eg>
          </fos:example>
       </fos:examples>
    </fos:function>
