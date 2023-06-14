@@ -54,6 +54,7 @@
       <fos:record extensible="false">
          <fos:field name="body" type="array(xs:string*)" required="true"/>
          <fos:field name="headers" type="map(xs:string,xs:integer)" required="false"/>
+         <fos:field name="headers-record" type="xs:string*" required="false"/>
       </fos:record>
    </fos:type>
 
@@ -12655,32 +12656,11 @@ else if (empty($input))
                   <fos:type>xs:string?</fos:type>
                   <fos:default>()</fos:default>
                </fos:option>              
-               <fos:option key="normalize-space">
-                  <fos:meaning>The value <code>false</code> indicates that text and attributes are compared <emph>as-is</emph>;
-                     the value <code>true</code> indicates that they are compared after normalization using <code>fn:normalize-space</code>.
-                  </fos:meaning>
-                  <fos:type>xs:boolean</fos:type>
-                  <fos:default>true</fos:default>
-               </fos:option>
-               <fos:option key="preserve-space">
-                  <fos:meaning>Determines whether text nodes consisting entirely of whitespace are significant.
-                  </fos:meaning>
-                  <fos:type>xs:boolean</fos:type>
-                  <fos:default>true</fos:default>
-               </fos:option>
                <fos:option key="processing-instructions">
                   <fos:meaning>Determines whether processing instructions are significant.
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
-               </fos:option>
-               <fos:option key="text-boundaries">
-                  <fos:meaning>Determines whether boundaries between text nodes are significant, even when two text
-                     nodes are separated by an ignored comment or processing instruction. (This property
-                     is provided, with the default <code>true</code>, for compatibility with previous versions.)
-                  </fos:meaning>
-                  <fos:type>xs:boolean</fos:type>
-                  <fos:default>true</fos:default>
                </fos:option>
                <fos:option key="timezones">
                   <fos:meaning>Determines whether timezones in date/time values are significant.
@@ -12715,6 +12695,21 @@ else if (empty($input))
                   <fos:type>xs:QName*</fos:type>
                   <fos:default>()</fos:default>
                </fos:option>
+               <fos:option key="whitespace">
+                  <fos:meaning><phrase diff="chg" at="2023-03-13">Determines the extent to which whitespace 
+                     is treated as significant. The value
+                     <code>preserve</code> retains all whitespace. The value <code>strip</code> ignores text nodes
+                     consisting entirely of whitespace.
+                     The value <code>normalize</code> ignores whitespace text nodes in the same way as
+                     the <code>strip</code> option, and additionally compares text and attribute nodes after 
+                     normalizing whitespace in accordance with the rules of the <code>fn:normalize-space</code> 
+                     function. The detailed rules, given below, also take into account type annotations and 
+                     <code>xml:space</code> attributes.
+                  </phrase>
+                  </fos:meaning>
+                  <fos:type>enum("preserve", "strip", "normalize")</fos:type>
+                  <fos:default>preserve</fos:default>
+               </fos:option>
             </fos:options>
          
          <note><p>As a general rule for boolean options (but not invariably), the value <code>true</code> indicates 
@@ -12726,7 +12721,7 @@ else if (empty($input))
          <p>The rules reference a function <code>equal-strings</code> which compares two strings as follows:</p>
          
          <olist>
-            <item><p>If the <code>normalize-space</code> option is <code>true</code>, each string is processed
+            <item><p>If the <code>whitespace</code> option is set to <code>normalize</code>, then each string is processed
                by calling the <code>fn:normalize-space</code> function.</p></item>
             <item><p>If the <code>normalization-form</code> option is present, each string is then normalized
             by calling the <code>fn:normalize-unicode</code> function, supplying the specified normalization
@@ -12738,7 +12733,7 @@ else if (empty($input))
          
          <eg><![CDATA[function ($s1 as xs:string, $s2 as xs:string, 
                    $collation as xs:string, $options as map(*)) as xs:boolean {
-    let $n1 := if (exists($options?normalization-form))
+    let $n1 := if ($options?whitespace = "normalize"))
                then normalize-unicode(?, $options?normalization-form) 
                else identity#1,
         $n2 := if ($options?normalize-space)
@@ -12870,16 +12865,31 @@ else if (empty($input))
                   <item><p>Both nodes have the same node kind.</p></item>
                   <item><p>Either the <code>base-uri</code> option is <code>false</code>, or both nodes have the same value
                      for their base URI property, or both nodes have an absent base URI.</p></item>
-                  <item><p>Let <code>significant-children($parent)</code> be the sequence of nodes applying the following
+                  <item><p>Let <code>significant-children($parent)</code> be the sequence of nodes obtained by applying the following
                   steps to the children of <code>$parent</code>, in turn:</p>
                      <olist>
                         <item><p>Comment nodes are discarded if the option <code>comments</code> is <code>false</code>.</p></item>
                         <item><p>Processing instruction nodes are discarded if the option <code>processing-instructions</code> is <code>false</code>.</p></item>
-                        <item><p>Adjacent text nodes are merged if the option <code>text-boundaries</code> is <code>false</code>.</p></item>
-                        <item><p>Whitespace-only text nodes are discarded if the option <code>preserve-space</code> is <code>false</code>,
-                           or if <code>$parent</code> is an element node whose type annotation is a complex type with an element-only
-                           or empty content model.</p></item>
-                 
+                        <item><p>Adjacent text nodes are merged.</p></item>
+                        <item><p>Whitespace-only text nodes are discarded if both the following conditions are true:</p>
+                           <olist>
+                              <item>
+                                 <p>Either:</p>
+                                 <olist>
+                                    <item>
+                                       <p>The option <code>whitespace</code> is set to <code>strip</code>
+                                          or <code>normalize</code>; or</p>
+                                    </item>
+                                    <item>
+                                       <p><code>$parent</code> is a schema-validated element node whose type annotation 
+                                          is a complex type with an element-only or empty content model.</p>
+                                    </item>
+                                 </olist>
+                              </item>
+                              <item><p>The text node is not within the scope
+                              of an element that has the attribute <code>xml:space="preserve"</code>.</p></item>
+                           </olist>
+                        </item>
                      </olist>
                   
                   </item>
@@ -13022,7 +13032,8 @@ else if (empty($input))
                               </item>
                               <item>
                                  <p>Either the option <code>typed-value</code> is <code>true</code>, or 
-                                    the <code>equal-strings</code> function returns <code>true</code> when applied to the string value of <code>$i1</code> 
+                                    the <code>equal-strings</code> function returns <code>true</code> 
+                                    when applied to the string value of <code>$i1</code> 
                                     and the string value of <code>$i2</code>.</p>
                               </item>
                               
@@ -13065,33 +13076,7 @@ else if (empty($input))
                         <item>
                            <p>Both nodes are text nodes, and the <code>equal-strings</code> function 
                               returns <code>true</code> when applied to their string values.</p>
-                           <note>
-                              <p>The handling of whitespace is controlled by a number of options:</p>
-                              <ulist>
-                                 <item><p>Firstly, text nodes consisting entirely of whitespace are considered
-                                 significant by default, unless the parent element has been schema-validated and
-                                 has an element-only content model. This can be overridden by setting the
-                                 <code>preserve-space</code> option to <code>false</code>. The process is not influenced
-                                 by any <code>xml:space</code> attributes that might be present.</p></item>
-                                 <item><p>The decision whether a text node is whitespace is made after
-                                 stripping comments and processing instructions. However, the text nodes
-                                 either side of a comment or processing instruction are merged only if the
-                                 <code>text-boundaries</code> option is <code>true</code> (it is <code>false</code> by default).
-                                 </p></item>
-                                 <item><p>If the <code>preserve-space</code> option and the
-                                 <code>normalize-space</code> option are both <code>true</code>, then a whitespace-only
-                                 text node will be reduced to zero length; this means that all whitespace-only
-                                 text nodes will compare equal regardless of their actual content, but the
-                                 presence of the node is still considered significant.</p></item>
-                                 <item><p>The <code>normalize-space</code> option affects the comparison
-                                 of text nodes, attribute nodes, comments and processing instructions (if not
-                                 stripped): it applies to all such nodes when their string values are
-                                 compared, and to nodes whose typed value is a string when comparing typed
-                                 values. It also affects strings within maps and arrays. It has no effect where
-                                 more specific rules apply, for example when comparing node names, namespace URIs,
-                                 or map keys.</p></item>
-                              </ulist>
-                           </note>
+                          
                         </item>
                   </olist>
                   </item>
@@ -13118,6 +13103,17 @@ else if (empty($input))
             in this specification, and whose value is not a permitted value for that key.</p>
       </fos:errors>
       <fos:notes>
+         <p>By default, whitespace in text nodes and attribute is considered significant. There are various ways
+         whitespace differences can be ignored:</p>
+         <ulist>
+            <item><p>If nodes have been schema-validated, setting the <code>typed-values</code> 
+               option to true causes the typed values rather
+               than the string values to be compared. This will typically cause whitespace to be ignored
+               except where the type of the value is <code>xs:string</code>.</p></item>
+            <item><p>Setting the <code>whitespace</code> option to <code>normalize</code> causes all
+            text and attribute nodes to have leading and trailing whitespace removed, and intermediate
+            whitespace reduced to a single character.</p></item>
+         </ulist>
          <p>By default, two nodes are not required to have the same type annotation, and they are not
             required to have the same in-scope namespaces. They may also differ in their parent,
             their base URI, and the values returned by the <code>is-id</code> and
@@ -13141,10 +13137,11 @@ else if (empty($input))
          unless the error is suppressed using the <code>false-on-error</code> option.</p>
       </fos:notes>
       <fos:examples>
-         <fos:variable name="at" id="v-deep-equal-at" as="element()"
-            >&lt;attendees&gt; &lt;name last='Parker'
-            first='Peter'/&gt; &lt;name last='Barker' first='Bob'/&gt; &lt;name last='Parker'
-            first='Peter'/&gt; &lt;/attendees&gt;</fos:variable>
+         <fos:variable name="at" id="v-deep-equal-at" as="element()"><![CDATA[<attendees>
+  <name last="Parker" first="Peter"/>
+  <name last="Barker" first="Bob"/>
+  <name last="Parker" first="Peter"/>
+</attendees>]]></fos:variable>
          <fos:example>
             <fos:test use="v-deep-equal-at">
                <fos:expression>deep-equal($at, $at/*)</fos:expression>
@@ -13239,8 +13236,10 @@ else if (empty($input))
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[deep-equal(
-    parse-xml("<para style='bold'><span>x</span></para>"),
-    parse-xml("<para style=' bold'> <span>x</span></para>"))]]></eg></fos:expression>
+    parse-xml(
+      "<para style='bold'><span>x</span></para>"),
+    parse-xml(
+      "<para style=' bold'> <span>x</span></para>"))]]></eg></fos:expression>
                <fos:result>false()</fos:result>
                <fos:postamble>By default, both the leading whitespace in the <code>style</code> attribute
                   and the whitespace text node preceding the <code>span</code> element are significant.</fos:postamble>
@@ -13249,13 +13248,15 @@ else if (empty($input))
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[deep-equal(
-    parse-xml("<para style='bold'><span>x</span></para>"),
-    parse-xml("<para style=' bold'> <span>x</span></para>"),
-    options := map{'normalize-space': true(), 'whitespace-text-nodes': false())]]></eg></fos:expression>
+    parse-xml(
+      "<para style='bold'><span>x</span></para>"),
+    parse-xml(
+      "<para style=' bold'> <span>x</span></para>"),
+    options := map{'whitespace': 'normalize'})]]></eg></fos:expression>
                <fos:result>false()</fos:result>
-               <fos:postamble>The <code>normalize-space</code> option ensures that the leading whitespace
-                  in the attribute value is ignored; the <code>whitespace-text-nodes</code> option
-                  causes the whitespace preceding the <code>span</code> element to be ignored.</fos:postamble>
+               <fos:postamble>The <code>whitespace</code> option causes both the leading space
+                  in the attribute value and the whitespace preceding the 
+                  <code>span</code> element to be ignored.</fos:postamble>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -16083,6 +16084,18 @@ else
                      <code>utf-8</code>
                   </td>
                </tr>
+               <tr diff="add" at="2023-03-31">
+                  <td>
+                     <code>escape-solidus</code>
+                  </td>
+                  <td>
+                     <code>xs:boolean?</code>
+                  </td>
+                  <td><code>true()</code> means <code>"yes"</code>, <code>false()</code> means <code>"no"</code></td>
+                  <td>
+                     <code>yes</code>
+                  </td>
+               </tr>
                <tr>
                   <td>
                      <code>escape-uri-attributes</code>
@@ -17698,6 +17711,112 @@ return sort($in, $SWEDISH)
                using the default collation:
             </p>
             <eg>sort($employees, (), function($emp) {$emp/name ! (last, first)})</eg>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+   
+   <fos:function name="transitive-closure" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="transitive-closure" return-type="function(node()) as node()*"> 
+            <fos:arg name="step" type="function(node()) as node()*"/>
+            <fos:arg name="min" type="xs:nonNegativeInteger?" default="1"/>
+            <fos:arg name="max" type="xs:positiveInteger?" default="()"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+         
+      </fos:properties>
+      <fos:summary>
+         <p>Given a function <var>F</var> that navigates from one node to other nodes, 
+            returns a function that applies <var>F</var> repeatedly.</p>
+      </fos:summary>
+      <fos:rules>
+         
+         <p>The argument is a function <code>$step</code> that takes a single node as input, and returns a set of nodes as its result. 
+            The result of the <code>fn:transitive-closure</code> function is a function <var>TC</var> that takes a 
+            single node <var>N</var> as input, and returns all nodes that can be reached from
+            <var>N</var> by applying <code>$step</code> repeatedly between <code>$min</code> and <code>$max</code> times (inclusive).</p>
+         
+         <p>Although <code>$step</code> may return any sequence of nodes, the result is treated as a set: the order of nodes
+            in the sequence is ignored, and duplicates are ignored. The result of calling <var>TC</var> will always be
+         a sequence of nodes in document order with no duplicates.</p>
+         
+         <p>The default value of <code>$min</code>, if the argument is not supplied or is set to an empty sequence,
+            is 1 (one). If <code>$min</code> is zero, the result of calling <var>TC</var> will include the argument node
+            <var>N</var>. If <code>$min</code> is greater than zero, the result will include <var>N</var> only if 
+            <var>N</var> is reachable by a cyclic path involving between <code>$min</code> and <code>$max</code> steps.</p>
+         
+         <p>The default value of <code>$max</code>, if the argument is not supplied or is set to an empty sequence,
+            is unbounded. In this situation the function <var>TC</var> continues execution until no further nodes
+            are added to the result set. Note that if the <code>$step</code> function constructs new nodes, this
+            can lead to non-termination. Specifying an explicit value for <code>$max</code> guarantees termination.</p>
+         
+ 
+    
+      </fos:rules>
+      <fos:notes>
+         <p>Cycles in the data are not a problem, even if <code>$max</code> is unbounded; 
+            the function stops searching when it finds no new nodes.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:variable name="data" id="transitive-closure-data"><![CDATA[document{<doc>
+   <person id="0"/>
+   <person id="1" manager="0"/>
+   <person id="2" manager="0"/>
+   <person id="3" manager="2"/>
+   <person id="4" manager="2"/>
+   <person id="5" manager="1"/>
+   <person id="6" manager="3"/>
+   <person id="7" manager="6"/>
+   <person id="8" manager="6"/>
+</doc>}]]>
+         </fos:variable>
+         <fos:variable name="direct-reports" id="transitive-closure-reports"><![CDATA[function($p as element(person)) as element(person)* {
+   $p/../person[@manager=$p/@id]
+}]]>
+         </fos:variable>          
+         <fos:example>
+            <fos:test use="transitive-closure-data">
+               <fos:expression><eg>let $tc := transitive-closure($direct-reports)
+return $tc($data//person[@id="2"])/string(@id)</eg>                   
+               </fos:expression>
+               <fos:result>("3", "4", "6", "7", "8")</fos:result>
+            </fos:test>
+            <fos:test use="transitive-closure-data">
+               <fos:expression><eg>let $tc := transitive-closure($direct-reports, min:=0)
+return $tc($data//person[@id="2"])/string(@id)</eg>                   
+               </fos:expression>
+               <fos:result>("2", "3", "4", "6", "7", "8")</fos:result>
+            </fos:test>   
+            <fos:test use="transitive-closure-data">
+               <fos:expression><eg>let $tc := transitive-closure($direct-reports, max:=2)
+return $tc($data//person[@id="2"])/string(@id)</eg>                   
+               </fos:expression>
+               <fos:result>("3", "4", "6")</fos:result>
+            </fos:test>               
+            <fos:test use="transitive-closure-data">
+               <fos:expression><eg>let $tc := transitive-closure(function{child::*})
+return $tc($data)/@id/string()</eg></fos:expression>
+               <fos:result>("0", "1", "2", "3", "4", "5", "6", "7","8")</fos:result>
+               <fos:postamble>The transitive closure of the child axis is the ancestor axis
+               if <code>min=1</code>, or the ancestor-or-self axis if <code>min=0</code>.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>The following example, given <code>$root</code> as the root of an XSLT stylesheet module, returns the URIs
+            of all stylesheet modules reachable using <code>xsl:import</code> and <code>xsl:include</code> declarations:</p>
+            <eg>let $tc := transitive-closure(function{document(//(xsl:import|xsl:include)/@href)}) 
+return $tc($root) =!> document-uri()</eg>
+            <p>This example uses the XSLT-defined <code>document()</code> function.</p>
+         </fos:example>
+         <fos:example>
+            <p>The following example, given <code>$doc</code> as the root of a document consisting of nested sections with paths
+               such as <code>article/section/section/section</code>, returns the headings of all level-2 and level-3 sections:</p>
+            <eg>let $tc := transitive-closure(function{child::section}, min:=2, max:=3) 
+return $tc($doc/article)/head</eg>
          </fos:example>
       </fos:examples>
    </fos:function>
@@ -20381,9 +20500,9 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
                <fos:default>","</fos:default>
             </fos:option>
             <fos:option key="record-separator">
-               <fos:meaning>The characters used to separate records within the CSV string.</fos:meaning>
+               <fos:meaning>The characters used to separate records within the CSV string. Defaults to matching any of CRLF, LF, or CR.</fos:meaning>
                <fos:type>xs:string</fos:type>
-               <fos:default>"\r\n"</fos:default>
+               <fos:default>("\r\n", "\n", "\r")</fos:default>
             </fos:option>
             <fos:option key="quote-character">
                <fos:meaning>The character used to quote fields within the CSV string.</fos:meaning>
@@ -20391,15 +20510,25 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
                <fos:default>'"'</fos:default>
             </fos:option>
             <fos:option key="headers">
-               <fos:meaning>Determines whether the first record from the CSV should be treated as a list of column headers and returned as a name: field-number map in the <code>headers</code> entry of the returned map.</fos:meaning>
+               <fos:meaning>Determines whether the first record from the CSV should be treated as a
+                  list of column headers and returned as a name: field-number map in the
+                     <code>headers</code> entry of the returned map. Additionally, the first record
+                  will be returned in the <code>headers-record</code> entry of the returned
+                  map.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
                <fos:default>true</fos:default>
                <fos:values>
-                  <fos:value value="true">
-                     The first record is read and turned into a map of the form <code>{ "Field-header": Field-number }</code>. The first record will then not be returned as part of the array-of-sequences in the <code>body</code> entry of the returned map. If there are duplicate field headers, only the first will be included.
+                  <fos:value value="true"> The first record is read and turned into a map of the
+                     form <code>{ "Field-header": Field-number }</code>. The first record will then
+                     not be returned as part of the array-of-sequences in the <code>body</code>
+                     entry of the returned map. If there are duplicate field headers, only the first
+                     will be included. Any fields whose value is the empty string will also be
+                     omitted. The first record will also be returned as the
+                     <code>headers-record</code> entry of the returned map
                   </fos:value>
-                  <fos:value value="false">
-                     No <code>headers</code> map will be returned in the result map, and the first record will be included in the returned <code>body</code> array.
+                  <fos:value value="false"> No <code>headers</code> map or
+                     <code>headers-record</code> will be returned in the result map, and the first
+                     record will be included in the returned <code>body</code> array.
                   </fos:value>
                </fos:values>
             </fos:option>
@@ -20413,6 +20542,19 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
                   </fos:value>
                   <fos:value value="true">
                      The first record will be included in the returned <code>body</code> array even if the <code>headers</code> option is <code>true()</code>.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="trim-whitespace">
+               <fos:meaning>Determines whether fields should have leading and trailing whitespace removed before being returned.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="false">
+                     Fields will be returned with any leading or trailing whitespace intact.
+                  </fos:value>
+                  <fos:value value="true">
+                     Fields will be returned with leading or trailing whitespace removed.
                   </fos:value>
                </fos:values>
             </fos:option>
@@ -20431,19 +20573,23 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <fos:example>
             <fos:test>
                <fos:expression>parse-csv("name,city\r\nBob,Berlin\r\nAlice,Aachen\r\n")</fos:expression>
-               <fos:result>map{"headers": map{"name":1, "city":2}, "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
+               <fos:result>map{"headers": map{"name":1, "city":2}, "headers-record": ("name", "city"), "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>parse-csv("name;city\nBob;Berlin\nAlice;Aachen\n", map{"record-separator": "\n", "field-separator": ";"})</fos:expression>
-               <fos:result>map{"headers": map{"name":1, "city":2}, "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
+               <fos:expression>parse-csv("name;city§Bob;Berlin§Alice;Aachen", map{"record-separator": "§", "field-separator": ";"})</fos:expression>
+               <fos:result>map{"headers": map{"name":1, "city":2}, "headers-record": ("name", "city"), "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>parse-csv('"name","city"\r\n"Bob","Berlin"\r\n"Alice","Aachen"\r\n')</fos:expression>
-               <fos:result>map{"headers": map{"name":1, "city":2}, "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
+               <fos:result>map{"headers": map{"name":1, "city":2}, "headers-record": ("name", "city"), "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression xml:space="preserve">parse-csv("name  ,city  \r\nBob   ,Berlin\r\nAlice ,Aachen\r\n", map{"trim-whitespace: true()})</fos:expression>
+               <fos:result>map{"headers": map{"name":1, "city":2}, "headers-record": ("name", "city"), "body": [("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>parse-csv("|name|,|city|\r\n|Bob|,|Berlin|\r\n", map{"quote-character": "|"})</fos:expression>
-               <fos:result>map{"headers": map{"name":1, "city":2}, "body": [("Bob","Berlin")]}</fos:result>
+               <fos:result>map{"headers": map{"name":1, "city":2}, "headers-record": ("name", "city"), "body": [("Bob","Berlin")]}</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>parse-csv("Bob,Berlin\r\nAlice,Aachen\r\n", map{headers: false()})</fos:expression>
@@ -20451,7 +20597,110 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
             </fos:test>
             <fos:test>
                <fos:expression>parse-csv("name,city\r\nBob,Berlin\r\nAlice,Aachen\r\n", map{return-headers: true()})</fos:expression>
-               <fos:result>map{"headers": map{"name":1, "city":2}, "body": [("name","city"), ("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
+               <fos:result>map{"headers": map{"name":1, "city":2}, "headers-record": ("name", "city"), "body": [("name","city"), ("Bob","Berlin"), ("Alice","Aachen")]}</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
+   <fos:function name="csv-to-xml" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="csv-to-xml" return-type="item()*">
+            <fos:arg name="csv" type-ref="parsed-csv-structure-record"/>
+            <fos:arg name="record-func" type="function(xs:string*) as item()*"/>
+            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property dependency="static-base-uri">context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Iterates over the body records from a <code>parsed-csv-structure-record</code>, calling the supplied <code>$record-func</code> function argument with each in turn.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The effect of the two-argument form of this function is the same as calling the
+            three-argument form with an empty map as the value of the <code>$options</code>
+            argument.</p>
+
+         <p>The first argument is a parsed CSV data structure,
+               <code>parsed-csv-structure-record</code>, as defined in <specref ref="csv-structures"
+            />.</p>
+
+         <p>The second argument is a function that takes a sequence of <code>xs:string</code> values
+            as its only argument, returning a sequence of <code>item()</code>s.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, the function returns the empty sequence.</p>
+
+         <p>The <code>$options</code> argument can be used to control the way records passed to the
+               <code>record-func</code> are structured. The <termref
+               def="option-parameter-conventions">option parameter conventions</termref> apply.</p>
+
+         <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
+
+         <fos:options>
+            <fos:option key="field-order">
+               <fos:meaning>A sequence indicating which fields to return and in which order. If this
+                  option is missing or the empty sequence, all fields are returned in their natural
+                  order. If an item in the sequence is an integer, it is treated as the index of the
+                  field in the record, if a string, it's used to look up the index from the
+                     <code>$csv?headers</code> map.</fos:meaning>
+               <fos:type>(xs:string,xs:integer)*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+         </fos:options>
+      </fos:rules>
+      <fos:examples>
+         <fos:variable name="csv" id="parsed-csv-1"><![CDATA[
+map {
+   "headers": map { "Name": 1, "City": 2 },
+   "headers-record": ("Name", "City"),
+   "body": [
+      ("Alice, "Aachen"),
+      ("Bob", "Berlin")
+   ]
+}]]>
+         </fos:variable>
+         <fos:variable name="record-func" id="simple-record-func"><![CDATA[
+function($record as xs:string*) as item() {
+   return <tr>{
+      for $field in $record return <td>{ $field }</td>
+   }</tr>
+}]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="parsed-csv-1 simple-record-func">
+               <fos:expression><![CDATA[
+csv-to-xml($csv, $record-func)]]>
+               </fos:expression>
+               <fos:result normalize-space="true"><![CDATA[
+<tr>
+   <td>Alice</td>
+   <td>Aachen</td>
+</tr>
+<tr>
+   <td>Bob</td>
+   <td>Berlin</td>
+</tr>]]>
+               </fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test use="parsed-csv-1 simple-record-func">
+               <fos:expression><![CDATA[
+csv-to-xml($csv, $record-func, map { "field-order": (2, 1) })]]>
+               </fos:expression>
+               <fos:result normalize-space="true"><![CDATA[
+<tr>
+   <td>Aachen</td>
+   <td>Alice</td>
+</tr>
+<tr>
+   <td>Berlin</td>
+   <td>Bob</td>
+</tr>]]>
+               </fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
