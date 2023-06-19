@@ -55,6 +55,7 @@
          <fos:field name="body" type="array(xs:string*)" required="true"/>
          <fos:field name="headers" type="map(xs:string,xs:integer)" required="false"/>
          <fos:field name="headers-record" type="xs:string*" required="false"/>
+         <fos:field name="field" required="true" type="function(xs:string*, item()) as xs:string"/>
       </fos:record>
    </fos:type>
 
@@ -20486,7 +20487,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
             parses this string to return an XDM value.</p>
 
          <p>If <code>$csv</code> is the empty sequence, implementations <rfc2119>must</rfc2119>
-            reutrn the empty sequence as the value of the <code>body</code> field of the returned
+            return the empty sequence as the value of the <code>body</code> field of the returned
             map.</p>
 
          <p>The <code>$options</code> argument can be used to control the way in which the parsing
@@ -20496,13 +20497,13 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <p>Implementations <rfc2119>must</rfc2119> treat any of CRLF, CR, or LF as a record separator, as with <code>fn:unparsed-text-lines</code>.</p>
 
          <p>Fields are regarded as simple <code>xs:string</code> values. Implementations
-            <rfc2119>must</rfc2119>, leave whitespace within a field untouched, without
+            <rfc2119>must</rfc2119> leave whitespace within a field untouched, without
             normalizing or otherwise altering it, unless whitespace trimming is explicitly requested
             by the user using the <code>trim-whitespace</code> option.</p>
 
-         <p>If the <code>headers</code> option is true, implmentations <rfc2119>must</rfc2119>
-            exclude the first record from the returned map's <code>body</code> key, and return it as
-            the value of the returned map's <code>headers-record</code> key.</p>
+         <p>If the <code>headers</code> option is true, implementations <rfc2119>must</rfc2119>
+            exclude the first record from the returned map’s <code>body</code> key, and return it as
+            the value of the returned map’s <code>headers-record</code> key.</p>
 
          <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
 
@@ -20535,19 +20536,15 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
                <fos:default>true</fos:default>
                <fos:values>
                   <fos:value value="true"> The first record is read and turned into a map of the
-                     form <code>{ "Field-header": Field-number }</code>, in the returned map's
+                     form <code>{ "Field-header": Field-number }</code>, in the returned map’s
                      <code>headers</code> entry. Implmentations <rfc2119>must</rfc2119> exclude
-                     the first record from the returned map's <code>body</code> entry, and return it
-                     as the returned map's <code>headers-record</code> entry. If there are duplicate
-                     field headers, implementations <rfc2119>must</rfc2119> include only the first
-                     occurence in the <code>headers</code> entry, ignoring subsequent entries. Any
-                     fields in the first record whose value is the empty string
-                     <rfc2119>must</rfc2119> also be omitted from the <code>headers</code> entry.
+                     the first record from the returned map’s <code>body</code> entry, and return it
+                     as the returned map’s <code>headers-record</code> entry.
                   </fos:value>
                   <fos:value value="false"> Implementations <rfc2119>must not</rfc2119> include
                      <code>headers</code> or <code>headers-record</code> entries in the returned
                      map, and the first record <rfc2119>must</rfc2119> be included at the beginning
-                     of <code>body</code> entry's array.
+                     of <code>body</code> entry’s array.
                   </fos:value>
                </fos:values>
             </fos:option>
@@ -20570,19 +20567,71 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
             </fos:option>
          </fos:options>
 
-         <p>The </p>
+         <p>The result of the function is a <code>parsed-csv-structure-record</code>, a map with
+            string keys containing at least two entries, <code>body</code>, and <code>field</code>,
+            with another two optional entries, <code>headers</code> and
+            <code>headers-record</code>.</p>
+         <olist>
+            <item>
+               <p>The entry with key <code>"body"</code> holds the records of the CSV as an array of
+                  sequences of strings, <code>array(xs:string*)</code>. If there is no data in the
+                  CSV, this will be empty.</p>
+            </item>
+            <item>
+               <p>The entry with key <code>"field"</code> is an arity-two function <var>F</var> that
+                  takes a CSV record <var>R</var> (of type <code>xs:string*</code>) and a string or
+                  integer key <var>K</var> as input, and returns the field in <var>R</var> that
+                  corresponds to the position <var>K</var>, if <var>K</var> is an
+                  <code>xs:integer</code>, or the position obtained by looking up <var>K</var> in
+                  the <code>headers</code> map if <var>K</var> is an <code>xs:string</code>.</p>
+
+               <p>TODO: What is the best way to specify dynamic errors that this function might throw?</p>
+
+               <p>The properties of this function are as follows:</p>
+               <ulist>
+                  <item>
+                     <p>name: absent</p>
+                  </item>
+                  <item>
+                     <p>parameter names: (<var>$record</var>, <var>$key</var>)</p>
+                  </item>
+                  <item>
+                     <p>signature: <code>(xs:string*, item()) => xs:string</code></p>
+                  </item>
+                  <item>
+                     <p>non-local variable bindings: none</p>
+                  </item>
+                  <item>
+                     <p>implementation: implementation-dependent</p>
+                  </item>
+                  <item>
+                     <p>errors: A dynamic error <errorref class="CV" code="0004"/> occurs if the supplied <var>$key</var> is a string and does not occur in the map of headers.</p>
+                  </item>
+               </ulist>
+            </item>
+            <item>
+               <p>If present, the entry with key <code>"headers"</code> holds the field headers
+                  (from the first record of the CSV) as a map of field name to position,
+                  <code>map(xs:string, xs:integer)</code>. If there are duplicate field headers,
+                  implementations <rfc2119>must</rfc2119> include only the first occurrence in the
+                  <code>headers</code> entry, ignoring subsequent entries. Any fields in the
+                  first record whose value is the empty string <rfc2119>must</rfc2119> also be
+                  omitted.</p>
+            </item>
+            <item>
+               <p>If present, the entry with key <code>"headers-record"</code> holds the first
+                  record of the CSV, a sequence of strings (<code>xs:string*</code>), unaltered.</p>
+            </item>
+         </olist>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error <errorref class="CV" code="0001"/> occurs if the value of
             <code>$csv</code> does not conform to the <bibref ref="rfc4180"/> grammar for quoted
             fields.</p>
-         <p>A dynamic error <errorref class="CV" code="0002"/> occurs if a value for
-            <code>field-separator</code> is specified and is not a single character.</p>
-         <p>A dynamic error <errorref class="CV" code="0003"/> occurs if a value for
-            <code>record-separator</code> is specified and is not a single character.</p>
-         <p>A dynamic error <errorref class="CV" code="0004"/> occurs if a value for
-            <code>quote-character</code> is specified and is not a single character.</p>
-         <p>A dynamic error <errorref class="CV" code="0005"/> occurs if any of the values for
+         <p>A dynamic error <errorref class="CV" code="0002"/> occurs if one or more of the values
+            for <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are specified and are not a single character.</p>
+         <p>A dynamic error <errorref class="CV" code="0003"/> occurs if any of the values for
             <code>field-separator</code>, <code>record-separator</code>,
             <code>quote-character</code> are equal.</p>
       </fos:errors>
@@ -20596,6 +20645,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          <fos:variable name="cr" id="escaped-cr"><![CDATA[char('x0D')]]></fos:variable>
          <fos:variable name="crlf" id="escaped-crlf"><![CDATA[char('x0D')||char('x0A')]]></fos:variable>
          <fos:example>
+            <p>TODO: How should the returned function be written in the <code>&lt;fos:result&gt;</code> elements in this example section?</p>
             <p>Handling any of the default record separators:</p>
             <fos:test use="escaped-crlf">
                <fos:expression>parse-csv(`name,city{$crlf}Bob,Berlin{$crlf}Alice,Aachen{$crlf}`)</fos:expression>
@@ -20751,7 +20801,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
                <fos:meaning>A sequence indicating which fields to return and in which order. If this
                   option is missing or the empty sequence, all fields are returned in their natural
                   order. If an item in the sequence is an integer, it is treated as the index of the
-                  field in the record, if a string, it's used to look up the index from the
+                  field in the record, if a string, it’s used to look up the index from the
                      <code>$csv?headers</code> map.</fos:meaning>
                <fos:type>(xs:string,xs:integer)*</fos:type>
                <fos:default>()</fos:default>
@@ -20759,7 +20809,7 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          </fos:options>
       </fos:rules>
       <fos:errors>
-         <p>A dynamic error <errorref class="CV" code="0006"/> occurs if <code>$csv</code> does not match type <code>parsed-csv-structure-record</code>.</p>
+         <p>A dynamic error <errorref class="CV" code="0005"/> occurs if <code>$csv</code> does not match type <code>parsed-csv-structure-record</code>.</p>
       </fos:errors>
       <fos:examples>
          <fos:variable name="csv" id="parsed-csv-1"><![CDATA[
@@ -21411,7 +21461,7 @@ csv-to-xml($csv, $record-func, map { "field-order": ("Invoice Date", "Transactio
                         under “element nodes”, above.</p>
                      <p>Free-standing attribute nodes are output as JSON objects with properties
                      <code>#attribute</code> set to the local name of the attribute, <code>#prefix</code>
-                     (if non-empty) set to the prefix of the attribute's name, <code>#namespace</code>
+                     (if non-empty) set to the prefix of the attribute’s name, <code>#namespace</code>
                      (if non-empty) set to the namespace URI, and <code>#value</code> set to
                         the result of atomizing the attribute value and applying the
                         <code>fn:json</code> function to the result.</p>
@@ -21466,7 +21516,7 @@ csv-to-xml($csv, $record-func, map { "field-order": ("Invoice Date", "Transactio
                   <item><p><code>#result</code> whose value is a string 
                      identifying the type of the function result, using the same conventions as for <code>#arguments</code>.</p></item>
                   <item><p>Optionally at implementer discretion, <code>#implementation</code> whose value is a string 
-                     representing the function's implementation in implementation-defined format.</p></item>
+                     representing the function’s implementation in implementation-defined format.</p></item>
                </ulist>
                <p>Strings are escaped as follows:</p>
                <olist>
@@ -23201,8 +23251,8 @@ return array:sort($in, $SWEDISH)
                <fos:meaning>Values for external variables defined in the library module. Values <rfc2119>must</rfc2119> be supplied
                   for external variables that have no default value, and <rfc2119>may</rfc2119> be supplied for external variables
                   that do have a default value. The supplied value <rfc2119>must</rfc2119> conform to the required type of the variable, without conversion.
-                  The map contains one entry for each external variable: the key is the variable's name, and the associated value is
-                  the variable's value. The <termref
+                  The map contains one entry for each external variable: the key is the variable’s name, and the associated value is
+                  the variable’s value. The <termref
                      def="option-parameter-conventions"
                   >option parameter conventions</termref> do not apply
                   to this contained map.</fos:meaning>
