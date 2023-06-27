@@ -22691,10 +22691,10 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       </fos:notes>
    </fos:function>
    
-   <fos:function name="xdm-to-json" prefix="fn">
+   <fos:function name="items-to-json" prefix="fn">
       <fos:signatures>
-         <fos:proto name="xdm-to-json" return-type="xs:string">
-            <fos:arg name="input" type="xs:string?"/>
+         <fos:proto name="items-to-json" return-type="xs:string">
+            <fos:arg name="input" type="item()*"/>
             <fos:arg name="options" type="map(*)" usage="inspection"  default="map{}"/>
          </fos:proto>
       </fos:signatures>
@@ -22708,7 +22708,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       </fos:summary>
       <fos:rules>
          <p>This function returns a string, in JSON format, containing a representation of the
-         supplied input <code>$input</code>. The function can process any input sequence
+         supplied input <code>$input</code>.</p>
+         <p>The function can process any input sequence
          whatsoever, but it is not lossless: there are cases when two different XDM values will
          have the same JSON representation. For example, the sequence <code>(1, 2)</code>
             and the array <code>[1, 2]</code> are both output as <code>"[1,2]"</code>.</p>
@@ -22716,6 +22717,20 @@ return $M(collation-key("a", $C))</eg></fos:expression>
          <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
          
          <fos:options>
+            <fos:option key="escape-solidus">
+               <fos:meaning>Determines whether, when escaping strings, the solidus (<code>/</code>)
+                  should be escaped.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>true</fos:default>
+               <fos:values>
+                  <fos:value value="false">
+                     The solidus character is output as is.
+                  </fos:value>
+                  <fos:value value="true">
+                     The solidus character is escaped with a backslash, that is, as <code>"\/"</code>.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
             <fos:option key="indent">
                <fos:meaning>Determines whether additional whitespace should be added to the output to improve readability.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
@@ -22752,7 +22767,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <fos:meaning>A mapping from element names to layout names, used to override the default
                formatting rules for a particular element name.</fos:meaning>
                <fos:type>map{xs:QName, enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
-                  "record", "sequence", "mixed")}</fos:type>
+                  "record", "sequence", "mixed", "xml", "html", "xhtml")}</fos:type>
                <fos:default>map{}</fos:default>
             </fos:option>
          </fos:options>
@@ -22789,10 +22804,15 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             </item>
             <item>
                <p><emph>Nodes</emph></p>
-               <p>A node is represented as a JSON object containing a single key-value pair. For elements, the key
+               <p>A node is represented as a JSON object containing a single key-value pair. 
+                  For elements and attributes, the key
                is derived from the element name as described in <specref ref="element-names-in-json"/>; 
                for all other node kinds it represents the node kind (for example,
                <code>#text</code> or <code>#comment</code>).</p>
+               <p>In the following rules, a node is considered to be <term>top-level</term> if it
+               is parentless, or if its parent is not itself part of the input being converted.
+               For example, if <code>$input</code> is a sequence of attribute nodes, then these
+               are considered to be top-level nodes, whether or not they have a parent element.</p>
                <ulist>
                   <item>
                      <p><emph>Document nodes</emph></p>
@@ -22810,9 +22830,29 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                      <p><emph>Element nodes</emph></p>
                      <p>A top-level element node is output as a JSON object comprising a single key-value pair, where the
                         key is derived from the element name as described in <specref ref="element-names-in-json"/>, and the content
-                        follows the rules of a specific layout appropriate to that element. The rules for 
-                        selecting a layout, and the mapping rules for each layout, are described in 
-                        <specref ref="xml-to-json-mappings"/>.</p>    
+                        follows the rules of a specific layout appropriate to that element. The available layouts 
+                        are described in <specref ref="xml-to-json-mappings"/>. A layout is selected for each element node <var>E</var>
+                        by applying the following rules in order:</p>
+                        <olist>
+                           <item><p>If the name of <var>E</var> is listed as the key of an entry in the <code>layouts</code> 
+                              option, then the corresponding named layout is used.</p></item>
+                           <item><p>If <var>E</var> has a type annotation <var>T</var> other than <code>xs:untyped</code>
+                           or <code>xs:anyType</code>, then the layout appropriate to its schema type
+                           is used. Specifically, taking the layouts in the order presented in 
+                              <specref ref="json-element-layouts"/>, the first layout whose <term>XSD conditions</term>
+                           are satisfied by <var>T</var> is chosen.</p></item>
+                           <item><p>If the option <code>uniform</code> is set to false (which is its default value),
+                              then the chosen layout is the first layout, in the order they are listed in 
+                              <specref ref="json-element-layouts"/>, whose <term>match pattern</term>
+                           matches <var>E</var>.</p></item>
+                           <item><p>If the option <code>uniform</code> is set to true, then let <var>S</var>
+                           be the set of all element nodes in the input having the same name as <var>E</var>,
+                           including element nodes that are not immediate items in the input sequence, but
+                           are rather contained recursively within nodes, maps, or arrays in the input sequence.
+                           The chosen layout is then the first layout, in the order they are listed in 
+                              <specref ref="json-element-layouts"/>, whose <term>match pattern</term> matches
+                              every element node in <var>S</var>.</p></item>
+                        </olist>
                   </item>
                   <item>
                      <p><emph>Text nodes</emph></p>
@@ -22872,7 +22912,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                and applying escaping rules. If the property name thus generated is the same as a previously output
                property name, then it is made unique by appending <code>"[N]"</code> where <var>N</var> is the smallest
                positive integer, starting at 2, that makes the resulting value unique.</p>
-               <p>The property value is derived by applying the <code>fn:xdm-to-json</code> function to the value in the map entry.</p>
+               <p>The property value is derived by applying the <code>fn:items-to-json</code> function to the value in the map entry.</p>
                
                <note><p>Conflicts between property names can arise because the XDM model allows keys of different types,
                   for example the <code>xs:date</code> value <code>2020-12-31</code> and the string value 
@@ -22886,7 +22926,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             <item>
                <p><emph>Arrays</emph></p>
                <p>An XDM array is output as a JSON array. Each member of the XDM array generates one entry in the
-                  JSON array, in order, obtained by applying the <code>fn:xdm-to-json</code> function to the XDM array member.</p>              
+                  JSON array, in order, obtained by applying the <code>fn:items-to-json</code> function to the XDM array member.</p>              
             </item>
             <item>
 
@@ -22933,15 +22973,19 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             </item>
             
             <item>
+               <p>Any solidus (<code>"/"</code>) is 
+                  replaced by <code>\/</code> if the <code>escape-solidus</code> option is set to
+                  true (its default value) but is output as <code>"/"</code> if the option is set
+                  to false; </p>
+            </item>
+            
+            <item>
                <p>Any other codepoint in the range 1-31 or 127-159 is replaced by an escape in 
                   the form <code>\uHHHH</code> where <code>HHHH</code> is the upper-case hexadecimal representation of the codepoint value.</p>
             </item>
          </olist>
       </fos:rules>
       <fos:errors>
-         <p>A dynamic error is raised if any element name appears in more than one of the options
-            <code>use-value-format</code>, <code>use-map-format</code>, and <code>use-array-format</code>: <errorref
-               class="JS" code="0005"/>.</p>
          <p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
             value (typically because it has been validated against an element-only content model): <errorref
                class="TY" code="0012"/>.</p>
@@ -22956,42 +23000,47 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>xdm-to-json(())</fos:expression>
+               <fos:expression>items-to-json(())</fos:expression>
                <fos:result>'null'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>xdm-to-json(12)</fos:expression>
+               <fos:expression>items-to-json(12)</fos:expression>
                <fos:result>'12'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>xdm-to-json((12, "December"))</fos:expression>
+               <fos:expression>items-to-json((12, "December"))</fos:expression>
                <fos:result>'[12,"December"]'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>xdm-to-json(true())</fos:expression>
+               <fos:expression>items-to-json(true())</fos:expression>
                <fos:result>'true'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>xdm-to-json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
+               <fos:expression>items-to-json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
                <fos:result>'{"a":1,"b":"NaN","c":[1,2,3]}'</fos:result>
                <fos:postamble>(or some permutation thereof)</fos:postamble>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[xdm-to-json(<a x="2">banana</a>)]]></fos:expression>
+               <fos:expression><eg><![CDATA[items-to-json(<a x="2">banana</a>)]]></eg></fos:expression>
                <fos:result>'{"a":{"@x":"2","#content":"banana"}}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[xdm-to-json(<a><b/><c>2</c></a>)]]></fos:expression>
+               <fos:expression><eg><![CDATA[items-to-json(<a><b/><c>2</c></a>)]]></eg></fos:expression>
                <fos:result>'{"a":{"#content":{"b":"","c":"2"}}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[xdm-to-json(<a>A <i>nice</i> one!</a>)]]></fos:expression>
+               <fos:expression><eg><![CDATA[items-to-json(<a>A <i>nice</i> one!</a>)]]></eg></fos:expression>
                <fos:result>'{"a":{"#content":["A ",{"i":"nice"}," one!"]}}'</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[items-to-json(<a>A <i>nice</i> one!</a>, 
+              map{'layouts':map{QName('', 'a'): 'xml'}, 'escape-solidus':false()})]]></eg></fos:expression>
+               <fos:result>'{"a":"<a>A <i>nice</i> one!</a>"}'</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
       <fos:history>
-         <fos:version version="4.0">Proposed for 4.0; not yet reviewed.</fos:version>
+         <fos:version version="4.0">Proposed for 4.0; initial review on 2023-06-27.</fos:version>
       </fos:history>
    </fos:function>
 
