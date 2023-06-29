@@ -23,7 +23,7 @@
   <xsl:output method="xml" indent="yes" saxon:double-space="test-case"
     cdata-section-elements="assert-xml"/>
   
-  <xsl:param name="qt4tests-dir" static="yes" select="'file:/Users/mike/GitHub/qt4cg/qt4tests/'"/>
+  <xsl:param name="qt4tests-dir" static="yes" select="'../../../build/qt4tests/'"/>
 
   <xsl:import-schema namespace="http://www.w3.org/xpath-functions/spec/namespace"
     schema-location="../src/fos.xsd"/>
