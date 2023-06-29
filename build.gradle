@@ -2,6 +2,7 @@ buildscript {
   repositories {
     mavenLocal()
     mavenCentral()
+    maven { url "https://dev.saxonica.com/maven" }
   }
 
   // Get rid of that [expletive deleted] warning about xml-apis 2.0.2/1.0.b2
@@ -12,7 +13,7 @@ buildscript {
   }
 
   dependencies {
-    classpath group: 'net.sf.saxon', name: 'Saxon-HE', version: '11.5'
+    classpath group: 'com.saxonica', name: 'Saxon-EE', version: '12.2'
   }
 }
 
@@ -23,6 +24,7 @@ plugins {
 repositories {
   mavenLocal()
   mavenCentral()
+  maven { url "https://dev.saxonica.com/maven" }
 }
 
 configurations {
@@ -31,7 +33,7 @@ configurations {
 
 dependencies {
   implementation (
-    [group: 'net.sf.saxon', name: 'Saxon-HE', version: '11.5' ],
+    [group: 'com.saxonica', name: 'Saxon-EE', version: '12.2' ],
     files("${projectDir}/lib/xjparse-3.1.0.jar")
   )
 }
@@ -103,10 +105,69 @@ task "publish-xslt-xquery-serialization-40"(dependsOn: ["serialization_40"]) {
 
 // ============================================================
 
+task qt4tests(
+  description: "Make sure the qt4tests repository is available"
+) {
+  doLast {
+    if (file("${buildDir}/qt4tests").exists()) {
+      exec {
+        workingDir "${buildDir}/qt4tests"
+        commandLine "git", "pull"
+      }
+    } else {
+      exec {
+        commandLine "git", "clone", "https://github.com/qt4cg/qt4tests.git",
+          "${buildDir}/qt4tests"
+      }
+    }
+  }
+}
+
+task saxon_config(
+) {
+  inputs.dir fileTree(dir: "${projectDir}/lib")
+  outputs.file "${buildDir}/config.xml"
+
+  doLast {
+    def cfg = new PrintStream(new File("${buildDir}/config.xml"))
+    if (file("${projectDir}/lib/saxon-license.lic").exists()) {
+      cfg.println("<configuration xmlns='http://saxon.sf.net/ns/configuration'")
+      cfg.println("               edition='EE'")
+      cfg.println("               licenseFileLocation='${projectDir}/lib/saxon-license.lic'/>")
+    } else {
+      cfg.println("<configuration xmlns='http://saxon.sf.net/ns/configuration'")
+      cfg.println("               edition='HE'/>")
+    }
+    cfg.close();
+  }
+}
+
+task fo_generate_tests(
+  dependsOn: ["qt4tests", "saxon_config"]
+) {
+  inputs.file "${projectDir}/specifications/xpath-functions-40/src/function-catalog.xml"
+  inputs.file "${projectDir}/specifications/xpath-functions-40/style/generate-qt3-test-set.xsl"
+  outputs.file "${buildDir}/test-suite/app/fo-spec-examples.xml"
+  outputs.upToDateWhen { false }
+
+  doLast {
+    if (file("${projectDir}/lib/saxon-license.lic").exists()) {
+      transform("${projectDir}/specifications/xpath-functions-40/src/function-catalog.xml",
+                "${projectDir}/specifications/xpath-functions-40/style/generate-qt3-test-set.xsl",
+                "${buildDir}/test-suite/app/fo-spec-examples.xml",
+                ["-t", "-val"], [:])
+    } else {
+      println("Cannot generate tests from specification; no Saxon license available.")
+    }
+  }
+}
+
+// ============================================================
+
 task xpath_functions_40(
   group: "Specifications",
   description: "Build the XPath Functions and Operators 4.0 specification",
-  dependsOn: ["fo_xml", "fo_html", "fo_html_diff", "fo_resources"]
+  dependsOn: ["fo_xml", "fo_html", "fo_html_diff", "fo_resources", "fo_generate_tests"]
 ) {
   // Just somewhere to hang dependencies
 }
@@ -121,7 +182,7 @@ task common_sources(
 
 task fo_merge(
   description: "Expand the FO sources into a single XML file",
-  dependsOn: ["common_sources"]
+  dependsOn: ["common_sources", "saxon_config"]
 ) {
   inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/src")
   inputs.files fileTree(dir: "${projectDir}/specifications/xpath-functions-40/style")
@@ -140,7 +201,7 @@ task fo_merge(
 }
 
 task fo_xml(
-  dependsOn: ["fo_merge"],
+  dependsOn: ["fo_merge", "saxon_config"],
   group: "Spec XML",
   description: "Create the XML version of the specification"
 ) {
@@ -156,7 +217,7 @@ task fo_xml(
 }
 
 task fo_html(
-  dependsOn: ["fo_merge", "setup_crossref_indexes"],
+  dependsOn: ["fo_merge", "setup_crossref_indexes", "saxon_config"],
   group: "Spec HTML",
   description: "Create the HTML and XHTML versions of the specification"
 ) {
@@ -179,7 +240,7 @@ task fo_html(
 }
 
 task fo_html_diff(
-  dependsOn: ["fo_merge", "setup_crossref_indexes"],
+  dependsOn: ["fo_merge", "setup_crossref_indexes", "saxon_config"],
   group: "Spec HTML (diff)",
   description: "Create the HTML and XHTML versions of the specification (with diff markup)"
 ) {
@@ -259,7 +320,8 @@ task fo_resources(
 
 task xpath_keyword_tests(
   group: "Test suite",
-  description: "Create the BuiltInKeywords.xml tests"
+  description: "Create the BuiltInKeywords.xml tests",
+  dependsOn: ["saxon_config"]
 ) {
   inputs.file "${projectDir}/specifications/xpath-functions-40/style/generate-keyword-test-set.xsl"
   inputs.file "${projectDir}/specifications/xpath-functions-40/src/function-catalog.xml"
@@ -274,7 +336,9 @@ task xpath_keyword_tests(
 
 // ============================================================
 
-task grammar_40() {
+task grammar_40(
+  dependsOn: ["saxon_config"]
+) {
   inputs.files fileTree(dir: "${projectDir}/specifications/grammar-40")
   inputs.file "${projectDir}/style/grammar-identity.xsl"
   outputs.file "${buildDir}/grammar-40/xpath-grammar.xml"
@@ -305,7 +369,7 @@ task xslt_40(
 }
 
 task xslt_grammar(
-  dependsOn: ["grammar_40"],
+  dependsOn: ["grammar_40", "saxon_config"],
   description: "Build the grammar files for XSLT 4.0"
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
@@ -346,7 +410,7 @@ task xslt_grammar(
 }
 
 task xslt_merge_catalog(
-  dependsOn: ["xslt_grammar"]
+  dependsOn: ["xslt_grammar", "saxon_config"]
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-40/src")
@@ -425,7 +489,7 @@ task xslt_svg(
 }
 
 task xslt_make_svg(
-  dependsOn: "xslt_merge_catalog",
+  dependsOn: ["xslt_merge_catalog", "saxon_config"],
   description: "Create SVG images with GraphViz"
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
@@ -527,7 +591,7 @@ task xslt_resources(
 }
 
 task xslt_html(
-  dependsOn: ["xslt_merge_catalog", "xslt_resources", "setup_crossref_indexes"],
+  dependsOn: ["xslt_merge_catalog", "xslt_resources", "setup_crossref_indexes", "saxon_config"],
   description: "Create the HTML version of the specification"
 ) {
 
@@ -556,7 +620,7 @@ task xslt_html(
 }
 
 task xslt_html_diff(
-  dependsOn: ["xslt_merge_catalog", "xslt_resources"],
+  dependsOn: ["xslt_merge_catalog", "xslt_resources", "saxon_config"],
   description: "Create the HTML version of the specification (with diffs)"
 ) {
 
@@ -585,7 +649,7 @@ task xslt_html_diff(
 }
 
 task xslt_xml(
-  dependsOn: ["xslt_merge_catalog"],
+  dependsOn: ["xslt_merge_catalog", "saxon_config"],
   description: "Create the XML version of the specification"
 ) {
   inputs.files fileTree(dir: "${projectDir}/style/identity.xsl")
@@ -643,7 +707,7 @@ task shared_40(
   }
 
   task "xquery_${shortName}_grammar"(
-    dependsOn: ["grammar_40"],
+    dependsOn: ["grammar_40", "saxon_config"],
     description: "Build the grammar files for the ${shortName} specification"
   ) {
     inputs.files fileTree(dir: "${projectDir}/style")
@@ -677,7 +741,7 @@ task shared_40(
   }
 
   task "xquery_assemble_${shortName}"(
-    dependsOn: ["xquery_${shortName}_grammar"],
+    dependsOn: ["xquery_${shortName}_grammar", "saxon_config"],
     description: "Assemble the sources for the ${shortName} specification"
   ) {
     inputs.files fileTree(dir: "${projectDir}/style")
@@ -715,7 +779,7 @@ task shared_40(
   }
 
   task "xquery_${shortName}_html"(
-    dependsOn: ["xquery_assemble_${shortName}", "setup_crossref_indexes"],
+    dependsOn: ["xquery_assemble_${shortName}", "setup_crossref_indexes", "saxon_config"],
     description: "Create the HTML and XHTML versions of the ${shortName} specification"
   ) {
     inputs.files fileTree(dir: "${projectDir}/style")
@@ -752,7 +816,7 @@ task shared_40(
   }
 
   task "xquery_${shortName}_html_diff"(
-    dependsOn: ["xquery_assemble_${shortName}"],
+    dependsOn: ["xquery_assemble_${shortName}", "saxon_config"],
     description: "Create the HTML and XHTML versions of the ${shortName} specification"
   ) {
     inputs.files fileTree(dir: "${projectDir}/style")
@@ -847,7 +911,7 @@ task datamodel_40(
 }
 
 task datamodel_merge(
-  dependsOn: ["common_sources"]
+  dependsOn: ["common_sources", "saxon_config"]
 ) {
   inputs.files fileTree(dir: "${projectDir}/specifications/xpath-datamodel-40/src")
   inputs.files fileTree(dir: "${projectDir}/specifications/xpath-datamodel-40/style")
@@ -895,7 +959,7 @@ task datamodel_merge(
 
 task datamodel_xml(
   group: "Spec XML",
-  dependsOn: ["datamodel_merge"],
+  dependsOn: ["datamodel_merge", "saxon_config"],
   description: "Create the XML version of the specification"
 ) {
   inputs.file datamodel_merge.outputs.getFiles().getSingleFile()
@@ -912,7 +976,7 @@ task datamodel_xml(
 
 task datamodel_html(
   group: "Spec HTML",
-  dependsOn: ["datamodel_xml", "setup_crossref_indexes"],
+  dependsOn: ["datamodel_xml", "setup_crossref_indexes", "saxon_config"],
   description: "Create the HTML and XHTML versions of the specification"
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
@@ -935,7 +999,7 @@ task datamodel_html(
 }
 
 task datamodel_html_diff(
-  dependsOn: ["datamodel_merge"],
+  dependsOn: ["datamodel_merge", "saxon_config"],
   group: "Spec HTML (diff)",
   description: "Create the HTML and XHTML versions of the specification (with diff markup)"
 ) {
@@ -1029,7 +1093,8 @@ task serialization_40(
 
 task serialization_xml(
   group: "Spec XML",
-  description: "Create the XML version of the specification"
+  description: "Create the XML version of the specification",
+  dependsOn: ["saxon_config"]
 ) {
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-xquery-serialization-40/src")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-xquery-serialization-40/style")
@@ -1049,7 +1114,7 @@ task serialization_xml(
 
 task serialization_html(
   group: "Spec HTML",
-  dependsOn: ["serialization_xml", "setup_crossref_indexes"],
+  dependsOn: ["serialization_xml", "setup_crossref_indexes", "saxon_config"],
   description: "Create the HTML and XHTML versions of the specification"
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
@@ -1072,7 +1137,8 @@ task serialization_html(
 
 task serialization_html_diff(
   group: "Spec HTML (diff)",
-  description: "Create the HTML and XHTML versions of the specification (with diff markup)"
+  description: "Create the HTML and XHTML versions of the specification (with diff markup)",
+  dependsOn: ["saxon_config"]
 ) {
   inputs.files fileTree(dir: "${projectDir}/style")
   inputs.files fileTree(dir: "${projectDir}/specifications/xslt-xquery-serialization-40/style")
@@ -1154,7 +1220,7 @@ task etc_copy(type: Copy) {
 }
 
 task etc_DM40(
-  dependsOn: ["datamodel_merge"],
+  dependsOn: ["datamodel_merge", "saxon_config"],
   description: "Build the etc/DM40.xml index"
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
@@ -1170,7 +1236,7 @@ task etc_DM40(
 }
 
 task etc_FO40(
-  dependsOn: ["fo_merge"],
+  dependsOn: ["fo_merge", "saxon_config"],
   description: "Build the etc/FO40.xml index"
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
@@ -1186,7 +1252,7 @@ task etc_FO40(
 }
 
 task etc_XP40(
-  dependsOn: ["xquery_assemble_xpath"],
+  dependsOn: ["xquery_assemble_xpath", "saxon_config"],
   description: "Build the etc/XP40.xml index"
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
@@ -1202,7 +1268,7 @@ task etc_XP40(
 }
 
 task etc_XQ40(
-  dependsOn: ["xquery_assemble_xquery"],
+  dependsOn: ["xquery_assemble_xquery", "saxon_config"],
   description: "Build the etc/XQ40.xml index"
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
@@ -1218,7 +1284,7 @@ task etc_XQ40(
 }
 
 task etc_XQ40XP40(
-  dependsOn: ["xquery_assemble_shared"],
+  dependsOn: ["xquery_assemble_shared", "saxon_config"],
   description: "Build the etc/XQ40XP40.xml index"
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
@@ -1234,7 +1300,7 @@ task etc_XQ40XP40(
 }
 
 task etc_XT40(
-  dependsOn: ["xslt_merge_catalog"],
+  dependsOn: ["xslt_merge_catalog", "saxon_config"],
   description: "Build the etc/XT40.xml index"
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
@@ -1250,7 +1316,8 @@ task etc_XT40(
 }
 
 task etc_SE40(
-  description: "Build the etc/SE40.xml index"
+  description: "Build the etc/SE40.xml index",
+  dependsOn: ["saxon_config"]
 ) {
   inputs.file "${projectDir}/style/extract.xsl"
   outputs.file "${buildDir}/etc/SE40.xml"
@@ -1279,7 +1346,8 @@ public void transform(String input, String stylesheet, String output,
   def jargs = [
     "-s:${input}",
     "-xsl:${stylesheet}",
-    "-o:${output}"
+    "-o:${output}",
+    "-config:${buildDir}/config.xml"
   ]
 
   if (options != null) {
@@ -1335,6 +1403,7 @@ public void fixupHtml(String input, String output) {
     args "-qs:.",
       "-s:${input}",
       "-o:${output}",
+      "-config:${buildDir}/config.xml",
       "currentDateTime=${TIMESTAMP}",
       "!method=html", "!version=5", "!indent=yes",
       "!suppress-indentation={http://www.w3.org/1999/xhtml}p {http://www.w3.org/1999/xhtml}pre"
