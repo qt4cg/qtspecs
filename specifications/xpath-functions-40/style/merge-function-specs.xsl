@@ -149,27 +149,29 @@
 					</def>
 				</gitem>
 			</xsl:if>
-			<xsl:if test="$fspec/fos:examples">
-				<gitem>
-					<label>Examples</label>
-					<def role="example">
-						<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
-						<table role="medium">
-							<xsl:if test="$fspec/fos:examples//fos:result">
-								<thead>
-									<tr>
-										<th>Expression</th>
-										<th>Result</th>
-									</tr>
-								</thead>
-							</xsl:if>
-							<tbody>
-								<xsl:apply-templates select="$fspec/fos:examples/node()"/>
-							</tbody>
-						</table>						
-					</def>
-				</gitem>
-			</xsl:if>
+
+  <xsl:if test="$fspec/fos:examples">
+    <gitem>
+      <label>Examples</label>
+      <def role="example">
+	<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
+	<table role="medium">
+	  <xsl:if test="not(contains-token($fspec/fos:examples/@role, 'wide'))
+                        and $fspec/fos:examples//fos:result">
+	    <thead>
+	      <tr>
+		<th>Expression</th>
+		<th>Result</th>
+	      </tr>
+	    </thead>
+	  </xsl:if>
+	  <tbody>
+	    <xsl:apply-templates select="$fspec/fos:examples/node()"/>
+	  </tbody>
+	</table>						
+      </def>
+    </gitem>
+  </xsl:if>
 			<xsl:if test="$fspec/fos:history">
 				<gitem>
 					<label>History</label>
@@ -296,6 +298,56 @@
 	    </td>
 	  </tr>
 	</xsl:template>
+
+	<xsl:template match="fos:test[ancestor::fos:examples[@role='wide']]" priority="6">
+	  <tr class="testdiv">
+	    <xsl:copy-of select="@diff, @at"/>
+            <th valign="top">Expression:</th>
+	    <td valign="top">
+	      <xsl:if test="fos:preamble">
+		<p><xsl:copy-of select="fos:preamble/node()" copy-namespaces="no"/></p>
+	      </xsl:if>
+	      <p>
+		<xsl:choose>
+		  <xsl:when test="fos:expression/@xml:space = 'preserve'">
+		    <code><xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/></code>
+		  </xsl:when>
+		  <xsl:when test="fos:expression/eg">
+		    <xsl:apply-templates select="fos:expression/node()"/>
+		  </xsl:when>
+		  <xsl:otherwise>
+		    <code><xsl:value-of select="fos:expression"/></code>
+		  </xsl:otherwise>
+		</xsl:choose>
+	      </p>
+	    </td>
+          </tr>
+	  <tr>
+	    <xsl:copy-of select="@diff, @at"/>
+            <th valign="top">Result:</th>
+	    <td valign="top">
+	      <xsl:if test="fos:result[2]"><p>One of the following:</p></xsl:if>
+	      <xsl:apply-templates select="fos:result|fos:error-result"/>
+	      <xsl:if test="fos:result[@normalize-space = 'true']">
+		<p>(with whitespace added for legibility)</p>
+	      </xsl:if>
+	      <xsl:if test="fos:result[@allow-permutation = 'true']">
+		<p>(or some permutation thereof)</p>
+	      </xsl:if>
+	      <xsl:if test="fos:result[@approx = 'true']">
+		<p>(approximately)</p>
+	      </xsl:if>
+	      <xsl:if test="fos:postamble">
+		<p><emph>
+		  <xsl:text>(</xsl:text>
+		  <xsl:copy-of select="fos:postamble/node()" copy-namespaces="no"/>
+		  <xsl:text>)</xsl:text>
+		  <xsl:if test="not(ends-with(fos:postamble, '.'))">.</xsl:if>
+		</emph></p>
+	      </xsl:if>
+	    </td>
+	  </tr>
+        </xsl:template>
 
 	<xsl:template match="fos:test" priority="5">
 	  <tr>
