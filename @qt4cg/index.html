@@ -1,151 +1,132 @@
 <!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses</title></head><body><main><article><h1>@qt4cg statuses</h1><p>This page displays recent status
             updates
             about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2023/">2023</a>, <a href="2022/">2022</a>, <a href="2021/">2021</a>, <a href="2020/">2020</a></p><div class="toots">
+<div class="toot" id="agenda-07-11"><h2>QT4 CG meeting 041 draft agenda<span class="toot-id"> #agenda-07-11</span></h2><div class="pubdate">07 Jul at 13:00:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2023/07-11">https://qt4cg.org/meeting/agenda/2023/07-11</a></div><p>Draft agenda published.</p></div>
+<div class="toot" id="created-597"><h2>Pull request #597 created<span class="toot-id"> #created-597</span></h2><div class="pubdate">07 Jul at 12:30:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/597">https://github.com/qt4cg/qtspecs/pull/597</a></div><details><summary>Editorial fixes from #566</summary><div class="markup"><p>This PR addresses some minor comments from issue #566. There are more substantive comments but I think they warrant discussion first.</p>
+</div></details></div>
+<div class="toot" id="created-596"><h2>Issue #596 created<span class="toot-id"> #created-596</span></h2><div class="pubdate">05 Jul at 07:45:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/596">https://github.com/qt4cg/qtspecs/issues/596</a></div><details><summary>Pinned values: Transforming Trees</summary><div class="markup"><h1>Pinned Values: Transforming JTrees</h1>
+<p>This is a continuation of ideas raised in issue #341, issue #350, and elsewhere. It's related to the requirements presented in issue #262 and issue #297.</p>
+<p>I have also presented ideas on transforming JSON trees at XML Prague and at Balisage, and I have tried out ideas over the years in Saxon extension functions. The proposal here owes a lot to those ideas, but consolidates them in a slightly different way.</p>
+<p>I'll use the term JTree to refer to a tree structure of maps and arrays. The key difference between a JTree and a node tree (let's call it an XTree) is that the nodes in a JTree have no identity and no parent pointers.</p>
+<p>As a result, some operations are remarkably difficult. Let's take one example:</p>
+<p>Consider the JSON structure</p>
+<pre><code>{ "cities": [
+    {  "name" : "Paris",
+       "size" : 300
+    },
+    {  "name" : "Berlin",
+       "size" : 300
+    }
+]}
+</code></pre>
+<p>and suppose we want to return a modified version of this in which the size of Berlin is changed to 400. It would be nice to be able to write something like:</p>
+<pre><code>modify($input, $input?cities[?name="Berlin"]?size, 400)
+</code></pre>
+<p>But of course, we can't do this. The result of the second argument is simply a number, 300, and we don't want to change all instances of the number 300 to 400, we only want to change one specific instance. Without value identity, the concept of "one specific instance" has no meaning.</p>
+<p>I'll leave it as an exercise to the reader to work out how to do this transformation using our current XSLT and XQuery capabilities. It's far more difficult than it should be. In addition, the tree-walking approach in XSLT of applying template rules recursively is inefficient, because its cost typically depends on the size of the tree, not on the size of the modification. With immutable/persistent data structures underpinning XDM maps and arrays, it should be possible to perform this modification in constant time, regardless of the size of the tree.</p>
+<p>My solution to this is that the expression in the second argument should return a <em>pinned value</em>. The pinned value behaves just like a plain integer 300 when used in operations such as arithmetic, but being pinned means that its location in the original JTree is retained, meaning that it becomes possible to replace it in the JTree with a different value.</p>
+<h2>Data Model</h2>
+<p>We need a change to the data model. Any value (any item or sequence) can have the property of being <em>pinned</em>. If a value is pinned, then it has a property called its <em>locus</em> which identifies its position within a JTree.</p>
+<p>With a small number of exceptions, specifically noted below, the fact that a value is pinned and has a locus does not change the effect of any operations on the value. For example, the fact that an integer with value 300 is pinned does not change the result of any arithmetic or comparison operations on the number.</p>
+<p>A <em>locus</em> may identify a value as being the root of a JTree, or it may identify its position within a JTree. In the latter case it has two basic properties called its <em>container</em> and its <em>slot</em>. The container is a pinned sequence, array, or map, and the slot identifies the value's position within the container: if the container is a sequence or an array, then the slot is an integer position; if the container is a map, then the slot is a key value.</p>
+<h2>Operations on Pinned Values</h2>
+<p>A value (any value) can be pinned as the root of a JTree using the function <code>fn:pin(value)</code>. This returns a value that is in every way identical to the original (including node identity, if it is a node or contains nodes) except for being pinned.</p>
+<p>Some selected operations have their definition changed so that if the input is a pinned value, then the result is a pinned value. These are of two kinds:</p>
+<ul>
+<li>Operations that return an existing value unchanged generally retain the pinned property and the locus. For example if a value is bound to a variable, then the result of a variable reference will retain these properties.</li>
+<li>Operations that select a value within a sequence, array, or map, when that sequence, array, or map is pinned, return a pinned value whose locus identifies the container and the value's slot within that container.</li>
+</ul>
+<p>So in the above example, if <code>$input</code> is pinned, the expression <code>$input?cities[?name="Berlin"]?size</code> returns an integer (300) whose locus is <code>(C, "size")</code>, where C is the map having name="Berlin". C in turn has a locus (A, 2) where A is the array of cities, and A has a locus (R, "cities") where R is the root of the JTree (the original <code>$input</code> value).</p>
+<p>It now becomes possible to define the <code>modify</code> function as follows: The first argument is a value which must be pinned. The second argument must return a pinned value which must be within the tree identified by the first argument (that is, recursively finding the container must lead to this root). The result of the <code>modify()</code> function is formed by recursively replacing each container, all the way up to the root, with a new container in which the contents of the relevant slot are replaced.</p>
+<h2>Feasibility</h2>
+<p>Let's pause to ask ourselves two questions: is this reasonably feasible to implement, and is it realistically possible to expect users to understand what's going on?</p>
+<h3>Implementation</h3>
+<p>I've had an implementation of something rather similar in Saxon for years, and I don't think it's especially difficult. In effect we have a Java class <code>PinnedValue</code> which extends <code>Value</code> and which delegates nearly all operations (including "instance of") to a contained <code>Value</code>. The one thing you need to be careful of is assuming (for example) that if a value represents an XDM array, then it will be an instance of a Java class such as <code>XdmArray</code>. (The terminology in the current Saxon implementation is quite different, so don't expect to find this in the current code).</p>
+<h3>Usability</h3>
+<p>I think that basic features like the <code>modify()</code> function won't be too difficult to explain. We just have to explain that (a) you can only modify a JTree if the root is first pinned, and (b) the expression used in the second argument must use a restricted set of operations: basically, those that do downward selection of values within a container.</p>
+<h2>Further Operations</h2>
+<p>I've illustrated the benefits with one particular operation, a modify() function, but the feature opens up many other possibilities as well. Here are a few:</p>
+<ul>
+<li>For pinned values we can expose the container and slot properties through functions (or through custom syntax such as axes). For example this means that in XSLT, if you are doing a recursive traversal of a JTree, a template rule for processing a particular value has access to its ancestors in the same way as is possible for XTrees.</li>
+<li>In addition derived properties of a pinned value can be exposed, for example the preceding and following "siblings" within an array (or indeed, within a sequence).</li>
+</ul>
+<p>I'll explore some additional use cases in further posts.</p>
+</div></details></div>
+<div class="toot" id="created-595"><h2>Pull request #595 created<span class="toot-id"> #created-595</span></h2><div class="pubdate">04 Jul at 21:31:43 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/595">https://github.com/qt4cg/qtspecs/pull/595</a></div><details><summary>588: (Editorial, XSLT) minor clarifications regarding xsl:sort</summary><div class="markup"><p>The main issue turned out to be spurious; there is in fact an explanation of the order attribute in the right place. But I made a couple of other minor editorial changes, including dropping the default for @data-type in the (non-normative) schema for XSLT 4.0 - the default of <code>data-type="text"</code> is inappropriate because it forces conversion, e.g. of dates to strings, and the default should be no conversion.</p>
+<p>Fix #588.</p>
+</div></details></div>
+<div class="toot" id="created-594"><h2>Pull request #594 created<span class="toot-id"> #created-594</span></h2><div class="pubdate">04 Jul at 21:05:59 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/594">https://github.com/qt4cg/qtspecs/pull/594</a></div><details><summary>592: (XSLT, Editorial) Add missing description of exponent-separator</summary><div class="markup"><p>Fix #592</p>
+</div></details></div>
+<div class="toot" id="created-593"><h2>Pull request #593 created<span class="toot-id"> #created-593</span></h2><div class="pubdate">04 Jul at 15:40:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/593">https://github.com/qt4cg/qtspecs/pull/593</a></div><details><summary>591: [XSLT, editorial] Add defaults to XSLT element syntax summaries</summary><div class="markup"><p>Fix #591. Add default values to e:attribute entries in the XSLT syntax summaries; change the DTD to allow these; change the stylesheet to render them; add a paragraph to the Notation section to explain the conventions.</p>
+</div></details></div>
+<div class="toot" id="created-592"><h2>Issue #592 created<span class="toot-id"> #created-592</span></h2><div class="pubdate">04 Jul at 15:38:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/592">https://github.com/qt4cg/qtspecs/issues/592</a></div><details><summary>XSLT §5.6 xsl:decimal-format - no explanation of exponent-separator</summary><div class="markup"><p>This problem is inherited from XSLT 3.0</p>
+<p>Section 5.6 gives a brief description of the purpose of every attribute of <code>xsl:decimal-format</code>, with the exception of <code>exponent-separator</code>.</p>
+</div></details></div>
+<div class="toot" id="created-591"><h2>Issue #591 created<span class="toot-id"> #created-591</span></h2><div class="pubdate">04 Jul at 14:06:33 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/591">https://github.com/qt4cg/qtspecs/issues/591</a></div><details><summary>Show defaults in XSLT element templates</summary><div class="markup"><p>This came out of issue #588, but is separable.</p>
+<p>It would be useful in the element templates in the XSLT specification to show default values for attributes.</p>
+</div></details></div>
+<div class="toot" id="created-590"><h2>Pull request #590 created<span class="toot-id"> #created-590</span></h2><div class="pubdate">04 Jul at 10:14:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/590">https://github.com/qt4cg/qtspecs/pull/590</a></div><details><summary>343: make $collation uniformly optional</summary><div class="markup"><p>Fix #343</p>
+</div></details></div>
+<div class="toot" id="created-589"><h2>Pull request #589 created<span class="toot-id"> #created-589</span></h2><div class="pubdate">04 Jul at 09:04:05 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/589">https://github.com/qt4cg/qtspecs/pull/589</a></div><details><summary>561: abbreviation fn=function, drop lambda syntax</summary><div class="markup"><p>Allows "fn" as an abbreviation for "function", and drops the "thin-arrow" lambda function syntax. Fix #561.</p>
+</div></details></div>
+<div class="toot" id="created-588"><h2>Issue #588 created<span class="toot-id"> #created-588</span></h2><div class="pubdate">03 Jul at 15:14:27 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/588">https://github.com/qt4cg/qtspecs/issues/588</a></div><details><summary>Incompleteness of xsl:sort specification</summary><div class="markup"><p>These are problems inherited from XSLT 3.0.</p>
+<p>The effect of the attribute <code>xsl:sort/@order</code> is never explained in the text; it is assumed that the meaning is obvious.</p>
+<p>The only explicit statement that the default is "ascending" is in the schema-for-xslt40, which is non-normative.</p>
+<p>The schema also gives a default of "text" for the data-type attribute, which is incorrect: when data-type is set to text, values will be cast to string before comparison, which is not what happens if the actual sort key values are numeric.</p>
+<p>We have added prose to define what we mean by "effective value". This clarifies that the effective value of the order attribute, if omitted, is the default value. But we don't have a systematic and formal way of saying what the default value is. This affects the result of test merge-021, which depends on deciding whether the two xsl:merge-source elements have the same effective value for "order", when one is omitted and the other is set to "ascending".</p>
+</div></details></div>
+<div class="toot" id="created-587"><h2>Pull request #587 created<span class="toot-id"> #created-587</span></h2><div class="pubdate">02 Jul at 22:04:09 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/587">https://github.com/qt4cg/qtspecs/pull/587</a></div><details><summary>365: Allow braces in switch and typeswitch expressions</summary><div class="markup"><p>Fix #365</p>
+</div></details></div>
+<div class="toot" id="created-586"><h2>Pull request #586 created<span class="toot-id"> #created-586</span></h2><div class="pubdate">02 Jul at 21:32:07 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/586">https://github.com/qt4cg/qtspecs/pull/586</a></div><details><summary>585: [Editorial] Rearrange text (and grammar) for dynamic function calls</summary><div class="markup"><p>This PR is purely editorial. It addresses the problems described in issue #585, in particular, the syntax of dynamic function calls is now described before the semantics.</p>
+</div></details></div>
+<div class="toot" id="closed-159"><h2>Issue #159 closed<span class="toot-id"> #closed-159</span></h2><div class="pubdate">02 Jul at 18:16:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/159">https://github.com/qt4cg/qtspecs/issues/159</a></div><p>Support named arguments on static function calls</p></div>
+<div class="toot" id="created-585"><h2>Issue #585 created<span class="toot-id"> #created-585</span></h2><div class="pubdate">30 Jun at 15:18:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/585">https://github.com/qt4cg/qtspecs/issues/585</a></div><details><summary>Editorial: dynamic function calls</summary><div class="markup"><p>Secion 4.4.2.1 describes the semantics of a dynamic function call, but there is no explanation of the syntax.</p>
+<p>The syntax is defined in section 4.5.2.</p>
+<p>It's rather odd for the syntax and semantics to be separated in this way, and in particular for the semantics to be explained first.</p>
+<p>It's also rather odd that both sections claim to have definitions of the term "dynamic function call", and the definitions are different.</p>
+<p>Furthermore the grammar productions in 4.5.2 reference, but don't include, PositionalArgumentList; instead they include ArgumentList which is not referenced. PositionalArgumentList is included under 4.23 Arrow Expressions.</p>
+</div></details></div>
+<div class="toot" id="created-584"><h2>Pull request #584 created<span class="toot-id"> #created-584</span></h2><div class="pubdate">29 Jun at 16:42:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/584">https://github.com/qt4cg/qtspecs/pull/584</a></div><details><summary>Editorial: Correction to map:filter examples</summary><div class="markup"><p>Corrects the syntax of the lambda functions in these two examples. Also improves the formatting.</p>
+</div></details></div>
+<div class="toot" id="created-583"><h2>Issue #583 created<span class="toot-id"> #created-583</span></h2><div class="pubdate">29 Jun at 14:44:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/583">https://github.com/qt4cg/qtspecs/issues/583</a></div><details><summary>array:replace(), etc</summary><div class="markup"><p>Some observations:</p>
+<ol>
+<li>array:replace would be more versatile if multiple positions could be specified, rather than just a single position.</li>
+<li>if all positions are selected, the function becomes identical to array:for-each. So perhaps we should scrap array:replace and instead add an optional parameter <code>$positions as xs:integer*</code> to array:for-each. However, that could be confusing: people might imagine that the items at positions not present in the list are discarded, rather than being returned unchanged in the result. So I propose we don't do that.</li>
+<li>if the function is useful on arrays, then it's also useful on sequences. But <code>fn:replace</code> does something completely different.</li>
+<li>We have a similar function on maps called <code>map:substitute</code> (but it's not quite the same, because it processes every entry in the map).</li>
+</ol>
+<p>In the interests of alignment, I propose we have three functions:</p>
+<p><code>fn:substitute($input as item()*, $positions as xs:positiveInteger*, $action as function(item()) as item())</code></p>
+<p>equivalent to <code>for $it at $pos in $item return if ($pos = $positions) then $action($it) else $it</code></p>
+<p><code>array:substitute($array as array(*), $positions as xs:positiveInteger*, $action as function(item()*) as item()*)</code></p>
+<p>equivalent to <code>array{for member $it at $pos in $item return if ($pos = $positions) then $action($it) else $it}</code></p>
+<p><code>map:substitute($map as map(*), $keys as xs:anyAtomicValue*, $action as function(anyAtomicValue, item()*) as item()*)</code></p>
+<p>For the first two functions, we don't really need to allow the second argument to be omitted, because it would then be equivalent to the corresponding for-each() function. Unfortunately that's not quite true of map:for-each(), because it doesn't return a map. However if you want to do a functional replacement of every entry in a map, it can be done easily enough with</p>
+<p><code>map:build(map:key-value-pairs($map), function{?key}, function{$action(?value)})</code></p>
+<p>so we're not really losing anything.</p>
+</div></details></div>
+<div class="toot" id="closed-582"><h2>Issue #582 closed<span class="toot-id"> #closed-582</span></h2><div class="pubdate">29 Jun at 13:16:47 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/582">https://github.com/qt4cg/qtspecs/pull/582</a></div><p>Fix examples to be consistent with spec</p></div>
+<div class="toot" id="created-582"><h2>Pull request #582 created<span class="toot-id"> #created-582</span></h2><div class="pubdate">29 Jun at 13:04:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/582">https://github.com/qt4cg/qtspecs/pull/582</a></div><details><summary>Fix examples to be consistent with spec</summary><div class="markup"><p>I know there are open comments on the actual spec, but in the short term, let's at least make the examples correct.</p>
+</div></details></div>
+<div class="toot" id="closed-581"><h2>Issue #581 closed<span class="toot-id"> #closed-581</span></h2><div class="pubdate">29 Jun at 12:44:23 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/581">https://github.com/qt4cg/qtspecs/pull/581</a></div><p>Fix schema error</p></div>
+<div class="toot" id="created-581"><h2>Pull request #581 created<span class="toot-id"> #created-581</span></h2><div class="pubdate">29 Jun at 12:44:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/581">https://github.com/qt4cg/qtspecs/pull/581</a></div><details><summary>Fix schema error</summary><div class="markup"><p>I can't explain why this didn't turn up initially in my local testing. :-(</p>
+</div></details></div>
+<div class="toot" id="closed-580"><h2>Issue #580 closed<span class="toot-id"> #closed-580</span></h2><div class="pubdate">29 Jun at 12:34:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/580">https://github.com/qt4cg/qtspecs/pull/580</a></div><p>Automatically generate app/fo-spec-examples on build</p></div>
+<div class="toot" id="created-580"><h2>Pull request #580 created<span class="toot-id"> #created-580</span></h2><div class="pubdate">29 Jun at 12:26:05 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/580">https://github.com/qt4cg/qtspecs/pull/580</a></div><details><summary>Automatically generate app/fo-spec-examples on build</summary><div class="markup"><p>This PR should update the build so that the test-suite <code>app/fo-spec-examples.xml</code> file is automatically build when the spec is published. The PR test won't tell us anything, so we'll have to merge it and see what happens...</p>
+</div></details></div>
+<div class="toot" id="closed-579"><h2>Issue #579 closed<span class="toot-id"> #closed-579</span></h2><div class="pubdate">29 Jun at 10:49:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/579">https://github.com/qt4cg/qtspecs/pull/579</a></div><p>Support role=wide on fos:examples</p></div>
+<div class="toot" id="created-579"><h2>Pull request #579 created<span class="toot-id"> #created-579</span></h2><div class="pubdate">29 Jun at 10:37:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/579">https://github.com/qt4cg/qtspecs/pull/579</a></div><details><summary>Support role=wide on fos:examples</summary><div class="markup"><p>This is a purely style related change. It supports role=wide on fos:example elements. If an example is identified as "wide" then the presentaiton is in sequential rows of the table rather than adjacent columns. See, for example, <code>parse-uri()</code>.</p>
+</div></details></div>
+<div class="toot" id="created-578"><h2>Pull request #578 created<span class="toot-id"> #created-578</span></h2><div class="pubdate">28 Jun at 15:03:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/578">https://github.com/qt4cg/qtspecs/pull/578</a></div><details><summary>fn:format-integer: $lang → $language</summary><div class="markup"><p>Parameter name aligned with other functions (<code>fn:format-dateTime</code>, <code>fn:lang</code>, others).</p>
+</div></details></div>
+<div class="toot" id="created-577"><h2>Pull request #577 created<span class="toot-id"> #created-577</span></h2><div class="pubdate">28 Jun at 14:50:40 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/577">https://github.com/qt4cg/qtspecs/pull/577</a></div><details><summary>Editorial: improve generator for keyword tests</summary><div class="markup"><p>Improves the stylesheet that generates the BuiltInKeywords.xml test set, using example values for arguments where appropriate, taking these from the function catalog.</p>
+</div></details></div>
+<div class="toot" id="created-576"><h2>Issue #576 created<span class="toot-id"> #created-576</span></h2><div class="pubdate">27 Jun at 20:03:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/576">https://github.com/qt4cg/qtspecs/issues/576</a></div><details><summary>Align JSON serialization with new fn:items-to-json() function</summary><div class="markup"><p>As far as possible, the JSON serialization method should be aligned with the new fn:items-to-json() (aka xdm-to-json) function.</p>
+<p>Firstly, the results should be the same when the input consists entirely of atomic values, or sequences, maps, and arrays consisting entirely of atomic values. This only requires one change: serializing a sequence of length &gt;1 should output the sequence as if it were an array, rather than raising an error. This is a compatible change.</p>
+<p>Secondly, the new fn:items-to-json() function should have an option to output elements (for example elements appearing within maps or arrays) in the same way as the JSON serialization method does, by serializing the nodes to lexical XML or HTML contained within a JSON character string.</p>
+<p>Finally, we should align the rules on how to output a function item (other than a map or array). We could either adopt the serialization approach (raise an error), or the items-to-json() approach (output some kind of placeholder saying "here be dragons") but they should be aligned.</p>
+<p>Note that the two operations are still very different. items-to-json() is primarily about converting XML to JSON, while JSON serialization is primarily about turning maps and arrays into their JSON lexical form.</p>
+</div></details></div>
 <div class="toot" id="closed-361"><h2>Issue #361 closed<span class="toot-id"> #closed-361</span></h2><div class="pubdate">27 Jun at 16:10:11 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/361">https://github.com/qt4cg/qtspecs/issues/361</a></div><p>Named arguments: $input vs. $value</p></div>
-<div class="toot" id="closed-562"><h2>Issue #562 closed<span class="toot-id"> #closed-562</span></h2><div class="pubdate">27 Jun at 16:10:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/562">https://github.com/qt4cg/qtspecs/pull/562</a></div><p>361: Named arguments: $input vs. $value</p></div>
-<div class="toot" id="closed-567"><h2>Issue #567 closed<span class="toot-id"> #closed-567</span></h2><div class="pubdate">27 Jun at 16:09:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/567">https://github.com/qt4cg/qtspecs/issues/567</a></div><p>Errors in schema for XSLT</p></div>
-<div class="toot" id="closed-568"><h2>Issue #568 closed<span class="toot-id"> #closed-568</span></h2><div class="pubdate">27 Jun at 16:09:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/568">https://github.com/qt4cg/qtspecs/pull/568</a></div><p>567: schema for xslt40</p></div>
-<div class="toot" id="closed-569"><h2>Issue #569 closed<span class="toot-id"> #closed-569</span></h2><div class="pubdate">27 Jun at 16:09:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/569">https://github.com/qt4cg/qtspecs/pull/569</a></div><p>Minor editorial corrections, XDM chh. 1, 2</p></div>
-<div class="toot" id="closed-106"><h2>Issue #106 closed<span class="toot-id"> #closed-106</span></h2><div class="pubdate">27 Jun at 16:08:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/106">https://github.com/qt4cg/qtspecs/issues/106</a></div><p>Decorators' support</p></div>
-<div class="toot" id="closed-175"><h2>Issue #175 closed<span class="toot-id"> #closed-175</span></h2><div class="pubdate">27 Jun at 16:08:31 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/175">https://github.com/qt4cg/qtspecs/issues/175</a></div><p>In XQuery, allow a semicolon at the end of the module</p></div>
-<div class="toot" id="closed-457"><h2>Issue #457 closed<span class="toot-id"> #closed-457</span></h2><div class="pubdate">27 Jun at 16:07:59 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/457">https://github.com/qt4cg/qtspecs/issues/457</a></div><p>Support parsing numeric, alphabetic, and additive number systems.</p></div>
-<div class="toot" id="created-575"><h2>Pull request #575 created<span class="toot-id"> #created-575</span></h2><div class="pubdate">27 Jun at 14:05:56 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/575">https://github.com/qt4cg/qtspecs/pull/575</a></div><details><summary>359: fn:void: Absorb result of evaluated argument</summary><div class="markup"><p>#359: fn:void: Absorb result of evaluated argument</p>
-</div></details></div>
-<div class="toot" id="created-574"><h2>Issue #574 created<span class="toot-id"> #created-574</span></h2><div class="pubdate">27 Jun at 14:02:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/574">https://github.com/qt4cg/qtspecs/issues/574</a></div><details><summary>fn:dump: Trace and discard results</summary><div class="markup"><p>See https://github.com/qt4cg/qtspecs/issues/359#issuecomment-1465971781</p>
-<h2>fn:dump</h2>
-<h3>Summary</h3>
-<p>Outputs trace information and discards the result.</p>
-<h3>Signature</h3>
-<pre><code>fn:dump(
-  $value  as item()*,	
-  $label  as xs:string?  := ()
-) as empty-sequence()
-</code></pre>
-<h3>Properties</h3>
-<p>This function is ·deterministic·, ·context-independent·, and ·focus-independent·.</p>
-<h3>Rules</h3>
-<p>Similar to <code>fn:trace:</code>, the values of <code>$value</code>, converted to an <code>xs:string</code>, and <code>$label</code> (if supplied and non-empty) may be directed to a trace data set. The destination of the trace output is ·implementation-defined·. The format of the trace output is ·implementation-dependent·, as is the ordering of the output.</p>
-<p>In contrast to <code>fn:trace</code>, the function returns an empty sequence.</p>
-</div></details></div>
-<div class="toot" id="created-573"><h2>Issue #573 created<span class="toot-id"> #created-573</span></h2><div class="pubdate">26 Jun at 16:53:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/573">https://github.com/qt4cg/qtspecs/issues/573</a></div><details><summary>Node construction functions</summary><div class="markup"><p>I propose introducing a set of functions that allow node construction in XPath. The basic functions are</p>
-<pre><code>new-document($children as node()*)
-new-element($name as QName, $content as node()*)
-new-attribute($name as QName, $value as xs:string)
-new-namespace($prefix as xs:string, $uri as xs:string)
-new-comment($content as xs:string)
-new-processing-instruction($name as xs:string, $content as xs:string)
-new-text($content as xs:string)
-</code></pre>
-<p>The semantics would be essentially identical to the current node constructors in XQuery and/or the corresponding instructions in XSLT (there are very few differences: a few minor ones, like if there are multiple attributes with the same name, XSLT takes the last, while XQuery throws an error).</p>
-<p>As always, it's difficult to know where to draw the line in functionality between XPath and XQuery. One of the guidelines I use is that if an addition to XPath is likely to be useful to XSLT users, then it's worth including. Clearly these functions are not strictly necessary in XSLT (they could easily be user-supplied as wrappers around XSLT instructions). But to take advantage of some of the other capabilities we're introducing in XPath, node construction functions are increasingly handy. Consider for example:</p>
-<p><code>&lt;xsl:copy-of select="interleave(para, new-element(xs:QName(xhtml:br)))"/&gt;</code></p>
-<p>That's a one-liner that replaces</p>
-<pre><code>&lt;xsl:for-each select="para"&gt;
-  &lt;xsl:if test="position() ne 1"&gt;&lt;br/&gt;&lt;/xsl:if&gt;
-  &lt;xsl:copy-of select="."/&gt;
-&lt;/xsl:for-each&gt;
-</code></pre>
-<p>The new functions are also useful in XQuery because although they duplicate existing syntax, the fact that they are functions rather than custom syntax makes them more versatile.</p>
-<p>As with existing constructs in XQuery and XSLT, a naive implementation that follows the semantics literally (which involves copying a subtree when adding an element to a new parent) would be rather inefficient. However, I think that the same established optimizations are equally applicable, for example lazy tree construction and/or push-mode evaluation.</p>
-</div></details></div>
-<div class="toot" id="created-572"><h2>Issue #572 created<span class="toot-id"> #created-572</span></h2><div class="pubdate">26 Jun at 16:36:41 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/572">https://github.com/qt4cg/qtspecs/issues/572</a></div><details><summary>fn:evaluate-xpath() function</summary><div class="markup"><p>XSLT 3.0 introduced an instruction, xsl:evaluate, for dynamic evaluation of XPath expressions. But there is no way of doing this in XQuery.</p>
-<p>It was done as an instruction in XSLT because functions at the time were not flexible enough to cope with a range of optional parameters. This situation has changed.</p>
-<p>An <code>fn:evaluate()</code> function might operate successfully with the following parameters:</p>
-<ul>
-<li>xpath - the XPath expression as a string.</li>
-<li>namespaces - the namespace bindings as a map from prefix to URI, defaulting to the namespace bindings in the static context of the caller</li>
-<li>parameters - parameter values as a map from QName to value, defaulting to an empty map</li>
-<li>context-item - the context item for evaluation, defaulting to the context item of the caller</li>
-<li>options:
-<ul>
-<li>default collation</li>
-<li>base URI</li>
-<li>schema-aware = true/false</li>
-<li>allow-external-access = true/false</li>
-<li>cache = true/false (whether to cache compiled expressions for reuse)</li>
-</ul>
-</li>
-</ul>
-<p>Before <code>xsl:evaluate</code> as introduced, there was some concern in the WG about security and the risk of injection attacks. I think that the allow-external-access switch is sufficient for this: if you don't trust the expression, set it to false, and all dangerous things like access to external documents and other resources, use of extension functions, etc, is disabled.</p>
-</div></details></div>
-<div class="toot" id="agenda-06-27"><h2>QT4 CG meeting 040 draft agenda<span class="toot-id"> #agenda-06-27</span></h2><div class="pubdate">23 Jun at 10:55:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2023/06-27">https://qt4cg.org/meeting/agenda/2023/06-27</a></div><p>Draft agenda published.</p></div>
-<div class="toot" id="created-571"><h2>Issue #571 created<span class="toot-id"> #created-571</span></h2><div class="pubdate">23 Jun at 09:05:20 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/571">https://github.com/qt4cg/qtspecs/issues/571</a></div><details><summary>XSLT: xsl:for-each-group/@break-when</summary><div class="markup"><p>The new <code>@break-when</code> attribute on <code>xsl:for-each-group</code></p>
-<p>(a) has not been reviewed by the CG</p>
-<p>(b) is not mentioned in the changes appendix</p>
-<p>(c) is not included in the schema-for-XSLT40</p>
-</div></details></div>
-<div class="toot" id="created-570"><h2>Issue #570 created<span class="toot-id"> #created-570</span></h2><div class="pubdate">23 Jun at 07:59:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/570">https://github.com/qt4cg/qtspecs/issues/570</a></div><details><summary>XSLT: Built-in template rules for maps and arrays</summary><div class="markup"><p>The current built-in template rules for maps and arrays do not work well for a recursive-descent traversal of a JSON-like tree of maps and arrays. The effect of on-no-match="shallow-copy" is to do a deep copy, and the effect of on-no-match="shallow-skip" is to do a deep skip. I therefore propose two new values for on-no-match, provisionally "shallow-copy-all" and "shallow-skip-all".</p>
-<p>For more details see my Balisage 2022 paper: https://balisage.net/Proceedings/vol27/html/Kay01/BalisageVol27-Kay01.html</p>
-<p>We do in fact have some test cases that use this syntax, see <code>attr/mode-4001</code> <em>et seq</em>, but it has never found its way into the spec.</p>
-</div></details></div>
-<div class="toot" id="created-569"><h2>Pull request #569 created<span class="toot-id"> #created-569</span></h2><div class="pubdate">23 Jun at 03:40:55 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/569">https://github.com/qt4cg/qtspecs/pull/569</a></div><details><summary>Minor editorial corrections, XDM chh. 1, 2</summary><div class="markup"><p>Minor corrections to XDM chapters 1, 2.</p>
-<ul>
-<li><code>expanded-QName</code> versus <code>expanded QName</code>. The latter outnumbered the former ca. 3:2, and is better, so I with with it.</li>
-<li>some language pointing to tables &amp; lines, language rendered obsolete by @ndw 's nice new graphs, excised</li>
-<li>other minor edits for clarity, consistency</li>
-</ul>
-</div></details></div>
-<div class="toot" id="created-568"><h2>Pull request #568 created<span class="toot-id"> #created-568</span></h2><div class="pubdate">22 Jun at 20:15:58 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/568">https://github.com/qt4cg/qtspecs/pull/568</a></div><details><summary>567: schema for xslt40</summary><div class="markup"><p>This PR applies the errata to the XSLT 3.0 version of the schema, and extends the schema to support new syntax that has been introduced in XSLT 4.0.</p>
-<p>Fix #567.</p>
-</div></details></div>
-<div class="toot" id="created-567"><h2>Issue #567 created<span class="toot-id"> #created-567</span></h2><div class="pubdate">22 Jun at 17:24:17 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/567">https://github.com/qt4cg/qtspecs/issues/567</a></div><details><summary>Errors in schema for XSLT</summary><div class="markup"><p>Erratum E10 for XSLT 3.0 notes a number of errors in the schema for XSLT 3.0. The errata can be found in the repository at https://github.com/w3c/qtspecs/blob/master/errata/xslt-30/errata.xml but they are not published or linked from the spec; they were produced by the XSL WG after publishing 3.0 and before the group disbanded.</p>
-<p>The version of the schema found in the 3.0 repository does not include these corrections; therefore, neither does the one in the 4.0 repository.</p>
-<p>There is another version of the schema in the xslt30test repository, and this one does include the corrections (as far as I can see).</p>
-<p>However, new additions for changes needed for 4.0 have been applied inconsistently to the two versions.</p>
-<p>There's therefore a pressing need to bring everything back into line. A good step would be to cut out the duplication: once we've got it clean, the build process should copy qtspecs/specifications/xslt-40/src/schema-for-xslt40.xsd to xslt40-test/tests/misc/catalog/schema-for-xslt40.xsd and we should only maintain the former.</p>
-</div></details></div>
-<div class="toot" id="created-566"><h2>Issue #566 created<span class="toot-id"> #created-566</span></h2><div class="pubdate">22 Jun at 11:31:04 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/566">https://github.com/qt4cg/qtspecs/issues/566</a></div><details><summary>fn:parse-uri, fn:build-uri: Feedback</summary><div class="markup"><p>Feedback on <code>fn:parse-uri</code> (thanks, @ndw, for the comprehensible rules in the spec):</p>
-<ol>
-<li>With the current rules, the port is not detected in <code>http://x:80</code>. Maybe <code>x:</code> is misinterpreted as the beginning of a Windows path?</li>
-<li>The <em>uri decoding</em> should be revised. It’s currently possible to create strings with invalid Unicode characters: <code>parse-uri('%FF')</code>. With the current rules, the following expression returns <code>df83</code> and <code>dc00</code>:</li>
-</ol>
-<pre><code class="language-xquery">parse-uri('%FF00')
-=!&gt; map:get('filepath')
-=!&gt; string-to-codepoints()
-=!&gt; format-integer('16^XX')
-</code></pre>
-<p>More to come (or not).</p>
-</div></details></div>
-<div class="toot" id="closed-560"><h2>Issue #560 closed<span class="toot-id"> #closed-560</span></h2><div class="pubdate">22 Jun at 11:23:18 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/560">https://github.com/qt4cg/qtspecs/issues/560</a></div><p>Formatting Monospace</p></div>
-<div class="toot" id="closed-565"><h2>Issue #565 closed<span class="toot-id"> #closed-565</span></h2><div class="pubdate">22 Jun at 09:29:31 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/565">https://github.com/qt4cg/qtspecs/pull/565</a></div><p>More typographic changes</p></div>
-<div class="toot" id="created-565"><h2>Pull request #565 created<span class="toot-id"> #created-565</span></h2><div class="pubdate">22 Jun at 09:21:14 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/565">https://github.com/qt4cg/qtspecs/pull/565</a></div><details><summary>More typographic changes</summary><div class="markup"><p>Further to #560, I'll just merge this if it passes.</p>
-<ol>
-<li>Make the <code>&lt;pre&gt;</code> font the same size as the other monospaced environments</li>
-<li>Tighten up the spacing in function signatures</li>
-<li>Make table-formatted examples use valign=top</li>
-<li>Add subtle shading to table-formatted examples so the rows are easier to distinguish.</li>
-</ol>
-</div></details></div>
-<div class="toot" id="created-564"><h2>Issue #564 created<span class="toot-id"> #created-564</span></h2><div class="pubdate">22 Jun at 07:54:18 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/564">https://github.com/qt4cg/qtspecs/issues/564</a></div><details><summary>Sorted maps</summary><div class="markup"><p>Based on a requirement from Michael Müller-Hillebrand on xsl-list.</p>
-<p>We could define a variant of map:build() that constructs a sorted map. If a map is sorted, then:</p>
-<ul>
-<li>map:is-sorted() returns true.</li>
-<li>map:keys() returns the keys in sorted order.</li>
-<li>map:range(map, min, max) returns a sorted sub-map whose keys lie within a particular range</li>
-<li>map:get-by-prefix() returns the values whose keys start with a given substring</li>
-</ul>
-</div></details></div>
-<div class="toot" id="closed-563"><h2>Issue #563 closed<span class="toot-id"> #closed-563</span></h2><div class="pubdate">21 Jun at 12:15:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/563">https://github.com/qt4cg/qtspecs/pull/563</a></div><p>Style and other editorial fixes</p></div>
-<div class="toot" id="created-563"><h2>Pull request #563 created<span class="toot-id"> #created-563</span></h2><div class="pubdate">21 Jun at 11:47:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/563">https://github.com/qt4cg/qtspecs/pull/563</a></div><details><summary>Style and other editorial fixes</summary><div class="markup"><p>This PR mostly attempts to fix #560 by making the formatting of code more consistent.</p>
-<ol>
-<li>I removed the reference to the W3C CSS and made a local copy</li>
-<li>Added CSS variables for code parameters and tried to make use of them everywhere</li>
-<li>I removed the use of "font:small" in index tables, so they're a little easier to read</li>
-<li>I noticed and fixed two places where we had old-style type hierarchy diagrams</li>
-</ol>
-<p>These fixes aren't going to be visible in the PR build, so I'm just going to merge it.</p>
-</div></details></div>
-<div class="toot" id="created-562"><h2>Pull request #562 created<span class="toot-id"> #created-562</span></h2><div class="pubdate">21 Jun at 09:03:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/562">https://github.com/qt4cg/qtspecs/pull/562</a></div><details><summary>361: Named arguments: $input vs. $value</summary><div class="markup"><p>#361: Just an editorial one to get one more issue closed.</p>
-</div></details></div>
-<div class="toot" id="minutes-06-20"><h2>QT4 CG meeting 039 draft minutes<span class="toot-id"> #minutes-06-20</span></h2><div class="pubdate">20 Jun at 17:15:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/minutes/2023/06-20">https://qt4cg.org/meeting/minutes/2023/06-20</a></div><p>Draft minutes published.</p></div>
-<div class="toot" id="closed-526"><h2>Issue #526 closed<span class="toot-id"> #closed-526</span></h2><div class="pubdate">20 Jun at 16:49:48 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/526">https://github.com/qt4cg/qtspecs/issues/526</a></div><p>load-xquery-module() needs changes to account for functions with an arity range</p></div>
-<div class="toot" id="closed-548"><h2>Issue #548 closed<span class="toot-id"> #closed-548</span></h2><div class="pubdate">20 Jun at 16:49:09 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/548">https://github.com/qt4cg/qtspecs/issues/548</a></div><p>Space separation in lambda expressions</p></div>
-<div class="toot" id="created-561"><h2>Issue #561 created<span class="toot-id"> #created-561</span></h2><div class="pubdate">20 Jun at 16:44:54 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/561">https://github.com/qt4cg/qtspecs/issues/561</a></div><details><summary>Alias for `function` keyword</summary><div class="markup"><p>See https://github.com/qt4cg/qtspecs/issues/548#issuecomment-1591023928 and the subsequent comments:</p>
-<blockquote>
-<p>[…] I would still be in favor to have <code>fn</code> or <code>f</code> as a plain alias for <code>function</code> (and optionally drop the thin arrow syntax), simply because function items and declarations can get so frequent:</p>
-</blockquote>
-<pre><code class="language-xquery">fn($a) { $a + 1 }
-fn { . + 1 }
-</code></pre>
-</div></details></div></div><p>See 1037
+<div class="toot" id="closed-562"><h2>Issue #562 closed<span class="toot-id"> #closed-562</span></h2><div class="pubdate">27 Jun at 16:10:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/562">https://github.com/qt4cg/qtspecs/pull/562</a></div><p>361: Named arguments: $input vs. $value</p></div></div><p>See 1065
             more statuses in yearly archives.</p></article></main></body></html>

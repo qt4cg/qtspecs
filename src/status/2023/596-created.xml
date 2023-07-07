@@ -1,0 +1,54 @@
+<item>
+   <title>Issue #596 created</title>
+   <pubDate>2023-07-05T07:45:57Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/596</link>
+   <guid>https://qt4cg.org/@qt4cg/2023/#created-596</guid>
+   <description>&lt;div&gt;&lt;p&gt;Pinned values: Transforming Trees&lt;/p&gt;&lt;div class="markup"&gt;&lt;h1&gt;Pinned Values: Transforming JTrees&lt;/h1&gt;
+&lt;p&gt;This is a continuation of ideas raised in issue #341, issue #350, and elsewhere. It's related to the requirements presented in issue #262 and issue #297.&lt;/p&gt;
+&lt;p&gt;I have also presented ideas on transforming JSON trees at XML Prague and at Balisage, and I have tried out ideas over the years in Saxon extension functions. The proposal here owes a lot to those ideas, but consolidates them in a slightly different way.&lt;/p&gt;
+&lt;p&gt;I'll use the term JTree to refer to a tree structure of maps and arrays. The key difference between a JTree and a node tree (let's call it an XTree) is that the nodes in a JTree have no identity and no parent pointers.&lt;/p&gt;
+&lt;p&gt;As a result, some operations are remarkably difficult. Let's take one example:&lt;/p&gt;
+&lt;p&gt;Consider the JSON structure&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{ "cities": [
+    {  "name" : "Paris",
+       "size" : 300
+    },
+    {  "name" : "Berlin",
+       "size" : 300
+    }
+]}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;and suppose we want to return a modified version of this in which the size of Berlin is changed to 400. It would be nice to be able to write something like:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;modify($input, $input?cities[?name="Berlin"]?size, 400)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;But of course, we can't do this. The result of the second argument is simply a number, 300, and we don't want to change all instances of the number 300 to 400, we only want to change one specific instance. Without value identity, the concept of "one specific instance" has no meaning.&lt;/p&gt;
+&lt;p&gt;I'll leave it as an exercise to the reader to work out how to do this transformation using our current XSLT and XQuery capabilities. It's far more difficult than it should be. In addition, the tree-walking approach in XSLT of applying template rules recursively is inefficient, because its cost typically depends on the size of the tree, not on the size of the modification. With immutable/persistent data structures underpinning XDM maps and arrays, it should be possible to perform this modification in constant time, regardless of the size of the tree.&lt;/p&gt;
+&lt;p&gt;My solution to this is that the expression in the second argument should return a &lt;em&gt;pinned value&lt;/em&gt;. The pinned value behaves just like a plain integer 300 when used in operations such as arithmetic, but being pinned means that its location in the original JTree is retained, meaning that it becomes possible to replace it in the JTree with a different value.&lt;/p&gt;
+&lt;h2&gt;Data Model&lt;/h2&gt;
+&lt;p&gt;We need a change to the data model. Any value (any item or sequence) can have the property of being &lt;em&gt;pinned&lt;/em&gt;. If a value is pinned, then it has a property called its &lt;em&gt;locus&lt;/em&gt; which identifies its position within a JTree.&lt;/p&gt;
+&lt;p&gt;With a small number of exceptions, specifically noted below, the fact that a value is pinned and has a locus does not change the effect of any operations on the value. For example, the fact that an integer with value 300 is pinned does not change the result of any arithmetic or comparison operations on the number.&lt;/p&gt;
+&lt;p&gt;A &lt;em&gt;locus&lt;/em&gt; may identify a value as being the root of a JTree, or it may identify its position within a JTree. In the latter case it has two basic properties called its &lt;em&gt;container&lt;/em&gt; and its &lt;em&gt;slot&lt;/em&gt;. The container is a pinned sequence, array, or map, and the slot identifies the value's position within the container: if the container is a sequence or an array, then the slot is an integer position; if the container is a map, then the slot is a key value.&lt;/p&gt;
+&lt;h2&gt;Operations on Pinned Values&lt;/h2&gt;
+&lt;p&gt;A value (any value) can be pinned as the root of a JTree using the function &lt;code&gt;fn:pin(value)&lt;/code&gt;. This returns a value that is in every way identical to the original (including node identity, if it is a node or contains nodes) except for being pinned.&lt;/p&gt;
+&lt;p&gt;Some selected operations have their definition changed so that if the input is a pinned value, then the result is a pinned value. These are of two kinds:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;Operations that return an existing value unchanged generally retain the pinned property and the locus. For example if a value is bound to a variable, then the result of a variable reference will retain these properties.&lt;/li&gt;
+&lt;li&gt;Operations that select a value within a sequence, array, or map, when that sequence, array, or map is pinned, return a pinned value whose locus identifies the container and the value's slot within that container.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;So in the above example, if &lt;code&gt;$input&lt;/code&gt; is pinned, the expression &lt;code&gt;$input?cities[?name="Berlin"]?size&lt;/code&gt; returns an integer (300) whose locus is &lt;code&gt;(C, "size")&lt;/code&gt;, where C is the map having name="Berlin". C in turn has a locus (A, 2) where A is the array of cities, and A has a locus (R, "cities") where R is the root of the JTree (the original &lt;code&gt;$input&lt;/code&gt; value).&lt;/p&gt;
+&lt;p&gt;It now becomes possible to define the &lt;code&gt;modify&lt;/code&gt; function as follows: The first argument is a value which must be pinned. The second argument must return a pinned value which must be within the tree identified by the first argument (that is, recursively finding the container must lead to this root). The result of the &lt;code&gt;modify()&lt;/code&gt; function is formed by recursively replacing each container, all the way up to the root, with a new container in which the contents of the relevant slot are replaced.&lt;/p&gt;
+&lt;h2&gt;Feasibility&lt;/h2&gt;
+&lt;p&gt;Let's pause to ask ourselves two questions: is this reasonably feasible to implement, and is it realistically possible to expect users to understand what's going on?&lt;/p&gt;
+&lt;h3&gt;Implementation&lt;/h3&gt;
+&lt;p&gt;I've had an implementation of something rather similar in Saxon for years, and I don't think it's especially difficult. In effect we have a Java class &lt;code&gt;PinnedValue&lt;/code&gt; which extends &lt;code&gt;Value&lt;/code&gt; and which delegates nearly all operations (including "instance of") to a contained &lt;code&gt;Value&lt;/code&gt;. The one thing you need to be careful of is assuming (for example) that if a value represents an XDM array, then it will be an instance of a Java class such as &lt;code&gt;XdmArray&lt;/code&gt;. (The terminology in the current Saxon implementation is quite different, so don't expect to find this in the current code).&lt;/p&gt;
+&lt;h3&gt;Usability&lt;/h3&gt;
+&lt;p&gt;I think that basic features like the &lt;code&gt;modify()&lt;/code&gt; function won't be too difficult to explain. We just have to explain that (a) you can only modify a JTree if the root is first pinned, and (b) the expression used in the second argument must use a restricted set of operations: basically, those that do downward selection of values within a container.&lt;/p&gt;
+&lt;h2&gt;Further Operations&lt;/h2&gt;
+&lt;p&gt;I've illustrated the benefits with one particular operation, a modify() function, but the feature opens up many other possibilities as well. Here are a few:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;For pinned values we can expose the container and slot properties through functions (or through custom syntax such as axes). For example this means that in XSLT, if you are doing a recursive traversal of a JTree, a template rule for processing a particular value has access to its ancestors in the same way as is possible for XTrees.&lt;/li&gt;
+&lt;li&gt;In addition derived properties of a pinned value can be exposed, for example the preceding and following "siblings" within an array (or indeed, within a sequence).&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;I'll explore some additional use cases in further posts.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
