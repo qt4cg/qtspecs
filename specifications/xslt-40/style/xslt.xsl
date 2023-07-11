@@ -314,7 +314,7 @@ constructor. These elements are:</p>
   <xsl:choose>
     <xsl:when test="contains(@name, ':')">
       <xsl:value-of select="@name"/>
-    </xsl:when>
+    </xsl:when> 
     <xsl:otherwise>
       <a href="#element-{@name}">
         <xsl:text>xsl:</xsl:text>
@@ -369,6 +369,11 @@ constructor. These elements are:</p>
   </xsl:choose>
   <xsl:text> = </xsl:text> 
   <xsl:apply-templates select="*"/>
+  <xsl:if test="@default">
+    <xsl:text>&#x3014;</xsl:text>
+    <xsl:value-of select="@default"/>
+    <xsl:text>&#x3015;</xsl:text>
+  </xsl:if>
 </xsl:template>
 
 <xsl:template match="e:data-type">
