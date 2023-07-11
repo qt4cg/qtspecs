@@ -42,9 +42,9 @@
    <xsl:template match="function[@prefix='op', 'xs']"/>
    
    <!-- Exclude functions that are either (a) difficult to test, or (b) not yet agreed / implemented -->
-   <xsl:template match="function[@name=('error', 'concat', 'truncate', 'transform', 'json', 'differences', 
-      'foot', 'load-xquery-module', 'parts', 'stack-trace', 'group-by', 'substitute', 'collection', 'uri-collection',
-      'items-ending-where', 'items-starting-where', 'slice', 'random-number-generator', 'replace')]" priority="5"/>
+   <xsl:template match="function[@name=('error', 'concat', 'transform',  
+      'load-xquery-module', 'parts', 'stack-trace', 'group-by', 'substitute', 'collection', 'uri-collection',
+      'items-starting-where', 'random-number-generator')]" priority="5"/>
    
    <xsl:template match="function[@prefix='array'][@name=('replace', 'slice', 'from-sequence', 'of', 'partition')]" priority="6"/>
    
@@ -69,7 +69,7 @@
             <xsl:for-each select="arg">
                <xsl:if test="position() != 1">, </xsl:if>
                <xsl:text>{@name} := </xsl:text>
-               <xsl:apply-templates select="@type"/>
+               <xsl:apply-templates select="(@example, @default, @type)[1]"/>
             </xsl:for-each>
             <xsl:text>)</xsl:text>
             <xsl:text>
@@ -83,17 +83,26 @@
                <xsl:text>{if (..//@default='.') then "/doc!" else ""}{$prefix}:{../../@name}(</xsl:text>
                <xsl:for-each select="arg">
                   <xsl:if test="position() != 1">, </xsl:if>
-                  <xsl:apply-templates select="@type"/>
+                  <xsl:apply-templates select="(@example, @default, @type)[1]"/>
                </xsl:for-each>
                <xsl:text>)) and </xsl:text>
             </xsl:if>
             <xsl:text>$x instance of </xsl:text>
-            <xsl:apply-templates select="@return-type"/>
+            <xsl:choose>
+               <xsl:when test="@return-type">
+                  <xsl:apply-templates select="@return-type"/>
+               </xsl:when>
+               <xsl:otherwise>item()*</xsl:otherwise>
+            </xsl:choose>           
          </test>
          <result>
             <assert-true/>
          </result>
       </test-case>
+   </xsl:template>
+   
+   <xsl:template match="@default | @example">
+      <xsl:value-of select="."/>
    </xsl:template>
    
    <xsl:template match="@type[starts-with(., 'item()') or starts-with(., 'xs:string') or starts-with(., 'xs:anyAtomicType')]" priority="5">
@@ -107,14 +116,16 @@
    <xsl:template match="@type[starts-with(., 'xs:numeric') 
       or starts-with(., 'xs:integer') 
       or starts-with(., 'xs:double')
-      or starts-with(., 'xs:nonNegativeInteger')]" priority="5">
+      or starts-with(., 'xs:nonNegativeInteger')
+      or starts-with(., 'xs:positiveInteger')]" priority="5">
       <xsl:text>1</xsl:text>
    </xsl:template>
    
    <xsl:template match="@type[starts-with(., 'xs:numeric*') 
       or starts-with(., 'xs:integer*') 
       or starts-with(., 'xs:double*')
-      or starts-with(., 'xs:nonNegativeInteger*')]" priority="7">
+      or starts-with(., 'xs:nonNegativeInteger*')
+      or starts-with(., 'xs:positiveInteger')]" priority="7">
       <xsl:text>(42, 43)</xsl:text>
    </xsl:template>
    
@@ -270,32 +281,8 @@
       <xsl:text>'BuiltInKeywords.xml'</xsl:text>
    </xsl:template>
    
-   <xsl:template match="@type[../@name = 'href'][../../@name='json-doc']" priority="13">
-      <xsl:text>'JSONTestSuite/test_parsing/y_number.json'</xsl:text>
-   </xsl:template>
-   
    <xsl:template match="*[@name = 'arguments']/@type" priority="80">
       <xsl:text>[22]</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[../@name = 'input'][../../@name=('boolean', 'not')]" priority="12">
-      <xsl:text>42</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[../@name = 'value'][../../@name='parse-ietf-date']" priority="12">
-      <xsl:text>'Wed, 06 Jun 1994 07:29:35 GMT'</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[../@name = 'value'][../../@name='parse-xml']" priority="12">
-      <xsl:text>'&lt;a/>'</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[../@name = 'node'][../../@name='xml-to-json']" priority="12">
-      <xsl:text>()</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[../@name = 'options'][../../@name='serialize']" priority="12">
-      <xsl:text>map{{}}</xsl:text>
    </xsl:template>
    
    <xsl:template match="@type[../../@name=('sum', 'zero-or-one', 'exactly-one', 'avg')]" priority="12">
