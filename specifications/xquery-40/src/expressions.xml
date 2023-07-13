@@ -2945,6 +2945,30 @@ would raise an error because it has an <code>id</code> child whose value is not 
           
             
          </div3>
+         
+         <div3 id="id-implausible-expressions" diff="add" at="Issue602">
+            <head>Implausible Expressions</head>
+            
+            <p><termdef id="dt-implausible" term="implausible">Certain expressions, while not
+            erroneous, are classified as being <term>implausible</term>,
+            because there is a high probability that they were written incorrectly.</termdef></p>
+            
+            <p>An example of an implausible expression is <code>@code/text()</code>. This expression
+            will always evaluate to an empty sequence, because attribute nodes cannot have text
+            node children. The semantics of the expression are well defined, but it is likely
+            that the user writing this expression intended something different.</p>
+            
+            <p>Where an expression is classified (by rules in this specification) as being
+            <termref def="dt-implausible"/>, a processor <rfc2119>may</rfc2119> (but is
+            not <rfc2119>required</rfc2119> to) raise a static error.</p>
+            
+            <p>For reasons of backwards compatibility and interoperability, and to facilitate
+            automatic generation of &language; code, a processor <rfc2119>must</rfc2119> 
+            provide a mode of operation in which <termref def="dt-implausible"/>
+            expressions are not treated as static errors, but are evaluated
+            with the defined semantics for the expression.</p>
+            
+         </div3> 
       </div2>
       <div2 id="id-important-concepts">
          <head>Concepts</head>
@@ -5348,7 +5372,8 @@ declare function flatten($tree as tree) as item()* {
 
                <p>In particular, if a variable <code>$rec</code> is known to conform to a particular
 		             record type, then when a lookup expression <code>$rec?field</code> is used, (a) the processor
-		             can report a type error if <code>$rec</code> cannot contain an entry with name <code>field</code>,
+		             can report a type error if <code>$rec</code> cannot contain an entry with name <code>field</code>
+                   (see <specref ref="id-implausible-lookup-expressions"/>),
 		             and (b) the processor can make static type inferences about the type of value returned by 
 		             <code>$rec?field</code>.</p>
 
@@ -8978,6 +9003,16 @@ return $incrementors[2](4)]]></eg>
                            >type error</termref> is
 		raised <errorref class="TY" code="0004"
                            />.</p>
+                     <note diff="add" at="Issue602">
+                        <p>Under the general rules for type errors 
+                           (see <specref ref="id-kinds-of-errors"/>), a processor
+                        <rfc2119>may</rfc2119> report a type error during static
+                        analysis if it will necessarily occur when the expression is evaluated.
+                        For example, the function call <code>fn:abs("beer")</code>
+                        will necessarily fail when evaluated, because the function requires
+                        a numeric value as its argument; this <rfc2119>may</rfc2119> be detected and reported
+                        as a static error.</p>
+                     </note>   
 		<p diff="del" at="2022-11-17"><phrase role="xquery"
                               >If the function call takes place in a <termref def="dt-module"
                               >module</termref> other
@@ -8996,7 +9031,30 @@ return $incrementors[2](4)]]></eg>
 		be substituted for a value of its base
 		type. </p>
                   </item>
+                  <item diff="add" at="Issue602"><p>An expression is deemed to be
+                     <termref def="dt-implausible"/> <errorref
+                        class="TY" code="0006"/> if all the following conditions
+                  are satisfied:</p>
+                  <olist>
+                     <item><p>The static type of the expression, after applying
+                     all necessary coercions, is <code>S*</code> or <code>S?</code>,
+                     where <var>S</var> is some item type.</p></item>
+                     <item><p>The required type <var>T</var>
+                        is <code>R*</code> or <code>R?</code>,
+                        where <var>R</var> is some item type.</p></item>
+                     <item><p>The item types <var>S</var> and <var>R</var> are disjoint:
+                        that is, neither <code>R ⊆ S</code> nor <code>S ⊆ R</code>
+                     is true (see <specref ref="id-itemtype-subtype"/> for an explanation
+                     of the notation).</p></item>
+                  </olist>
+                     <p>For example, supplying a value whose static type is <code>xs:integer*</code>
+                     when the required type is <code>xs:string*</code> is <termref def="dt-implausible"/>,
+                  because it can succeed only in the special case where the actual value supplied
+                  is an empty sequence.</p></item>
                </ulist>
+                        
+                        
+                     
             </div3>
 
 
@@ -10203,6 +10261,37 @@ return filter($days,$m)
                   </item>
 
                </ulist>
+            </div4>
+            <div4 id="implausible-axis-steps" diff="add" at="Issue602">
+               <head>Implausible Axis Steps</head>
+               <p>Certain axis steps, given an inferred type for the context item, are
+               classified as <termref def="dt-implausible"/>. During the static analysis
+               phase, a processor <rfc2119>may</rfc2119> (subject to the rules in
+               <specref ref="id-implausible-expressions"/>) report a static error
+               when such axis steps are encountered: <errorref class="TY" code="0144"/>.</p>
+               <p>More specifically, an axis step is classified as <termref def="dt-implausible"/>
+               if any of the following conditions applies:</p>
+               <olist>
+                  <item><p>The inferred type of the context item is a node kind for which the
+                     specified axis is always empty: for example, the inferred type
+                     of the context item is <code>attribute()</code> 
+                     and the axis is <code>child</code>.</p></item>
+                  <item><p>The node test exclusively selects node kinds that cannot appear
+                  on the specified axis: for example, the axis is <code>child</code>
+                  and the node test is <code>document-node()</code>.</p></item>
+                  <item><p>In a schema-aware environment, when using the <code>child</code>,
+                     <code>descendant</code>, <code>descendant-or-self</code>, or <code>attribute</code>
+                     axes, the inferred type of the
+                     context item has a content type that does not allow any node matching
+                  the node test to be present on the relevant axis. For example, if the inferred context item type
+                  is <code>schema-element(list)</code> and the relevant element declaration 
+                     only allows <code>item</code> children,
+                  the axis step <code>child::li</code> will never select anything and is therefore
+                  classified as <termref def="dt-implausible"/>.</p></item>
+               </olist>
+               <note><p>Processors may choose not to classify the expression <code>/..</code>
+               as implausible, since XSLT 1.0 users were sometimes advised to use this construct
+               as an explicit way of denoting the empty sequence.</p></note>
             </div4>
          </div3>
 
@@ -15599,6 +15688,38 @@ return .($k)
                      </p>
                   </item>
                </ulist>
+            </div4>
+            <div4 id="id-implausible-lookup-expressions" diff="add" at="Issue602">
+               <head>Implausible Lookup Expressions</head>
+               <p>Under certain conditions a lookup expression that will never select anything
+                  is classified as <termref def="dt-implausible"/>. During the static analysis
+                  phase, a processor <rfc2119>may</rfc2119> (subject to the rules in
+                  <specref ref="id-implausible-expressions"/>) report a static error
+                  when such lookup expressions are encountered: <errorref class="TY" code="0145"/>.</p>
+               <p>More specifically, a unary or postfix lookup is classified as 
+                  <termref def="dt-implausible"/> if any of the following conditions applies:</p>
+               <olist>
+                  <item><p>The inferred type of the left-hand operand (or the context item, in the case
+                  of a unary expression) is a record test (see <specref ref="id-record-test"/>),
+                  and the <code>KeySpecifier</code> is an <code>IntegerLiteral</code>.
+                  </p></item>
+                  <item><p>The inferred type of the left-hand operand (or the context item, in the case
+                     of a unary expression) is a record test (see <specref ref="id-record-test"/>),
+                     and the <code>KeySpecifier</code> is an <code>NCName</code> or <code>StringLiteral</code>
+                     that cannot validly appear as a field name in the record.
+                  </p></item>
+                  <item><p>The inferred type of the left-hand operand (or the context item, in the case
+                     of a unary expression) is a map type,
+                     and the inferred type of the <code>KeySpecifier</code>, after coercion, is a type that
+                     is disjoint with the key type of the map.
+                  </p></item>
+                  <item><p>The inferred type of the left-hand operand (or the context item, in the case
+                     of a unary expression) is an array type,
+                     and the <code>KeySpecifier</code> is the <code>IntegerLiteral</code> <code>0</code> (zero).
+                  </p></item>
+               </olist>
+               <note><p>Other errors, such as using an <code>NCName</code> <code>KeySpecifier</code>
+               for an array lookup, are handled under the general provisions for type errors.</p></note>
             </div4>
          </div3>
       <!--   <div3 id="id-composite-atomic-values" diff="add" at="A">
