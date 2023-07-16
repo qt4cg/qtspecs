@@ -139,6 +139,8 @@
 
   
   <xsl:mode name="strip-space" on-no-match="shallow-copy"/>
+  <xsl:template match="@escaped-key[. = false()]" mode="strip-space"/>
+  <xsl:template match="@escaped[. = false()]" mode="strip-space"/>
   <xsl:template match="text()[not(normalize-space())][not(parent::fn:match)][not(parent::fn:non-match)]" mode="strip-space"/>
 
 
