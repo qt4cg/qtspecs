@@ -427,8 +427,7 @@ General notes <a href="#const-infoset">occur elsewhere</a>.</p>
       </h2>
 
       <p>This section summarizes the infoset mapping for each kind of
-      node. General notes <a href="#infoset-mapping">occur
-      elsewhere</a>.</p>
+      node.</p>
 
       <xsl:for-each select="//div3[head = 'Infoset Mapping']">
 	<div>
