@@ -5705,6 +5705,26 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                <head><?function fn:parse-html?></head>
             </div3>
          </div2>
+         <div2 id="csv-functions">
+            <head>Functions on CSV Data</head>
+            <p>The functions listed parse CSV data.</p>
+            <?local-function-index?>
+            <p>The structured representation of a parsed CSV is described by the
+               <code>parsed-csv-structure-record</code>, see <specref ref="csv-to-xdm-mapping"/>.</p>
+
+            <div3 id="func-parse-csv">
+               <head><?function fn:parse-csv?></head>
+            </div3>
+            <div3 id="func-csv-to-xdm">
+               <head><?function fn:csv-to-xdm?></head>
+            </div3>
+            <div3 id="func-csv-to-xml">
+               <head><?function fn:csv-to-xml?></head>
+            </div3>
+            <div3 id="func-csv-fetch-field-by-column">
+               <head><?function fn:csv-fetch-field-by-column?></head>
+            </div3>
+         </div2>
          <div2 id="json">
             <head>Conversion to and from JSON</head>
 
@@ -6878,6 +6898,484 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                <p>The result of the <xspecref spec="DM40" ref="dm-unparsed-entity-system-id"/>
                   <code>dm:unparsed-entity-system-id($node)</code> for an HTML DOM <code>Node</code>
                   is an empty sequence.</p>
+            </div3>
+         </div2>
+         <div2 id="csv">
+            <head>Conversion from CSV</head>
+
+            <p>Comma separated values (CSV) refers to a wide variety of plain-text tabular data with
+               fields and records separated by standard character delimiters. CSV has developed
+               informally for decades, and this implementation refers to <bibref ref="rfc4180"/>,
+               which provides a standardized grammar. This section defines a mapping from RFC 4180
+               to constructs in the XDM model, and provides illustrative examples of how these
+               constructs can be used in conjunction with existing language features to provide rich
+               processing of CSV data.</p>
+
+            <p>A CSV is a 2-dimensional tabular data structure consisting of multiple rows. Each
+               <term>row</term> contains multiple fields. Each <term>field</term>’s position in
+               the row is organised by <term>column</term> located in a <term>column</term> Fields
+               across records are members of a <term>column</term>, identified by position and
+               possibly name. Each field contains a single string value. Column names can be
+               assigned within a CSV using an optional <term>header row</term>.</p>
+
+            <p>The rows and fields from this specification map directly to the <term>record</term>
+               and field structures defined in RFC 4180, which has no explicit structure to
+               represent columns.</p>
+
+            <p>A row can be thought of as analogous to both a sequence of fields and a map of fields
+               (when columns are named). Fields are ordered left-to-right and thus have a position,
+               as with an array. Named columns allow fields to be retrieved by name, as with a
+               map.</p>
+
+            <p>Fields are simple strings. A field that contains reserved characters (one of the
+               delimiters) must be quoted, and the quote character must be escaped if it occurs
+               within a field. (See <specref ref="csv-field-quoting"/>.)</p>
+
+            <p>The functions for processing CSV-formatted data are built on
+               <code>fn:parse-csv</code>, which provides a simple representation of a parsed CSV
+               as a sequence of arrays-of-strings, <code>array(xs:string)*</code>, handling row and
+               column delimiters, and quoting.</p>
+
+            <p>The <code>fn:csv-to-xml</code> and <code>fn:csv-to-xdm</code> functions provide more
+               sophisticated processing.</p>
+
+
+            <div3 id="common-parsing-options">
+               <head>Common parsing options</head>
+
+               <p>All three functions: <code>fn:parse-csv</code>, <code>fn:csv-to-xml</code>, and
+                  <code>fn:csv-to-xdm</code>, take options to control basic parsing, consisting
+                  of specifying the various delimiters. These core delimiter options are used by the
+                  functions that generate CSV data:</p>
+
+               <?type common-csv-options ?>
+
+               <p>Additionally, the parsing functions share an additional option to control whether
+                  leading and trailing whitespace should be stripped or not.</p>
+
+               <?type parse-csv-options ?>
+            </div3>
+
+            <div3 id="csv-delimiters">
+               <head>CSV delimiters</head>
+
+
+               <div4 id="row-delimiters">
+                  <head>Row delimiters</head>
+
+                  <p>Rows in CSV are typically delimited with CRLF, LF, or CR line endings, although
+                     field quoting means that there is not always a one-to-one mapping between line
+                     and row in a file.</p>
+
+                  <p>The row delimiter defaults to matching any of CRLF (<code><![CDATA[&#x0D;&#x0A;]]></code>),
+                     LF (<code><![CDATA[&#x0A;]]></code>), or CR (<code><![CDATA[&#x0D;]]></code>). Valid values for the row
+                     delimiter are a single unicode character, or one of CRLF, LF, or CR, that has
+                     not been marked for use as the column delimiter. Implementations
+                     <rfc2119>must</rfc2119> raise <errorref class="CV" code="0002"/> if the
+                     <code>row-delimiter</code> option is set to a mutli-character string other
+                     than CRLF (<code><![CDATA[&#x0D;&#x0A;]]></code>), and <errorref class="CV" code="0003"/>
+                     if the same string has been set for row or column delimiter, or quote
+                     character.</p>
+              </div4>
+
+               <div4 id="column-delimiters">
+                  <head>Column/Field delimiters</head>
+
+                  <p>Fields in CSV are typically delimited with a comma. Files with other field
+                     delimiters are common, especially when the comma has data significance, for
+                     example with the use of the decimal comma in much of the world (there the
+                     delimiter is usually the semicolon).</p>
+
+                  <p>The column delimiter defaults to the comma <code>","</code>. Valid values for
+                     the column delimiter are a single unicode character, that has not been marked
+                     for use as the row delimiter. Implementations <rfc2119>must</rfc2119> raise
+                     <errorref class="CV" code="0002"/> if the <code>column-delimiter</code>
+                     option is set to a mutli-character string, and <errorref class="CV" code="0003"
+                     /> if the same string has been set for row or column delimiter, or quote
+                     character.</p>
+               </div4>
+            </div3>
+
+            <div3 id="csv-field-quoting">
+               <head>Field quoting</head>
+
+               <p>CSVs, per RFC 4180, require that fields be wrapped with a quote character if they
+                  contain either the row or column delimiter. This is achieved by wrapping the field
+                  with the quote character:</p>
+
+               <eg>"A single field, with a comma","another field containing CRLF
+                  within it"</eg>
+
+               <p>If a field is to contain the quote character, it must be escaped by preceding it
+                  with itself, as with escaping double quotes in XPath (see <xspecref
+                     ref="id-literals" spec="XP40"/>). Implementations <rfc2119>must</rfc2119> raise
+                  <errorref class="CV" code="0001"/> if a quote character appears within a field
+                  incorrectly escaped.</p>
+
+               <eg>incorrectly escaped " quote character</eg>
+
+               <p>The quotes surrounding quoted fields are not included in their content. The
+                  following input string, when parsed, would produce a sequence of strings, as shown
+                  below:</p>
+
+               <eg>'"Field 1","Field 2","Field ""with quotes"" 3"'</eg>
+
+               <eg>('Field 1', 'Field 2', 'Field "with quotes" 3')</eg>
+
+               <p>The quote character defaults to the double quote <code>"</code>.</p>
+
+               <div4 id="csv-field-quoting-column-delimiters">
+                  <head>Field quoting and column delimiters</head>
+
+                  <p>No space is allowed between the column delimiter and a quote. Implementations
+                     <rfc2119>must</rfc2119> raise <errorref class="CV" code="0001"/> if
+                     whitespace or other characters occur between a quote character and the nearest
+                     column delimiter.</p>
+
+                  <p>The following example is illegal and parsing it should raise an error.</p>
+
+                  <eg>'"Field 1", "Field 2", "Field 3"'</eg>
+
+               </div4>
+            </div3>
+
+            <div3 id="basic-csv-to-xdm-mapping">
+               <head>Basic mapping of CSV to XDM</head>
+
+               <p>The basic output from <code>fn:parse-csv</code> returns a sequence of rows, where
+                  each row is simply mapped to an array of <code>xs:string</code> values.</p>
+
+               <p>The first row of the CSV is returned as with all the other rows.
+                  <code>fn:parse-csv</code> does not distinguish between a header row and data
+                  rows, and returns all of them.</p>
+
+               <eg>
+'Column 1,Column 2,Column 3
+Field 1A,Field 1B,Field 1C
+Field 2A,Field 2B,Field 2C'
+               </eg>
+
+               <p>Produces</p>
+
+               <eg>
+(
+   ["Column 1", "Column 2", "Column 3"],
+   ["Field 1A", "Field 1B", "Field 1C"],
+   ["Field 2A", "Field 2B", "Field 2C"]
+)
+               </eg>
+
+               <p>There is an expectation that, in the general case, all rows in a given CSV will
+                  have the same number of columns, but there is no guarantee of this.</p>
+
+               <eg>
+'Column 1,Column 2,Column 3
+Field 1A,Field 1B,Field 1C
+Field 2A,Field 2B,Field 2C,Field 2D'
+               </eg>
+
+               <p>Produces</p>
+
+               <eg>
+(
+   ["Column 1", "Column 2", "Column 3"],
+   ["Field 1A", "Field 1B", "Field 1C"],
+   ["Field 2A", "Field 2B", "Field 2C", "Field 2D]
+)
+               </eg>
+
+               <p><bibref ref="rfc4180"/> states that CSVs <rfc2119>should</rfc2119> contain the
+                  same number of fields in each row, so that there are a uniform number of columns.
+                  However, the reality is that CSVs can, and sometimes do, contain a variable number
+                  of fields in a row. As a result, implementations of this function <rfc2119>must
+                  not</rfc2119> truncate or pad the number of fields in each row for any reason.
+                  The <code>fn:csv-to-xml</code> and <code>fn:csv-to-xdm</code> functions provide
+                  facilities to deal with enforcing uniformity and an expected number of
+                  columns.</p>
+            </div3>
+
+            <div3 id="csv-to-xdm-mapping">
+               <head>Mapping CSV data to XDM in <code>fn:csv-to-xdm</code></head>
+
+
+               <p>The <code>fn:csv-to-xdm</code> function returns a
+                  <code>parsed-csv-structure-record</code>:</p>
+
+               <?type parsed-csv-structure-record ?>
+
+               <div4 id="csv-xdm-header">
+                  <head>The <code>header</code> entry</head>
+
+                  <p>The <code>columns</code> entry describes how columns map to names, as well as
+                     providing all the fields in the header row that was used to generate the column
+                     names.</p>
+
+                  <?type csv-columns-record ?>
+
+                  <p>It’s required. If column names were not extracted, then implementations
+                     <rfc2119>must</rfc2119> return a <code>csv-columns-record</code> whose
+                     <code>names</code> entry is an empty map, and whose <code>fields</code>
+                     entry is the empty sequence.</p>
+               </div4>
+
+               <div4 id="csv-xdm-rows">
+                  <head>The <code>rows</code> entry</head>
+
+                  <p>The <code>rows</code> entry returns the rows themselves. It is a sequence of
+                     <code>csv-row</code> records. If the CSV was empty of rows, implementations
+                     <rfc2119>must</rfc2119> return a <code>rows</code> entry consisting of the
+                     empty sequence.</p>
+               </div4>
+
+               <div4 id="csv-xdm-row">
+                  <head>The <code>csv-row</code> record</head>
+
+                  <?type csv-row-record ?>
+
+                  <p>The <code>csv-row</code> record represents a single row. The
+                     <code>fields</code> entry is a sequence containing the fields as
+                     <code>xs:string</code>.</p>
+
+                  <p>The <code>field</code> entry contains a function, as described below:</p>
+               </div4>
+
+               <div4 id="csv-xdm-field-function">
+                  <head>The <code>field</code> function</head>
+
+                  <p>The function returned in the <code>field</code> entry is an arity 1 (one)
+                     function which takes either a string or an integer as its argument
+                     <code>$key</code>, and returns a field from the <code>csv-row</code>’s
+                     <code>fields</code> sequence by either column position (when passed an
+                     <code>xs:integer</code>) or column name (when passed an
+                     <code>xs:string</code>).</p>
+
+                  <p>This function is, effectively, a partial application of
+                     <code>fn:csv-fetch-field-by-column</code> where its <code>$columns</code>
+                     argument is bound to the <code>columns</code> entry of the
+                     <code>parsed-csv-structure-record</code>, and its <code>$row</code> argument
+                     is bound to <code>array{csv-row?fields}</code>. This is described in more
+                     detail below:</p>
+
+                  <p>Given a string, <code>$csv-string</code> containing CSV data, implementations
+                     <rfc2119>must</rfc2119> return a function that will return identical results
+                     to <code>fn:csv-fetch-field-by-column</code> called with the same
+                     <code>csv-columns</code> and an <code>array()</code> containing the same
+                     items as the <code>fields</code> sequence:</p>
+
+                  <eg>let $csv-record := fn:csv-to-xdm($csv-string),
+   $csv-columns := $csv-record?columns,
+   $csv-row := head($csv-record?rows)
+   return if (empty($csv-row?field(1)))
+   then empty(fn:csv-fetch-field-by-column($csv-columns, array{$csv-row}, 1))
+   else $csv-row?field(1) = fn:csv-fetch-field-by-column($csv-columns, array{$csv-row}, 1)
+   (: must return true :)
+                  </eg>
+               </div4>
+            </div3>
+            <div3 id="csv-represent-as-xml">
+               <head>Representing CSV data as XML</head>
+
+               <p>The <code>fn:csv-to-xml</code> function returns XML representing the CSV data.
+                  Following is a CSV text and its XML representation.</p>
+
+               <eg>Name,Date,Amount
+Alice,2023-07-14,1.23
+Bob,2023-07-14,2.34
+               </eg>
+
+               <eg><![CDATA[
+<csv xmlns="http://www.w3.org/2005/xpath-functions">
+   <columns>
+      <column>Name</column>
+      <column>Date</column>
+      <column>Amount</column>
+   </columns>
+   <rows>
+      <row>
+         <field column="Name">Alice</field>
+         <field column="Date">2023-07-14</field>
+         <field column="Amount">1.23</field>
+      </row>
+      <row>
+         <field column="Name">Bob</field>
+         <field column="Date">2023-07-14</field>
+         <field column="Amount">2.34</field>
+      </row>
+   </rows>
+</csv>
+]]></eg>
+
+               <p>If column names were not extracted, then implementations <rfc2119>should
+                  not</rfc2119> include the <code><![CDATA[<header>]]></code> element, and
+                  <code><![CDATA[<field>]]></code> elements <rfc2119>should not</rfc2119> have
+                  the <code>column</code> attribute:</p>
+
+               <eg><![CDATA[
+<csv xmlns="http://www.w3.org/2005/xpath-functions">
+   <rows>
+      <row>
+         <field>Name</field>
+         <field>Date</field>
+         <field>Amount</field>
+      </row>
+      <row>
+         <field>Alice</field>
+         <field>2023-07-14</field>
+         <field>1.23</field>
+      </row>
+      <row>
+         <field>Bob</field>
+         <field>2023-07-14</field>
+         <field>2.34</field>
+      </row>
+   </rows>
+</csv>
+]]></eg>
+
+               <p>An XSD 1.0 schema for the XML representation is provided in <specref ref="schema-for-csv"/>.</p>
+            </div3>
+            <div3 id="illustrative-csv-examples">
+               <head>Illustrative examples of processing CSV data</head>
+
+
+               <p>The following examples illustrate how an application can build more complex processing of the output of <code>fn:parse-csv</code>.</p>
+
+               <p>A variable, <code>$crlf</code> is assumed to be in scope containing the CR and LF characters</p>
+
+               <eg>let $crlf := fn:char('x0D')||fn:char('x0A')</eg>
+
+               <div4 id="csv-to-html-table">
+                  <head>Converting a CSV into an HTML-style table using <code>fn:csv-to-xdm</code></head>
+
+                  <p>Direct conversion is a matter of iterating across the records and fields to
+                     generate <code>&lt;tr&gt;</code> and <code>&lt;td&gt;</code> elements.</p>
+
+                  <p>Using XQuery:</p>
+                  <eg><![CDATA[
+let $csv := fn:csv-to-xdm(`name,city{$crlf}Bob,Berlin`),
+    $headers := $parsed-csv?headers-record
+return <table>
+   <thead>{
+      for $column in $csv?columns?fields
+         return <th>{ $column }</th>
+   }</thead>
+   <tbody>{
+      for $row in $csv?rows return <tr>
+         { for $field in $row?fields return <td>{ $field }</td> }
+      </tr>
+   }</tbody>
+</table>
+                  ]]></eg>
+
+                  <p>Using XSLT:</p>
+                  <eg><![CDATA[
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:eg="http://example.org/eg"
+  xmlns:array="http://www.w3.org/2005/xpath-functions/array"
+  exclude-result-prefixes="eg array"
+  version="4.0">
+  <xsl:output method="xml" indent="true"/>
+
+  <xsl:template match="." mode="csv-th" expand-text="true">
+    <th>{.}</th>
+  </xsl:template>
+
+  <xsl:template match="." mode="csv-td" expand-text="true">
+    <td>{.}</td>
+  </xsl:template>
+
+  <xsl:template match="." mode="csv-tr">
+    <tr>
+      <xsl:apply-templates select=".?fields" mode="csv-td"/>
+    </tr>
+  </xsl:function>
+
+  <xsl:template name="xsl:initial-template">
+    <xsl:variable name="csv" select="csv-to-xdm(`name,city{$crlf}Bob,Berlin`)"/>
+    <table>
+      <thead>
+        <tr>
+          <xsl:apply-templates select="$csv?columns?fields" mode="csv-th"/>
+        </tr>
+      </thead>
+      <tbody>
+        <xsl:apply-templates select="$csv?rows" mode="csv-tr"/>
+      </tbody>
+    </table>
+  </xsl:template>
+</xsl:stylesheet>
+                  ]]></eg>
+               </div4>
+               <div4 id="csv-to-html-table-csv-to-xml">
+                  <head>Converting a CSV into an HTML-style table using <code>fn:csv-to-xml</code></head>
+
+                  <p>The <code>fn:csv-to-xml</code> function makes these kinds of
+                     conversion-to-XML-table tasks simpler by providing a simple XML represenation of the data. Here, in XQuery:</p>
+
+                  <eg><![CDATA[
+let $csv := fn:csv-to-xml(`name,city{$crlf}Bob,Berlin`)
+return <table>
+   <thead>{
+      for $column in $csv/csv/columns/column
+         return <th>{ $column }</th>
+   }</thead>
+   <tbody>{
+      for $row in $csv/csv/rows/row
+         return <tr>{ for $field in $row/field return <td>{ $field }</td> }</tr>
+      }
+   }</tbody>
+</table>
+                  ]]></eg>
+
+                  <p>And in XSLT:</p>
+
+                  <eg><![CDATA[
+<xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+  xmlns:fn="http://www.w3.org/2005/xpath-functions"
+  exclude-result-prefixes="fn"
+  version="4.0">
+  <xsl:output method="xml" indent="true"/>
+
+  <xsl:template match="fn:column" expand-text="true">
+    <th>{.}</th>
+  </xsl:template>
+
+  <xsl:template match="fn:field" expand-text="true">
+    <td>{.}</td>
+  </xsl:template>
+
+  <xsl:template match="fn:row">
+    <tr>
+      <xsl:apply-templates/>
+    </tr>
+  </xsl:function>
+
+  <xsl:template match="fn:columns">
+    <thead>
+      <tr>
+        <xsl:apply-templates/>
+      </tr>
+    </thead>
+  </xsl:function>
+
+  <xsl:template match="fn:rows">
+    <tbody>
+      <xsl:apply-templates/>
+    </tbody>
+  </xsl:function>
+
+  <xsl:template match="fn:csv">
+    <table>
+      <xsl:apply-templates/>
+    </table>
+  </xsl:template>
+
+  <xsl:template name="xsl:initial-template">
+    <xsl:apply-templates select="fn:csv-to-xml(`name,city{$crlf}Bob,Berlin`)"/>
+  </xsl:template>
+</xsl:stylesheet>
+                  ]]></eg>
+               </div4>
             </div3>
          </div2>
       </div1>
@@ -10230,6 +10728,10 @@ Organization for Standardization, 2012. Available from: <loc href="http://www.is
                   Internationalized Resource Identifiers (IRIs).</emph> Available at:
                   <loc href="http://www.ietf.org/rfc/rfc3987.txt">http://www.ietf.org/rfc/rfc3987.txt</loc>.
                </bibl>
+               <bibl id="rfc4180" key="RFC 4180">IETF. <emph>RFC 4180:
+                  Common Format and MIME Type for Comma-Separated Values (CSV) Files.</emph> Available at:
+                  <loc href="http://www.ietf.org/rfc/rfc4180.txt">http://www.ietf.org/rfc/rfc4180.txt</loc>.
+               </bibl>
                <bibl id="rfc7159" key="RFC 7159">IETF. <emph>RFC 7159: The Javascript Object Notation (JSON) Data Interchange Format</emph> Available at:
                   <loc href="http://www.rfc-editor.org/rfc/rfc7159.txt">http://www.rfc-editor.org/rfc/rfc7159.txt</loc>.
                </bibl>
@@ -10463,6 +10965,29 @@ ISBN 0 521 77752 6.</bibl>
                <p>Raised by <code>fn:char</code> if the supplied character name is not recognized, or
                   if it represents a codepoint that is not valid in the version of XML supported by the
                   processor.</p>
+            </error>
+            <error class="CV" code="0001" label="CSV field quoting error."
+               type="dynamic">
+               <p>Raised by <code>fn:parse-csv</code> if a syntax error in the quoting of one of the
+                  fields in the input CSV is found.</p>
+            </error>
+            <error class="CV" code="0002" label="Illegal CSV delimiter error."
+               type="dynamic">
+               <p>Raised by <code>fn:parse-csv</code> if the <code>field-separator</code>,
+                  <code>record-separator</code>, or <code>quote-character</code> option is set to
+                  an illegal value.</p>
+            </error>
+            <error class="CV" code="0003" label="duplicate CSV delimiter error."
+               type="dynamic">
+               <p>Raised by <code>fn:parse-csv</code> if any of the delimiter characters have been
+                  set to the same value.</p>
+            </error>
+            <error class="CV" code="0004" label="Argument supplied is not a known column name."
+               type="dynamic">
+               <p>Raised by <code>fn:csv-fetch-field-by-column</code>, and the function from the
+                  <code>field</code> entry of <code>csv-columns-record</code>, if its
+                  <code>$key</code> argument is an <code>xs:string</code> and is not one of the
+                  known column names.</p>
             </error>
             <error class="DC" code="0001" label="No context document." type="dynamic">
                <p>Raised by <code>fn:id</code>, <code>fn:idref</code>, and <code>fn:element-with-id</code>
@@ -10804,8 +11329,14 @@ ISBN 0 521 77752 6.</bibl>
             <p>The schema is reproduced below, and can also be found in <loc href="schema-for-json.xsd">schema-for-json.xsd</loc>:</p>
             <?doc schema-for-json.xsd?>
          </div2>
-      </div1> 
-      
+         <div2 id="schema-for-csv">
+            <head>Schema for the result of <code>fn:csv-to-xml</code></head>
+            <p>This schema describes the output of the function <code>fn:csv-to-xml</code>.</p>
+            <p>The schema is reproduced below, and can also be found in <loc href="schema-for-json.xsd">schema-for-json.xsd</loc>:</p>
+            <?doc schema-for-csv.xsd?>
+         </div2>
+      </div1>
+
       <inform-div1 id="other-functions">
          <head>Other Functions</head>
          <p>This Appendix describes some sources of functions that fall outside the scope of the function library defined
@@ -11402,6 +11933,10 @@ declare function eg:distinct-nodes-stable ($arg as node()*) as node()* {
               <item><p><code>map:filter</code></p></item>
               <item><p><code>map:replace</code></p></item>
               <item><p><code>map:substitute</code></p></item>
+              <item><p><code>fn:parse-csv</code></p></item>
+              <item><p><code>fn:csv-to-xdm</code></p></item>
+              <item><p><code>fn:csv-to-xml</code></p></item>
+              <item><p><code>fn:csv-fetch-field-by-column</code></p></item>
               <!--<item><p><code>array:partition</code></p></item>-->
               <item><p><code>array:replace</code></p></item>
               <item><p><code>array:slice</code></p></item>
