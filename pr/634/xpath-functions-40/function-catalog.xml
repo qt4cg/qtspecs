@@ -49,7 +49,45 @@
          <fos:field name="include-template-content" type="xs:boolean?" required="false"/>
       </fos:record>
    </fos:type>
-   
+
+   <fos:type id="common-csv-options">
+      <fos:record extensible="false">
+         <fos:field name="row-delimiter" type="xs:string" required="false"/>
+         <fos:field name="column-delimiter" type="xs:string" required="false"/>
+         <fos:field name="quote-character" type="xs:string" required="false"/>
+      </fos:record>
+   </fos:type>
+
+   <fos:type id="parse-csv-options">
+      <fos:record extensible="false">
+         <fos:field name="row-delimiter" type="xs:string" required="false"/>
+         <fos:field name="column-delimiter" type="xs:string" required="false"/>
+         <fos:field name="quote-character" type="xs:string" required="false"/>
+         <fos:field name="trim-whitespace" type="xs:boolean" required="false"/>
+      </fos:record>
+   </fos:type>
+
+   <fos:type id="parsed-csv-structure-record">
+      <fos:record extensible="false">
+         <fos:field name="columns" type="csv-columns-record" required="true"/>
+         <fos:field name="rows" type="csv-row-record*" required="true"/>
+      </fos:record>
+   </fos:type>
+
+   <fos:type id="csv-columns-record">
+      <fos:record extensible="false">
+         <fos:field name="names" type="map(xs:string, xs:integer)" required="true"/>
+         <fos:field name="fields" required="true" type="xs:string*"/>
+      </fos:record>
+   </fos:type>
+
+   <fos:type id="csv-row-record">
+      <fos:record extensible="false">
+         <fos:field name="fields" type="xs:string*" required="true"/>
+         <fos:field name="field" required="true" type="function(union(xs:integer, xs:string)) as xs:string?"/>
+      </fos:record>
+   </fos:type>
+
    <fos:function name="node-name" prefix="fn">
       <fos:signatures>
          <fos:proto name="node-name" return-type="xs:QName?">
@@ -273,7 +311,7 @@
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns the result of atomizing a sequence. This process flattens arrays, and replaces 
+         <p>Returns the result of atomizing a sequence. This process flattens arrays, and replaces
             nodes by their typed values.</p>
       </fos:summary>
       <fos:rules>
@@ -607,6 +645,7 @@
             to an empty sequence. Previously if <code>$description</code> was supplied, it could not be empty.</fos:version>
       </fos:history>
    </fos:function>
+
    <fos:function name="trace" prefix="fn">
       <fos:signatures>
          <fos:proto name="trace" return-type="item()*">
@@ -624,33 +663,32 @@
       </fos:summary>
       <fos:rules>
          <p>The function returns <code>$input</code>, unchanged.</p>
-         <p>In addition, the values of <code>$input</code>, converted to an <code>xs:string</code>,
-            and <code>$label</code> (if supplied <phrase diff="add" at="2022-12-19">and non-empty</phrase>)
-            <rfc2119>may</rfc2119> be directed to a trace data set. The destination of the trace
-            output is <termref
-               def="implementation-defined"
-               >implementation-defined</termref>. The format of the trace output is
-            <termref
-               def="implementation-dependent"
-               >implementation-dependent</termref>. The ordering of output from calls of the
-            <code>fn:trace</code> function is <termref
-               def="implementation-dependent">implementation-dependent</termref>.</p>
+         <p>In addition, the values of <code>$input</code>, typically serialized and converted
+            to an <code>xs:string</code>, and <code>$label</code> (if supplied
+            <phrase diff="add" at="2022-12-19">and non-empty</phrase>) <rfc2119>may</rfc2119>
+            be output to an <termref def="implementation-defined"/> destination.</p>
+         <p>The serialization of the trace output <rfc2119>must not</rfc2119> raise an error.
+            This can be achieved (for example) by using a serialization method that can handle
+            arbitrary input, such as the adaptive output method (see
+            <xspecref spec="SER31" ref="adaptive-output"/>).</p>
+         <p>The format of the trace output and its order are
+            <termref def="implementation-dependent"/>. Therefore, the order in which the output
+            appears is not predictable. This also means that if dynamic errors occur
+            (whether or not they are caught using try/catch), it may be unpredictable whether
+            any output is logged before the error occurs.</p>
       </fos:rules>
       <fos:notes>
-         <p>Sometimes there is a need to output trace information unrelated to a specific value.
-            In such cases it can be useful to set <code>$input</code> to an empty string or an empty
-            sequence, and to compute the value of the <code>$label</code> argument: 
-            <code>fn:trace((), "Processing item " || $i)</code>.</p>
+         <p>If the trace information is unrelated to a specific value,
+            <code>fn:log</code> can be used instead.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <p>Consider a situation in which a user wants to investigate the actual value passed to
                a function. Assume that in a particular execution, <code>$v</code> is an
                   <code>xs:decimal</code> with value <code>124.84</code>.
-                  Writing <code>fn:trace($v, 'the value of $v is:')</code> will put the strings
+                  Writing <code>fn:trace($v, 'the value of $v is:')</code> will output the strings
                   <code>"124.84"</code> and <code>"the value of $v is:"</code>
-                  in the trace data set in implementation
-               dependent order.</p>
+                  in an implementation-dependent order.</p>
          </fos:example>
       </fos:examples>
       <fos:history>
@@ -658,6 +696,46 @@
             to an empty sequence. Previously if <code>$label</code> was supplied, it could not be empty.</fos:version>
       </fos:history>
    </fos:function>
+
+   <fos:function name="log" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="log" return-type="empty-sequence()">
+            <fos:arg name="input" type="item()*" usage="transmission"/>
+            <fos:arg name="label" type="xs:string?" default="()"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Outputs trace information and discards the result.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>Similar to <code>fn:trace</code>, the values of <code>$input</code>,
+            typically serialized and converted to an <code>xs:string</code>, and <code>$label</code>
+            (if supplied and non-empty) <rfc2119>may</rfc2119> be output to an
+            <termref def="implementation-defined"/> destination.</p>
+         <p>In contrast to <code>fn:trace</code>, the function returns an empty sequence.</p>
+         <p>The serialization of the log output <rfc2119>must not</rfc2119> raise an error.
+            This can e.g. be achieved by using a serialization method that can handle arbitrary
+            input, such as the <xspecref spec="SER31" ref="adaptive-output"/>.</p>
+         <p>The format of the trace output and its order are
+            <termref def="implementation-dependent"/>. Therefore, the order in which the output
+            appears is not predictable. This also means that if dynamic errors occur
+            (whether or not they are caught using try/catch), it may be unpredictable whether
+            any output is logged before the error occurs.</p>
+      </fos:rules>
+      <fos:notes>
+         <p>The function can be used for debugging. It can also be helpful in productive
+            environments, e.g. to store dynamic input and evaluations to log files.</p>
+      </fos:notes>
+      <fos:history>
+         <fos:version version="4.0">New function.</fos:version>
+      </fos:history>
+   </fos:function>
+
    <fos:function name="numeric-add" prefix="op">
       <fos:signatures>
          <fos:proto name="numeric-add" return-type="xs:numeric">
@@ -3386,9 +3464,10 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
 
       </fos:rules>
       <fos:errors>
-         <p>A dynamic error is raised <errorref class="CH" code="0001"
+         <p diff="chg" at="2023-06-12">A dynamic error is raised <errorref class="CH" code="0001"
                /> if any of the codepoints in
-               <code>$values</code> is not a permitted XML character.</p>
+               <code>$values</code> is not a
+               <termref def="dt-permitted-character">permitted character</termref>.</p>
       </fos:errors>
       <fos:examples>
          <fos:example>
@@ -13028,6 +13107,58 @@ return contains-sequence(
          </fos:example>
       </fos:examples>
    </fos:function>
+
+   <fos:function name="void" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="void" return-type="empty-sequence()">
+            <fos:arg name="input" type="item()*"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Absorbs the argument.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The function absorbs the supplied <code>$input</code> argument and
+            returns an empty sequence.</p>
+      </fos:rules>
+      <fos:notes>
+         <p>The function can be used to discard unneeded output of expressions
+            (functions, third-party libraries, etc.).</p>
+         <p>It can also be used to discard results during development.</p>
+         <p>The function is utilized by built-in functions such as <code>map:get</code>
+            to return an empty sequence for arbitrary input.</p>
+         <p>It is <termref def="implementation-dependent">implementation-dependent</termref>
+            whether the supplied argument is evaluated or ignored. An implementation may decide to
+            evaluate <termref def="dt-nondeterministic">nondeterministic</termref> expressions and
+            ignore deterministic ones.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>void(1 to 1000000)</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>array:get(array { 1, 2, 3 }, 4, void#1)</fos:expression>
+               <fos:result>()</fos:result>
+               <fos:postamble>Without the third argument, an error would be raised</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression>for $f in (identity#1, void#1) return $f(123)</fos:expression>
+               <fos:result>123</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">New in 4.0. Approved.</fos:version>
+      </fos:history>
+   </fos:function>
+
    <fos:function name="zero-or-one" prefix="fn">
       <fos:signatures>
          <fos:proto name="zero-or-one" return-type="item()?">
@@ -13052,6 +13183,7 @@ return contains-sequence(
             contains more than one item.</p>
       </fos:errors>
    </fos:function>
+
    <fos:function name="one-or-more" prefix="fn">
       <fos:signatures>
          <fos:proto name="one-or-more" return-type="item()+">
@@ -15424,15 +15556,14 @@ else
             to an absolute URI (for example, because the base-URI property in the static context is absent), 
             </phrase>or if it cannot be used to retrieve the string
             representation of a resource. </p>
-         <p>A dynamic error is raised <errorref class="UT" code="1190"
+         <p diff="chg" at="2023-06-12">A dynamic error is raised <errorref class="UT" code="1190"
             /> if the value of the
             <code>$encoding</code> argument is not a valid encoding name, if the
             processor does not support the specified encoding, if
             the string representation of the retrieved resource contains octets that cannot be
-            decoded into Unicode <termref
-               def="character"
-            >characters</termref> using the specified
-            encoding, or if the resulting characters are not permitted XML characters.</p>
+            decoded into Unicode <termref def="character">characters</termref> using the specified
+            encoding, or if the resulting characters are not
+            <termref def="dt-permitted-character">permitted character</termref>.</p>
          <p>A dynamic error is raised <errorref class="UT" code="1200"
             /> if <code>$encoding</code>
             is absent and the processor cannot infer the
@@ -15845,7 +15976,7 @@ else
          
          <p>The result of the function is a <i>parcel</i>. A parcel is a single item,
          but its exact form is implementation-dependent. The only guaranteed operations
-         that apply to parcels are the <code>fn:unparcel</code> and <code>array:of</code>
+         that apply to parcels are the <code>fn:unparcel</code> and <code>array:of-members</code>
          functions.</p>
          
          
@@ -15853,9 +15984,9 @@ else
       
       <fos:notes>
          <p>The main use case for this function is for temporary values used while constructing
-         or deconstructing arrays using the <code>array:of</code> and <code>array:members</code>
+         or deconstructing arrays using the <code>array:of-members</code> and <code>array:members</code>
          functions, and higher-level constructs that may be defined in terms of these primitives
-         in XSLT or XQuery. The <code>array:of</code> function constructs an array from a sequence
+         in XSLT or XQuery. The <code>array:of-members</code> function constructs an array from a sequence
          of parcels, and the <code>array:members</code> function does the reverse.</p>
          <p>Applications may also choose to use parcels to represent nested sequences directly,
          without converting these to arrays. However, there are few operations available on parcels
@@ -15875,11 +16006,11 @@ else
                <fos:result>(1, 2, 3 ,4, 5)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:of((parcel(1 to 3), parcel(10 to 13))</fos:expression>
+               <fos:expression>array:of-members((parcel(1 to 3), parcel(10 to 13))</fos:expression>
                <fos:result>[(1, 2, 3), (10, 11, 12, 13)]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:of(tokenize("A long hot summer") ! parcel((position(), .)))</fos:expression>
+               <fos:expression>array:of-members(tokenize("A long hot summer") ! parcel((position(), .)))</fos:expression>
                <fos:result>[(1,"A"), (2,"long"), (3,"hot"), (4,"summer")]</fos:result>
             </fos:test>
          </fos:example>
@@ -16461,8 +16592,6 @@ else
             not support serialization, then a dynamic error <errorref
                class="DC" code="0010"/> is
             raised.</p>
-         <p>The serialization process will raise an error if <code>$input</code> is an attribute or
-            namespace node.</p>
          <p>When the second argument is supplied as a map, 
             and the supplied value is of the wrong type for the particular parameter, for example if the value of <code>indent</code>
          is a string rather than a boolean, then as defined by the <termref
@@ -18767,9 +18896,9 @@ return fold-left($MAPS, map{},
       </fos:examples>
    </fos:function>
 
-   <fos:function name="of" prefix="map">
+   <fos:function name="of-pairs" prefix="map">
       <fos:signatures>
-         <fos:proto name="of" return-type="map(*)">
+         <fos:proto name="of-pairs" return-type="map(*)">
             <fos:arg name="pairs" 
                      type="record(key as xs:anyAtomicType, value as item()*, *)*" 
                      usage="inspection"
@@ -18788,7 +18917,7 @@ return fold-left($MAPS, map{},
       </fos:summary>
       <fos:rules>
          
-         <p>The function <code>map:of</code>
+         <p>The function <code>map:of-pairs</code>
             <phrase>returns a map</phrase> that
             is formed by combining <termref def="dt-key-value-pair-map">key-value pair maps</termref> supplied in the 
             <code>$key-value-pairs</code>
@@ -18821,17 +18950,18 @@ return fold-left($MAPS, map{},
             select="map { 0: &quot;Sonntag&quot;, 1: &quot;Montag&quot;, 2: &quot;Dienstag&quot;,&#xa;     3: &quot;Mittwoch&quot;, 4: &quot;Donnerstag&quot;, 5: &quot;Freitag&quot;, 6 :&quot;Samstag&quot; }"/>
          <fos:example>
             <fos:test>
-               <fos:expression>map:of(())</fos:expression>
+               <fos:expression>map:of-pairs(())</fos:expression>
                <fos:result>map{}</fos:result>
                <fos:postamble>Returns an empty map</fos:postamble>
             </fos:test>
             <fos:test use="v-map-of-week">
-               <fos:expression>map:of(map:pairs($week))</fos:expression>
+               <fos:expression>map:of-pairs(map:pairs($week))</fos:expression>
                <fos:result>$week</fos:result>
-               <fos:postamble>The function <code>map:of</code> is the inverse of <code>map:pairs</code>.</fos:postamble>
+               <fos:postamble>The function <code>map:of-pairs</code> is the inverse of
+                  <code>map:pairs</code>.</fos:postamble>
             </fos:test>
             <fos:test>
-               <fos:expression><eg><![CDATA[map:of((
+               <fos:expression><eg><![CDATA[map:of-pairs((
   map { "key": 0, "value": "no" },
   map { "key": 1, "value": "yes" }
 ))]]></eg></fos:expression>
@@ -18839,7 +18969,7 @@ return fold-left($MAPS, map{},
                <fos:postamble>Returns a map with two entries</fos:postamble>
             </fos:test>
             <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of((
+               <fos:expression><eg>map:of-pairs((
   map:pairs($week),
   map { "key": 7, "value": "Unbekannt" }
 ))</eg></fos:expression>
@@ -18850,7 +18980,7 @@ return fold-left($MAPS, map{},
                   entry.</fos:postamble>
             </fos:test>
             <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of((
+               <fos:expression><eg>map:of-pairs((
   map:pairs($week),
   map { "key": 6, "value": "Sonnabend" }
 ))</eg></fos:expression>
@@ -18862,7 +18992,7 @@ return fold-left($MAPS, map{},
                   one used in the result combines the two supplied values into a single sequence.</fos:postamble>
             </fos:test>
             <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of(
+               <fos:expression><eg>map:of-pairs(
   (map:pairs($week),
    map { "key": 6, "value": "Sonnabend" }),
   function($old, $new)  { $new }
@@ -18876,7 +19006,7 @@ return fold-left($MAPS, map{},
                   is the one that comes last in the input sequence.</fos:postamble>
             </fos:test>
             <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of(
+               <fos:expression><eg>map:of-pairs(
   (map:pairs($week),
    map { "key": 6, "value": "Sonnabend" }),
   function($old, $new) { `{$old}|{$new}` }
@@ -19178,7 +19308,7 @@ return map:keys($birthdays, function($date) {
          <fos:proto name="get" return-type="item()*">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
             <fos:arg name="key" type="xs:anyAtomicType"/>
-            <fos:arg name="fallback" type="function(xs:anyAtomicType) as item()*" default="->($k){}"/>
+            <fos:arg name="fallback" type="function(xs:anyAtomicType) as item()*" default="void#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -19483,6 +19613,59 @@ map:merge(for $b in //book return map:entry($b/isbn, $b))]]></eg>
          </fos:example>
       </fos:examples>
    </fos:function>
+
+   <fos:function name="pair" prefix="map">
+      <fos:signatures>
+         <fos:proto name="pair" return-type="map(*)">
+            <fos:arg name="key" type="xs:anyAtomicType"/>
+            <fos:arg name="value" type="item()*" usage="navigation"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p><phrase>Returns</phrase> a <termref def="dt-key-value-pair-map"/> that 
+            represents a single key-value pair.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The function <code>map:pair</code> returns a <termref def="dt-map"
+            >map</termref> which contains two entries, one (with the key <code>"key"</code>)
+            containing <code>$key</code> and the other (with the key <code>"value"</code>)
+            containing <code>$value</code>.</p>
+      </fos:rules>
+      <fos:notes>
+         <p>The function call <code>map:pair(K, V)</code> produces the same result as the
+         expression <code>map { "key": K, "value": V }</code>.</p>
+         <p>The function <code>map:pair</code> is intended primarily for use in conjunction with
+            the function <code>map:of-pairs</code>. A map may be constructed like this:</p>
+
+         <eg><![CDATA[
+map:of-pairs((
+   map:pair("Su", "Sunday"),
+   map:pair("Mo", "Monday"),
+   map:pair("Tu", "Tuesday"),
+   map:pair("We", "Wednesday"),
+   map:pair("Th", "Thursday"),
+   map:pair("Fr", "Friday"),
+   map:pair("Sa", "Saturday")
+   ))]]></eg>
+         <p>The <code>map:of-pairs</code> function can be used to construct
+            a map with a variable number of entries, for example:</p>
+         <eg><![CDATA[map:of-pairs(//book ! map:pair(./isbn, .))]]></eg>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>map:pair("M", "Monday")</fos:expression>
+               <fos:result>map { "key": "M", "value": "Monday" }</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
    <fos:function name="remove" prefix="map">
       <fos:signatures>
          <fos:proto name="remove" return-type="map(*)">
@@ -20226,8 +20409,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <fos:type>xs:boolean</fos:type>
                <fos:default>false</fos:default>
                <fos:values>
-                  <fos:value value="false"
-                           >
+                  <fos:value value="false">
                      All characters in the input that are valid
                      in the version of XML supported by the implementation, whether or not they are represented 
                      in the input by means of an escape sequence, are represented as unescaped characters in the result. Any
@@ -20787,6 +20969,1059 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       </fos:examples>
    </fos:function>
 
+   <fos:function name="parse-csv" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="parse-csv" return-type="array(xs:string)*">
+            <fos:arg name="csv" type="xs:string?"/>
+            <fos:arg name="options" type-ref="parse-csv-options" usage="inspection" default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Parses CSV data supplied as a string, returning the results in the form of a sequence of arrays of strings.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The effect of the one-argument form of this function is the same as calling the
+            two-argument form with an empty map as the value of the <code>$options</code>
+            argument.</p>
+
+         <p>The first argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of a
+            sequence of <code>xs:string</code> values. The function parses this sequence to return
+            an XDM value.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, implementations <rfc2119>must</rfc2119>
+            return the empty sequence as the value of the <code>body</code> field of the returned
+            map.</p>
+
+         <p>The <code>$options</code> argument can be used to control the way in which the parsing
+            takes place. The <termref
+               def="option-parameter-conventions">option parameter conventions</termref> apply.</p>
+
+         <p>Implementations <rfc2119>must</rfc2119> treat any of CRLF, CR, or LF as a single line
+            separator, as with <code>fn:unparsed-text-lines</code>.</p>
+
+         <p>Fields are regarded as simple <code>xs:string</code> values. Implementations
+            <rfc2119>must</rfc2119> leave whitespace within a field untouched, without
+            normalizing or otherwise altering it, unless whitespace trimming is explicitly requested
+            by the user using the <code>trim-whitespace</code> option.</p>
+
+         <p>When whitespace trimming is requested, implementations <rfc2119>must</rfc2119> only
+            strip leading and trailing whitespace, this is not equivalent to calling
+            <code>fn:normalize-space()</code>.</p>
+
+         <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
+
+         <fos:options>
+            <fos:option key="field-delimiter">
+               <fos:meaning>The character used to delimit fields within a record. An instance of
+                  <code>xs:string</code> whose length is exactly one.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>","</fos:default>
+            </fos:option>
+            <fos:option key="record-delimiter">
+               <fos:meaning>The characters used to delimit records within the CSV string, if the
+                  default use of line separator as record separator is to be overridden.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="quote-character">
+               <fos:meaning>The character used to quote fields within the CSV string. An instance of
+                  <code>xs:string</code> whose length is exactly one.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>'"'</fos:default>
+            </fos:option>
+            <fos:option key="trim-whitespace">
+               <fos:meaning>Determines whether fields should have leading and trailing whitespace
+                  removed before being returned.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="false">Fields will be returned with any leading or trailing
+                     whitespace intact. Implementations <rfc2119>must</rfc2119> preserve whitespace
+                     as it occurred in the CSV string.
+                  </fos:value>
+                  <fos:value value="true">Fields will be returned with leading or trailing
+                     whitespace removed, and all non-leading or -trailing whitespace preserved.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+         </fos:options>
+
+         <p>The result of the function is a sequence of arrays-of-strings
+            <code>array(xs:string)*</code>.</p>
+         <p>A blank row is represented as an empty array.</p>
+         <p>An empty field is represented by the empty string.</p>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <errorref class="CV" code="0001"/> occurs if the value of
+            <code>$csv</code> does not conform to the <bibref ref="rfc4180"/> grammar for quoted
+            fields.</p>
+         <p>A dynamic error <errorref class="CV" code="0002"/> occurs if one or more of the values
+            for <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are specified and are not a single character.</p>
+         <p>A dynamic error <errorref class="CV" code="0003"/> occurs if any of the values for
+            <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are equal.</p>
+      </fos:errors>
+      <fos:notes>
+         <p>All fields are returned as <code>xs:string</code> values.</p>
+         <p>Quoted fields in the input are returned without the quotes.</p>
+         <p>For more discussion of the returned data, see <specref ref="csv"/>.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:variable name="lf" id="escaped-lf"><![CDATA[char('x0A')]]></fos:variable>
+         <fos:variable name="cr" id="escaped-cr"><![CDATA[char('x0D')]]></fos:variable>
+         <fos:variable name="crlf" id="escaped-crlf"><![CDATA[char('x0D')||char('x0A')]]></fos:variable>
+         <fos:example>
+            <p>Handling any of the default record separators:</p>
+            <fos:test use="escaped-crlf">
+               <fos:expression>parse-csv(`name,city{$crlf}Bob,Berlin{$crlf}Alice,Aachen{$crlf}`)</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+            <fos:test use="escaped-cr">
+               <fos:expression>parse-csv(`name,city{$cr}Bob,Berlin{$cr}Alice,Aachen{$cr}`)</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+            <fos:test use="escaped-lf">
+               <fos:expression>parse-csv(`name,city{$lf}Bob,Berlin{$lf}Alice,Aachen{$lf}`)</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Quote handling:</p>
+            <fos:test use="escaped-crlf">
+               <fos:expression>parse-csv(`"name","city"${crlf}"Bob","Berlin"${crlf}"Alice","Aachen"${crlf}`)</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+            <fos:test use="escaped-crlf">
+               <fos:expression>parse-csv(`"name","city"${crlf}"Bob ""The Exemplar"" Mustermann","Berlin"${crlf}`)</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ['Bob "The Exemplar" Mustermann', "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Non-default record- and field-separators:</p>
+            <fos:test>
+               <fos:expression>parse-csv("name;city§Bob;Berlin§Alice;Aachen", map{"record-separator": "§", "field-separator": ";"})</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Non-default quote character:</p>
+            <fos:test use="escaped-crlf">
+               <fos:expression>parse-csv(`|name|,|city|${crlf}|Bob|,|Berlin|${crlf}`, map{"quote-character": "|"})</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Trimming whitespace in fields:</p>
+            <fos:test use="escaped-crlf">
+               <fos:expression xml:space="preserve">parse-csv(`name  ,city  ${crlf}Bob   ,Berlin${crlf}Alice ,Aachen${crlf}`, map{"trim-whitespace: true()})</fos:expression>
+               <fos:result>(
+   ["name", "city"]
+   ["Bob", "Berlin"],
+   ["Alice", "Aachen"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
+   <fos:function name="csv-to-xdm" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="csv-to-xdm" return-type-ref="parsed-csv-structure-record">
+            <fos:arg name="csv" type="xs:string?"/>
+            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Parses CSV data supplied as a string, returning the results in the form of a
+            <code>parsed-csv-structure-record</code> record containing information about the
+            column structure of the data, as well as the data itself as a sequence of
+            <code>csv-row-record</code> records.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The effect of the one-argument form of this function is the same as calling the
+            two-argument form with an empty map as the value of the <code>$options</code>
+            argument.</p>
+
+         <p>The first argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of a
+            sequence of <code>xs:string</code> values. The function parses this sequence using
+            <code>fn:parse-csv</code>, and then processes its result to return an XDM value.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, implementations <rfc2119>must</rfc2119>
+            return a <code>parsed-csv-structure-record</code> whose <code>rows</code> entry is the empty sequence.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, but column name extraction has been
+            requested, or explicit column names have been supplied, then the
+            <code>parsed-csv-structure-record</code> returned by implementations
+            <rfc2119>must</rfc2119> have a <code>rows</code> entry whose value is the empty
+            sequence.</p>
+
+         <p>The <code>$options</code> argument can be used to control the way in which the parsing
+            takes place. The <termref
+               def="option-parameter-conventions">option parameter conventions</termref> apply.</p>
+
+         <p>Handling of delimiters, and whitespace trimming, are handled using
+            <code>fn:parse-csv</code>, and the options controlling their use are defined
+            there.</p>
+
+         <p>If the <code>headers</code> option is true, implementations <rfc2119>must</rfc2119>
+            exclude the first record from the returned map’s <code>body</code> key, and return it as
+            the value of the returned map’s <code>headers-record</code> key.</p>
+
+         <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
+         <fos:options>
+            <fos:option key="field-delimiter">
+               <fos:meaning>The character used to delimit fields within a record. An instance of
+                  <code>xs:string</code> whose length is exactly one.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>","</fos:default>
+            </fos:option>
+            <fos:option key="record-delimiter">
+               <fos:meaning>The characters used to delimit records within the CSV string, if the
+                  default use of line separator as record separator is to be overridden.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="quote-character">
+               <fos:meaning>The character used to quote fields within the CSV string. An instance of
+                  <code>xs:string</code> whose length is exactly one.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>'"'</fos:default>
+            </fos:option>
+            <fos:option key="trim-whitespace">
+               <fos:meaning>Determines whether fields should have leading and trailing whitespace
+                  removed before being returned.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="false">Fields will be returned with any leading or trailing
+                     whitespace intact. Implementations <rfc2119>must</rfc2119> preserve whitespace
+                     as it occurred in the CSV string.
+                  </fos:value>
+                  <fos:value value="true">Fields will be returned with leading or trailing
+                     whitespace removed, and all non-leading or -trailing whitespace preserved.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="column-names">
+               <fos:meaning>Determines whether the first row of the CSV should be treated as a list
+                  of column names and returned as a <code>csv-columns-record</code> in the
+                  <code>columns</code> entry of the returned map.</fos:meaning>
+               <fos:type>union(xs:boolean, map(xs:string, xs:integer))</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="true">A <code>csv-columns-record</code> is constructed using the
+                     first row of the CSV data and returned as the <code>header</code> entry of the
+                     <code>parsed-csv-structure-record</code>. The row’s fields are transformed
+                     into a map of the form <code>{ "Column name": column-number }</code> for the
+                     <code>names</code> entry of the <code>csv-columns-record</code>, and the
+                     fields of the row are returned as a sequence of strings
+                     (<code>xs:string*</code>) for the <code>fields</code> entry. Implmentations
+                     <rfc2119>must</rfc2119> exclude the first row from the <code>rows</code>
+                     entry of the returned <code>parsed-csv-structure-record</code>.</fos:value>
+                  <fos:value value="false">Implementations <rfc2119>must</rfc2119> return an empty
+                     <code>csv-columns-record</code>, equivalent to the literal map <code>map {
+                     names: map {}, fields: () }</code>, in the <code>columns</code> entry of
+                     the returned <code>parsed-csv-structure-record</code>. Implementations
+                     <rfc2119>must not</rfc2119> exclude the first row from the <code>rows</code>
+                     entry of the <code>parsed-csv-structure-record</code>.</fos:value>
+                  <fos:value value="map(xs:integer, xs:string)">A <code>csv-columns-record</code> is
+                     constructed using the supplied map and returned as the <code>header</code>
+                     entry of the <code>parsed-csv-structure-record</code>. The supplied map is used
+                     as the <code>names</code> entry, and a sequence of strings for the
+                     <code>fields</code> is constructed, filling in blank columns with the empty
+                     string. and the fields of the row are returned as the <code>fields</code>
+                     entry. Implementations <rfc2119>must not</rfc2119> exclude the first row from
+                     the <code>rows</code> entry of the <code>parsed-csv-structure-record</code>.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="number-of-columns">
+               <fos:meaning>Specifies how many columns to return.</fos:meaning>
+               <fos:type>union(enum("all", "first-row"), xs:integer)</fos:type>
+               <fos:default>"all"</fos:default>
+               <fos:values>
+                  <fos:value value="'all'">All fields from all rows
+                     <rfc2119>must</rfc2119> be returned, without being padded or truncated,
+                     regardless of whether rows have varying numbers of fields, or of how many
+                     fields they have.</fos:value>
+                  <fos:value value="'first-row'">The number of fields in the first row is counted,
+                     and processing proceeds as if that integer had been supplied as the value for
+                     this option.</fos:value>
+                  <fos:value value="xs:integer">The number of columns is set to this value. Rows
+                     with more fields than the supplied value are truncated by discarding the extra
+                     fields. as if calling <code>fn:subsequence(R, 1, I)</code>, given the row’s
+                     sequence of fields in <var>R</var>, and the supplied value in <var>I</var>. If
+                     a row has fewer fields than the supplied value it is padded by appending empty
+                     string values until it contains the specified number of fields.</fos:value>
+               </fos:values>
+            </fos:option>
+         </fos:options>
+
+         <p>If column names were extracted from the first row of the CSV, when there are duplicate
+            column names, implementations <rfc2119>must</rfc2119> include only the first occurrence
+            in the <code>names</code> entry of the <code>csv-columns-record</code>, ignoring
+            subsequent entries. Any fields in the first record whose value is the empty string
+            <rfc2119>must</rfc2119> also be omitted.</p>
+
+         <p>The result of the function is a <code>parsed-csv-structure-record</code>, a map with
+            string keys containing two entries, <code>columns</code>, and <code>rows</code>.</p>
+         <olist>
+            <item>
+               <p>The entry with key <code>"columns"</code> holds a <code>csv-columns-record</code>
+                  record. If column names have been extracted, or supplied, then the record will
+                  have a <code>names</code> entry whose value is a map of column-name to
+                  column-number, <code>map(xs:integer, xs:string)</code>. The record’s
+                  <code>fields</code> entry will contains the column names as a sequence of
+                  strings, <code>xs:string*</code>, replicating the row they were taken from.</p>
+
+               <p>If column names were not extracted or supplied, then the
+                  <code>csv-columns-record</code> will contain a <code>names</code> entry whose
+                  value is an empty map, and a <code>fields</code> entry whose value is the empty
+                  sequence.</p>
+            </item>
+            <item>
+               <p>The entry with key <code>"rows"</code> holds the records of the CSV as a sequence
+                  of row records, <code>csv-row-record*</code>. If there is no data in the CSV, this
+                  will be the empty sequence.</p>
+
+               <p>Each record in the <code>rows</code> sequence contains a <code>fields</code>
+                  entry, containing the row’s fields as a sequence of strings,
+                  <code>xs:string*</code>, and a <code>field</code> entry containing an arity-one
+                  function. The function takes a string or integer key <var>K</var> as input, and
+                  returns the field in <var>fields</var> that corresponds to the position
+                  <var>K</var>, if <var>K</var> is an <code>xs:integer</code>, or the position
+                  obtained by looking up <var>K</var> in the <code>names</code> map if <var>K</var>
+                  is an <code>xs:string</code>.</p>
+
+               <p>The properties of this function are as follows:</p>
+               <ulist>
+                  <item>
+                     <p>name: absent</p>
+                  </item>
+                  <item>
+                     <p>parameter names: (<var>$key</var>)</p>
+                  </item>
+                  <item>
+                     <p>signature: <code>(union(xs:integer, xs:string)) => xs:string?</code></p>
+                  </item>
+                  <item>
+                     <p>non-local variable bindings: none</p>
+                  </item>
+                  <item>
+                     <p>implementation: implementation-dependent</p>
+                  </item>
+                  <item>
+                     <p>errors: A dynamic error <errorref class="CV" code="0004"/> occurs if the
+                        supplied <var>$key</var> is a string and does not occur in the map of column
+                        names.</p>
+                  </item>
+               </ulist>
+
+               <p>This function behaves identically to <code>fn:csv-fetch-field-by-column</code>
+                  would had the <code>header</code> entry of the containing
+                  <code>parsed-csv-structure-record</code> and the <code>fields</code> entry of
+                  this <code>csv-row-record</code> been supplied as its first two arguments, and
+                  <var>$key</var> as its last. See the definition of
+                  <code>fn:csv-fetch-field-by-column</code> for more details</p>
+            </item>
+         </olist>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <errorref class="CV" code="0001"/> occurs if the value of
+            <code>$csv</code> does not conform to the <bibref ref="rfc4180"/> grammar for quoted
+            fields.</p>
+         <p>A dynamic error <errorref class="CV" code="0002"/> occurs if one or more of the values
+            for <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are specified and are not a single character.</p>
+         <p>A dynamic error <errorref class="CV" code="0003"/> occurs if any of the values for
+            <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are equal.</p>
+      </fos:errors>
+      <fos:notes>
+         <p>All fields are returned as <code>xs:string</code> values.</p>
+         <p>Quoted fields in the input are returned without the quotes.</p>
+         <p>For more discussion of the returned data, see <specref ref="csv"/>.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:variable name="crlf" id="escaped-crlf-2"><![CDATA[char('x0D')||char('x0A')]]></fos:variable>
+         <fos:variable name="csv-string" id="csv-string">`name,city{$crlf}Bob,Berlin{$crlf}Alice,Aachen{$crlf}`</fos:variable>
+         <fos:variable name="options" id="non-default-delims">map { "record-separator": "§", "field-separator": ";", "quote-character": "|" }</fos:variable>
+         <fos:variable name="non-std-csv" id="non-standard-csv-string">`|name|;|city|§|Bob|;|Berlin|§|Alice|;|Aachen|`</fos:variable>
+         <fos:variable name="trim-opts" id="trim-whitespace-options">map { "trim-whitespace": true() }</fos:variable>
+         <fos:example>
+            <p>With defaults for delimiters and quotes, and default column extraction (false):</p>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>map:keys(csv-to-xdm($csv-string))</fos:expression>
+               <fos:result>("header", "rows")</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string)?columns</fos:expression>
+               <fos:result>map {
+  "names": map {},
+  "fields": (),
+}</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>count(csv-to-xdm($csv-string)?rows)</fos:expression>
+               <fos:result>3</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string)?rows[1]?field("name")</fos:expression>
+               <fos:error-result error-code="CV"/>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string)?rows[1]?field(2)</fos:expression>
+               <fos:result>"city"</fos:result>
+            </fos:test>
+            <p>With defaults for delimiters and quotes, and <code>columns: true()</code> set:</p>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string, map {"columns": true()})?columns</fos:expression>
+               <fos:result>map {
+  "names": map { "name": 1, "city": 2 },
+  "fields": ("name", "city"),
+}</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>count(csv-to-xdm($csv-string, map {"columns": true()})?rows)</fos:expression>
+               <fos:result>2</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string), map {"columns": true()}?rows[1]?fields</fos:expression>
+               <fos:result>("Bob", "Berlin")</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string, map {"columns": true()})?rows[1]?field("name")</fos:expression>
+               <fos:result>"Bob"</fos:result>
+            </fos:test>
+            <fos:test use="csv-string escaped-crlf-2">
+               <fos:expression>csv-to-xdm($csv-string, map {"columns": true()})?rows[1]?field(2)</fos:expression>
+               <fos:result>"Berlin"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Non-default record- and field-delimiters, non-default quotes:</p>
+            <fos:test use="non-default-delims non-standard-csv-string">
+               <fos:expression>map:keys(csv-to-xdm($non-std-csv, $options))</fos:expression>
+               <fos:result>("header", "rows")</fos:result>
+            </fos:test>
+            <fos:test use="non-default-delims non-standard-csv-string">
+               <fos:expression>csv-to-xdm($non-std-csv, $options)?columns</fos:expression>
+               <fos:result>map {
+                  "names": map {},
+                  "fields": (),
+                  }</fos:result>
+            </fos:test>
+            <fos:test use="non-default-delims non-standard-csv-string">
+               <fos:expression>count(csv-to-xdm($non-std-csv, $options)?rows)</fos:expression>
+               <fos:result>3</fos:result>
+            </fos:test>
+            <fos:test use="non-default-delims non-standard-csv-string">
+               <fos:expression>csv-to-xdm($non-std-csv, $options)?rows[3]?field(1)</fos:expression>
+               <fos:result>"Alice"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Trimming whitespace in fields:</p>
+            <fos:test use="escaped-crlf-2 trim-whitespace-options">
+               <fos:expression xml:space="preserve">csv-to-xdm(`name  ,city  ${crlf}Bob   ,Berlin${crlf}Alice ,Aachen${crlf}`, $trim-opts)?rows?fields</fos:expression>
+               <fos:result>("name", "city", "Bob", "Berlin", "Alice", "Aachen")</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:variable name="csv-uneven-cols" id="uneven-cols-csv-string">`date,name,city,amount,currency,original amount,note{$crlf}2023-07-19,Bob,Berlin,10.00,USD,13.99{$crlf}2023-07-20,Alice,Aachen,15.00{$crlf}2023-07-20,Charlie,Celle,15.00,GBP,11.99,cake,not a lie{$crlf}`</fos:variable>
+         <fos:example>
+            <p>Filtering columns</p>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>csv-to-xdm($csv-uneven-cols, map { "columns": true(), "filter-columns": (2,1,4) })?columns?fields</fos:expression>
+               <fos:result>("name","date","amount")</fos:result>
+            </fos:test>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>for $r in csv-to-xdm($csv-uneven-cols, map { "columns": true(), "filter-columns": (2,1,4) })?rows return array { $r?fields }</fos:expression>
+               <fos:result>(
+   ["Bob","2023-07-19","10.00"],
+   ["Alice","2023-07-20","15.00"],
+   ["Charlie","2023-07-20","15.00"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Specifying the number of columns, using <code>"all"</code> (the default)</p>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>csv-to-xdm($csv-uneven-cols, map { "columns": true(), "number-of-columns": "all" })?columns?fields</fos:expression>
+               <fos:result>("date","name","city","amount","currency","original amount","note")</fos:result>
+            </fos:test>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>for $r in csv-to-xdm($csv-uneven-cols, map { "columns": true(), "number-of-columns": "all" })?rows return array { $r?fields }</fos:expression>
+               <fos:result>(
+   ["2023-07-19","Bob","Berlin","10.00","USD","13.99"],
+   ["2023-07-20","Alice","Aachen","15.00"],
+   ["2023-07-20","Charlie","Celle","15.00","GBP","11.99","cake","not a lie"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Specifying the number of columns using <code>"first-row"</code></p>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>csv-to-xdm($csv-uneven-cols, map { "columns": true(), "number-of-columns": "first-row" })?columns?fields</fos:expression>
+               <fos:result>("date","name","city","amount","currency","original amount","note")</fos:result>
+            </fos:test>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>for $r in csv-to-xdm($csv-uneven-cols, map { "columns": true(), "number-of-columns": "first-row" })?rows return array { $r?fields }</fos:expression>
+               <fos:result>(
+   ["2023-07-19","Bob","Berlin","10.00","USD","13.99",""],
+   ["2023-07-20","Alice","Aachen","15.00","","",""],
+   ["2023-07-20","Charlie","Celle","15.00","GBP","11.99","cake"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Specifying the number of columns with a number</p>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>csv-to-xdm($csv-uneven-cols, map { "columns": true(), "number-of-columns": 6 })?columns?fields</fos:expression>
+               <fos:result>("date","name","city","amount","currency","original amount")</fos:result>
+            </fos:test>
+            <fos:test use="escaped-crlf-2 uneven-cols-csv-string">
+               <fos:expression>for $r in csv-to-xdm($csv-uneven-cols, map { "columns": true(), "number-of-columns": 6 })?rows return array { $r?fields }</fos:expression>
+               <fos:result>(
+   ["2023-07-19","Bob","Berlin","10.00","USD","13.99"],
+   ["2023-07-20","Alice","Aachen","15.00","",""],
+   ["2023-07-20","Charlie","Celle","15.00","GBP","11.99"]
+)</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
+   <fos:function name="csv-to-xml" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="csv-to-xml" return-type="element(fn:csv)">
+            <fos:arg name="csv" type="xs:string?"/>
+            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property dependency="static-base-uri">context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Parses CSV data supplied as a string, returning the results as an XML document, as described by
+            <specref ref="csv-represent-as-xml"/>.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The effect of the one-argument form of this function is the same as calling the
+            two-argument form with an empty map as the value of the <code>$options</code>
+            argument.</p>
+
+         <p>The first argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of a
+            sequence of <code>xs:string</code> values. The function parses this sequence using
+            <code>fn:parse-csv</code>, and then processes its result to return an XML document.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, implementations <rfc2119>must</rfc2119>
+            return a <code><![CDATA[<fn:csv>]]></code> whose <code><![CDATA[<fn:rows>]]></code> element
+            is empty.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, but column name extraction has been
+            requested, but explicit column names have not been supplied, then the implementation
+            <rfc2119>must</rfc2119> return a <code><![CDATA[<fn:csv>]]></code> element whose
+            <code><![CDATA[<fn:header>]]></code> element is empty.</p>
+
+         <p>If <code>$csv</code> is the empty sequence, but explicit column names have been
+            supplied, then the implementation <rfc2119>must</rfc2119> return a
+            <code><![CDATA[<fn:csv>]]></code> element whose <code><![CDATA[<fn:header>]]></code>
+            element contains the appropriate <code><![CDATA[<fn:column>]]></code> elements.</p>
+
+         <p>The <code>$options</code> argument can be used to control the way in which the parsing
+            takes place. The <termref
+               def="option-parameter-conventions">option parameter conventions</termref> apply.</p>
+
+         <p>Handling of delimiters, and whitespace trimming, are handled using
+            <code>fn:parse-csv</code>, and the options controlling their use are defined
+            there.</p>
+
+         <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
+
+         <fos:options>
+            <fos:option key="field-delimiter">
+               <fos:meaning>The character used to delimit fields within a record. An instance of
+                  <code>xs:string</code> whose length is exactly one.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>","</fos:default>
+            </fos:option>
+            <fos:option key="record-delimiter">
+               <fos:meaning>The characters used to delimit records within the CSV string, if the
+                  default use of line separator as record separator is to be overridden.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="quote-character">
+               <fos:meaning>The character used to quote fields within the CSV string. An instance of
+                  <code>xs:string</code> whose length is exactly one.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>'"'</fos:default>
+            </fos:option>
+            <fos:option key="trim-whitespace">
+               <fos:meaning>Determines whether fields should have leading and trailing whitespace
+                  removed before being returned.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="false">Fields will be returned with any leading or trailing
+                     whitespace intact. Implementations <rfc2119>must</rfc2119> preserve whitespace
+                     as it occurred in the CSV string.
+                  </fos:value>
+                  <fos:value value="true">Fields will be returned with leading or trailing
+                     whitespace removed, and all non-leading or -trailing whitespace preserved.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="column-names">
+               <fos:meaning>Determines whether the first row of the CSV should be treated as a list
+                  of column headers and returned as a <code>csv-columns-record</code> in the
+                  <code>header</code> entry of the returned map.</fos:meaning>
+               <fos:type>union(xs:boolean, map(xs:integer, xs:string))</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="true">The <code><![CDATA[<header>]]></code> element is populated
+                     with <code><![CDATA[<column>]]></code> elements constructed using the values
+                     from the first row of the CSV data. Implmentations <rfc2119>must</rfc2119>
+                     exclude the first row from the <code><![CDATA[<rows>]]></code>
+                     element.</fos:value>
+                  <fos:value value="false">Implementations <rfc2119>must not</rfc2119> include a
+                     <code><![CDATA[<header>]]></code> element in the output.</fos:value>
+                  <fos:value value="map(xs:integer, xs:string)">The supplied map is used to
+                     construct a sequence of <code><![CDATA[<column>]]></code> elements to populate
+                     the <code><![CDATA[<header>]]></code> element. The <code>xs:integer</code>
+                     denotes the column number, and the <code>xs:string</code> the column name. Gaps
+                     in the integer sequence of column numbers are filled with empty
+                     <code><![CDATA[<column>]]></code> elements. Implementations <rfc2119>must
+                     not</rfc2119> exclude the first row from the <code><![CDATA[<rows>]]></code>
+                     element.</fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="filter-columns">
+               <fos:meaning>A sequence indicating which fields to return and in which order. If this
+                  option is missing or the empty sequence, all fields are returned in their natural
+                  order. Items in the sequence are treated as the index of the column to return. In
+                  the returned data, only fields from the specified columnms are returned, and in
+                  the order specified.</fos:meaning>
+               <fos:type>xs:integer*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="number-of-columns">
+               <fos:meaning>Specifies how many columns to return.</fos:meaning>
+               <fos:type>union(enum("all", "first-row"), xs:integer)</fos:type>
+               <fos:default>"all"</fos:default>
+               <fos:values>
+                  <fos:value value="'all'">All fields from all rows
+                     <rfc2119>must</rfc2119> be returned, without being padded or truncated,
+                     regardless of whether rows have varying numbers of fields, or of how many
+                     fields they have.</fos:value>
+                  <fos:value value="'first-row'">The number of fields in the first row is counted,
+                     and processing proceeds as if that integer had been supplied as the value for
+                     this option.</fos:value>
+                  <fos:value value="xs:integer">The number of columns is set to this value. Rows
+                     with more fields than the supplied value are truncated by discarding the extra
+                     fields. as if calling <code>fn:subsequence(R, 1, I)</code>, given the row’s
+                     sequence of fields in <var>R</var>, and the supplied value in <var>I</var>. If
+                     a row has fewer fields than the supplied value it is padded by appending empty
+                     string values until it contains the specified number of fields.</fos:value>
+               </fos:values>
+            </fos:option>
+         </fos:options>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <errorref class="CV" code="0001"/> occurs if the value of
+            <code>$csv</code> does not conform to the <bibref ref="rfc4180"/> grammar for quoted
+            fields.</p>
+         <p>A dynamic error <errorref class="CV" code="0002"/> occurs if one or more of the values
+            for <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are specified and are not a single character.</p>
+         <p>A dynamic error <errorref class="CV" code="0003"/> occurs if any of the values for
+            <code>field-separator</code>, <code>record-separator</code>,
+            <code>quote-character</code> are equal.</p>
+      </fos:errors>
+      <fos:examples>
+         <fos:variable name="crlf" id="escaped-crlf-3"><![CDATA[char('x0D')||char('x0A')]]></fos:variable>
+         <fos:variable name="csv-string" id="csv-string-2">`name,city{$crlf}Bob,Berlin{$crlf}Alice,Aachen{$crlf}`</fos:variable>
+         <fos:example>
+            <p>An empty CSV with default column extraction (false):</p>
+            <fos:test>
+               <fos:expression>csv-to-xml("")</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:rows/>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>An empty CSV with column extraction:</p>
+            <fos:test>
+               <fos:expression>csv-to-xml("", map { "columns": true() })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header/>
+   <fn:rows/>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>An empty CSV with explicit column names:</p>
+            <fos:test>
+               <fos:expression>csv-to-xml("", map { "columns": map { "name": 1, "city": 3 })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:column>name</fn:field>
+      <fn:column/>
+      <fn:column>city</fn:field>
+   </fn:header>
+   <fn:rows/>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>With defaults for delimiters and quotes, and column extraction:</p>
+            <fos:test use="escaped-crlf-3 csv-string-2">
+               <fos:expression>csv-to-xml($csv-string, map { "columns": true() })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:column>name</fn:field>
+      <fn:column>city</fn:field>
+   </fn:header>
+   <fn:rows>
+      <fn:row>
+         <fn:field column="name">Bob</fn:field>
+         <fn:field column="city">Berlin</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="name">Alice</fn:field>
+         <fn:field column="city">Aachen</fn:field>
+      </fn:row>
+   </fn:rows>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>With defaults for delimiters and quotes, and column extraction:</p>
+            <fos:test use="escaped-crlf-3 csv-string-2">
+               <fos:expression>csv-to-xml($csv-string, map { "columns": true() })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:field>name</fn:field>
+      <fn:field>city</fn:field>
+   </fn:header>
+   <fn:rows>
+      <fn:row>
+         <fn:field column="name">Bob</fn:field>
+         <fn:field column="city">Berlin</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="name">Alice</fn:field>
+         <fn:field column="city">Aachen</fn:field>
+      </fn:row>
+   </fn:rows>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:variable name="csv-uneven-cols" id="uneven-cols-csv-string-2">`date,name,city,amount,currency,original amount,note{$crlf}2023-07-19,Bob,Berlin,10.00,USD,13.99{$crlf}2023-07-20,Alice,Aachen,15.00{$crlf}2023-07-20,Charlie,Celle,15.00,GBP,11.99,cake,not a lie{$crlf}`</fos:variable>
+         <fos:example>
+            <p>Filtering columns</p>
+            <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
+               <fos:expression>csv-to-xml($csv-string, map { "columns": true(), "filter-columns": (2,1,4) })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:field>name</fn:field>
+      <fn:field>date</fn:field>
+      <fn:field>amount</fn:field>
+   </fn:header>
+   <fn:rows>
+      <fn:row>
+         <fn:field column="name">Bob</fn:field>
+         <fn:field column="date">2023-07-19</fn:field>
+         <fn:field column="amount">10.00</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="name">Alice</fn:field>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="name">Charlie</fn:field>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+      </fn:row>
+   </fn:rows>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Specifying the number of columns, using "all" (the default)</p>
+            <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
+               <fos:expression>csv-to-xml($csv-uneven-cols, map { "columns": true(), "number-of-columns": "all" })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:field>date</fn:field>
+      <fn:field>name</fn:field>
+      <fn:field>city</fn:field>
+      <fn:field>amount</fn:field>
+      <fn:field>currency</fn:field>
+      <fn:field>original amount</fn:field>
+      <fn:field>note</fn:field>
+   </fn:header>
+   <fn:rows>
+      <fn:row>
+         <fn:field column="date">2023-07-19</fn:field>
+         <fn:field column="name">Bob</fn:field>
+         <fn:field column="city">Berlin</fn:field>
+         <fn:field column="amount">10.00</fn:field>
+         <fn:field column="currency">USD</fn:field>
+         <fn:field column="original amount">13.99</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="name">Alice</fn:field>
+         <fn:field column="city">Aachen</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="name">Charlie</fn:field>
+         <fn:field column="city">Celle</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+         <fn:field column="currency">GBP</fn:field>
+         <fn:field column="original amount">11.99</fn:field>
+         <fn:field column="note">cake</fn:field>
+         <fn:field>not a lie</fn:field>
+      </fn:row>
+   </fn:rows>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Specifying the number of columns using <code>"first-row"</code></p>
+            <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
+               <fos:expression>csv-to-xml($csv-uneven-cols, map { "columns": true(), "number-of-columns": "first-row" })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:field>date</fn:field>
+      <fn:field>name</fn:field>
+      <fn:field>city</fn:field>
+      <fn:field>amount</fn:field>
+      <fn:field>currency</fn:field>
+      <fn:field>original amount</fn:field>
+      <fn:field>note</fn:field>
+   </fn:header>
+   <fn:rows>
+      <fn:row>
+         <fn:field column="date">2023-07-19</fn:field>
+         <fn:field column="name">Bob</fn:field>
+         <fn:field column="city">Berlin</fn:field>
+         <fn:field column="amount">10.00</fn:field>
+         <fn:field column="currency">USD</fn:field>
+         <fn:field column="original amount">13.99</fn:field>
+         <fn:field column="note"/>
+      </fn:row>
+      <fn:row>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="name">Alice</fn:field>
+         <fn:field column="city">Aachen</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+         <fn:field column="currency"/>
+         <fn:field column="original amount"/>
+         <fn:field column="note"/>
+      </fn:row>
+      <fn:row>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="name">Charlie</fn:field>
+         <fn:field column="city">Celle</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+         <fn:field column="currency">GBP</fn:field>
+         <fn:field column="original amount">11.99</fn:field>
+         <fn:field column="note">cake</fn:field>
+      </fn:row>
+   </fn:rows>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>Specifying the number of columns with a number</p>
+            <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
+               <fos:expression>csv-to-xml($csv-uneven-cols, map { "columns": true(), "number-of-columns": 6 })</fos:expression>
+               <fos:result><![CDATA[
+<fn:csv>
+   <fn:header>
+      <fn:field>date</fn:field>
+      <fn:field>name</fn:field>
+      <fn:field>city</fn:field>
+      <fn:field>amount</fn:field>
+      <fn:field>currency</fn:field>
+      <fn:field>original amount</fn:field>
+   </fn:header>
+   <fn:rows>
+      <fn:row>
+         <fn:field column="date">2023-07-19</fn:field>
+         <fn:field column="name">Bob</fn:field>
+         <fn:field column="city">Berlin</fn:field>
+         <fn:field column="amount">10.00</fn:field>
+         <fn:field column="currency">USD</fn:field>
+         <fn:field column="original amount">13.99</fn:field>
+      </fn:row>
+      <fn:row>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="name">Alice</fn:field>
+         <fn:field column="city">Aachen</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+         <fn:field column="currency"/>
+         <fn:field column="original amount"/>
+      </fn:row>
+      <fn:row>
+         <fn:field column="date">2023-07-20</fn:field>
+         <fn:field column="name">Charlie</fn:field>
+         <fn:field column="city">Celle</fn:field>
+         <fn:field column="amount">15.00</fn:field>
+         <fn:field column="currency">GBP</fn:field>
+         <fn:field column="original amount">11.99</fn:field>
+      </fn:row>
+   </fn:rows>
+</fn:csv>
+]]></fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
+   <fos:function name="csv-fetch-field-by-column" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="csv-fetch-field-by-column" return-type="xs:string">
+            <fos:arg name="columns" type-ref="csv-columns-record"/>
+            <fos:arg name="fields" type="xs:string*" usage="inspection"/>
+            <fos:arg name="key" type="union(xs:integer, xs:string)" usage="inspection"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Fetches a field from a parsed CSV row by name or position.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The first argument is a <code>csv-columns-record</code>, as provided in the
+            <code>header</code> entry of the <code>parsed-csv-structure-record</code> returned by
+            <code>fn:csv-to-xdm</code>.</p>
+
+         <p>The second argument is the row whose fields are being fetched, represented as a sequence
+            of strings as would be provided by the <code>fields</code> entry of a
+            <code>csv-row-record</code> returned by <code>fn:csv-to-xdm</code>.</p>
+
+         <p>The final argument is the key to use for the lookup, supplied as either an
+            <code>xs:string</code> (the column name) or <code>xs:integer</code> (the column
+            position).</p>
+
+         <p>When the argument is a string, if the string is missing from the keys of the map
+            contained in the <code>names</code> entry of the <code>$columns</code> argument’s
+            <code>csv-columns-record</code>, then implementations <rfc2119>must</rfc2119> raise
+            an <errorref class="CV" code="0004"/>.</p>
+
+         <p>When the argument is an integer, if the integer position is outside the bounds of the
+            <code>$fields</code> sequence (i.e. is greater than the size of the sequence), then
+            implementations <rfc2119>must</rfc2119> return the empty string.</p>
+
+         <p>The function returns the field in the sequence <code>$fields</code> at the position in
+            the sequence either explicitly provided (when <code>$key</code> is an
+            <code>xs:integer</code>), or looked up from the map of name to position in the
+            <code>csv-columns-record</code> provided in <code>$columns</code>.</p>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <errorref class="CV" code="0004"/> occurs if the value of
+            <code>$key</code> is an <code>xs:string</code> but is not a member of the keys of the
+            map contained in the <code>names</code> entry of the <code>csv-columns-record</code> in
+            <code>$header</code>. fields.</p>
+      </fos:errors>
+      <fos:examples>
+         <fos:variable name="columns" id="csv-column-fetch-columns">map {
+   "names": map { "name": 1, "city": 2 },
+   "fields: ("name", "city")
+}</fos:variable>
+         <fos:variable name="fields" id="csv-column-fetch-fields">("Bob", "Berlin")</fos:variable>
+         <fos:example>
+            <p>With a string key:</p>
+            <fos:test use="csv-column-fetch-columns csv-column-fetch-fields">
+               <fos:expression>csv-fetch-field-by-column($columns, $fields, "name")</fos:expression>
+               <fos:result>"Bob"</fos:result>
+            </fos:test>
+            <fos:test use="csv-column-fetch-columns csv-column-fetch-fields">
+               <fos:expression>csv-fetch-field-by-column($columns, $fields, "amount")</fos:expression>
+               <fos:error-result error-code="FOCV0004"/>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>With an integer key</p>
+            <fos:test use="csv-column-fetch-columns csv-column-fetch-fields">
+               <fos:expression>csv-fetch-field-by-column($columns, $fields, 2)</fos:expression>
+               <fos:result>"Berlin"</fos:result>
+            </fos:test>
+            <fos:test use="csv-column-fetch-columns csv-column-fetch-fields">
+               <fos:expression>csv-fetch-field-by-column($columns, $fields, 3)</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
    <fos:function name="parse-json" prefix="fn">
       <fos:signatures>
          <fos:proto name="parse-json" return-type="item()?">
@@ -20887,8 +22122,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <fos:type>xs:boolean</fos:type>
                <fos:default>true</fos:default>
                <fos:values>
-                  <fos:value value="false"
-                           >
+                  <fos:value value="false">
                      All characters in the input that are valid
                      in the version of XML supported by the implementation, whether or not they are represented 
                      in the input by means of an escape sequence, are represented as unescaped characters in the result. Any
@@ -21144,7 +22378,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                of the initial octets of the resource.</p>
             </item>
             <item>
-               <p>If the resource contains characters that are not valid in the version of XML used by the processor,
+               <p diff="chg" at="2023-06-12">If the resource contains characters that are not
+               <termref def="dt-permitted-character">permitted characters</termref>,
             then rather than raising an error as <code>fn:unparsed-text#1</code> does, the function replaces such characters by the equivalent
             JSON escape sequence prior to parsing.</p>
                <note>
@@ -21678,11 +22913,11 @@ else $fallback($position)</eg>
                <fos:result>["b", "c"]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>["a"] => array:get(1, ->($i) { })</fos:expression>
+               <fos:expression>["a"] => array:get(1, void#1)</fos:expression>
                <fos:result>"a"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>[] => array:get(1, ->($i) { })</fos:expression>
+               <fos:expression>[] => array:get(1, void#1)</fos:expression>
                <fos:result>()</fos:result>
             </fos:test>
          </fos:example>
@@ -21815,7 +23050,7 @@ else $fallback($position)</eg>
             members in positions 1 to <code>array:size($array)</code> are the same as the members in the corresponding position
             of <code>$array</code>, and the member in position <code>array:size($array) + 1</code> is <code>$member</code>.</p>
          <p diff="chg" at="A">More formally, the result is the value of the expression
-            <code>array:of((array:members($array), map{'value':$member}))</code>.</p>
+            <code>array:of-members((array:members($array), map{'value':$member}))</code>.</p>
 
       </fos:rules>
       <fos:examples>
@@ -21857,7 +23092,7 @@ else $fallback($position)</eg>
       <fos:rules>
          <p>Informally, the function concatenates the members of several arrays into a single array.</p>
          <p diff="chg" at="A">More formally, the function returns the result of 
-            <code>array:of($arrays ! array:members(.))</code>.</p>
+            <code>array:of-members($arrays ! array:members(.))</code>.</p>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -21914,7 +23149,7 @@ else $fallback($position)</eg>
          <p diff="add" at="2022-12-19">Setting the third argument to the empty sequence has the same effect as omitting the argument.</p>
          <p>Except in error cases, the result of the three-argument version of the function is the 
             value of the expression
-            <code role="example">array:of(array:members($array) => fn:subsequence($start, $length))</code>.</p>
+            <code role="example">array:of-members(array:members($array) => fn:subsequence($start, $length))</code>.</p>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="AY" code="0001"
@@ -22058,7 +23293,7 @@ else $fallback($position)</eg>
          <p>Returns an array containing selected members of a supplied input array based on their position.</p>
       </fos:summary>
       <fos:rules>
-         <p>Returns the value of <code role="example">array:of(array:members($array) => fn:slice($start, $end, $step))</code></p>
+         <p>Returns the value of <code role="example">array:of-members(array:members($array) => fn:slice($start, $end, $step))</code></p>
       </fos:rules>
       <fos:notes>
          <p>The function is formally defined by converting the array to a sequence, applying 
@@ -22180,7 +23415,7 @@ else $fallback($position)</eg>
             except the members whose position (counting from 1) is present in the sequence <code>$positions</code>.
          The order of the remaining members is preserved.</p>
          <p diff="chg" at="A">More formally, the result of the function, except in error cases, is given by the expression
-            <code role="example">array:of(array:members($array) => fn:remove($positions))</code>.
+            <code role="example">array:of-members(array:members($array) => fn:remove($positions))</code>.
          </p>
       </fos:rules>
       <fos:errors>
@@ -22242,7 +23477,7 @@ else $fallback($position)</eg>
             then all members from <code>$array</code> whose position is greater than or equal to <code>$position</code>. 
             Positions are counted from 1.</p>
          <p>More formally, except in error cases, the result is the value of the expression
-            <code role="example">array:of(array:members($array) => fn:insert-before($position, map{'value':$member}))</code>.</p>
+            <code role="example">array:of-members(array:members($array) => fn:insert-before($position, map{'value':$member}))</code>.</p>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error occurs <errorref class="AY" code="0001"
@@ -22476,7 +23711,7 @@ else $fallback($position)</eg>
       </fos:summary>
       <fos:rules>
          <p diff="chg" at="A">The function returns the result of the expression:
-            <code role="example">array:of(array:members($array) => fn:reverse())</code></p>
+            <code role="example">array:of-members(array:members($array) => fn:reverse())</code></p>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -22526,7 +23761,7 @@ else $fallback($position)</eg>
          <p>Informally, the function returns an array whose members are obtained by applying 
          the supplied <code>$function</code> to each member of the input array in turn.</p>
          <p>More formally, the function returns the result of the expression
-            <code>array:of(array:members($array) ! map { 'value': $action(?value) }</code>.</p>
+            <code>array:of-members(array:members($array) ! map { 'value': $action(?value) }</code>.</p>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -22576,7 +23811,7 @@ else $fallback($position)</eg>
          <p>Informally, the function returns an array containing those members of the input
          array that satisfy the supplied predicate.</p>
          <p>More formally, the function returns the result of the expression
-            <code role="example">array:of(array:members($array) => fn:filter(function($m) { $predicate($m?value) })</code>.</p>
+            <code role="example">array:of-members(array:members($array) => fn:filter(function($m) { $predicate($m?value) })</code>.</p>
 
       </fos:rules>
       <fos:errors>
@@ -22771,7 +24006,7 @@ else array:fold-left(array:tail($array),
       </fos:summary>
       <fos:rules>
          <p>The function returns the result of the expression:</p>
-         <eg><code>array:of(
+         <eg><code>array:of-members(
     for-each-pair(array:members($array1), 
                      array:members($array2), 
                      function($m, $n) {map{'value': $action($m?value, $n?value)}}))</code>
@@ -22830,7 +24065,7 @@ return array:for-each-pair(
          <p>Informally, <code>array:build#2</code> applies the supplied function to each item 
             in the input sequence, and the resulting sequence becomes one member of the returned array.</p>
          <p>More formally, <code>array:build#2</code> returns the result of the expression:</p>
-         <eg>array:of($input ! map{'value':$action(.)})</eg>
+         <eg>array:of-members($input ! map{'value':$action(.)})</eg>
       </fos:rules>
       <fos:notes>
          <p>The single-argument function <code>array:build($input)</code> is equivalent to the XPath
@@ -22905,7 +24140,7 @@ return array:for-each-pair(
          
       </fos:rules>
       <fos:notes>
-         <p>This function is the inverse of <code>array:of</code>.</p>   
+         <p>This function is the inverse of <code>array:of-members</code>.</p>   
       </fos:notes>
  
       <fos:examples>
@@ -22927,7 +24162,7 @@ return array:for-each-pair(
                <fos:expression><eg>let $array := [ "any array" ]
 return deep-equal(
   $array,
-  array:of(array:members($array))
+  array:of-members(array:members($array))
 )</eg></fos:expression>
                <fos:result>true()</fos:result>
             </fos:test>
@@ -22938,9 +24173,67 @@ return deep-equal(
       </fos:history>
    </fos:function>
    
-   <fos:function name="of" prefix="array">
+   <fos:function name="split" prefix="array">
       <fos:signatures>
-         <fos:proto name="of" return-type="array(*)">
+         <fos:proto name="split" return-type="array(*)*">
+            <fos:arg name="array" type="array(*)" usage="inspection"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Delivers the contents of an array as a sequence of singleton arrays.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The members of the array are delivered as a sequence of arrays. 
+            Each returned array encapsulates the value of a single array member.</p>
+      </fos:rules>
+      <fos:notes>
+         <p>The function call <code>array:split($array)</code> produces the same result as the
+            expression <code>for member $m in $array return [ $m ]</code>.</p>
+         <p>This function is the inverse of <code>array:join</code>.</p>   
+      </fos:notes>
+ 
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>array:split([])</fos:expression>
+               <fos:result>[]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>array:split([1 to 5])</fos:expression>
+               <fos:result>[(1, 2, 3, 4, 5)]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:split(
+  array { 1 to 5 }
+)</eg></fos:expression>
+               <fos:result>[1], [2], [3], [4], [5]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:split(
+  [(1,1), (2,4), (3,9), (4,16), (5,25)]
+) ! sum(.)</eg></fos:expression>
+               <fos:result>2, 6, 12, 20, 30</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>let $array := [ "any array" ]
+return deep-equal(
+  $array,
+  array:join(array:split($array))
+)</eg></fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+   
+   <fos:function name="of-members" prefix="array">
+      <fos:signatures>
+         <fos:proto name="of-members" return-type="array(*)">
             <fos:arg name="input" type="record(value as item()*)*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -22969,19 +24262,19 @@ return deep-equal(
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>array:of(())</fos:expression>
+               <fos:expression>array:of-members(())</fos:expression>
                <fos:result>[]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:of(map { 'value': (1 to 5) })</fos:expression>
+               <fos:expression>array:of-members(map { 'value': (1 to 5) })</fos:expression>
                <fos:result>[(1, 2, 3, 4, 5)]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:of((1 to 5) ! map { 'value': . })</fos:expression>
+               <fos:expression>array:of-members((1 to 5) ! map { 'value': . })</fos:expression>
                <fos:result>[1, 2, 3, 4, 5]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:of((1 to 5) ! map { 'value': (., .*.) })</fos:expression>
+               <fos:expression>array:of-members((1 to 5) ! map { 'value': (., .*.) })</fos:expression>
                <fos:result>[(1,1), (2,4), (3,9), (4,16), (5,25)]</fos:result>
             </fos:test>
          </fos:example>
@@ -23034,9 +24327,7 @@ return deep-equal(
                ref="choosing-a-collation"/>.</p>
          
          <p diff="chg" at="A">The result of <code>array:sort#3</code> is the value of the expression
-            <code role="example">array:of(array:members($array) => sort($collation, function($x) { $key($x?value) }))</code></p>
-
-        
+            <code role="example">array:of-members(array:members($array) => sort($collation, function($x) { $key($x?value) }))</code></p>
       </fos:rules>
       <fos:errors>
          <p>If the set of computed sort keys contains values that are not comparable using the <code>le</code> operator then the sort 
@@ -24399,8 +25690,9 @@ declare function fn:all(
             letters A-F may be in either upper or lower case.</p></item>
             
          </olist>
-         <p>The result must consist of valid XML characters (XML 1.0 or XML 1.1, whichever is supported by
-         the processor). For example <code>fn:char("#xDEAD")</code> is invalid because it is in the surrogate range.</p>
+         <p diff="chg" at="2023-06-12">The result must consist of
+         <termref def="dt-permitted-character">permitted characters</termref>.
+         For example <code>fn:char("#xDEAD")</code> is invalid because it is in the surrogate range.</p>
       </fos:rules>
       <fos:errors>
          <p>The function fails with a dynamic error <errorref
