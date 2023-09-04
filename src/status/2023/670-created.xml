@@ -1,0 +1,297 @@
+<item>
+   <title>Issue #670 created</title>
+   <pubDate>2023-09-02T05:45:09Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/670</link>
+   <guid>https://qt4cg.org/@qt4cg/2023/#created-670</guid>
+   <description>&lt;div&gt;&lt;p&gt;The trouble with XPath‘s fn:fold-right. A fix and Proposal for fn:fold-lazy&lt;/p&gt;&lt;div class="markup"&gt;&lt;h1&gt;&lt;strong&gt;The trouble with XPath‘s fn:fold-right.&lt;/strong&gt;&lt;br/&gt;&lt;strong&gt;Laziness in XPath.&lt;/strong&gt;&lt;/h1&gt;
+&lt;p&gt;&lt;em&gt;This article discusses the standard XPath 3.1 function &lt;strong&gt;fn:fold-right,&lt;/strong&gt; its definition in the official Spec, its lack of apparent use-cases and its utter failure to reproduce the (lazy) behavior of Haskell’s &lt;strong&gt;foldr&lt;/strong&gt; , which is presumed to be the motivation behind &lt;strong&gt;fn:fold-right&lt;/strong&gt;.&lt;/em&gt;&lt;br/&gt;
+&lt;em&gt;The 2nd part of the article introduces the implementation of short-circuiting and generators, which together unprecedentedly provide laziness in XPath. Based on these, a new XPath function: &lt;strong&gt;fn:fold-lazy&lt;/strong&gt;    is implemented, that utilizes laziness, similar to Haskell’s &lt;strong&gt;foldr&lt;/strong&gt;. This behavior is demonstrated in specific examples&lt;/em&gt;&lt;/p&gt;
+&lt;h2&gt;&lt;strong&gt;Introduction&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;Higher order functions were introduced into XPath starting with &lt;a href="https://www.w3.org/TR/xpath-functions-30/#basic-hofs"&gt;version 3.0&lt;/a&gt; in 2014 and later in &lt;a href="https://www.w3.org/TR/xpath-functions-31/#higher-order-functions"&gt;version 3.1&lt;/a&gt; in 2017.&lt;br/&gt;
+The definition of the standard function &lt;a href="https://www.w3.org/TR/xpath-functions-31/#func-fold-right"&gt;fn:fold-right&lt;/a&gt; closely mimics that of Haskell’s &lt;a href="https://hackage.haskell.org/package/base-4.18.0.0/docs/Prelude.html#g:11"&gt;foldr&lt;/a&gt;, and anyone acquainted with &lt;strong&gt;foldr&lt;/strong&gt; can be left with the impression that &lt;strong&gt;fn:fold-right&lt;/strong&gt; would have identical behavior (and hence use-cases) as Haskell’s &lt;strong&gt;foldr&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Unfortunately, there is a critical difference between the definitions of these two functions. Whereas the definition of &lt;strong&gt;foldr&lt;/strong&gt; explicitly defines its behavior when provided with a function, lazy in its 1st argument – from &lt;a href="https://hackage.haskell.org/package/base-4.18.0.0/docs/Prelude.html#g:11"&gt;Haskell’s definition of
+foldr&lt;/a&gt;:&lt;/p&gt;
+&lt;p&gt;“… &lt;em&gt;Note that since the head of the resulting expression is produced by an application of the operator to the first element of the list, given an operator lazy in its right argument, foldr can produce a terminating expression from an unbounded list.”&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;The XPath definition of &lt;a href="https://www.w3.org/TR/xpath-functions-31/#func-fold-right"&gt;fn:fold-right&lt;/a&gt; does not mention any laziness.&lt;/p&gt;
+&lt;p&gt;There is no official concept of “laziness” in XPath, thus &lt;strong&gt;fn:fold-right&lt;/strong&gt; doesn’t cover some of the most important use-cases of Haskell’s &lt;strong&gt;foldr&lt;/strong&gt; , which can successfully produce a result when passed an infinite (or having unlimited length) list.&lt;/p&gt;
+&lt;p&gt;This in fact makes &lt;strong&gt;fn:fold-right&lt;/strong&gt; almost useless, and explains why even some  of the members of the XPath 3.1 WG have stated on occasions that they do not see why the function was introduced.&lt;/p&gt;
+&lt;h2&gt;&lt;strong&gt;fn:fold-right gone wrong – example&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;This Haskell code:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-hs"&gt;foldr (\x y -&amp;gt; (if x == 0 then 0 else x*y)) 1 (map (\x -&amp;gt; x - 15) [1 ..1000000])
+
+foldr (\x y -&amp;gt; (if x == 0 then 0 else x*y)) 1 (map (\x -&amp;gt; x - 15) [1 ..10000000])
+
+foldr (\x y -&amp;gt; (if x == 0 then 0 else x*y)) 1 (map (\x -&amp;gt; x - 15) [1 ..])
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;produces the product of all numbers in the following list, respectively:&lt;/p&gt;
+&lt;p&gt;[-14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, &lt;strong&gt;0&lt;/strong&gt;, 1, 2, 3, …, 999985]&lt;/p&gt;
+&lt;p&gt;[-14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, &lt;strong&gt;0&lt;/strong&gt;, 1, 2, 3, …, 9999985]&lt;/p&gt;
+&lt;p&gt;[-14, -13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, &lt;strong&gt;0&lt;/strong&gt;, 1, 2, 3, …, ] -- up to infinity.&lt;/p&gt;
+&lt;p&gt;Because all these &lt;code&gt;3&lt;/code&gt; lists contain a zero as their 15th item, the expected result is &lt;strong&gt;&lt;code&gt;0&lt;/code&gt;&lt;/strong&gt; when evaluating any of these &lt;code&gt;3&lt;/code&gt; expressions – even in the last case where the provided as argument list is infinite. And this is indeed what happens:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/4e7cbbc7-543f-433a-bdb6-e25aa59d1172" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;Not only Haskell produces the correct result in all cases, but &lt;em&gt;regardless of the list’s length, the result is produced instantaneously&lt;/em&gt;!&lt;/p&gt;
+&lt;p&gt;Now, let us evaluate this equivalent XPath expression with BaseX:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $product := function($input as array(xs:integer)) as xs:integer
+                         { 
+                           array:fold-right($input, 1, function($x as xs:integer, $y as xs:integer) as  xs:integer 
+                                                               {if($x eq 0) then 0 else $x * $y}) 
+                         },
+    $ar := array { (1 to 36) ! function($x as xs:integer) as xs:integer {$x -15}(.)}
+  return
+     $product($ar)
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here we are passing a list containing just 36 integers. The result is quite unexpected and spectacular:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/83a86918-deb3-4f4a-9b2f-38bab85d863f" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;Here is what happens:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;Even though when processing the 15th integer in the array the result is 0, the XPath processor continues to evaluate the RHS (right-hand side) until the last member of the array (&lt;code&gt;36&lt;/code&gt;).&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;On “its way back” the XPath processor multiplies: &lt;code&gt;(36*35*34*33*32* …*6*5*4)*3&lt;/code&gt;, and the result of the right-most multiplication is bigger than the maximum integer (or decimal) that this XPath processor supports.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;C r r r a s s h&lt;/strong&gt; … As seen in the screenshot above.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The root cause for this unfortunate behavior is that the XPath processor doesn’t support short-circuiting and laziness. And thus, &lt;strong&gt;fn:fold-right&lt;/strong&gt; is useless even in the normal/trivial case of a collection (array) with only 36 members. Not to speak of collections containing millions of members, or even infinite ones…&lt;/p&gt;
+&lt;p&gt;Let us see what happens when evaluating similar expressions with another XPath processor: Saxon.&lt;/p&gt;
+&lt;p&gt;Saxon seems to produce the correct result, however it takes exponentially longer times when the length of the passed array is increased, leading to this one:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/e0b9e34e-b58e-4100-a22a-48581be84072" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;It took 261 seconds for the evaluation to be done, but accessing the &lt;code&gt;15&lt;/code&gt;th member of the array and short-circuiting to &lt;code&gt;0&lt;/code&gt; should be almost instantaneous…&lt;br/&gt;
+So what happens in this case? The difference between BaseX and Saxon is that Saxon implements a “Big Integer” and thus can multiply almost &lt;code&gt;1 000 000&lt;/code&gt; integers without getting a value that cannot be handled… But doing almost &lt;code&gt;1&lt;/code&gt;M multiplications of big integers obviously takes time …&lt;/p&gt;
+&lt;p&gt;What is common in these two examples? Obviously, neither BaseX nor Saxon detects and performs short-circuiting. Why is this? What is the reason for this?&lt;/p&gt;
+&lt;p&gt;I asked a developer of BaseX if I could submit a bug about this behavior. His answer was shockingly unexpected: “&lt;em&gt;This is not a bug, because no requirement in the Specification has been violated&lt;/em&gt;”.&lt;/p&gt;
+&lt;p&gt;Thus, the main cause of the common behavior of both XPath processors to handle the evaluation of these examples, is the specification of the function, which blatantly allows such crap to happen.&lt;/p&gt;
+&lt;p&gt;Now that we see this, let us try to provide the wanted, useful behavior writing our own function.&lt;/p&gt;
+&lt;h2&gt;&lt;strong&gt;The fix: Step 1 – fn:fold-right in pure XPath&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;Before going in depth with our pure XPath solution, we need as a base a pure-XPath implementation of &lt;strong&gt;fn:fold-right&lt;/strong&gt; .&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt; let $fold-right-inner := function ($seq as item()*,
+                                    $zero as item()*,
+                                    $f as function(item(), item()*) as item()* ,
+                                    $self as function(*)
+                                   ) as item()*
+{
+  if(empty($seq)) then $zero
+    else
+      $f(head($seq), $self(tail($seq), $zero, $f, $self))
+},
+
+    $fold-right := function ($seq as item()*,
+                             $zero as item()*,
+                             $f as function(item(), item()*) as item()* 
+                            ) as item()*
+{
+  $fold-right-inner($seq, $zero, $f, $fold-right-inner)
+},
+               
+   $fAdd := function($x, $y)  {$x + $y},
+   $fMult  := function($x, $y)  {$x * $y}
+   
+   return
+     $fold-right((1 to 6) ! function($x){$x - 3}(.), 1, $fMult)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;When we evaluate the above with any of the two XPath processors, the correct result is produced:&lt;/p&gt;
+&lt;p&gt;720&lt;/p&gt;
+&lt;p&gt;And we certainly do have exactly the same problems as the provided built-in &lt;strong&gt;fn:fold-right&lt;/strong&gt; with a similar example:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/b65e72b1-a5a6-4f73-b485-c316a05f3cc4" alt="image"/&gt;&lt;/p&gt;
+&lt;h2&gt;&lt;strong&gt;The fix: Step 2 – &lt;code&gt;$fold-right-sc&lt;/code&gt; detecting and performing short-circuiting&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;Now that we have &lt;strong&gt;&lt;code&gt;$fold-right&lt;/code&gt;&lt;/strong&gt; as a base, let us add code to it so that it  will detect and perform short-circuiting. We will implement a function similar to &lt;strong&gt;&lt;code&gt;$fold-right&lt;/code&gt;&lt;/strong&gt; but having this signature:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;    $fold-right-sc := function ($seq as item()*,
+                                $zero as item()*,
+                                $f as function(item(), item()*) as item()*,
+                                $fGetPartial as function(*)
+                               ) as item()*
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The last of the function’s parameters &lt;code&gt;$fGetPartial&lt;/code&gt; returns a new function that is the partial application of &lt;code&gt;$f&lt;/code&gt;, when its 1st argument is set to the current member of the input sequence &lt;code&gt;$seq&lt;/code&gt;. The idea is that whenever short-circuiting is possible, &lt;code&gt;$fGetPartial&lt;/code&gt; returns not a function having one argument (arity &lt;code&gt;1&lt;/code&gt;), but a constant – a function with &lt;code&gt;0&lt;/code&gt; arguments (arity &lt;code&gt;0&lt;/code&gt;).&lt;/p&gt;
+&lt;p&gt;If the arity of the so produced partial application is &lt;code&gt;0&lt;/code&gt;, then our code will immediately return with the value &lt;code&gt;$f($currentItem)&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Here is the complete code of &lt;code&gt;$fold-right-sc&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt; let $fold-right-sc-inner := function ($seq as item()*,
+                                       $zero as item()*,
+                                       $f as function(item(), item()*) as item()*,
+                                       $fGetPartial as function(*),
+                                       $self as function(*)
+                                      ) as item()*
+{
+  if(empty($seq)) then $zero
+    else
+      if(function-arity($fGetPartial(head($seq), $zero)) eq 0)
+        then $fGetPartial(head($seq), $zero) ()
+        else $f(head($seq), $self(tail($seq), $zero, $f, $fGetPartial, $self))
+},
+
+    $fold-right-sc := function ($seq as item()*,
+                                $zero as item()*,
+                                $f as function(item(), item()*) as item()*,
+                                $fGetPartial as function(*)
+                               ) as item()*
+{
+  $fold-right-sc-inner($seq, $zero, $f, $fGetPartial, $fold-right-sc-inner)
+},
+               
+   $fAdd := function($x, $y)  {$x + $y},
+   $fMult  := function($x, $y)  {if($x eq 0) then 0 else $x * $y},
+   $fMultGetPartial := function($x, $y)
+   {
+     if($x eq 0)
+       then function() {0}
+       else function($z) {$x * $z}
+   }
+   
+   return
+     $fold-right-sc((1 to 1000000) ! function($x){$x - 3}(.), 1, $fMult, $fMultGetPartial)
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Do note&lt;/strong&gt;:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;
+&lt;p&gt;If the current item (the head of the sequence) is &lt;code&gt;0&lt;/code&gt;, then &lt;code&gt;$fMultGetPartial&lt;/code&gt; returns a function with &lt;code&gt;0&lt;/code&gt; arguments (constant) that produces &lt;code&gt;0&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;code&gt;$fold-right-sc&lt;/code&gt; (inner) treats differently a partial application of arity &lt;code&gt;0&lt;/code&gt; from a partial application with arity &lt;code&gt;1&lt;/code&gt;. In the former case it simply produces the expected constant value without recursing further. Here is the relevant code fragment&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ol&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;  if(empty($seq)) then $zero
+    else
+      if(function-arity($fGetPartial(head($seq), $zero)) eq 0)
+        then $fGetPartial(head($seq), $zero) ()
+        else $f(head($seq), $self(tail($seq), $zero, $f, $fGetPartial, $self))
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And now BaseX has no problems with the evaluation, even though the input sequence is of size 1M. The complete evaluation takes just a fraction of a millisecond (0.04 ms):&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/3eec8eba-95e9-4ef4-bc4f-a1c5b9a3f0fc" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;With Saxon things are not so good. Even though Saxon produces the correct result, evaluating the expression with an input sequence of size 1M takes 0.5 seconds (half a second), and evaluating the expression with an input sequence of 10M takes 5 seconds (10 times as long):&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/087c279c-86b9-4b51-a086-eb7c3f85f802" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;&lt;img src="media/92f636bb9993afbd2fc75157f3024f75.png" alt=""/&gt;&lt;/p&gt;
+&lt;p&gt;What is happening?&lt;/p&gt;
+&lt;p&gt;Even though Saxon performs much faster than the previous 261 seconds, due to  detecting the short-circuiting possibility and performing the short-circuit, Saxon still processes all 10M items when evaluating this subexpression (which obviously the more optimized BaseX doesn’t do in advance):&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;(1 to 10000000) ! function($x){$x - 3}(.)&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;Therefore, we have one remaining problem: How to prevent long sequences (or arrays) from being fully materialized before starting the evaluation of &lt;code&gt;$fold-right-sc&lt;/code&gt; ?&lt;/p&gt;
+&lt;h2&gt;&lt;strong&gt;The fix: Step 3 – replacing collections with generators&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;Generators are well known and provided out of the box in many programming languages. Per Wikipedia:&lt;/p&gt;
+&lt;p&gt;“In &lt;a href="https://en.wikipedia.org/wiki/Computer_science"&gt;computer science&lt;/a&gt;,  a &lt;strong&gt;generator&lt;/strong&gt; is a &lt;a href="https://en.wikipedia.org/wiki/Subroutine"&gt;routine&lt;/a&gt; that can be used to control the &lt;a href="https://en.wikipedia.org/wiki/Iteration"&gt;iteration&lt;/a&gt; behaviour of a &lt;a href="https://en.wikipedia.org/wiki/Control_flow#Loops"&gt;loop&lt;/a&gt;. All generators are also &lt;a href="https://en.wikipedia.org/wiki/Iterator"&gt;iterators&lt;/a&gt;.&lt;a href="https://en.wikipedia.org/wiki/Generator_(computer_programming)#cite_note-1"&gt;[1]&lt;/a&gt; A generator is very similar to a function that returns an array, in that a generator has parameters, can be called, and generates a sequence of values.
+However, instead of building an array containing all the values and returning them all at once, a generator yields the values one at a time, which requires less memory and allows the caller to get started processing the first few values immediately. In short, a generator &lt;em&gt;looks like&lt;/em&gt; a function but &lt;em&gt;behaves like&lt;/em&gt; an &lt;a href="https://en.wikipedia.org/wiki/Iterator"&gt;iterator&lt;/a&gt;.”&lt;/p&gt;
+&lt;p&gt;A full-fledged generator (such as implemented in C#) is an instance of a &lt;a href="https://en.wikipedia.org/wiki/Finite-state_machine"&gt;Finite State Machine(FSM)&lt;/a&gt;, and implementing it in full generality goes beyond the topic and goals of this article. Expect another article soon that will provide this.&lt;/p&gt;
+&lt;p&gt;Here we will implement a simple kind of generator, that when passed an integer index &lt;code&gt;$N&lt;/code&gt;, produces the &lt;code&gt;$N&lt;/code&gt;th item of a specific sequence. Although this is probably the simplest form of a generator, it can be useful in many cases and is a good illustrative solution to our current problem. The whole approach of replacing “something” with a function that must be called to produce this “something” is known as &lt;a href="https://wiki.haskell.org/Lifting"&gt;“lifting”&lt;/a&gt;&lt;/p&gt;
+&lt;p&gt;First, we will add to our &lt;code&gt;$fold-right&lt;/code&gt; just the use of generators, without the detection and performing of short-circuiting:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $fold-right-lifted-inner := function ($seqGen as function(xs:integer) as array(*),
+                                    $index as xs:integer,
+                                    $zero as item()*,
+                                    $f as function(item(), item()*) as item()* ,
+                                    $self as function(*)
+                                   ) as item()*
+                                {
+                                  let $nextSeqResult := $seqGen($index),
+                                      $isEndOfSeq :=  $nextSeqResult(1),
+                                      $seqItem := $nextSeqResult(2)
+                                    return
+                                      if($isEndOfSeq) then $zero
+                                        else
+                                          $f($seqItem, $self($seqGen, $index+1, $zero, $f, $self))
+                                },
+
+    $fold-right-lifted := function ($seqGen as function(xs:integer) as array(*),
+                                    $zero as item()*,
+                                    $f as function(item(), item()*) as item()* 
+                                  ) as item()*
+                                  {
+                                    $fold-right-lifted-inner($seqGen, 1, $zero, $f, $fold-right-lifted-inner)
+                                  },
+                                  
+   $NaN := xs:double('NaN'),
+   
+   $fSeq1ToN := function($ind as xs:integer, $indStart as xs:integer, $indEnd as xs:integer) as array(*)
+                {
+                  if($ind lt  $indStart or $ind gt $indEnd)
+                    then  array{true(), $NaN}
+                    else array{false(), $ind}
+                },
+   $fSeq-1-6 := $fSeq1ToN(?, 1, 6),
+               
+   $fAdd := function($x, $y)  {$x + $y},
+   $fMult  := function($x, $y)  {$x * $y}
+   
+   return
+     $fold-right-lifted($fSeq-1-6, 1, $fMult) 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here we see an example of a simple generator – the function &lt;strong&gt;&lt;code&gt;$fSeq1ToN&lt;/code&gt;&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;This function returns an array with two members: a Boolean, which if &lt;code&gt;true()&lt;/code&gt; indicates the end of the sequence, and the 2nd member is the current head of the simulated sequence.&lt;br/&gt;
+The generator has two other parameters which are the values (inclusive) for the start-index and the end-index. Whenever the passed value of &lt;code&gt;$ind&lt;/code&gt; is outside of this specified range, &lt;strong&gt;&lt;code&gt;$fSeq1ToN&lt;/code&gt;&lt;/strong&gt; returns a result array with its first member set to &lt;code&gt;true()&lt;/code&gt; (the 2nd member of the result must be ignored in this case), which indicates end-of sequence.&lt;br/&gt;
+Otherwise it returns &lt;code&gt;array{false(), $ind}&lt;/code&gt; . It is the responsibility of the caller to stop calling the generator:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;   $fSeq1ToN := function($ind as xs:integer, $indStart as xs:integer, $indEnd as xs:integer) as array(*)
+                {
+                  if($ind lt  $indStart or $ind gt $indEnd)
+                    then  array{true(), $NaN}
+                    else array{false(), $ind}
+                }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Evaluating the complete XPath expression above produces the correct result both in BaseX and in Saxon: the product of the integers &lt;code&gt;1&lt;/code&gt; to &lt;code&gt;6&lt;/code&gt;:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/adcee4dc-ddec-4f4c-9e29-1c754315e3d3" alt="image"/&gt;&lt;/p&gt;
+&lt;p&gt;Now that we have successfully implemented the last missing piece of our complete  solution, let us put everything together:&lt;/p&gt;
+&lt;h2&gt;&lt;strong&gt;The fix: Step 4 – putting it all together&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;Finally we can replace the input sequence in $fold-right-sc with a generator:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $fold-right-sc-lifted-inner := function ($seqGen as function(xs:integer) as array(*),
+                                    $index as xs:integer,
+                                    $zero as item()*,
+                                    $f as function(item(), item()*) as item()* ,
+                                    $fGetPartial as function(*),
+                                    $self as function(*)
+                                   ) as item()*
+                                {
+                                  let $nextSeqResult := $seqGen($index),
+                                      $isEndOfSeq :=  $nextSeqResult(1),
+                                      $seqItem := $nextSeqResult(2)
+                                    return
+                                      if($isEndOfSeq) then $zero
+                                        else
+                                          if(function-arity($fGetPartial($seqItem, $zero)) eq 0)
+                                            then $fGetPartial($seqItem, $zero) ()
+                                            else $f($seqItem, $self($seqGen, $index+1, $zero, $f, $fGetPartial, $self))
+                                },
+
+    $fold-right-sc-lifted := function ($seqGen as function(xs:integer) as array(*),
+                                       $zero as item()*,
+                                       $f as function(item(), item()*) as item()*,
+                                       $fGetPartial as function(*) 
+                                      ) as item()*
+                                      {
+                                         $fold-right-sc-lifted-inner($seqGen, 1, $zero, $f, $fGetPartial, $fold-right-sc-lifted-inner)
+                                      },
+                                  
+   $NaN := xs:double('NaN'),
+   
+   $fSeq1ToN := function($ind as xs:integer, $indStart as xs:integer, $indEnd as xs:integer) as array(*)
+                {
+                  if($ind lt  $indStart or $ind gt $indEnd)
+                    then  array{true(), $NaN}
+                    else array{false(), $ind}
+                },
+   $fSeq-1-6 := $fSeq1ToN(?, 1, 6),
+   $fSeq-1-1M := $fSeq1ToN(?, 1, 1000000),
+   $fSeq-1-1M-minus-3 := function($n as xs:integer)
+   {
+     array{$fSeq-1-1M($n)(1), $fSeq-1-1M($n)(2) -3}
+   },
+               
+   $fAdd := function($x, $y)  {$x + $y},
+   $fMult  := function($x, $y)  {$x * $y},
+   $fMultGetPartial := function($x, $y)
+   {
+     if($x eq 0)
+       then function() {0}
+       else function($z) {$x * $z}
+   }
+   
+   return
+     $fold-right-sc-lifted($fSeq-1-1M-minus-3, 1, $fMult, $fMultGetPartial) 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now this expression (and even one involving a sequence of 10M items take &lt;code&gt;0&lt;/code&gt; seconds to be evaluated in both BaseX and Saxon, producing the correct result &lt;code&gt;0&lt;/code&gt;:&lt;/p&gt;
+&lt;p&gt;&lt;img src="https://github.com/qt4cg/qtspecs/assets/10605892/e00a1c4c-ee3a-473e-8386-c6fbf10b6d04" alt="image"/&gt;&lt;/p&gt;
+&lt;h2&gt;&lt;br/&gt;&lt;strong&gt;Summary&lt;/strong&gt;&lt;/h2&gt;
+&lt;p&gt;This article demonstrated the problems inherent to the standard XPath &lt;strong&gt;fn:fold-right&lt;/strong&gt; and correctly determined the root causes for these problems: no short-circuiting and no collection generators.&lt;/p&gt;
+&lt;p&gt;Then a step-by-step solution was built that shows how to implement lazy evaluation in XPath based on short-circuiting and collection generators. This fixed the error raised by BaseX and dramatically reduced the evaluation time of
+Saxon from &lt;code&gt;261&lt;/code&gt; seconds to &lt;code&gt;0&lt;/code&gt; seconds.&lt;/p&gt;
+&lt;p&gt;The new function produced can be called &lt;strong&gt;&lt;code&gt;$fold-lazy&lt;/code&gt;&lt;/strong&gt; and is a good candidate for inclusion in the XPath 4.0 standard functions.&lt;/p&gt;
+&lt;p&gt;A complete design and implementation of a general collection-generator will be published in a separate article.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
