@@ -26,7 +26,7 @@
      <xsl:comment> ************************************************** </xsl:comment>
      <xsl:text>&#10;</xsl:text>
 
-      <test-set name="misc-BuiltInKeywords">
+      <test-set name="misc-BuiltInKeywords" covers-40="keywords">
          <description>Tests for keyword argument names to built-in functions: 4.0 proposal</description>        
          <dependency type="spec" value="XP40+ XQ40+"/>
          <xsl:comment>Generated using generate-keyword-test-set.xsl from function-catalog.xml on {current-date()}</xsl:comment>
