@@ -307,19 +307,21 @@
 	      <xsl:if test="fos:preamble">
 		<p><xsl:copy-of select="fos:preamble/node()" copy-namespaces="no"/></p>
 	      </xsl:if>
-	      <p>
-		<xsl:choose>
-		  <xsl:when test="fos:expression/@xml:space = 'preserve'">
+	      <xsl:choose>
+		<xsl:when test="fos:expression/@xml:space = 'preserve'">
+	          <p>
 		    <code><xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/></code>
-		  </xsl:when>
-		  <xsl:when test="fos:expression/eg">
-		    <xsl:apply-templates select="fos:expression/node()"/>
-		  </xsl:when>
-		  <xsl:otherwise>
+                  </p>
+		</xsl:when>
+		<xsl:when test="fos:expression/eg">
+		  <xsl:apply-templates select="fos:expression/node()"/>
+		</xsl:when>
+		<xsl:otherwise>
+	          <p>
 		    <code><xsl:value-of select="fos:expression"/></code>
-		  </xsl:otherwise>
-		</xsl:choose>
-	      </p>
+                  </p>
+		</xsl:otherwise>
+	      </xsl:choose>
 	    </td>
           </tr>
 	  <tr>
@@ -356,19 +358,21 @@
 	      <xsl:if test="fos:preamble">
 		<p><xsl:copy-of select="fos:preamble/node()" copy-namespaces="no"/></p>
 	      </xsl:if>
-	      <p>
-		<xsl:choose>
-		  <xsl:when test="fos:expression/@xml:space = 'preserve'">
+	      <xsl:choose>
+		<xsl:when test="fos:expression/@xml:space = 'preserve'">
+                  <p>
 		    <code><xsl:value-of select="translate(fos:expression, ' ', '&#xa0;')"/></code>
-		  </xsl:when>
-		  <xsl:when test="fos:expression/eg">
-		    <xsl:apply-templates select="fos:expression/node()"/>
-		  </xsl:when>
-		  <xsl:otherwise>
+                  </p>
+		</xsl:when>
+		<xsl:when test="fos:expression/eg">
+		  <xsl:apply-templates select="fos:expression/node()"/>
+		</xsl:when>
+		<xsl:otherwise>
+                  <p>
 		    <code><xsl:value-of select="fos:expression"/></code>
-		  </xsl:otherwise>
-		</xsl:choose>
-	      </p>
+                  </p>
+		</xsl:otherwise>
+	      </xsl:choose>
 	    </td>
 	    <td valign="top">
 	      <xsl:if test="fos:result[2]"><p>One of the following:</p></xsl:if>
