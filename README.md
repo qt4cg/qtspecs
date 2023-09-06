@@ -16,3 +16,5 @@ There are numerous paths to participating in qtspec development.
 * Open or comment on an [issue](https://github.com/qt4cg/qtspecs/issues) for the specs. This is the primary method for requesting modifications to the specs. Additions to the spec should be well described in order to aid adoption and implementation. Editorial changes are also accepted via issues.
 * Fork the repo, make changes, and make a pull request. Note the [contribution guidelines](https://github.com/qt4cg/qtspecs/blob/02722859c851355969a93665c773d2a621b7448f/CONTRIBUTING.md).
 * Join the [xml.com Slack](https://join.slack.com/t/xmlcom/shared_invite/zt-1g1yparfo-8JBa2o4zlh_UgxiIwiqwjQ). qtspecs discussion is centered in the #xpath-ng channel.
+
+hack
