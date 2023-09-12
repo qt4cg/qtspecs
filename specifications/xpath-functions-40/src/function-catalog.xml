@@ -4432,6 +4432,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
          </fos:example>
       </fos:examples>
    </fos:function>
+
    <fos:function name="encode-for-uri" prefix="fn">
       <fos:signatures>
          <fos:proto name="encode-for-uri" return-type="xs:string">
@@ -4478,9 +4479,9 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <fos:example>
             <fos:test>
                <fos:expression><eg>encode-for-uri(
-  "http://www.example.com/00/Weather/CA/Los%20Angeles#ocean"
+  "http://example.com/00/Weather/CA/Los%20Angeles#ocean"
 )</eg></fos:expression>
-               <fos:result>"http%3A%2F%2Fwww.example.com%2F00%2FWeather%2FCA%2FLos%2520Angeles%23ocean"</fos:result>
+               <fos:result>"http%3A%2F%2Fexample.com%2F00%2FWeather%2FCA%2FLos%2520Angeles%23ocean"</fos:result>
                <fos:postamble>This is probably not what the user intended because all of the
                   delimiters have been encoded.</fos:postamble>
             </fos:test>
@@ -4488,23 +4489,104 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <fos:example>
             <fos:test>
                <fos:expression><eg>concat(
-  "http://www.example.com/",
+  "http://example.com/",
   encode-for-uri("~bébé")
 )</eg></fos:expression>
-               <fos:result>"http://www.example.com/~b%C3%A9b%C3%A9"</fos:result>
+               <fos:result>"http://example.com/~b%C3%A9b%C3%A9"</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
                <fos:expression><eg>concat(
-  "http://www.example.com/",
+  "http://example.com/",
   encode-for-uri("100% organic")
 )</eg></fos:expression>
-               <fos:result>"http://www.example.com/100%25%20organic"</fos:result>
+               <fos:result>"http://example.com/100%25%20organic"</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
    </fos:function>
+
+   <fos:function name="decode-from-uri" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="decode-from-uri" return-type="xs:string">
+            <fos:arg name="value" type="xs:string?"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Decodes URI-escaped characters in a string.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>This function returns the original representation of a URI-escaped string.</p>
+         <p>If <code>$value</code> is the empty sequence, the function returns the zero-length
+            string.</p>
+         <p>Otherwise, the value is first converted to an sequence of octets. Each plus sign
+            (<code>+</code>) is replaced with the octet representing a space character
+            (<code>x20</code>), and any substring that matches the regular expression
+            <code>%[a-fA-F0-9][a-fA-F0-9]</code> is replaced with an octet for the two-digit
+            hexadecimal number that follows the percent sign. Characters that are not part of
+            such a substring are replaced with the octets of their UTF-8 encoding.
+            For example, <code>"A%42+C"</code> results in the octets <code>x41</code>,
+            <code>x42</code>, <code>x20</code>, <code>x43</code>, and <code>"💡"</code> yields
+            <code>xF0</code>, <code>x9F</code>, <code>x92</code>, and <code>xA1</code>.</p>
+         <p>If <code>%</code> is followed by up to two characters that are no hexadecimal digits,
+            these characters are replaced by octets <code>xEF</code>, <code>xBF</code>,
+            and <code>xBD</code>, that is, the UTF-8 encoding of the Unicode replacement character
+            (<code>0xFFFD</code>). For example, the incomplete or invalid percent-encoded strings
+            <code>"%"</code>, <code>"%X"</code>, and <code>"%AX"</code> are all replaced with
+            these octets. For the string <code>"%1X!"</code>, the octets <code>xEF</code>,
+            <code>xBF</code>, <code>xBD</code>, and <code>x21</code> are returned.</p>
+         <p>Next, the resulting octets are interpreted as UTF-8. For example,
+            <code>x41</code>, <code>x42</code>, <code>x20</code>, and <code>x43</code>
+            becomes <code>"AB C"</code>, and <code>xF0</code>, <code>x9F</code>,
+            <code>x92</code>, and <code>xA1</code> becomes <code>"💡"</code>.</p>
+         <p>If an invalid UTF-8 octet sequence is encountered, the octets that have
+            successfully been parsed are replaced with a Unicode replacement character.
+            Examples:</p>
+         <ulist>
+            <item><p>The single octet <code>xF0</code> is converted to <code>"�"</code>.</p></item>
+            <item><p>The octets <code>xF0</code>, <code>x9F</code>, <code>x92</code>, and
+               <code>x41</code> are converted to <code>"�A"</code>:
+               The bit pattern of the first octet indicates that the UTF-8 character comprises
+               four octets. As the fourth octet is invalid, a Unicode replacement character is
+               added for the first three octets, and the fourth (invalid) octet is parsed as a
+               new character.</p></item>
+            <item><p>Similarly, the octets <code>xF0</code>, <code>xF0</code>, <code>x9F</code>,
+               <code>x92</code>, and <code>xA1</code> are converted to <code>"�💡"</code>:
+               The second octet is invalid, but it becomes valid when being parsed as the
+               first octet of the remaining UTF-8 sequence.</p></item>
+         </ulist>
+         <p>Similarly, a UTF-8 octet sequence that represents a codepoint that is not a
+            valid XML character is replaced with a Unicode replacement character.
+            For example, <code>x00</code> becomes <code>"�"</code>.</p>
+      </fos:rules>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>decode-from-uri("http://example.com/")</fos:expression>
+               <fos:result>"http://example.com/"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>decode-from-uri("~b%C3%A9b%C3%A9?a=b+c")</fos:expression>
+               <fos:result>"~bébé?a=b c"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>decode-from-uri("%00-%XX-%F0%9F%92%41-%F0%F0%9F%92%A1")</fos:expression>
+               <fos:result>"�-�-�A-�💡"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+
    <fos:function name="iri-to-uri" prefix="fn">
       <fos:signatures>
          <fos:proto name="iri-to-uri" return-type="xs:string">
