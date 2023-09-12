@@ -357,8 +357,9 @@
                   <code class="as">as&#160;</code>
                   <code>
                     <a href="#{@type-ref}">
-                      <xsl:value-of select="@type-ref"/>
+                      <xsl:value-of select="@type-ref"/>                
                     </a>
+                    <xsl:value-of select="@type-ref-occurs"/>    
                   </code>
                   <xsl:if test="not (@default) and not($last)">,</xsl:if>
                 </xsl:if>
@@ -393,9 +394,10 @@
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
                   </xsl:when>
                   <xsl:when test="@return-type-ref">
-                    <a href="#{@return-type-ref}">
+                    <a href="#{replace(@return-type-ref, '[*+?]$', '')}">
                       <xsl:value-of select="@return-type-ref"/>
                     </a>
+                    <xsl:value-of select="@return-type-ref-occurs"/>
                     <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
                   </xsl:when>
                   <!--<xsl:otherwise>

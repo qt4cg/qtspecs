@@ -225,7 +225,7 @@
                                         else if ($isOp)
                                              then 'op'
                                              else 'fn'}">
-				<xsl:copy-of select="@name, @return-type, @return-type-ref, @diff, @at"/>
+				<xsl:copy-of select="@name, @return-type, @return-type-ref, @return-type-ref-occurs, @diff, @at"/>
 				<xsl:apply-templates/>
 			</proto>
 		</example>
@@ -233,7 +233,7 @@
 
 	<xsl:template match="fos:arg">
 		<arg>
-			<xsl:copy-of select="@name, @type, @type-ref, @diff, @at, @default"/>
+			<xsl:copy-of select="@name, @type, @type-ref, @type-ref-occurs, @diff, @at, @default"/>
 		</arg>
 	</xsl:template>
 
