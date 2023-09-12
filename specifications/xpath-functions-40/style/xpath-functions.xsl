@@ -793,31 +793,29 @@
 -->
 <!-- ============ CREATE THE QUICK REFERENCE APPENDIX ===================== -->
 
-<!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
 <xsl:template match="/">
-    <xsl:variable name="XSLTprocessor">
-      <xsl:text>XSLT Processor: </xsl:text>
-      <xsl:value-of select="system-property('xsl:vendor')"/>
-      <xsl:if test="number(system-property('xsl:version')) ge 2.0">
-        <xsl:text> </xsl:text>
-        <xsl:value-of select="system-property('xsl:product-name')"/>
-        <xsl:text> </xsl:text>
-        <xsl:value-of select="system-property('xsl:product-version')"/>
-      </xsl:if>
-    </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <xsl:choose>
     <xsl:when test="key('ids', 'quickref')">
       <xsl:apply-imports/>
     </xsl:when>
     <xsl:otherwise>
-        <xsl:variable name="transformed">
-          <xsl:apply-templates mode="transform"/>
-        </xsl:variable>
-        <xsl:apply-templates select="$transformed/spec"/>
+      <xsl:variable name="transformed">
+        <xsl:apply-templates mode="transform"/>
+      </xsl:variable>
+      <xsl:apply-templates select="$transformed/spec"/>
     </xsl:otherwise>
   </xsl:choose>
+  <xsl:variable name="XSLTprocessor">
+    <xsl:text>XSLT Processor: </xsl:text>
+    <xsl:value-of select="system-property('xsl:vendor')"/>
+    <xsl:if test="number(system-property('xsl:version')) ge 2.0">
+      <xsl:text> </xsl:text>
+      <xsl:value-of select="system-property('xsl:product-name')"/>
+      <xsl:text> </xsl:text>
+      <xsl:value-of select="system-property('xsl:product-version')"/>
+    </xsl:if>
+  </xsl:variable>
+  <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
 </xsl:template>
 
 <xsl:template match="head/meta">

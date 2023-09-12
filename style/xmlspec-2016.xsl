@@ -107,6 +107,13 @@
   <!-- Template for the root node.  Creation of <html> element could
        go here, but that doesn't feel right. -->
   <xsl:template match="/">
+    <xsl:if test="//prod[@num] and //prod[not(@num)]">
+      <xsl:message terminate="yes">
+        <xsl:text>Manually and automatically numbered productions </xsl:text>
+        <xsl:text>cannot coexist.</xsl:text>
+      </xsl:message>
+    </xsl:if>
+    <xsl:apply-templates/>
     <xsl:comment>
       <xsl:text>{xmlspec} </xsl:text>
       <xsl:text>XSLT Processor: </xsl:text>
@@ -120,13 +127,6 @@
       <xsl:message>$show.diff.markup = <xsl:value-of select="$show.diff.markup"/></xsl:message>
 -->
     </xsl:comment>
-    <xsl:if test="//prod[@num] and //prod[not(@num)]">
-      <xsl:message terminate="yes">
-        <xsl:text>Manually and automatically numbered productions </xsl:text>
-        <xsl:text>cannot coexist.</xsl:text>
-      </xsl:message>
-    </xsl:if>
-    <xsl:apply-templates/>
   </xsl:template>
 
   <!-- abstract: appears only in header -->
