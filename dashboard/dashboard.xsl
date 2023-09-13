@@ -77,11 +77,10 @@
 
   <xsl:result-document href="#load-from-github" method="ixsl:replace-content">
     <section class="repository" x-name="qtspecs">
-      <p>These are the open pull requests and current branches. Where possible, a summary of the
+      <p>These are the open pull requests and current branches.
+      Where possible, a summary of the
       changes between the pull request or branch and the latest drafts is
-      provided with a <a href="deltaxml.html">DeltaXML</a> pipeline
-      (pull requests #188 and earlier, and the “variadicity” branch, predate this
-      feature so no such diffs are present).
+      provided with a <a href="deltaxml.html">DeltaXML</a> pipeline.
       </p>
       <div class="pull-requests">Loading pull requests…</div>
       <div class="branches">Loading branches…</div>
@@ -679,7 +678,7 @@
         <xsl:choose>
           <xsl:when test=".?number = $useful-pulls">
             <div class="pull-request" x-pull="{.?number}" id="pr-{.?number}"
-                 x-base="{.?base?sha}" x-head="{.?head?sha}">
+                 x-base="{.?base?sha}" x-head="{.?head?sha}" x-state="{.?state}">
               <h4>PR #{.?number}: {.?title}</h4>
               <details>
                 <summary>
