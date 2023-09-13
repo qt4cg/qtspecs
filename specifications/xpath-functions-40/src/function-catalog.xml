@@ -29,7 +29,7 @@
          <fos:field name="query" type="xs:string" required="false"/>
          <fos:field name="fragment" type="xs:string" required="false"/>
          <fos:field name="path-segments" type="array(xs:string)" required="false"/>
-         <fos:field name="query-segments" type="array(record(key? as xs:string, value? as xs:string, *))" required="false"/>
+         <fos:field name="query-parameters" type="array(record(key? as xs:string, value? as xs:string, *))" required="false"/>
       </fos:record>
    </fos:type>
    
@@ -27185,15 +27185,20 @@ declare function fn:some(
 
          <p>The <emph>query separator</emph> is the value of the
          <code>query-separator</code> option.
-         A <emph>query-segments</emph> value is constructed as follows: tokenize
-         the <emph>query</emph> on the <emph>query separator</emph>. For each
-         token, construct a map. If the token contains an equal sign (<code>=</code>),
-         the map contains a key named <code>key</code> with a value equal to the
-         string preceding the first equal sign, uri decoded, and a key named <code>value</code>
-         with a value equal to the string following the first equal sign, uri decoded. If the
-         token does not contain an equal sign, the map contains a single key named
-         <code>value</code> with a value equal to the token, uri decoded. In every case,
-         <emph>uri decoding</emph> is applied to each value add to the map.</p>
+         A <emph>query-parameters</emph> value is constructed as follows.
+         Start with an empty map. Tokenize the <emph>query</emph> on
+         the <emph>query separator</emph>. For each token, identify
+         the <emph>key</emph> and the <emph>value</emph>. If the token
+         contains an equal sign (<code>=</code>), the <emph>key</emph>
+         is the string that precedes the first equal sign, uri
+         decoded, and the <emph>value</emph> is the remainder
+         of the token, after the first equal sign, uri decoded. If the
+         token does not contain an equal sign, <emph>key</emph> is the
+         empty string and the <emph>value</emph> is equal to the
+         token, uri decoded. Add the <emph>key</emph>/<emph>value</emph> pair
+         to the map. If the <emph>key</emph> already exists in the map, add the <emph>value</emph>
+         to a list of values associated with that key. The resulting map, when all
+         tokens have been processed, is the <emph>query-parameters</emph> map.</p>
 
          <p>If the <emph>filepath</emph> is not the empty sequence,
          it is uri decoded. On a Windows system, any
@@ -27214,7 +27219,7 @@ declare function fn:some(
   "query": <emph>query</emph>,
   "fragment": <emph>fragment</emph>,
   "path-segments": <emph>path-segments</emph>,
-  "query-segments": <emph>query-segments</emph>,
+  "query-parameters": <emph>query-parameters</emph>,
   "filepath": <emph>filepath</emph>
 }</eg>
 
@@ -27310,10 +27315,10 @@ declare function fn:some(
   "port": "8080",
   "path": "/path",
   "query": `s=%22hello world%22&amp;sort=relevance`,
-  "query-segments": (
-    map { "key": "s", "value": '"hello world"' },
-    map { "key": "sort", "value": "relevance" }
-  ),
+  "query-parameters": map {
+    "s": '"hello world"',
+    "sort": "relevance"
+  },
   "path-segments": ("", "path")
 }</eg></fos:result>
     </fos:test>
@@ -27457,9 +27462,9 @@ declare function fn:some(
 <eg>map {
   "uri": "?q=1",
   "query": "q=1",
-  "query-segments": (
-    map { "key": "q", "value": "1" }
-  )
+  "query-parameters": map {
+    "q": "1"
+  }
 }</eg></fos:result>
     </fos:test>
   </fos:example>
@@ -27475,9 +27480,9 @@ declare function fn:some(
   "host": "[2001:db8::7]",
   "path": "/c=GB",
   "query": "objectClass?one",
-  "query-segments": (
-    map { "value": "objectClass?one" }
-  ),
+  "query-parameters": map {
+    "": "objectClass?one"
+  },
   "path-segments": ("", "c=GB")
 }</eg></fos:result>
     </fos:test>
@@ -27634,10 +27639,10 @@ description of <code>fn:resolve-uri</code>.</p>
   "port": "8080",
   "path": "/path",
   "query": "s=%22hello world%22;sort=relevance",
-  "query-segments": (
-    map { "key": "s", "value": '"hello world"' },
-    map { "key": "sort", "value": "relevance" }
-  ),
+  "query-parameters": map {
+    "s": '"hello world"',
+    "sort": "relevance"
+  },
   "path-segments": ("", "path")
 }</eg></fos:result>
     </fos:test>
@@ -27690,8 +27695,8 @@ path with an explicit <code>file:</code> scheme.</p>
          to be resolved. Updated in response to 
          <loc href="https://github.com/qt4cg/qtspecs/issues/389">issue #389</loc> and
          <loc href="https://github.com/qt4cg/qtspecs/issues/390">issue #390</loc>.
-         FIXME: the examples need to be updated.
-         </fos:version>
+         Further updated on 13 September 2023 in response to comments from review
+         in meeting 042.</fos:version>
       </fos:history>
    </fos:function>
 
@@ -27815,17 +27820,22 @@ path with an explicit <code>file:</code> scheme.</p>
         If the <code>path</code> value is the empty sequence,
         the empty string is used for the path. The path is added to the URI.</p>
 
-        <p>If the <code>query-segments</code> key exists in the map, then
-        a sequence of strings is constructed from each segment in turn.
-        If the segment contains both a <code>key</code> and a <code>value</code>,
-        the string is the concatenation of the value of the <code>key</code>,
-        an equal sign (<code>=</code>), and the value of the <code>value</code>. If it contains
-        only one of those keys, then it is the value of that key. If it contains
-        neither, it is ignored. In any case, the keys and values, if present, are subject
-        to encoding with <code>encode-for-uri</code>.
-        The query is constructed by joining the resulting
+        <p>If the <code>query-parameters</code> key exists in the map, its value
+        must be a map. A sequence of strings is constructed from the values in the map.
+        For each <emph>key</emph> and each <emph>value</emph> associated with
+        that key in turn:</p>
+
+        <ulist>
+           <item><p>If the <emph>key</emph> is the empty string, the string constructed
+           is the <emph>value</emph> encoded with <code>encode-for-uri</code>.</p></item>
+           <item><p>Otherwise, the string constructed is the value of the
+           <emph>key</emph>, encoded, followed by an equal sign (<code>=</code>),
+           followed by the <emph>value</emph>, encoded.</p></item>
+        </ulist>
+
+        <p>The query is constructed by joining the resulting
         strings into a single string, separated by <code>$options?query-separator</code>).
-        If the <code>query-segments</code> key does not exist in the map, but
+        If the <code>query-parameters</code> key does not exist in the map, but
         the <code>query</code> key does, then the query is the value of the
         <code>query</code> key. If there is a query, it is added to the URI with
         a preceding question mark (<code>?</code>).</p>
@@ -27857,7 +27867,8 @@ path with an explicit <code>file:</code> scheme.</p>
          to be resolved. Updated in response to 
          <loc href="https://github.com/qt4cg/qtspecs/issues/389">issue #389</loc> and
          <loc href="https://github.com/qt4cg/qtspecs/issues/390">issue #390</loc>.
-         FIXME: the examples need to be updated.</fos:version>
+         Further updated on 13 September 2023 in response to comments from review
+         in meeting 042.</fos:version>
       </fos:history>
    </fos:function>
    
