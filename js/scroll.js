@@ -365,3 +365,4 @@ window.addEventListener('resize', (event) => {
   console.log("resize");
   dxmlview.find_visible_diffs();
 });
+dxmlview.view_both();
