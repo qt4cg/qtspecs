@@ -1,0 +1,58 @@
+<item>
+   <title>Issue #708 created</title>
+   <pubDate>2023-09-17T08:56:39Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/708</link>
+   <guid>https://qt4cg.org/@qt4cg/2023/#created-708</guid>
+   <description>&lt;div&gt;&lt;p&gt;Toward a design for generators&lt;/p&gt;&lt;div class="markup"&gt;&lt;h2&gt;Motivation&lt;/h2&gt;
+&lt;p&gt;The motivations for this are to explore the creation of sequences where the next item in the sequence is determined by evaluating a function on the current state of a system. These sequence generators have an initial starting value and state. They can also stop when some condition is met.&lt;/p&gt;
+&lt;p&gt;The motivating example here is the &lt;a href="https://qt4cg.org/specifications/xpath-functions-40/Overview.html#func-random-number-generator"&gt;fn:random-number-generator&lt;/a&gt; function, where:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;let $rnd := fn:random-number-generator()&lt;/code&gt; initializes a new random number sequence with the default seed as its state;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;let $value := $rnd?number&lt;/code&gt; returns the current value of the sequence;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;let $rnd := $rnd?next()&lt;/code&gt; returns the state and value of the next item in the sequence.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;This has all the properties needed for a forward (left-to-right) generating sequence. To make it a generalized generator sequence, the &lt;code&gt;number&lt;/code&gt; field should be renamed &lt;code&gt;value&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;NOTE: The &lt;code&gt;fn:random-number-generator&lt;/code&gt; function defines an infinite sequence as it has no termination/end of sequence condition.&lt;/p&gt;
+&lt;h2&gt;Sequence Generators as Record Types&lt;/h2&gt;
+&lt;p&gt;Therefore, a forward generator sequence could look like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;declare item-type sequence-generator as record(
+    value as item(),
+    next as function() as record(value, next, *)?,
+    *
+);
+
+declare function generated-sequence() as sequence-generator?;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If calling &lt;code&gt;?next()&lt;/code&gt; on a sequence above returns the empty sequence then there are no more values in that sequence.&lt;/p&gt;
+&lt;p&gt;If the &lt;code&gt;generated-sequence()&lt;/code&gt; returns the empty sequence then there are no items in the sequence.&lt;/p&gt;
+&lt;p&gt;NOTE: This does not currently define reversible sequence support. A &lt;code&gt;reversed&lt;/code&gt; property could be provided that returns a &lt;code&gt;sequence-generator&lt;/code&gt; that operates on the sequence from right to left. I haven't figured out exactly how this should look, but reversed generator sequences may be better investigated as a separate issue.&lt;/p&gt;
+&lt;p&gt;NOTE: An implementation can process this sequence iteratively if needed.&lt;/p&gt;
+&lt;h3&gt;Analysis&lt;/h3&gt;
+&lt;p&gt;While this allows generator sequence types to be created, they are -- like &lt;code&gt;fn:random-number-generator()&lt;/code&gt; cumbersome to use. This does have the advantage of being backward compatible with &lt;code&gt;fn:random-number-generator()&lt;/code&gt;, though.&lt;/p&gt;
+&lt;p&gt;The problem comes when trying to make these work like sequences. The subtype and function coercion rules should be doable. The other sequence operations like filtering are more complicated to define properly.&lt;/p&gt;
+&lt;p&gt;However, this has the same issues that allowing &lt;code&gt;array()&lt;/code&gt; in &lt;code&gt;fn:*&lt;/code&gt; functions has -- how do you differentiate the use cases where the user is working on a sequence of generators, or the generated sequences?&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;NOTE: You can't extend the functions to take a &lt;code&gt;(sequence-type | item()*)&lt;/code&gt; parameter as a &lt;code&gt;sequence-type&lt;/code&gt; is a subtype of &lt;code&gt;item()&lt;/code&gt; which matches &lt;code&gt;item()*&lt;/code&gt;. If the functions were to be extended to handle these, then &lt;code&gt;fn:head(fn:random-number-generator())&lt;/code&gt; would return a number instead of a map.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2&gt;Sequence Generator Function&lt;/h2&gt;
+&lt;p&gt;The Kotlin language has a &lt;a href="https://kotlinlang.org/api/latest/jvm/stdlib/kotlin.sequences/generate-sequence.html"&gt;generateSequence&lt;/a&gt; function that takes a next function, an optional seed value or construction function, and returns a lazy sequence over that. -- Internally, it is building a Java iterator that produces values from calling the next function. The sequence will terminate when the next value is null.&lt;/p&gt;
+&lt;p&gt;I propose that -- in addition to the &lt;code&gt;sequence-generator&lt;/code&gt; type above -- XPath defines the following function:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;declare function fn:sequence($generator as sequence-generator) as item()*;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This solves the issues in the &lt;em&gt;Analysis&lt;/em&gt; section above, and is analogous to &lt;code&gt;array:values&lt;/code&gt;. It is implementation defined how the sequence is constructed. -- This allows an implementer to appropriately map the generator to their internal sequence implementation in order to provide lazy evaluation and other operations.&lt;/p&gt;
+&lt;p&gt;There should also be the following helper function for random numbers:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;declare function fn:random-numbers(
+    $seed as xs:anyAtomicType? := ()
+) as xs:double* {
+    fn:random-number-generator() =&amp;gt; fn:sequence()
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The user-defined sequences then become e.g.:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;let $generator as sequence-generator := map {
+    value : 1,
+    next : function () { () }
+}
+return fn:sequence($generator)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
