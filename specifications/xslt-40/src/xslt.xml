@@ -26039,7 +26039,8 @@ the same group, and the-->
                   which is expanded as described in <specref ref="qname"/>.</p>
                <p>An <elcode>xsl:accumulator</elcode> declaration can only appear as a <termref def="dt-top-level"/> element in a stylesheet module.</p>
 
-
+               <p diff="add" at="issue211">The <code>capture</code> attribute is allowed only on an <elcode>xsl:accumulator-rule</elcode> element
+               that specifies <code>phase="end"</code>. Its effect is described in <specref ref="capturing-accumulators"/>.</p>
                
 
                
@@ -26128,7 +26129,9 @@ the same group, and the-->
                      <termref def="dt-type-error">type error</termref> occurs if conversion is not
                   possible. The <code>as</code> attribute defaults to <code>item()*</code>.</p>
 
-               <p>The effect of the <code>streamable</code> attribute is defined in <specref ref="streamability-of-accumulators"/>.</p>
+               <p>The effect of the <code>streamable</code> 
+                  <phrase diff="add" at="issue211">and <code>capture</code></phrase> attributes 
+                  are defined in <specref ref="streamability-of-accumulators"/>.</p>
 
             </div3>
             <div3 id="applicability-of-accumulators">
@@ -26358,6 +26361,11 @@ the same group, and the-->
                                  available for use within the <code>select</code> expression or contained sequence
                                     constructor.</p>
                            </note>
+                           <note diff="add" at="issue211">
+                              <p>There is a slight variation here for an accumulator rule specifying
+                              <code>phase="end"</code> and <code>capture="yes"</code>. For details,
+                              see <specref ref="streamability-of-accumulators"/>.</p>
+                           </note>
                         </item>
                      </olist>
                   </item>
@@ -26451,8 +26459,71 @@ the same group, and the-->
 
 
             </div3>
+            <div3 id="capturing-accumulators">
+               <head>Capturing Accumulators</head>
+               
+               <p>The <code>capture</code> attribute is intended primarily for use with streamable accumulators, but
+                  in the interests of consistency, it has the same effect both for streamable and non-streamable
+                  accumulators. If an accumulator rule with <code>phase="end"</code> specifies <code>capture="yes"</code>,
+                  then the rule is evaluated not with the matched node as the context item, but rather with a snapshot
+                  copy of the matched node. The snapshot copy is made following the rules of the <function>snapshot</function>
+                  function, with one exception: no accumulator values are copied into the snapshot tree (which would otherwise
+                  happen: see <specref ref="copying-accumulators"/>).</p>
+               
+               <note><p>The principal effect of specifying <code>capture="yes"</code> is to relax
+                  the rules for streamability. With this option, the <code>phase="end"</code> accumulator rule
+                  has access to the full subtree rooted at the node being visited. In a typical implementation,
+                  a streaming processor encountering an element that matches a capturing accumulator rule
+                  will make an on-the-fly in-memory copy of that element, allowing the <code>phase="end"</code>
+                  accumulator rule full access to the subtree, and also to attributes of ancestors.</p>
+                  
+                  <p>This means that an accumulator that needs access to the typed value or string value of an element 
+                     can get this directly with a rule that matches the element, avoiding the need 
+                     to write rules that match the element's text node children.
+                  </p>
+                  
+                  <p>For example, to capture a copy of the most recent <code>h2</code> element in a document,
+                  the following accumulator might be declared:</p>
+                  
+                  <eg><![CDATA[<xsl:accumulator name="most-recent-h2" streamable="yes">
+  <xsl:accumulator-rule match="h2" capture="yes" select="."/>
+</xsl:accumulator>]]></eg>
+                  
+                  <p>and subsequent processing wishing to copy the most recent <code>h2</code> element into the result
+                  tree can simply use <code>&lt;xsl:copy-of select="accumulator-before('most-recent-h2')"/></code>.</p>
+                  
+               </note>
+                  
+               <example id="use-accumulator-to-create-glossary">
+                  <head>Using a capturing accumulator to construct a glossary</head>
+                  <p>Suppose a document contains definitions of technical terms with markup such as:</p>
+                     <eg><![CDATA[<define term="oxidation">In <topic>chemistry</topic>, 
+   <term>oxidation</term> is a chemical process in which atoms lose electrons.</define>]]></eg>
+                  <p>and the requirement is to generate a glossary that lists all the defined terms in the document, as an appendix.</p>
+                  <p>This can be achieved by capturing all the defined terms in a map:</p>
+                  <eg><![CDATA[<xsl:accumulator name="glossary-terms" 
+         as="map{xs:string, element(define)}" 
+         initial-value="map{}"
+         streamable="yes">
+   <xsl:accumulator-rule match="define[@term]" 
+           phase="end" 
+           capture="yes"
+           select="map:put($value, @term, .)"/>
+</xsl:accumulator>]]></eg>
+                  <p>At the end of processing, the map containing all the terms and their definitions (including
+                     the internal markup) is available as the value
+                  of <code>accumulator-before('glossary-terms')</code>, and this can be sorted and rendered in the usual way.</p>
+         
+               </example>
+                  
+               
+               
+               
+            </div3>
             <div3 id="streamability-of-accumulators">
                <head>Streamability of Accumulators</head>
+               
+               
 
                <p>An accumulator is <termref def="dt-guaranteed-streamable"/> if
                   it satisfies all the following
@@ -26473,10 +26544,28 @@ the same group, and the-->
                            <termref def="dt-motionless"/>.</p>
                   </item>
                   <item>
-                     <p>The <termref def="dt-expression">expression</termref> in the <code>select</code> attribute or contained
-                           sequence constructor is <termref def="dt-grounded"/> and
-                        <termref def="dt-motionless"/>.</p>
+                     <p><phrase diff="add" at="issue211">In an <elcode>xsl:accumulator-rule</elcode> with 
+                        <code>phase="start"</code> (the default value),</phrase>
+                        the <termref def="dt-type-adjusted-posture-and-sweep"/> of
+                        the <termref def="dt-expression">expression</termref> in the <code>select</code> attribute or the contained
+                           <termref def="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
+                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p>
                   </item>
+                  <item diff="add" at="issue211">
+                     <p>In an <elcode>xsl:accumulator-rule</elcode> with 
+                        <code>phase="end"</code>, one of the
+                        following conditions holds:</p>
+                     <olist>
+                        <item><p>The rule has <code>capture="no"</code> (the default value),
+                           and the <termref def="dt-type-adjusted-posture-and-sweep"/> of
+                           the <termref def="dt-expression">expression</termref> in the <code>select</code> attribute or the contained
+                           <termref def="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
+                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item>
+                        <item><p>The rule has <code>capture="yes"</code>.</p></item>
+                     </olist>
+                  </item>
+                  
+                  
 
                </olist>
 
@@ -39237,6 +39326,8 @@ See <loc href="http://www.w3.org/TR/xhtml11/"/>
                      <code>&lt;xsl:mode on-no-match="shallow-copy-all"></code>. This is designed to allow rule-based recursive
                   transformation of JSON data structures (trees of maps and arrays) to work in the same way as with
                   XML-derived data structures.</p></item>
+                  <item><p>The streamability rules for accumulators have been relaxed, so that the <code>phase="end"</code>
+                  processing has access to the full subtree of the matched node.</p></item>
                </olist>
             </div3>
          </div2>
