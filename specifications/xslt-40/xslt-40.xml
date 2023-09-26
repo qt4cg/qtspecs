@@ -7087,7 +7087,7 @@
 
 </eg></example><example><head>Applying Templates to JSON Documents</head><p>This example reads a JSON data file and formats it as XHTML.</p><p>It takes the following JSON data as input:</p><eg xml:space="preserve">[
   { "Title": "Computer Architecture",
-    "Authors": ["Enid Blyton"]
+    "Authors": ["Enid Blyton"],
     "Category": "Computers",
     "Price": 42.60
   },
@@ -7097,7 +7097,7 @@
     "Price": 56.00
   },
   {  "Title": "How to Explore Outer Space with Binoculars",
-     "Authors: ["Bruce Betts", "Erica Colon"]
+     "Authors": ["Bruce Betts", "Erica Colon"],
      "Category": "Science",
      "Price": 10.40
   }
@@ -7345,6 +7345,7 @@
       <e:attribute name="on-no-match" default="'text-only-copy'">
          <e:constant value="deep-copy"/>
          <e:constant value="shallow-copy"/>
+         <e:constant value="shallow-copy-all"/>
          <e:constant value="deep-skip"/>
          <e:constant value="shallow-skip"/>
          <e:constant value="text-only-copy"/>
@@ -7749,14 +7750,16 @@
                evaluated instead. </p><p>The built-in <termref def="dt-template-rule">template rules</termref> have lower
                   <termref def="dt-import-precedence">import precedence</termref> than all other
                template rules. Thus, the stylesheet author can override a built-in template rule by
-               including an explicit template rule.</p><p>There are six sets of built-in template rules available. The set
+               including an explicit template rule.</p><p>There are <phrase diff="chg" at="issue570">seven</phrase> sets of built-in template rules available. The set
                that is chosen is a property of the <termref def="dt-mode">mode</termref> selected by
                the <elcode>xsl:apply-templates</elcode> instruction. This property is set using the
                   <code>on-no-match</code> attribute of the <elcode>xsl:mode</elcode> declaration,
-               which takes one of the six values <code>deep-copy</code>, <code>shallow-copy</code>,
-                  <code>deep-skip</code>, <code>shallow-skip</code>, <code>text-only-copy</code>, or
+               which takes one of the values <code>deep-copy</code>, <code>shallow-copy</code>,
+               <phrase diff="add" at="issue570"><code>shallow-copy-all</code>,</phrase>
+                  <code>deep-skip</code>, <code>shallow-skip</code>, 
+               <code>text-only-copy</code>, or
                   <code>fail</code>, the default being <code>text-only-copy</code>. The effect of
-               these six sets of built-in template rules is explained in the following
+               these <phrase diff="chg" at="issue570">seven</phrase> sets of built-in template rules is explained in the following
                subsections.</p><div3 id="built-in-templates-text-only-copy"><head>Built-in Templates: Text-only Copy</head><p>The effect of processing a
                      tree using a <termref def="dt-mode">mode</termref> that specifies
                         <code>on-no-match="text-only-copy"</code> is that the textual
@@ -7845,7 +7848,87 @@
   &lt;!-- no action --&gt;
 &lt;/xsl:template&gt;
 
-&lt;/xsl:stylesheet&gt;</eg></example></div3><div3 id="built-in-templates-deep-skip"><head>Built-in Templates: Deep Skip</head><p>The effect of processing a tree using a <termref def="dt-mode">mode</termref> that specifies
+&lt;/xsl:stylesheet&gt;</eg></example></div3><div3 id="built-in-templates-shallow-copy-all" diff="add" at="issue570"><head>Built-in Templates: Shallow Copy All</head><p>This processing mode is introduced in XSLT 4.0 as a variant of <code>shallow-copy</code>
+               to enable recursive descent processing of trees involving maps and arrays, such as might result
+               from parsing JSON input.
+               </p><p>For all items other than maps and arrays, the effect of <code>shallow-copy-all</code>
+               is exactly the same as <code>shallow-copy</code>.</p><p>For arrays, the processing is as follows. A new result array is created, and its content
+                  is populated by decomposing the input array to a sequence of <term>value records</term>
+               using the function <function>array:members</function>. Each of these value records is processed
+                  by a call on <elcode>xsl:apply-templates</elcode> (using the current mode, and passing
+                  on the values of all template parameters); the result of the called template
+                  is expected to be a value record.</p><p>That is, the template rule is equivalent to the following, except that this does not show
+                  the propagation of template parameters:</p><eg xml:space="preserve">&lt;xsl:array use="?value"&gt;
+  &lt;xsl:apply-templates select="array:members(.)" mode="#current"/&gt;
+&lt;/xsl:array&gt;  
+    </eg><note><p>A <term>value record</term> is a singleton map: it has a single entry with the key <code>"value"</code>,
+               the corresponding value being a member of the original array. The default processing for a value
+               record, unless specified otherwise, is to apply templates to the value, as indicated by the rules
+               that follow.</p></note><p>For maps, the processing is as follows:</p><ulist><item><p>If the map contains two or more entries,
+                     then a new result map is created, and its content is populated
+                     by decomposing the input map using the function <function>map:entries</function> to 
+                     produce a sequence of single-entry maps (each containing one key and one value), and then applying
+                     templates to this sequence, using the current mode, and passing
+                     on the values of all template parameters.</p></item><item><p>If the map contains a single entry <code>map{<var>K</var> : <var>V/0</var>}</code>, then a new single entry
+                     map <code>map{<var>K</var> : <var>V/1</var>}</code> is constructed in which <var>V/1</var> is the
+                     result of applying templates to <var>V/0</var> (using the current mode, and passing
+                     on the values of all template parameters).</p><note><p>This rule has the effect that if the input is a value record, the output will also
+                     be a value record.</p></note></item><item><p>If the map is empty, the result is an empty map.</p></item></ulist><p>In the first case, the template rule is equivalent to the following, except that this does not show
+                  the propagation of template parameters:</p><eg xml:space="preserve">&lt;xsl:map&gt;
+  &lt;xsl:apply-templates select="map:entries(.)" mode="#current"/&gt;
+&lt;/xsl:map&gt;</eg><p>In the second case, the template rule is equivalent to the following, except that this does not show
+                  the propagation of template parameters:</p><eg xml:space="preserve">&lt;xsl:map-entry key="map:keys(.)"&gt;
+  &lt;xsl:apply-templates select="map:values(.)" mode="#current"/&gt;
+&lt;/xsl:map-entry&gt;</eg><p>The reason there is a special rule for maps with one entry is to ensure that the process
+               terminates.</p><p>The overall effect is best understood with an example.</p><example><head>Modified Identity Transformation of a JSON Document</head><p>The following stylesheet transforms a supplied JSON document by deleting all properties
+                     named <code>"Note"</code>, appearing at any level:</p><eg xml:space="preserve" role="xslt-document">&lt;xsl:stylesheet version="3.0"
+     xmlns:xsl="http://www.w3.org/1999/XSL/Transform"&gt;
+				  
+&lt;xsl:mode on-no-match="shallow-copy-all"/&gt;
+
+&lt;xsl:template match="record(Note)"&gt;
+  &lt;!-- no action --&gt;
+&lt;/xsl:template&gt;
+
+&lt;/xsl:stylesheet&gt;</eg><p>Consider the following JSON input, converted to an array of maps by calling 
+                     the function <function>parse-json</function>:</p><eg xml:space="preserve">[
+   { "Title": "Computer Architecture",
+     "Authors": ["Enid Blyton", {"Note": "possibly misattributed"}],
+     "Category": "Computers",
+     "Price": 42.60
+   },
+   { "Title": "How to Win Elections",
+     "Authors": ["Donald Trump", "Boris Johnson"],
+     "Category": "Politics",
+     "Price": 56.00,
+     "Note": "out of print"
+   },
+   {  "Title": "How to Explore Outer Space with Binoculars",
+      "Authors": ["Bruce Betts", "Erica Colon"],
+      "Category": "Science",
+      "Price": 10.40
+   }
+]</eg><p>The logic proceeds as follows:</p><olist><item><p>The outermost array is processed by applying templates to a sequence of value records, 
+                        the first being in the form:</p><eg xml:space="preserve">map{"value": map:{"Title": ..., "Author": ..., ...}</eg><p>The result of applying templates to these value records is expected to comprise a new sequence
+                        of value records, which is used to construct the final output array.</p></item><item><p>Each of the value records is processed using the rule for singleton maps. This rule
+                        produces a new value record by applying templates to the value, that is, to a map of the form
+                        <code>map:{"Title": ..., "Author": ..., ...}</code> representing a book.</p></item><item><p>Each of these books, being represented by a map with more than two entries, is processed by
+                     a template rule that splits the map into its multiple entries, each represented as a singleton
+                     map (a map with one key and one value). One of these singleton maps, for example, would be
+                     <code>map{"Title": "How to Win Elections"}</code>.</p></item><item><p>The default processing for a singleton map of the form 
+                        <code>map{"Title": "How to Win Elections"}</code> is to return the value unchanged.
+                        This is achieved by applying templates to the string <code>"How to Win Elections"</code>;
+                     the default template rule for strings returns the string unchanged.</p></item><item><p>When a singleton map in the form <code>map{"Note": "out of print"}</code> is encountered, no output
+                     is produced, meaning that entry in the parent map is effectively dropped. This is because there
+                     is an explicit template rule with <code>match="record(Note)"</code> that matches such singleton maps.</p></item><item><p>When a singleton map in the form <code>"Authors": ["Bruce Betts", "Erica Colon"]</code> 
+                        is encountered, a new singleton map is produced; it has the same key (<code>"Authors"</code>),
+                        and a value obtained by applying templates to the array <code>["Bruce Betts", "Erica Colon"]</code>.
+                        The default processing for an array, in which none of the constituents are matched by explicit
+                        template rules, ends up delivering a copy of the array.</p></item><item><p>When the singleton map <code>"Authors": ["Enid Blyton", map{"Note": "possibly misattributed"}]</code>
+                        is encountered, the recursive processing results in templates being applied to the map
+                        <code>{"Note": "possibly misattributed"}</code>. This matches the template rule having
+                        <code>match="record(Note)"</code>, which returns no output, so the entry is effectively deleted.</p><note><p>The map entry is deleted, but the map itself remains, so the value becomes
+                           <code>"Authors": ["Enid Blyton", map:{}]</code>.</p></note></item></olist></example></div3><div3 id="built-in-templates-deep-skip"><head>Built-in Templates: Deep Skip</head><p>The effect of processing a tree using a <termref def="dt-mode">mode</termref> that specifies
                      <code>on-no-match="deep-skip"</code> is that where no explicit template rule is
                   specified for an element, that element and all its descendants are ignored, and
                   are not copied to the result tree.</p><p>The effect of choosing <code>on-no-match="deep-skip"</code> is as follows:</p><ulist><item><p>The built-in rule for document nodes is equivalent to calling
@@ -23733,7 +23816,10 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                   elements within <elcode>xsl:analyze-string</elcode> may take a <code>select</code> attribute
                   in place of a contained sequence constructor.</p></item><item><p>Simplified stylesheets no longer require an <code>xsl:version</code> attribute
                   (which means they might not need a declaration of the XSLT namespace). Unless otherwise
-                  specified, a 4.0 simplified stylesheet defaults <code>expand-text</code> to <code>true</code>.</p></item></olist></div3></div2><div2 id="xpath-changes-since-3.1"><head>Changes in Other Related Specifications</head><p>A number of changes affecting XSLT 4.0 have been made in other related
+                  specified, a 4.0 simplified stylesheet defaults <code>expand-text</code> to <code>true</code>.</p></item><item><p>A new set of built-in template rules is introduced, invoked using 
+                     <code>&lt;xsl:mode on-no-match="shallow-copy-all"&gt;</code>. This is designed to allow rule-based recursive
+                  transformation of JSON data structures (trees of maps and arrays) to work in the same way as with
+                  XML-derived data structures.</p></item></olist></div3></div2><div2 id="xpath-changes-since-3.1"><head>Changes in Other Related Specifications</head><p>A number of changes affecting XSLT 4.0 have been made in other related
                specifications. Some of the more significant changes are as follows:</p><olist><item><p>A number of new kinds of ItemType are introduced, for example union types,
                   record types, and enumeration types.</p></item><item><p>The coercion rules (previously “function conversion rules”) allow atomic values
                   of primitive types to be supplied where a restricted type is required: for example
