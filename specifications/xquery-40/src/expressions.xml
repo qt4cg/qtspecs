@@ -5319,7 +5319,7 @@ name.</p>
                   <prodrecap id="TypedRecordTest" ref="TypedRecordTest"/>
                   <prodrecap id="FieldDeclaration" ref="FieldDeclaration"/>
                   <prodrecap id="FieldName" ref="FieldName"/>
-                  <prodrecap id="SelfReference" ref="SelfReference"/>    
+                  <!--<prodrecap id="SelfReference" ref="SelfReference"/>  -->  
                   <prodrecap id="ExtensibleFlag" ref="ExtensibleFlag"/>    
                </scrap>
 
@@ -5375,19 +5375,19 @@ name.</p>
                      documentary value.</p>
                </note>
                
-               <p>If a field is declared using <code>..</code> (optionally followed
+               <p diff="del" at="issue295">If a field is declared using <code>..</code> (optionally followed
                by an occurrence indicator) in place of a <code>SequenceType</code>,
                   this indicates that the record type is recursive: the value
                of this field, if present, must be an instance of the record type being declared. For example, a record
                designed to hold error information might be declared as:</p>
                
-               <eg>record(error-code as xs:QName, message as xs:string, cause? as ..)</eg>
+               <eg diff="del" at="issue295">record(error-code as xs:QName, message as xs:string, cause? as ..)</eg>
                
-               <p>A map conforms to this type if it has entries with keys <code>error-code</code> and <code>message</code>
+               <p diff="del" at="issue295">A map conforms to this type if it has entries with keys <code>error-code</code> and <code>message</code>
                of the correct types, and if the <code>cause</code> entry is either absent, or is a map that itself conforms
                to this type.</p>
                
-               <p>A <code>FieldDeclaration</code> that a <code>SelfReference</code> to identify its type must either
+               <p diff="del" at="issue295">A <code>FieldDeclaration</code> that a <code>SelfReference</code> to identify its type must either
                be optional (marked with a question mark after the name), or must allow the empty sequence as a permitted
                value (marked by using the occurrence indicator <code>?</code> or <code>*</code> after the item type).
                   If the field is not optional and does not allow an empty sequence, a 
@@ -5396,37 +5396,7 @@ name.</p>
                This rule ensures that finite instances of the type can be constructed.</p>
                
               
-               <example id="e-binary-tree">
-                  <p>A record used to represent a node in a binary tree might be represented as:</p>
-                  <eg>record(left? as .., value, right? as ..)</eg>
-                  <p>A function to walk this tree and enumerate all the values in depth-first order might be written 
-                     (using XQuery syntax) as:</p>
-                  <eg><![CDATA[declare item-type binary-tree as
-    record(left? as .., value, right? as ..);                 
-declare function flatten($tree as binary-tree?) as item()* {
-    $tree ! (flatten(?left), ?value, flatten(?right))   
-}]]></eg>
-               </example>
                
-               <example id="e-arbitrary-tree">
-                  <p>A record used to represent a node in a tree where each node has an arbitrary number
-                     of children might be represented as:</p>
-                  <eg>record(value, children as ..*)</eg>
-                  <p>A function to walk this tree and enumerate all the values in order might be written 
-                     (using XQuery syntax) as:</p>
-                  <eg><![CDATA[declare item-type tree as
-    record(value, children as ..*);                 
-declare function flatten($tree as tree) as item()* {
-    $tree?value, $tree?children ! flatten(.))   
-}]]></eg>
-               </example>
-               
-               <note>
-                  <p>If a <code>RecordTest</code> contains a <code>SelfReference</code> field that is not optional,
-                  and whose type does not permit an empty sequence, then it will not be possible to construct an instance.
-                  So a <code>RecordTest</code> such as <code>record(a as ..)</code> serves no practical
-                  purpose; but it is not disallowed.</p>
-               </note>
 
                
 
@@ -5479,6 +5449,84 @@ declare function flatten($tree as tree) as item()* {
                <p>Rules defining whether one record type is a <termref def="dt-subtype"/> of another
                   are given in <specref ref="id-item-subtype-records"/>.</p>
 
+            </div4>
+            
+            <div4 id="id-recursive-record-tests" diff="add" at="issue295">
+               <head>Recursive Record Tests</head>
+               
+               <p>The declared type of a field within a record test is a SequenceType, and as such
+               it may contain a reference to a <termref def="dt-type-alias"/> that is present in 
+               the static context.</p>
+               
+               <p>This allows recursive definitions to be created. For example, the following
+               XQuery declaration defines a linked list:</p>
+               
+               <p><eg>declare item type my:list as record(value as item()*, next? as my:list);</eg></p>
+               
+               <p>The equivalent in XSLT is:</p>
+               
+               <eg><![CDATA[<xsl:item-type name="my:list" 
+               as="record(value as item()*, next? as my:list)"/>]]></eg>
+               
+               <p>To ensure that finite instances of a recursive record test can exist, a cycle of references
+               is not allowed unless at least one of the references is <termref def="dt-shielded"/>.
+               <termdef id="dt-shielded" term="shielded">A reference to an item type is <term>shielded</term>
+               if it occurs within a <nt def="FieldDeclaration">FieldDeclaration</nt> that satisfies one
+               or more of the following conditions:</termdef> </p>
+               
+               <ulist>
+                  <item><p>The field declaration is optional (for example <code>next? as my:list</code>).</p></item>
+                  <item><p>The type of the field declaration matches an empty sequence (for example
+                     <code>next as my:list?</code>).</p></item>
+                  <item><p>The type of the field declaration  
+                     is a subtype of <code>function(*)*</code>
+                     (for example <code>next as (function() as my:list)</code>).</p>
+                     <note><p>This rule allows a field declaration that matches an array test
+                        (for example <code>next as array(my:list)</code>) or a map test
+                        (for example <code>next as map(xs:integer, my:list)</code>).</p></note>
+                  </item>
+               </ulist>
+               
+               <p>Instances of recursive record types can be constructed and interrogated in the normal way.
+               For example a list of length 3 can be constructed as:</p>
+               <p><eg>map{"value":1, "next":map{"value":2, "next":map{"value":3}}}</eg></p>
+               <p>and the third value in the map can be retrieved as <code>$list?next?next?value</code>.
+               In practice, recursive data structures are usually manipulated using recursive functions.</p>
+               
+               <note><p>For an example of a practical use of recursive record types, see the
+               specification of the function <code>fn:random-number-generator</code>.</p></note>
+               
+               <p>Recursive type definitions need to be handled specially by the subtyping rules; 
+                  a naïve approach of simply replacing each item type alias
+               with its definition would make the assessment of the subtype relationship non-terminating.
+               For details see <specref ref="id-itemtype-subtype"/>.</p>
+               
+               <example id="e-binary-tree">
+                  <head>A Binary Tree</head>
+                  <p>A record used to represent a node in a binary tree might be represented as:</p>
+                  <eg>record(left? as .., value, right? as ..)</eg>
+                  <p>A function to walk this tree and enumerate all the values in depth-first order might be written 
+                     (using XQuery syntax) as:</p>
+                  <eg><![CDATA[declare item-type t:binary-tree as
+    record(left? as t:binary-tree, value, right? as t:binary-tree);                 
+declare function t:flatten($tree as t:binary-tree?) as item()* {
+    $tree ! (t:flatten(?left), ?value, t:flatten(?right))   
+}]]></eg>
+               </example>
+               
+               <example id="e-arbitrary-tree">
+                  <head>An Arbitrary Tree</head>
+                  <p>A record used to represent a node in a tree where each node has an arbitrary number
+                     of children might be represented (using XQuery syntax) as:</p>
+                  <eg>declare item-type t:tree as record(value, children as t:tree*);</eg>
+                  <p>A function to walk this tree and enumerate all the values in order might be written 
+                     as:</p>
+                  <eg>               
+declare function t:flatten($tree as t:tree) as item()* {
+    $tree?value, $tree?children ! t:flatten(.))   
+}</eg>
+               </example>
+               
             </div4>
 
             <div4 id="id-array-test">
@@ -5857,6 +5905,7 @@ declare function flatten($tree as tree) as item()* {
                   This section defines the rules for deciding whether any two item types have this relationship.</p>
                
 
+
              
                <p diff="chg" at="Issue451">The rules in this section apply to 
                   <termref def="dt-item-type">item types</termref>, not to 
@@ -5868,6 +5917,10 @@ declare function flatten($tree as tree) as item()* {
                   or indeed as the parenthesized forms <code>(xs:string)</code> or
                  <code>(STR)</code>.</p>
 
+
+               
+               <p diff="chg" at="issue295">References to <termref def="dt-type-alias">type aliases</termref> 
+                  are handled as described in <specref ref="id-itemtype-subtype-aliases"/>.</p>            
                
                <p>The relationship <code>A ⊆ B</code> is true
                if and only if at least one of the conditions listed in the following subsections applies:</p>
@@ -6531,6 +6584,50 @@ declare function flatten($tree as tree) as item()* {
                         
                         
                   </olist>
+               </div4>
+               <div4 id="id-itemtype-subtype-aliases" diff="add" at="issue295">
+                  <head>Type Aliases</head>
+                  <p>This section describes how item types that reference <termref def="dt-type-alias">type aliases</termref>
+                  are handled when evaluating the subtype relationship.</p>
+                  <p>Types can be classified as recursive or non-recursive. A recursive type is one that references
+                  itself, directly or indirectly.</p>
+                  <p>Where an item type contains a reference to a type alias that is non-recursive, the reference
+                  is expanded, recursively, as the first step in evaluating the subtype relationship. For example
+                  this means that if <var>U</var> is a type alias for <code>union(xs:integer, xs:double)</code>,
+                     then <code>xs:integer ⊆ U</code> is true, because 
+                     <code>xs:integer ⊆ union(xs:integer, xs:double)</code> is true.</p>
+                  <p>Recursive types are considered to be, in the terminology of the computer science
+                  literature, <term>iso-recursive</term> (rather than <term>equi-recursive</term>). 
+                     This means that a recursive type name is not
+                  treated as being equivalent to its expansion (at any depth). 
+                  For example, if the type alias <var>T</var>
+                  refers to the type <code>record(A as item()*, B as T?)</code>, then the type 
+                     <code>array(T)</code> is not considered to be equivalent to 
+                     <code>array(record(A as item()*, B as T?))</code>, despite the fact
+                  that the two types have exactly the same instances.</p>
+                  <p>The rules are therefore defined as follows:</p>
+                  <ulist>
+                     <item><p>If <var>B</var> is the type alias of a recursive type, then
+                        <var>A</var> ⊆ <var>B</var> is true if and only if 
+                        <var>A</var> and <var>B</var>
+                        are references to the same type alias.</p></item>
+                     <item><p>If <var>A</var> is the type alias of a recursive type, then
+                        <var>A</var> ⊆ <var>B</var> is true if either:</p>
+                        <ulist>
+                           <item><p><var>A</var> and <var>B</var>
+                              are references to the same type alias.</p></item>
+                           <item><p><code>record(*) ⊆ B</code>.</p>
+                           <note><p>This is because only record types are allowed to be recursive.</p></note></item>
+                        </ulist>
+                     </item>
+                  </ulist>
+
+                  <note><p>The decision to make recursive types iso-recursive rather than equi-recursive
+                  was made largely because it saves a great deal of implementation complexity without any serious
+                  adverse effects for users. It practice, the rules for subtyping largely affect substitutability
+                  of different function signatures, and any problems can be avoided by using type alias names
+                  in function signatures consistently, especially when recursive types are involved.</p>
+                  </note>
                </div4>
    
 
