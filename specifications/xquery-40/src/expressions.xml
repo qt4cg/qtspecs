@@ -4270,7 +4270,7 @@ the schema type named <code>us:address</code>.</p>
                         </scrap>
                         
                         <p>Although the grammar allows any <code>ItemType</code> to appear, each <code>ItemType</code>
-                        must identify a <termref def="dt-generalized-atomic-type"/>. [TODO: error code]</p>
+                        must identify a <termref def="dt-generalized-atomic-type"/> <errorref class="ST" code="0147"/>.</p>
                      
                      <p diff="add" at="2023-02-20">A <code>LocalUnionType</code> is a 
                         <termref def="dt-generalized-atomic-type">generalized atomic type</termref>. It is classified
@@ -4309,26 +4309,54 @@ the schema type named <code>us:address</code>.</p>
                         <prodrecap id="EnumerationType" ref="EnumerationType"/>   
                      </scrap>
                      
-                     <p>An item matches an <code>EnumerationType</code> if it is an instance of <code>xs:string</code>,
-                        and is equal to one of the string literals listed within the parentheses, when compared
-                     using the codepoint collation.</p>
+                     <p>An <code>EnumerationType</code> has a value space consisting of a set of <code>xs:string</code>
+                        values. When matching strings against an enumeration type, strings are always compared
+                     using the Unicode codepoint collation.</p>
                      
-                     <p>For example, the type <code>enum("red", "green", "blue")</code> matches the string "green".</p>
+                     <p>For example, if an argument of a function declares the required type 
+                        as <code>enum("red", "green", "blue")</code>, then the string <code>"green"</code> is accepted,
+                        while <code>"yellow"</code> is rejected with a type error.</p>
                      
-                     <note>
-                        <p>Unlike a schema-defined type that restricts <code>xs:string</code> with an enumeration facet,
-                        matching of an <code>EnumerationType</code> is based purely on value comparison, and not on type
-                        annotations. For example, if <code>color</code> is a schema-defined atomic type derived from
-                        <code>xs:string</code> with an enumeration facet permitting the values
-                        (<code>"red"</code>, <code>"green"</code>, <code>"blue"</code>),
-                        the expression <code>"green" instance of color</code> returns <code>false</code>, because the type annotation
-                        does not match. By contrast, <code>"green" instance of enum("red", "green", "blue")</code>
-                        returns <code>true</code>.</p>
-                        <p>An <term>EnumerationType</term> matches only <code>xs:string</code> values, not
-                        <code>xs:untypedAtomic</code> or <code>xs:anyURI</code> values, even though these might compare
-                           equal. However, the <termref def="dt-coercion-rules">coercion rules</termref> allow <code>xs:untypedAtomic</code> or 
-                           <code>xs:anyURI</code> values to be supplied where the required type is an enumeration type.</p>
-                     </note>
+                     <p>Technically, enumeration types are defined as follows:</p>
+                     
+                     <ulist>
+                        <item><p>An enumeration type with a single enumerated value (such as 
+                           <code>enum("red")</code>) is an atomic type
+                           derived from <code>xs:string</code> by restriction using an enumeration facet
+                           that permits only the value <code>"red"</code>. This is referred to
+                           as a <term>singleton enumeration type</term>. It is equivalent to the XSD-defined type:</p>
+                        <eg><![CDATA[
+               <xs:simpleType>
+                 <xs:restriction base="xs:string">
+                   <xs:enumeration value="red"/>
+                 </xs:restriction>
+               </xs:simpleType>]]></eg></item>
+                        <item><p>Two singleton enumeration types are the same type if and only
+                        if they have the same (single) enumerated value, as determined using the Unicode
+                        codepoint collation.</p></item>
+                        <item><p>An enumeration type with multiple
+                           enumerated values is a union of singleton enumeration types, 
+                           so <code>enum("red", "green", "blue")</code>
+                           is equivalent to <code>union(enum("red"), enum("green"), enum("blue"))</code>.</p></item>
+                        <item><p>In consequence, an enumeration type <var>T</var> is a subtype
+                        of an enumeration type <var>U</var> if the enumerated values of <var>T</var>
+                        are a subset of the enumerated values of <var>U</var>: 
+                           see <specref ref="id-itemtype-subtype"/>.</p></item>
+                        
+                     </ulist>
+                     
+                     <p>An enumeration type is thus a <termref def="dt-generalized-atomic-type"/>.</p>
+                     
+                     <p>It follows from these rules that an atomic value will only satisfy an <code>instance of</code>
+                     test if it has the correct type annotation, and this can only be achieved using an explicit cast or
+                     constructor function. So the expression <code>"red" instance of enum("red", "green", "blue")</code>
+                     returns <code>false</code>. 
+                        However, the <termref def="dt-coercion-rules"/> ensure that where a variable
+                     or function declaration specifies an enumeration type as the required type, a string 
+                     (or indeed an <code>xs:untypedAtomic</code> or <code>xs:anyURI</code> value) equal
+                     to one of the enumerated values will be accepted.</p>
+                     
+       
                   </div4>   
 
                
@@ -5856,6 +5884,12 @@ declare function flatten($tree as tree) as item()* {
                                  by restriction from <code>xs:decimal</code>.</p></item>
                                  <item><p><code>xs:decimal ⊆ xs:numeric</code> because <code>xs:numeric</code> is a pure union
                                     type that includes <code>xs:decimal</code> as a member type.</p></item>
+                                 <item><p><code>enum("red") ⊆ xs:string</code> because the singleton
+                                    enumeration type <code>enum("red")</code> is defined to be an atomic
+                                    type derived from <code>xs:string</code>.</p></item>
+                                 <item><p><code>enum("red") ⊆ enum("red", "green")</code> because the 
+                                    enumeration type <code>enum("red", "green")</code> is defined to be a union type
+                                       that has the atomic type <code>enum("red")</code> as a member type.</p></item>
                               </ulist>
                            </example>
                         </item>
@@ -5870,23 +5904,24 @@ declare function flatten($tree as tree) as item()* {
                                     because <code>xs:short ⊆ xs:integer</code> and <code>xs:long ⊆ xs:integer</code>.</p></item>
                                  <item><p><code>union(P, Q) ⊆ union(P, Q, R)</code>
                                  because <code>P ⊆ union(P, Q, R)</code> and <code>Q ⊆ union(P, Q, R)</code>.</p></item>
+                                 <item><p><code>enum("red", "green") ⊆ xs:string</code> because the 
+                                    enumeration type <code>enum("red") ⊆ xs:string</code> 
+                                    and <code>enum("green") ⊆ xs:string</code>.</p></item>
+                                 <item><p><code>enum("red", "green") ⊆ enum("red", "green", "blue")</code> because 
+                                    <code>enum("red") ⊆ enum("red", "green", "blue")</code> and 
+                                    <code>enum("green") ⊆ enum("red", "green", "blue")</code>.</p></item>
+                                 <item><p><code>enum("red", "green", "blue") ⊆ union(enum("red", "green"), enum("blue"))</code> because 
+                                    each of the types <code>enum("red")</code>, <code>enum("green")</code>, and <code>enum("blue")</code>
+                                    is a subtype of one of the two members of the union type.</p></item>
                               </ulist>                             
                            </example>
                            <note><p>This rule applies both when <code>A</code> is a schema-defined union type
-                              and when it is a <nt def="LocalUnionType">LocalUnionType</nt>.
+                              and when it is a <nt def="LocalUnionType">LocalUnionType</nt>; in addition it
+                              applies when <code>A</code> is an enumeration type with multiple enumerated values,
+                              which is defined to be equivalent to a union type.
                            </p></note>
                         </item>
-                        <item diff="add" at="A">
-                           <p><var>A</var> is an <termref def="dt-EnumerationType"/>, and <var>B</var> matches
-                              every string literal in the enumeration of <var>A</var>.</p>
-                           <example>
-                              <head>Examples:</head>
-                              <ulist>
-                                 <item><p><code>enum("red", "green", "blue") ⊆ xs:string</code></p></item>
-                                 <item><p><code>enum("red", "green", "blue") ⊆ enum("red", "green", "blue", "yellow")</code></p></item>
-                              </ulist>
-                           </example>
-                        </item>
+             
                      </olist>
                </div4>
                <div4 id="id-item-subtype-nodes">
@@ -8828,12 +8863,11 @@ return $incrementors[2](4)]]></eg>
 
                   <item>
                      <p>If <var>T</var> is <phrase diff="add" at="A">a <code>SequenceType</code>
-                     whose <code>ItemType</code> is a <termref def="dt-generalized-atomic-type"/> 
-                     other than an enumeration type,</phrase> (possibly with an occurrence indicator 
+                     whose <code>ItemType</code> is a <termref def="dt-generalized-atomic-type"/></phrase> (possibly with an occurrence indicator 
                         <code>*</code>, <code>+</code>, or <code>?</code>), then the following conversions are applied,
                         <phrase diff="add" at="A">in order</phrase>:</p>
                      
-                     <p>TODO: coercion for enumeration types needs further work.</p>
+                     <note><p>Enumeration types are generalized atomic types, so these rules apply.</p></note>
 
                      <olist>
 
@@ -8846,7 +8880,7 @@ return $incrementors[2](4)]]></eg>
                         <item>
                            <p>Each item in the atomic sequence that is of type
 		<code>xs:untypedAtomic</code> is cast to the expected 
-                              atomic type. <phrase diff="add" at="A">If the expected atomic type is an 
+                              generalized atomic type. <phrase diff="add" at="A">If the expected atomic type is an 
                                  <termref def="dt-EnumerationType"/>,
 		the value is cast to <code>xs:string</code></phrase>. If the item is of type <code>xs:untypedAtomic</code> 
                               and the expected type is <termref
@@ -8914,6 +8948,23 @@ return $incrementors[2](4)]]></eg>
                             is a primitive type (<code>xs:double</code>, <code>xs:float</code>, or <code>xs:string</code>).
                             Relabeling occurs only when <var>T</var> is a derived type. Promotion and relabeling are therefore
                             never combined.</p></note>
+                        </item>
+                        <item diff="add" at="issue688">
+                           <p>If <var>T</var> is a sequence type whose item type is a <termref def="dt-pure-union-type"/> <var>U</var>,
+                              then any atomic value <var>A</var> in the atomic sequence is <term>relabeled</term> as an instance of 
+                              some member type <var>M</var> in the transitive membership of <var>U</var> if <var>M</var> satisfies
+                              all the conditions for relabeling defined in the previous rule, and if it is the first member type
+                              in the transitive membership of <var>U</var> to satisfy those conditions. For example, if <var>T</var>
+                              is the type <code>union(xs:negativeInteger, xs:positiveInteger)*</code> and the supplied value is the
+                              sequence <code>(20, -20)</code>, then the first item <code>20</code> is relabeled as type
+                              <code>xs:positiveInteger</code> and the second item <code>-20</code>is relabeled as type 
+                              <code>xs:negativeInteger</code>.
+                           </p>
+                           <note>
+                              <p>This rule also ensures that if the required type is <code>enum("red", "green", "blue")</code>
+                              and the supplied value is <code>"green"</code>, then the supplied value will be accepted, and
+                              will be relabeled as an instance of the derived atomic type <code>enum("green")</code>.</p>
+                           </note>
                         </item>
                      </olist>
                   </item>
@@ -18883,6 +18934,16 @@ matching</termref>; otherwise it returns <code>false</code>. For example:</p>
                         >dynamic error</termref> is raised <errorref class="DY" code="0002"/>.</p>
                </item>
             </ulist>
+            
+            <note><p>An <code>instance of</code> test does not allow any kind of casting or coercion.
+            The results may therefore be counterintuitive. For example, the expression
+            <code>3 instance of xs:positiveInteger</code> returns <code>false</code>, because
+            the expression <code>3</code> evaluates to an instance of <code>xs:integer</code>,
+            not <code>xs:positiveInteger</code>. For similar reasons, <code>"red" instance of
+            enum("red", "green", "blue")</code> returns false.</p>
+            
+            <p>On such occasions, a <code>castable as</code> test may be more appropriate:
+            see <specref ref="id-castable"/></p></note>
          </div3>
 
          <div3 id="id-typeswitch" role="xquery">
@@ -19017,6 +19078,7 @@ be used to process an expression in a way that depends on its <termref
                <prodrecap id="SimpleTypeName" ref="SimpleTypeName"/>
                <prodrecap ref="TypeName"/>
                <prodrecap ref="LocalUnionType"/>
+               <prodrecap ref="EnumerationType"/>
             </scrap>
             <p>Sometimes
 it is necessary to convert a value to a specific datatype. For this
@@ -19025,13 +19087,17 @@ creates a new value of a specific type based on an existing value. A
 <code>cast</code> expression takes two operands: an <term>input
 expression</term> and a <term>target type</term>. The type of the
 atomized value of the input expression is called the <term>input type</term>. 
-The <phrase diff="chg" at="A">target type</phrase> must be either of:</p>
+The <phrase diff="chg" at="A">target type</phrase> must be one of:</p>
             <ulist>
+               <item diff="add" at="issue688"><p>The name of an <termref def="dt-item-type-aliases">item type alias</termref>
+               defined in the <termref def="dt-static-context"/>, which in turn must refer to an item
+               type in one of the following categories.</p></item>
                <item><p>The name of a type defined in the  <termref def="dt-is-types">in-scope schema types</termref>, 
                   which must be a simple type <errorref class="ST" code="0052"/>.
                   In addition, the target type cannot be <code>xs:NOTATION</code>, <code>xs:anySimpleType</code>,
                   or <code>xs:anyAtomicType</code></p></item>
                <item diff="add" at="A"><p>A <code>LocalUnionType</code> such as <code>union(xs:date, xs:dateTime)</code>.</p></item>
+               <item diff="add" at="issue688"><p>An <code>EnumerationType</code> such as <code>enum("red", "green", "blue")</code>.</p></item>
             </ulist>
                <p>Otherwise, a static error is raised <errorref class="ST" code="0080"/>.</p> 
             <p>The optional occurrence indicator <code>?</code> denotes that an empty
@@ -19135,7 +19201,12 @@ The result of a cast expression is one of the following:
                      </olist>
                   </p>
 
-
+                  <note diff="add" at="issue688"><p>Casting to an enumeration type relies on the fact that an enumeration type
+                  is a generalized atomic type. So <code>cast $x as enum("red")</code> is equivalent
+                  to casting to an anonymous atomic type derived from <code>xs:string</code>
+                  whose enumeration facet restricts the value space to the single string <code>"red"</code>,
+                     while <code>cast $x as enum("red", "green")</code> is equivalent to casting
+                  to <code>union(enum("red"), enum("green"))</code>.</p></note>
 
 
                </item>
@@ -19151,19 +19222,24 @@ The result of a cast expression is one of the following:
                <prodrecap ref="SimpleTypeName"/>
                <prodrecap ref="TypeName"/>
                <prodrecap ref="LocalUnionType"/>
+               <prodrecap ref="EnumerationType"/>
             </scrap>
             <p>&language;
 provides an expression that tests whether a given value
 is castable into a given target type. 
 
-The <phrase diff="chg" at="A">target type</phrase> must be either of:</p>
+The <phrase diff="chg" at="A">target type</phrase> must be one of:</p>
             
             <ulist>
+               <item diff="add" at="issue688"><p>The name of an <termref def="dt-item-type-aliases">item type alias</termref>
+                  defined in the <termref def="dt-static-context"/>, which in turn must refer to an item
+                  type in one of the following categories.</p></item>
                <item><p>The name of a type defined in the  <termref def="dt-is-types">in-scope schema types</termref>, 
                   which must be a simple type <errorref class="ST" code="0052"/>.
                   In addition, the target type cannot be <code>xs:NOTATION</code>, <code>xs:anySimpleType</code>,
                   or <code>xs:anyAtomicType</code></p></item>
                <item diff="add" at="A"><p>A <code>LocalUnionType</code> such as <code>union(xs:date, xs:dateTime)</code>.</p></item>
+               <item diff="add" at="issue688"><p>An <code>EnumerationType</code> such as <code>enum("red", "green", "blue")</code>.</p></item>
             </ulist>
             
 
@@ -19173,8 +19249,9 @@ if the result of evaluating <code>E</code>
 can be successfully cast into the target type <code>T</code> by using a <code>cast</code> expression; 
 otherwise it returns <code>false</code>. 
 If evaluation of <code>E</code> fails with a dynamic error or if the value of <code>E</code> cannot be atomized, 
-the <code>castable</code> expression as a whole fails. 
-The <code>castable</code> expression can be used as a <termref
+the <code>castable</code> expression as a whole fails.</p> 
+
+<p>The <code>castable</code> expression can be used as a <termref
                   def="dt-predicate"
                >predicate</termref>  to
 avoid errors at evaluation time. 
@@ -19187,18 +19264,31 @@ if ($x castable as hatsize)
    else if ($x castable as IQ)
    then $x cast as IQ
    else $x cast as xs:string]]></eg>
+            
+            <note diff="add" at="issue688">
+               <p>The expression <code>$x castable as enum("red", "green", "blue")</code>
+               is for most practical purposes equivalent to <code>$x = ("red", "green", "blue")</code>;
+            the main difference is that it uses the Unicode codepoint collation for comparing strings,
+            not the default collation from the static context.</p>
+            </note>
          </div3>
          <div3 id="id-constructor-functions">
             <head>Constructor Functions</head>
-            <p>For every  simple type in the <termref def="dt-is-types"
+            <p>For every simple type in the <termref def="dt-is-types"
                   >in-scope schema types</termref>  (except <code>xs:NOTATION</code> and <code>xs:anyAtomicType</code>, and <code>xs:anySimpleType</code>, which are not instantiable), a <term>constructor function</term> is implicitly defined. In each case, the name of the constructor function is the same as the name of its target type (including namespace). The signature of the constructor function for  a given type depends on the type that is being constructed, and can be found in  <xspecref
-                  spec="FO31" ref="constructor-functions"/>. All constructor functions for atomic types are <termref def="dt-system-function">system functions</termref>.</p>
+                  spec="FO31" ref="constructor-functions"/>.
+            There is also a constructor function for every named item type in the <termref def="dt-item-type-aliases"/>
+            that maps to a <termref def="dt-generalized-atomic-type"/>.</p> 
+            
+               <p>All such constructor functions are classified as
+               <termref def="dt-system-function">system functions</termref>.</p>
 
 
 
             <p>
                <termdef term="constructor function" id="dt-constructor-function"
-                     >The <term>constructor function</term> for a given type is used to convert instances of other  simple types into the given type. The semantics of the constructor function call <code>T($arg)</code> are defined to be equivalent to the expression <code
+                     >The <term>constructor function</term> for a given type is used to convert instances of other  simple types into the given type. 
+                  The semantics of the constructor function call <code>T($arg)</code> are defined to be equivalent to the expression <code
                      role="parse-test">(($arg) cast as T?)</code>.</termdef>
             </p>
             <p>The following examples illustrate the use of constructor functions:</p>
@@ -19238,7 +19328,7 @@ equivalent to <code
 
 
 
-               <item>
+               <item diff="add" at="issue688">
                   <p>If
 <code>usa:zipcode</code> is a user-defined atomic type
 in the <termref
@@ -19249,6 +19339,12 @@ expression <code
                         role="parse-test">("12345" cast as
 usa:zipcode?)</code>.</p>
                   <eg role="parse-test"><![CDATA[usa:zipcode("12345")]]></eg>
+               </item>
+               <item>
+                  <p>If <code>my:chrono</code> is defined as a type alias for 
+                     <code>union(xs:date, xs:time, xs:dateTime)</code>, then the result
+                     of <code>my:chrono("12:00:00Z")</code> is the <code>xs:time</code>
+                     value <code>12:00:00Z</code>.</p>
                </item>
             </ulist>
 
