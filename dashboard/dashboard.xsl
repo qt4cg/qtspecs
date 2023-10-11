@@ -403,7 +403,7 @@
     </xsl:apply-templates>
     <ixsl:schedule-action
         http-request="map {
-                        'method': 'GET',
+                        'method': 'HEAD',
                         'href': $documents[1]?uri,
                         'status-only': true()
                       }">
@@ -440,7 +440,7 @@
       </xsl:apply-templates>
       <ixsl:schedule-action
           http-request="map {
-                          'method': 'GET',
+                          'method': 'HEAD',
                           'href': $documents[1]?uri,
                           'status-only': true()
                         }">
