@@ -514,32 +514,19 @@
   <!-- div[n]: structural divisions -->
   <!-- make an HTML div -->
   <!-- see also div[n]/head -->
-  <xsl:template match="div1">
-    <div class="div1">
-      <xsl:apply-templates/>
-    </div>
-  </xsl:template>
-
-  <xsl:template match="div2">
-    <div class="div2">
-      <xsl:apply-templates/>
-    </div>
-  </xsl:template>
-
-  <xsl:template match="div3">
-    <div class="div3">
-      <xsl:apply-templates/>
-    </div>
-  </xsl:template>
-
-  <xsl:template match="div4">
-    <div class="div4">
-      <xsl:apply-templates/>
-    </div>
-  </xsl:template>
-
-  <xsl:template match="div5">
-    <div class="div5">
+  <xsl:template match="div1|div2|div3|div4|div5">
+    <xsl:variable name="class" select="local-name(.)"/>
+    <div>
+      <xsl:attribute name="class">
+        <xsl:choose>
+          <xsl:when test="@role">
+            <xsl:sequence select="$class || ' ' || @role"/>
+          </xsl:when>
+          <xsl:otherwise>
+            <xsl:sequence select="$class"/>
+          </xsl:otherwise>
+        </xsl:choose>
+      </xsl:attribute>
       <xsl:apply-templates/>
     </div>
   </xsl:template>
@@ -2705,7 +2692,8 @@
       <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2729,7 +2717,8 @@
       <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2753,7 +2742,8 @@
       <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2775,7 +2765,8 @@
       <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2796,7 +2787,8 @@
       <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2817,7 +2809,8 @@
       <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2835,7 +2828,8 @@
      <span class="secno">
         <xsl:apply-templates select="." mode="divnum"/>
       </span>
-      <span class="content">
+      <span>
+        <xsl:call-template name="toc-entry-class"/>
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
@@ -2847,6 +2841,19 @@
       </ol>
     </xsl:if>
     </li>
+  </xsl:template>
+
+  <xsl:template name="toc-entry-class">
+    <xsl:attribute name="class">
+      <xsl:choose>
+        <xsl:when test="@role">
+          <xsl:sequence select="'content ' || @role"/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:sequence select="'content'"/>
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:attribute>
   </xsl:template>
 
   <xsl:template name="css">

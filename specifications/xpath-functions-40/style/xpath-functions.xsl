@@ -59,7 +59,10 @@
           <option value="op">op</option>
         </select>
         <xsl:text> </xsl:text>
-        
+
+        <xsl:variable name="new-functions"
+                      select="key('id', 'new-functions')//code/string()"/>
+
         <xsl:for-each select="$prefixes">
           <xsl:variable name="prefix" select="."/>
           <select id="select-{$prefix}" 
@@ -69,17 +72,29 @@
             <xsl:for-each select="$catalog//fos:function[(@prefix, 'fn')[1] = $prefix]">
               <xsl:sort select="@name" lang="en"/>
               <xsl:variable name="target" select="local:target-id(concat($prefix, ':', @name))"/>
+
+              <xsl:variable name="fqfn" select="$prefix || ':' || @name"/>
+
+              <xsl:variable name="new-function"
+                            select="$fqfn = $new-functions
+                                    or .//ednote[contains(., 'New in 4.0')]"/>
+
               <option value="{$target}">
                 <xsl:if test="empty(key('id', $target, $spec))">
                   <xsl:attribute name="disabled" select="'disabled'"/>
                 </xsl:if>
                 <xsl:variable name="name" select="string(@name)"/>
                 <xsl:variable name="l" select="string-length($name)"/>
+
                 <xsl:value-of select="if ($l gt 31)
                                       then substring($name, 1, 14)
                                            || '…'
                                            || substring($name, $l - 15)
                                       else $name"/>
+
+                <xsl:if test="$new-function">
+                  <xsl:text> 🆕</xsl:text>
+                </xsl:if>
               </option>
 
               <xsl:if test="empty(key('id', $target, $spec))">
