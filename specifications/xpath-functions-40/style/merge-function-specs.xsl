@@ -21,6 +21,8 @@
         <xsl:key name="id" match="*" use="@id"/>
         <xsl:variable name="new-functions"
                       select="key('id', 'new-functions')//code/string()"/>
+        <xsl:variable name="changed-functions"
+                      select="key('id', 'changes-to-existing-functions')//code/string()"/>
 
 	<xsl:template match="/">
 		<xsl:for-each select="1 to 20">
@@ -76,6 +78,11 @@
                 <xsl:if test="$fqfn = $new-functions
                               or $fspec//ednote[contains(., 'New in 4.0')]">
                   <xsl:attribute name="role" select="'new-function'"/>
+                </xsl:if>
+
+                <xsl:if test="$fqfn = $changed-functions
+                              or $fspec//ednote[contains(., 'Changed in 4.0')]">
+                  <xsl:attribute name="role" select="'changed-function'"/>
                 </xsl:if>
 
 		<head>

@@ -63,6 +63,9 @@
         <xsl:variable name="new-functions"
                       select="key('id', 'new-functions')//code/string()"/>
 
+        <xsl:variable name="changed-functions"
+                      select="key('id', 'changes-to-existing-functions')//code/string()"/>
+
         <xsl:for-each select="$prefixes">
           <xsl:variable name="prefix" select="."/>
           <select id="select-{$prefix}" 
@@ -79,6 +82,10 @@
                             select="$fqfn = $new-functions
                                     or .//ednote[contains(., 'New in 4.0')]"/>
 
+              <xsl:variable name="changed-function"
+                            select="$fqfn = $changed-functions
+                                    or .//ednote[contains(., 'Changed in 4.0')]"/>
+
               <option value="{$target}">
                 <xsl:if test="empty(key('id', $target, $spec))">
                   <xsl:attribute name="disabled" select="'disabled'"/>
@@ -94,6 +101,9 @@
 
                 <xsl:if test="$new-function">
                   <xsl:text> 🆕</xsl:text>
+                </xsl:if>
+                <xsl:if test="$changed-function">
+                  <xsl:text> 🆙</xsl:text>
                 </xsl:if>
               </option>
 
