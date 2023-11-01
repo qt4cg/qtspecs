@@ -155,9 +155,16 @@
       <label>Examples</label>
       <def role="example">
 	<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
+   <xsl:if test="$fspec//fos:variable">
+   	<table role="medium">
+   		<thead><tr><th>Variables</th></tr></thead>
+   		<tbody>
+   			<xsl:apply-templates select="$fspec/fos:examples/fos:variable"/>
+   		</tbody>
+   	</table>
+   </xsl:if>
 	<table role="medium">
-	  <xsl:if test="not(contains-token($fspec/fos:examples/@role, 'wide'))
-                        and $fspec/fos:examples//fos:result">
+	  <xsl:if test="fos:use-two-column-format($fspec/fos:examples)">
 	    <thead>
 	      <tr>
 		<th>Expression</th>
@@ -166,7 +173,7 @@
 	    </thead>
 	  </xsl:if>
 	  <tbody>
-	    <xsl:apply-templates select="$fspec/fos:examples/node()"/>
+	    <xsl:apply-templates select="$fspec/fos:examples/node()[not(self::fos:variable)]"/>
 	  </tbody>
 	</table>						
       </def>
@@ -184,6 +191,13 @@
 			</xsl:if>
 		</glist>
 	</xsl:template>
+	
+	<xsl:function name="fos:use-two-column-format" as="xs:boolean">
+		<xsl:param name="examples" as="element(fos:examples)"/>
+		<xsl:sequence select="not(contains-token($examples/@role, 'wide'))
+			and $examples//fos:result
+			and not(max($examples//eg!tokenize(., '\n')!string-length(.)) gt 30)"/>			
+	</xsl:function>
 
 	<xsl:template match="*" mode="make-note">
 		<xsl:copy copy-namespaces="no">
@@ -299,7 +313,7 @@
 	  </tr>
 	</xsl:template>
 
-	<xsl:template match="fos:test[ancestor::fos:examples[@role='wide']]" priority="6">
+	<xsl:template match="fos:test[not(ancestor::fos:examples[fos:use-two-column-format(.)])]" priority="6">
 	  <tr class="testdiv">
 	    <xsl:copy-of select="@diff, @at"/>
             <th valign="top">Expression:</th>
@@ -368,9 +382,9 @@
 		  <xsl:apply-templates select="fos:expression/node()"/>
 		</xsl:when>
 		<xsl:otherwise>
-                  <p>
+                  <eg>
 		    <code><xsl:value-of select="fos:expression"/></code>
-                  </p>
+                  </eg>
 		</xsl:otherwise>
 	      </xsl:choose>
 	    </td>
@@ -400,7 +414,7 @@
 	
 	<xsl:template match="fos:result">
 		<xsl:choose>
-			<xsl:when test="contains(., codepoints-to-string(10))">
+			<xsl:when test="contains(., codepoints-to-string(10)) || ..//eg">
 				<eg><xsl:value-of select="."/></eg>
 			</xsl:when>
 			<xsl:otherwise>
