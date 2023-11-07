@@ -21,6 +21,7 @@
       <fos:record extensible="true">
          <fos:field name="uri" type="xs:string" required="false"/>
          <fos:field name="scheme" type="xs:string" required="false"/>
+         <fos:field name="hierarchical" type="xs:boolean" required="false"/>
          <fos:field name="authority" type="xs:string" required="false"/>
          <fos:field name="userinfo" type="xs:string" required="false"/>
          <fos:field name="host" type="xs:string" required="false"/>
@@ -18025,20 +18026,32 @@ declare function fold-right(
             </olist>
             <p>More formally, the function is equivalent to the following implementation in XPath:</p>
             <eg>
-<![CDATA[let $apply := function($x, $f) 
-               {fn:apply($f, 
-                         if(function-arity($f) eq 1) then [$x]
-                            else if(not($x instance of array(*))) then array{$x}
-                                                                  else $x
-                        )
-                },
-    $chain := function($x as item()*, $funs as function(*)*) as item()*
-                  {
-                    fold-left($funs, $x, $apply)
-                  }
-         ]]>
+<![CDATA[let $chain :=
+      (
+        let $apply := function($x, $f) 
+           {fn:apply($f, 
+                     if(function-arity($f) eq 1) then [$x]
+                        else if($x instance of array(*)) then $x 
+                               else array{$x}
+                    )
+            }
+          return
+            function($input as item()*, $functions as function(*)*) as item()*
+            {
+              fold-left($functions, $input, $apply)
+            }           
+      )
+     ]]>
             </eg>
         </fos:rules>
+      <fos:errors>
+         <p>A type error is raised <errorref class="AP" code="0001" type="type"
+               /> if the current result does not match the arity 
+                  and the type(s) of the argument(s) of the next function in the chain,
+                  that is, it is a sequence or an array of <code>M</code> items/members and <code>M ne function-arity(current-function)</code>
+                  or <errorref class="RG" code="0006" type="type"/>
+                  if the items /members of the current result cannot be coerced to the required types of the arguments of the next function.</p>
+      </fos:errors>
 
         <fos:notes>
                 <olist>
@@ -18059,7 +18072,7 @@ declare function fold-right(
                         <p>
                             For a function with arity <code>N</code>, greater than <code>1</code>,
                             the result produced by the application of the previous function must be either a sequence
-                            (with <code>N</code> items), or, if some of the parameters of the function could be sequence themselves,
+                            with <code>N</code> items, or, if some of the parameters of the function could be sequences themselves,
                             then an array with<code>N</code> members, and each of these <code>N</code> members is passed
                             by the implementation in the function call as the corresponding argument of this function.
                         </p>
@@ -18072,12 +18085,18 @@ declare function fold-right(
                             or the items /members of the current result cannot be coerced to the required types of the arguments of the next function.
                         </p>
                     </item>
+                    <item>
+                        <p>
+                            In very simple cases, when it may be possible to use short and meaningful static expressions, one could consider 
+                            using chaining provided via the arrow operators. 
+                            In all such cases one should carefully consider the fact that any such desicion could result in longer and less-understandable
+                            expressions, would involve one or more operators (not needed if <code>fn:chain</code> is used), and the loss of reusability.
+                        </p>
+                    </item>
                 </olist>
          <p>
             In the following examples it is assumed that these definitions are in scope:
-            <!--<fos:expression>-->
-            <eg>
-<![CDATA[(: The functions below: $incr, $times, $doubleAll, and $range, etc... 
+            <eg><![CDATA[(: The functions below: $incr, $times, $doubleAll, and $range, etc... 
    are needed only for the following examples :)
 let $incr := function($x) {op("+")($x, ?)},
     $times := function($y) {op("*")($y,  ?)},
@@ -18089,17 +18108,40 @@ let $incr := function($x) {op("+")($x, ?)},
                 {for $i in 1 to array:size($ar) return count($ar($i))},
     $product3 := function($x, $y, $z) {  $x * $y * $z},
     $range := function($n as xs:integer) {1 to $n}
-    ]]>
-            </eg>
-            <!--</fos:expression>-->
+    ]]></eg>
          </p>
       </fos:notes>
             <fos:examples>
+                <fos:variable name="incr" id="chain-variable-incr"><![CDATA[
+                function($x) {op("+")($x, ?)}
+                ]]></fos:variable>
+                <fos:variable name="doubleAll" id="chain-variable-doubleAll"><![CDATA[
+                function($nums as xs:numeric*) {$nums ! op("*")(., 2)}
+                ]]></fos:variable>
+                <fos:variable name="times" id="chain-variable-times"><![CDATA[
+                function($y) {op("*")($y,  ?)}
+                ]]></fos:variable>
+                <fos:variable name="appendAll" id="chain-variable-appendAll"><![CDATA[
+                function($strings as xs:string*, $addage as xs:string) 
+                {$strings ! concat#2(., $addage)}
+                ]]></fos:variable>
+                <fos:variable name="makeUpperAll" id="chain-variable-makeUpperAll"><![CDATA[
+                function($strings as xs:string*) {$strings ! upper-case(.)}
+                ]]></fos:variable>
+                <fos:variable name="countAll" id="chain-variable-countAll"><![CDATA[
+                function($ar as array(*)) 
+                {for $i in 1 to array:size($ar) return count($ar($i))}
+                ]]></fos:variable>
+                <fos:variable name="product3" id="chain-variable-product3"><![CDATA[
+                function($x, $y, $z) {  $x * $y * $z}
+                ]]></fos:variable>
+                <fos:variable name="range" id="chain-variable-range"><![CDATA[
+                function($n as xs:integer) {1 to $n}
+                ]]></fos:variable>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr chain-variable-doubleAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( (2, 3), ($doubleAll, op("+"), $incr(3)))
                                 ]]></eg>
                             </fos:expression>
@@ -18107,10 +18149,9 @@ chain( (2, 3), ($doubleAll, op("+"), $incr(3)))
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr chain-variable-doubleAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( (2, 3), ($doubleAll, sum#1, $incr(3)))
                                 ]]></eg>
                             </fos:expression>
@@ -18118,10 +18159,9 @@ chain( (2, 3), ($doubleAll, sum#1, $incr(3)))
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( (2, 3), (op("+"), $incr(3)))
                                 ]]></eg>
                             </fos:expression>
@@ -18129,10 +18169,9 @@ chain( (2, 3), (op("+"), $incr(3)))
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( (2, 3), (sum#1, $incr(3)))
                                 ]]></eg>
                             </fos:expression>
@@ -18140,10 +18179,9 @@ chain( (2, 3), (sum#1, $incr(3)))
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( [1, (), 2, 3], (array:size#1, $incr(3)) )
                                 ]]></eg>
                             </fos:expression>
@@ -18151,10 +18189,9 @@ chain( [1, (), 2, 3], (array:size#1, $incr(3)) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( (1, 2, 3), (count#1, $incr(3)) )
                                 ]]></eg>
                             </fos:expression>
@@ -18162,10 +18199,9 @@ chain( (1, 2, 3), (count#1, $incr(3)) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-incr">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( [1, 2, 3], (count#1, $incr(3)) )
                                 ]]></eg>
                             </fos:expression>
@@ -18173,10 +18209,9 @@ chain( [1, 2, 3], (count#1, $incr(3)) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-range chain-variable-doubleAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( 5, ($range, $doubleAll, sum#1) )
                                 ]]></eg>
                             </fos:expression>
@@ -18184,10 +18219,9 @@ chain( 5, ($range, $doubleAll, sum#1) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-range chain-variable-doubleAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( 2, ($range, $doubleAll, op("*")) )
                                 ]]></eg>
                             </fos:expression>
@@ -18195,10 +18229,9 @@ chain( 2, ($range, $doubleAll, op("*")) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-countAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( [(1,2,3), ()], ($countAll, op("+")) )
                                 ]]></eg>
                             </fos:expression>
@@ -18206,10 +18239,9 @@ chain( [(1,2,3), ()], ($countAll, op("+")) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-countAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( [(1,2,3), (), (5, 6)], ($countAll, sum#1) )
                                 ]]></eg>
                             </fos:expression>
@@ -18217,10 +18249,9 @@ chain( [(1,2,3), (), (5, 6)], ($countAll, sum#1) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-countAll chain-variable-product3">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( [(1,2,3), (), (5, 6)], ($countAll, $product3) )
                                 ]]></eg>
                             </fos:expression>
@@ -18230,8 +18261,7 @@ chain( [(1,2,3), (), (5, 6)], ($countAll, $product3) )
                 <fos:example>
                     <fos:test>
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( "abra cadabra", (tokenize#2(?, " "), string-join#2(?, "+")) )
                                 ]]></eg>
                             </fos:expression>
@@ -18239,10 +18269,9 @@ chain( "abra cadabra", (tokenize#2(?, " "), string-join#2(?, "+")) )
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                    <fos:test>
+                    <fos:test use="chain-variable-appendAll chain-variable-makeUpperAll">
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( "The cat sat on the mat", 
        ( tokenize#2(?, " "), 
          $appendAll(?, "."), 
@@ -18257,8 +18286,7 @@ chain( "The cat sat on the mat",
                 <fos:example>
                     <fos:test>
                         <fos:expression>
-                            <eg>
-                                <![CDATA[
+                            <eg><![CDATA[
 chain( (
          chain( ("A    long   message   ", "   long "), 
                 (head#1, normalize-space#1, normalize-unicode#1) ),
@@ -18272,22 +18300,9 @@ chain( (
                     </fos:test>
                 </fos:example>
                 <fos:example>
-                   <fos:test>
-                      <fos:expression>
-                         <eg>
-                            <![CDATA[
-chain(3, (array:append([1], ?), op("+")))                        
-                         ]]>
-                         </eg>
-                      </fos:expression>
-                      <fos:result>4</fos:result>
-                   </fos:test>
-                </fos:example>
-                <fos:example>
                   <fos:test>
                     <fos:expression>
-                       <eg>
-                          <![CDATA[
+                       <eg><![CDATA[
 chain( (), true#0)
     ]]></eg>
                     </fos:expression>
@@ -18297,38 +18312,40 @@ chain( (), true#0)
                 <fos:example>
                   <fos:test>
                     <fos:expression>
-                      <eg>
-                        <![CDATA[
-chain((1, 2, 3), $product3) 
+                      <eg><![CDATA[
+chain(3, (array:append([1], ?), op("+"))) 
     ]]></eg>
                     </fos:expression>
-                    <fos:result>6</fos:result>
+                    <fos:result>4</fos:result>
                   </fos:test>
                 </fos:example>
                 <fos:example>
-                  <fos:test>
+                  <fos:test use="chain-variable-product3">
                     <fos:expression>
-                      <eg>
-                        <![CDATA[
+                      <eg><![CDATA[
 chain((1, 2, 3), ($product3, $product3)) 
     ]]></eg>
                     </fos:expression>
-                    <fos:result>Raises a type error ([FOAP0001]) because only 1 argument is supplied to the second function in the chain, but it needs 3 arguments</fos:result>
+                    <fos:error-result error-code="FOAP0001"/>
                   </fos:test>
                 </fos:example>
                 <fos:example>
-                  <fos:test>
+                  <fos:test use="chain-variable-product3">
                     <fos:expression>
-                      <eg>
-                        <![CDATA[
+                      <eg><![CDATA[
 chain((1, 2, 3, 4), $product3) 
     ]]></eg>
                     </fos:expression>
-                    <fos:result>Raises a type error ([FOAP0001]) because 4 arguments are supplied to the function but it needs 3 arguments</fos:result>
+                    <fos:error-result error-code="FOAP0001"/>
                   </fos:test>
                 </fos:example>
             </fos:examples>
+            <fos:history>
+               <fos:version version="4.0">New in 4.0. Accepted 2022-10-20.</fos:version>
+            </fos:history>            
         </fos:function>
+
+
 
 
    <fos:function name="iterate-while" prefix="fn">
@@ -27487,14 +27504,8 @@ declare function some(
          in URI-adjacent spaces, such as file names. Not all such strings
          can be successfully parsed as URIs.</p>
 
-         <p>This function is described as a series of transformations
-         over the input string to identify the parts of a URI that are
-         present. Some portions of the URI are identified by matching
-         with a regular expression. This approach is designed to make
-         the description clear and unambiguous, it is not implementation
-         advice.</p>
-
          <p>The following options are available:</p>
+
 
          <fos:options>
             <fos:option key="path-separator">
@@ -27529,9 +27540,16 @@ declare function some(
             </fos:option>
          </fos:options>
 
+         <p>This function is described as a series of transformations
+         over the input string to identify the parts of a URI that are
+         present. Some portions of the URI are identified by matching
+         with a regular expression. This approach is designed to make
+         the description clear and unambiguous; it is not implementation
+         advice.</p>
+
          <p>Processing begins with a <emph>string</emph> that is equal
          to the <code>$uri</code>. If the <emph>string</emph> contains
-         any backlashes (<code>\</code>), replace them with forward
+         any backslashes (<code>\</code>), replace them with forward
          slashes (<code>/</code>).</p>
 
          <p>Strip off the fragment identifier and any query:</p>
@@ -27586,7 +27604,7 @@ declare function some(
          not to be hierarchical, then <emph>hierarchical</emph> is set accordingly.
          If the implementation does not know if a <emph>scheme</emph> is or is not
          hierarchical, the <emph>hierarchical</emph> setting depends on the
-         <emph>string</emph>. If the <emph>string</emph> is the empty string,
+         <emph>string</emph>: if the <emph>string</emph> is the empty string,
          <emph>hierarchical</emph> is the empty sequence (<emph>i.e.</emph> not known),
          otherwise <emph>hierarchical</emph> is
          <code>true</code> if <emph>string</emph> begins with <code>/</code> and
@@ -27717,8 +27735,8 @@ declare function some(
          calling <code>fn:decode-from-uri</code> on the string.</p>
 
          <p>The <emph>query separator</emph> is the value of the
-         <code>query-separator</code> option.
-         A <emph>query-parameters</emph> value is constructed as follows.
+         <code>query-separator</code> option, and is used to construct
+         a <emph>query-parameters</emph> value as follows.
          Start with an empty map. Tokenize the <emph>query</emph> on
          the <emph>query separator</emph>. For each token, identify
          the <emph>key</emph> and the <emph>value</emph>. If the token
@@ -27756,7 +27774,7 @@ declare function some(
   "filepath": <emph>filepath</emph>
 }</eg>
 
-         <p>The map should only be populated with keys that have a non-empty value (keys
+         <p>The map should be populated with only those keys that have a non-empty value (keys
          whose value is the empty sequence <rfc2119>should</rfc2119>
          be omitted).</p>
 
@@ -27780,7 +27798,7 @@ declare function some(
          <p>Unlike <code>fn:resolve-uri</code>, this function is not attempting to resolve
          one URI against another and consequently, the errors that can arise under those
          circumstances do not apply here. The <code>fn:parse-uri</code> function will
-         accept strings that would raise errors if resolution was attempted,
+         accept strings that would raise errors if resolution was attempted;
          see <code>fn:build-uri</code>.</p>
       </fos:notes>
       
