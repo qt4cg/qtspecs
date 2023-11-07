@@ -1,0 +1,55 @@
+<item>
+   <title>Issue #817 created</title>
+   <pubDate>2023-11-06T20:31:24Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/817</link>
+   <guid>https://qt4cg.org/@qt4cg/2023/#created-817</guid>
+   <description>&lt;div&gt;&lt;p&gt;EBV 4.0&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;Yes, I dare to question the semantics of effective boolean values. The reason is that I never learned to fully like them. It seems obvious where the rules come from, and why they have been reasonable in previous versions of the language. From today’s perspective, I think there’s really some need to simplify and unify the rules, and I believe it’s possible with little effort and without endangering backward compatibility (provided that we are willing to drop errors and return results).&lt;/p&gt;
+&lt;p&gt;Some examples for the somewhat strange nature of the current rules:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;boolean((&amp;lt;_&amp;gt;x&amp;lt;/_&amp;gt;, &amp;lt;_&amp;gt;y&amp;lt;/_&amp;gt;))&lt;/code&gt; returns &lt;code&gt;true&lt;/code&gt;, whereas &lt;code&gt;boolean(('x', 'y'))&lt;/code&gt; raises an error.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;boolean(xs:NCName('x'))&lt;/code&gt; returns &lt;code&gt;true&lt;/code&gt;, whereas &lt;code&gt;boolean(xs:QName('x'))&lt;/code&gt; raises an error.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;boolean((&amp;lt;a/&amp;gt;, 1))&lt;/code&gt; and &lt;code&gt;boolean((1, &amp;lt;a/&amp;gt;))&lt;/code&gt; may either return &lt;code&gt;true&lt;/code&gt; or raise an error, depending on the implementation.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;I believe it will make much more sense to&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;check all values of the input equally (in analogy to the existential semantics of general comparisons), and&lt;/li&gt;
+&lt;li&gt;use existence checks for more types instead of raising a clueless error.&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;The semantics would be tidied up a lot, it could look like this…&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;declare function ebv($input as item()*) as xs:boolean {
+  some $item in $input satisfies typeswitch($item) {
+    case xs:untypedAtomic | xs:string | xs:anyURI  return $item != ''
+    case xs:numeric                                return $item != 0
+    case xs:boolean                                return $item
+    default                                        return true()
+  }
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;…or, if we include more types, like this:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;declare function ebv($input as item()*) as xs:boolean {
+  some $item in $input satisfies typeswitch($item) {
+    case xs:untypedAtomic | xs:string | xs:anyURI  return $item != ''
+    case xs:numeric                                return $item != 0
+    case xs:boolean                                return $item
+    case xs:base64Binary                           return $item != xs:base64Binary('')
+    case xs:hexBinary                              return $item != xs:hexBinary('')
+    case array(*)                                  return array:size($item) != 0
+    case map(*)                                    return map:size($item) != 0
+    default                                        return true()
+  }
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;(If we believe that it’s too progressive to accept all types, we could still raise an error for some specific types… although I don’t think that anyone would benefit from this choice).&lt;/p&gt;
+&lt;p&gt;As a result, EBV checks could also be used to check more than one item:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;(: true if at least one tokenized string is non-empty :)
+if(tokenize('a/', '/')) then ...
+(: true if at least one number is unequal to 0 :)
+if($numbers) then ...
+(: true if at least one Boolean is true :)
+if(false(), true(), true()) then ...
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Nothing would change for the classical EBV checks: &lt;code&gt;if($node/*)&lt;/code&gt;, &lt;code&gt;if($x = $y)&lt;/code&gt;, &lt;code&gt;if($ok)&lt;/code&gt;, …&lt;/p&gt;
+&lt;p&gt;Regarding “1. check all values of the input equally”, one could argue that this might affect performance. I don’t actually think so: For node sequences, it will still be sufficient to retrieve only the first item. For mixed-type sequences, errors were raised in the past.&lt;/p&gt;
+&lt;p&gt;The resulting EBV could be easily combined with revised predicate semantics (#816).&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
