@@ -4,7 +4,7 @@
           <span class="diff-chg">changed text</span>, and
           <span class="diff-del">deleted text</span>.</p><hr/></div><div class="head"><p><a href="https://www.w3.org/"><img src="https://www.w3.org/StyleSheets/TR/2016/logos/W3C" alt="W3C" height="48" width="72"/></a></p>
 <h1><a id="title"/>XPath and XQuery Functions and Operators 4.0 </h1>
-<h2><a id="w3c-doctype"/>W3C Editor's Draft 1 November 2023</h2><dl><dt>This version:</dt><dd>
+<h2><a id="w3c-doctype"/>W3C Editor's Draft 7 November 2023</h2><dl><dt>This version:</dt><dd>
             <a href="https://qt4cg.org/specifications/xpath-functions-40/">https://qt4cg.org/specifications/xpath-functions-40/</a>
         </dd><dt>Latest version of XPath and XQuery Functions and Operators 4.0:</dt><dd>
             <a href="https://qt4cg.org/specifications/xpath-functions-40/">https://qt4cg.org/specifications/xpath-functions-40/</a>
@@ -9683,17 +9683,25 @@ return map:keys($ann) || ': ' || string-join(map:values($ann), ', ')</pre></div>
                         Finally the last function in <code>$functions</code> is applied on the latest-result obtained so far,
                         and the result of this final function application is the result of calling <code>fn:chain($input, $functions)</code> .
                     </p></li></ol><p>More formally, the function is equivalent to the following implementation in XPath:</p><div class="exampleInner"><pre class="small">
-let $apply := function($x, $f) 
-               {fn:apply($f, 
-                         if(function-arity($f) eq 1) then [$x]
-                            else if(not($x instance of array(*))) then array{$x}
-                                                                  else $x
-                        )
-                },
-    $chain := function($x as item()*, $funs as function(*)*) as item()*
-                  {
-                    fold-left($funs, $x, $apply)
-                  }</pre></div></dd><dt class="label">Notes</dt><dd><div class="note"><ol class="enumar"><li><p>
+let $chain :=
+      (
+        let $apply := function($x, $f) 
+           {fn:apply($f, 
+                     if(function-arity($f) eq 1) then [$x]
+                        else if($x instance of array(*)) then $x 
+                               else array{$x}
+                    )
+            }
+          return
+            function($input as item()*, $functions as function(*)*) as item()*
+            {
+              fold-left($functions, $input, $apply)
+            }           
+      )</pre></div></dd><dt class="label">Error Conditions</dt><dd><p>A type error is raised [<a href="#ERRFOAP0001" title="err:FOAP0001">err:FOAP0001</a>] if the current result does not match the arity 
+                  and the type(s) of the argument(s) of the next function in the chain,
+                  that is, it is a sequence or an array of <code>M</code> items/members and <code>M ne function-arity(current-function)</code>
+                  or [<a href="#ERRFORG0006" title="err:FORG0006">err:FORG0006</a>]
+                  if the items /members of the current result cannot be coerced to the required types of the arguments of the next function.</p></dd><dt class="label">Notes</dt><dd><div class="note"><ol class="enumar"><li><p>
                             Contrary to the right-to-left evaluation of function-composition as defined in Math, here the functions in
                             <code>$functions</code> are evaluated in their order from left-to-right (the first function is evaluated first,
                             then the second,..., and the last function is evaluated last).
@@ -9703,7 +9711,7 @@ let $apply := function($x, $f)
                         </p></li><li><p>
                             For a function with arity <code>N</code>, greater than <code>1</code>,
                             the result produced by the application of the previous function must be either a sequence
-                            (with <code>N</code> items), or, if some of the parameters of the function could be sequence themselves,
+                            with <code>N</code> items, or, if some of the parameters of the function could be sequences themselves,
                             then an array with<code>N</code> members, and each of these <code>N</code> members is passed
                             by the implementation in the function call as the corresponding argument of this function.
                         </p></li><li><p>
@@ -9711,11 +9719,14 @@ let $apply := function($x, $f)
                             and the type(s) of the argument(s) of the next function in the chain,
                             that is, it is a sequence or an array of <code>M</code> items/members and <code>M ne function-arity(current-function)</code>
                             or the items /members of the current result cannot be coerced to the required types of the arguments of the next function.
+                        </p></li><li><p>
+                            In very simple cases, when it may be possible to use short and meaningful static expressions, one could consider 
+                            using chaining provided via the arrow operators. 
+                            In all such cases one should carefully consider the fact that any such desicion could result in longer and less-understandable
+                            expressions, would involve one or more operators (not needed if <code>fn:chain</code> is used), and the loss of reusability.
                         </p></li></ol></div><p class="note">
             In the following examples it is assumed that these definitions are in scope:
-            
-            <div class="exampleInner"><pre class="small">
-(: The functions below: $incr, $times, $doubleAll, and $range, etc... 
+            <div class="exampleInner"><pre class="small">(: The functions below: $incr, $times, $doubleAll, and $range, etc... 
    are needed only for the following examples :)
 let $incr := function($x) {op("+")($x, ?)},
     $times := function($y) {op("*")($y,  ?)},
@@ -9727,62 +9738,57 @@ let $incr := function($x) {op("+")($x, ?)},
                 {for $i in 1 to array:size($ar) return count($ar($i))},
     $product3 := function($x, $y, $z) {  $x * $y * $z},
     $range := function($n as xs:integer) {1 to $n}</pre></div>
-            
-         </p></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><tbody><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+         </p></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><thead><tr><th>Variables</th></tr></thead><tbody><tr><td colspan="2"><div class="exampleInner"><pre>let $incr := 
+                function($x) {op("+")($x, ?)}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre class="small">let $doubleAll := 
+                function($nums as xs:numeric*) {$nums ! op("*")(., 2)}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre>let $times := 
+                function($y) {op("*")($y,  ?)}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre class="small">let $appendAll := 
+                function($strings as xs:string*, $addage as xs:string) 
+                {$strings ! concat#2(., $addage)}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre class="small">let $makeUpperAll := 
+                function($strings as xs:string*) {$strings ! upper-case(.)}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre class="small">let $countAll := 
+                function($ar as array(*)) 
+                {for $i in 1 to array:size($ar) return count($ar($i))}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre>let $product3 := 
+                function($x, $y, $z) {  $x * $y * $z}</pre></div></td></tr><tr><td colspan="2"><div class="exampleInner"><pre>let $range := 
+                function($n as xs:integer) {1 to $n}</pre></div></td></tr></tbody></table><table class="medium"><tbody><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
+                            <div class="exampleInner"><pre>
 chain( (2, 3), ($doubleAll, op("+"), $incr(3)))</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>13</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( (2, 3), ($doubleAll, sum#1, $incr(3)))</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>13</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( (2, 3), (op("+"), $incr(3)))</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>8</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                             <div class="exampleInner"><pre>
-                                
 chain( (2, 3), (sum#1, $incr(3)))</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>8</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( [1, (), 2, 3], (array:size#1, $incr(3)) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>7</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( (1, 2, 3), (count#1, $incr(3)) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>6</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( [1, 2, 3], (count#1, $incr(3)) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>4</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( 5, ($range, $doubleAll, sum#1) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>30</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( 2, ($range, $doubleAll, op("*")) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>8</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( [(1,2,3), ()], ($countAll, op("+")) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>3</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( [(1,2,3), (), (5, 6)], ($countAll, sum#1) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>5</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                            <div class="exampleInner"><pre class="small">
-                                
+                            <div class="exampleInner"><pre>
 chain( [(1,2,3), (), (5, 6)], ($countAll, $product3) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>0</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                             <div class="exampleInner"><pre class="small">
-                                
 chain( "abra cadabra", (tokenize#2(?, " "), string-join#2(?, "+")) )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>"abra+cadabra"</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                             <div class="exampleInner"><pre class="small">
-                                
 chain( "The cat sat on the mat", 
        ( tokenize#2(?, " "), 
          $appendAll(?, "."), 
@@ -9792,7 +9798,6 @@ chain( "The cat sat on the mat",
      )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>"THE. CAT. SAT. ON. THE. MAT."</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                             <div class="exampleInner"><pre class="small">
-                                
 chain( (
          chain( ("A    long   message   ", "   long "), 
                 (head#1, normalize-space#1, normalize-unicode#1) ),
@@ -9802,26 +9807,18 @@ chain( (
       (contains#2)
     )</pre></div>
                             </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>true()</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
-                         <div class="exampleInner"><pre class="small">
-                            
-chain(3, (array:append([1], ?), op("+")))</pre></div>
-                      </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>4</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                        <div class="exampleInner"><pre>
-                          
 chain( (), true#0)</pre></div>
                     </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>true()</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                       <div class="exampleInner"><pre>
-                        
-chain((1, 2, 3), $product3)</pre></div>
-                    </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>6</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
+chain(3, (array:append([1], ?), op("+")))</pre></div>
+                    </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>4</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                       <div class="exampleInner"><pre>
-                        
 chain((1, 2, 3), ($product3, $product3))</pre></div>
-                    </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre class="small">Raises a type error ([FOAP0001]) because only 1 argument is supplied to the second function in the chain, but it needs 3 arguments</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
+                    </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><p>Raises error FOAP0001.</p></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top">
                       <div class="exampleInner"><pre>
-                        
 chain((1, 2, 3, 4), $product3)</pre></div>
-                    </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre class="small">Raises a type error ([FOAP0001]) because 4 arguments are supplied to the function but it needs 3 arguments</pre></div></td></tr></tbody></table></div></dd></dl></div></div><div class="diff-add"><div class="div3 new-function">
+                    </td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><p>Raises error FOAP0001.</p></td></tr></tbody></table></div></dd><dt class="label">History</dt><dd><div class="example"><p>New in 4.0. Accepted 2022-10-20.</p></div></dd></dl></div></div><div class="diff-add"><div class="div3 new-function">
 <h4><a id="func-every"/>17.2.3 fn:every</h4><dl><dt class="label">Summary</dt><dd><p>Returns <code>true</code> if every item in the input sequence matches a supplied predicate.</p></dd><dt class="label">Signature</dt><dd><div class="proto"><table class="proto" border="0"><tr class="name"><td colspan="3"><code class="function">fn:every</code>(</td></tr><tr class="arg"><td><code>$input</code></td><td><code class="as">as </code><code class="type"><code>item()*</code></code>,</td><td/></tr><tr class="arg"><td><code>$predicate</code></td><td><code class="as">as </code><code class="type"><code>function(item()) as xs:boolean</code></code></td><td><code class="assign">:= </code><code>fn:identity#1</code></td></tr><tr class="return-type"><td colspan="3">)<code class="as"> as </code><code><code>xs:boolean</code></code></td></tr></table></div></dd><dt class="label">Properties</dt><dd><p>This function is <a title="deterministic" class="termref" href="#dt-deterministic"><span class="arrow">·</span>deterministic<span class="arrow">·</span></a>, <a title="context-independent" class="termref" href="#dt-context-independent"><span class="arrow">·</span>context-independent<span class="arrow">·</span></a>,  and <a title="focus-dependent" class="termref" href="#dt-focus-independent"><span class="arrow">·</span>focus-independent<span class="arrow">·</span></a>. </p></dd><dt class="label">Rules</dt><dd><p>The effect of the function is equivalent to the following implementation in XQuery:</p><div class="exampleInner"><pre class="small">
 declare function every(
   $input     as item()*,
@@ -11706,7 +11703,7 @@ There is no constructor function for <code>xs:NOTATION</code>. Constructors are 
                   union types defined in a schema.</p></div><p>Special rules apply to constructor functions for namespace-sensitive types, that is,
                             atomic types derived from <code>xs:QName</code> and <code>xs:NOTATION</code>, list types that have
    a namespace-sensitive item type, and union types that have a namespace-sensitive member type. See <a href="#constructor-qname-notation"><b>20.2 Constructor functions for xs:QName and xs:NOTATION</b></a>.</p><div class="example">
-<div class="exampleHeader"><a id="d7e61088"/>Example: Using a Constructor Function for a User-Defined Atomic Type</div><p>Consider a situation where the static context contains an atomic type
+<div class="exampleHeader"><a id="d7e61128"/>Example: Using a Constructor Function for a User-Defined Atomic Type</div><p>Consider a situation where the static context contains an atomic type
                     called <code>hatSize</code> defined in a schema whose target namespace is bound
                     to the prefix <code>eg</code>. In such a case the following constructor function is available to users:</p><div class="proto"><table class="proto" border="0"><tr class="name"><td colspan="3"><code class="function">eg:hatSize</code>(</td></tr><tr class="arg"><td><code>$value</code></td><td><code class="as">as </code><code class="type"><code>xs:anyAtomicType</code></code></td><td/></tr><tr class="return-type"><td colspan="3">)<code class="as"> as </code><code><code>my:hatSize</code>?</code></td></tr></table></div><p>The resulting function may be used in an expression such as <code>eg:hatSize("10½")</code>.</p></div><div class="diff-del"><p>In the case of an atomic type <var>A</var>, the return type of the function is <code>A?</code>, reflecting
                the fact that the result will be an empty sequence if the input is an empty sequence. For a union or list type,
