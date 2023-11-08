@@ -10,17 +10,27 @@ PAGE=1
 PERPAGE=100
 DONE=0
 
-#Use the DocBook issues list for testing...
-#ISSUESURI=https://api.github.com/repos/docbook/xsltng/issues
-
 ISSUESURI=https://api.github.com/repos/qt4cg/qtspecs/issues
+
+if [ -z QT4CG_GITHUB_ISSUES_TOKEN ]; then
+    echo "No access token; unauthenticated requests are rate limited."
+fi
 
 rm -f /tmp/issues.$$.page*.json
 while [ "$DONE" = "0" ]; do
     printf -v PN "%02d" $PAGE
     FN="/tmp/issues.$$.page$PN.json"
     printf "Getting page %s..." "$PN"
-    curl -s -o $FN "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
+
+    if [ -z QT4CG_GITHUB_ISSUES_TOKEN ]; then
+        curl -s -o $FN "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
+    else
+        curl -s -o $FN \
+             --header "Authorization: Bearer $QT4CG_GITHUB_ISSUES_TOKEN" \
+             --header "X-GitHub-Api-Version: 2022-11-28" \
+             "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
+    fi
+
     LAST=`cat $FN | jq ".[].number" | tail -1`
     echo $LAST
     if [ "$LAST" = "1" ]; then
