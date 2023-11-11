@@ -12097,7 +12097,7 @@ return exists($break)
       </fos:rules>
       
       <fos:notes>
-         <p>The effect of the function is equivalent to the following XSLT expression:</p>
+         <p>The function is equivalent to the following XSLT expression:</p>
          <eg><![CDATA[
 <xsl:for-each-group select="$values" group-by="." collation="{$collation}">
   <xsl:sequence select="current-group()[2]"/>
@@ -13265,16 +13265,13 @@ return ends-with-sequence(
       <fos:rules>
          <p>Informally, the function returns <code>true</code> if <code>$input</code> contains a consecutive subsequence matching <code>$subsequence</code>,
             when items are compared using the supplied (or default) <code>$compare</code> function.</p>
-         <p>More formally, the effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>More formally, the function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function contains-sequence(
-  $input       as item()*,
-  $subsequence as item()*,
-  $compare     as function(item(), item()) as xs:boolean := fn:deep-equal#2
-) as xs:boolean {
+declare function contains-sequence($input, $subsequence, $compare) {
   starts-with-sequence($input, $subsequence, $compare) or
   exists($input) and contains-sequence(tail($input), $subsequence, $compare)
 };
+contains-sequence($input, $subsequence, $compare)
 ]]></eg>
       </fos:rules>
       <fos:notes>
@@ -13727,20 +13724,14 @@ return contains-sequence(
          <p>More formally, the <code>equal-strings</code> function is equivalent to the following
             implementation in XQuery:</p>
          <eg><![CDATA[
-declare function equal-strings(
-  $string1   as xs:string,
-  $string2   as xs:string, 
-  $collation as xs:string,
-  $options   as map(*)
-) as xs:boolean {
-  let $n1 := if ($options?whitespace = "normalize"))
-             then normalize-unicode(?, $options?normalization-form) 
-             else identity#1
-  let $n2 := if ($options?normalize-space)
-             then normalize-space#1 
-             else identity#1               
-  return compare($n1($n2($string1)), $n1($n2($string2)), $collation) eq 0    
-}]]></eg>
+let $n1 := if ($options?whitespace = "normalize"))
+           then normalize-unicode(?, $options?normalization-form) 
+           else identity#1
+let $n2 := if ($options?normalize-space)
+           then normalize-space#1 
+           else identity#1               
+return compare($n1($n2($string1)), $n1($n2($string2)), $collation) eq 0    
+]]></eg>
          <p>The rules for deciding whether two items <code>$i1</code> and <code>$i2</code> are deep-equal
             are as follows. The two items are deep-equal
             if one or more of the following conditions are true:</p>
@@ -17680,45 +17671,27 @@ return map:keys($ann) || ': ' || string-join(map:values($ann), ', ')
       <fos:signatures>
          <fos:proto name="for-each" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="action" type="function(item()) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="function(item(), xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Applies the function item <code>$action</code> to every item from the sequence <var>$input</var>
             in turn, returning the concatenation of the resulting sequences in order.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery
+         (provided that ordering mode is <code>ordered</code>):</p>
          <eg><![CDATA[
-declare function for-each(
-  $input  as item()*,
-  $action as function(item()) as item()*
-) as item()* {
-  if (empty($input))
-  then ()
-  else ($action(head($input)), for-each(tail($input), $action))
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="for-each">
-  <xsl:param name="iinput"/>
-  <xsl:param name="action"/>
-  <xsl:if test="exists($input)">
-    <xsl:sequence select="$action(head($input)), for-each(tail($input), $action)"/>
-  </xsl:if>
-</xsl:function>]]>
-         </eg>
+for $item at $pos in $input
+return $action($item, $pos)
+]]></eg>
       </fos:rules>
       <fos:notes>
-         <p>The function call <code>fn:for-each($SEQ, $F)</code> is equivalent to the expression
-               <code>for $i in $SEQ return $F($i)</code>, assuming that ordering mode is
-               <code>ordered</code>.</p>
          <p diff="add" at="2023-02-20">See also <code>array:build</code>, which provides similar functionality for the
          case where the input is a sequence rather than an array.</p>
       </fos:notes>
@@ -17744,64 +17717,59 @@ declare function for-each(
                <fos:result>(23, 29)</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>for-each(
+  ('one', 'two', 'three'),
+  fn($item, $pos) { $pos || '. ' || $item }
+)</eg></fos:expression>
+               <fos:result>("1. one", "2. two", "3. three")</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:history>
          <fos:version version="3.1">First introduced in 3.1.</fos:version>
-         <fos:version version="4.0">Functionality unchanged in 4.0, but the specification has been formalized.</fos:version>
+         <fos:version version="4.0">Positional parameter added to predicate function; the specification has been formalized.</fos:version>
       </fos:history>
    </fos:function>
    <fos:function name="filter" prefix="fn">
       <fos:signatures>
          <fos:proto name="filter" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean" usage="inspection"/>
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Returns those items from the sequence <code>$input</code> for which the supplied function
                <code>$predicate</code> returns <code>true</code>.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function filter(
-  $input     as item()*,
-  $predicate as function(item()) as xs:boolean
-) as item()* {
-  if (empty($input))
-  then ()
-  else (head($input)[$predicate(.)], filter(tail($input), $predicate))
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="filter" as="item()*">
-  <xsl:param name="input" as="item()*"/>
-  <xsl:param name="predicate" as="function(item()) as xs:boolean"/>
-  <xsl:if test="exists($input)">
-    <xsl:sequence select="head($input)[$f(.) eq true()], filter(tail($input), $f)"/>
-  </xsl:if>
-</xsl:function>]]>
-         </eg>
+for $item at $pos in $input
+where $predicate($item, $pos)
+return $item
+]]></eg>
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
-            occurs if the supplied function <code>$predicate</code> returns anything other than a single
+            occurs if the supplied <code>$predicate</code> function returns anything other than a single
                <code>xs:boolean</code> item; there is no conversion to an effective boolean
             value.</p>
       </fos:errors>
       <fos:notes>
-         <p>The function call <code>fn:filter($SEQ, $F)</code> has a very similar effect to the
-            expression <code>$SEQ[$F(.)]</code>. There are some differences, however. In the case of
+         <p>If <code>$predicate</code> is an arity-1 function,
+            the function call <code>fn:filter($input, $predicate)</code> has a very similar effect to the
+            expression <code>$input[$predicate(.)]</code>. There are some differences, however. In the case of
                <code>fn:filter</code>, the function <code>$F</code> is required to return a boolean;
             there is no special treatment for numeric predicate values, and no conversion to an
-            effective boolean value. Also, with a filter expression <code>$SEQ[$F(.)]</code>, the
-            focus within the predicate is different from that outside; this means that the use of a
+            effective boolean value. Also, with a filter expression <code>$input[$predicate(.)]</code>,
+            the focus within the predicate is different from that outside; this means that the use of a
             context-sensitive function such as <code>fn:lang#1</code> will give different results in
             the two cases.</p>
       </fos:notes>
@@ -17818,54 +17786,48 @@ declare function filter(
                <fos:result>()</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>let $sequence := (1, 1, 2, 3, 4, 4, 5)
+return filter(
+  $sequence,
+  fn($item, $pos) { $item = $sequence[$pos - 1] }
+)</eg></fos:expression>
+               <fos:result>(1, 4)</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Positional parameter added to predicate function.</fos:version>
+      </fos:history>
    </fos:function>
+
    <fos:function name="fold-left" prefix="fn">
       <fos:signatures>
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="zero" type="item()*"/>
-            <fos:arg name="action" type="function(item()*, item()) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="function(item()*, item(), xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Processes the supplied sequence from left to right, applying the supplied function
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function fold-left(
-  $input  as item()*,
-  $zero   as item()*,
-  $action as function(item()*, item()) as item()*
-) as item()* {
+declare function fold-left($input, $zero, $action, $pos) {
   if (empty($input))
   then $zero
-  else fold-left(tail($input), $action($zero, head($input)), $action)
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="fold-left" as="item()*">
-  <xsl:param name="input" as="item()*"/>
-  <xsl:param name="zero" as="item()*"/>
-  <xsl:param name="action" as="function(item()*, item()) as item()*"/>
-  <xsl:choose>
-    <xsl:when test="empty($input)">
-      <xsl:sequence select="$zero"/>
-    </xsl:when>
-    <xsl:otherwise>
-      <xsl:sequence select="fold-left(tail($input), $action($zero, head($input)), $action)"/>
-    </xsl:otherwise>
-  </xsl:choose>
-</xsl:function>]]>
-         </eg>
+  else fold-left(tail($input), $action($zero, head($input), $pos + 1), $action)
+};
+fold-left($input, $zero, $action, 1)]]></eg>
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
@@ -17972,21 +17934,35 @@ declare function fold-left(
                <fos:result>map{1:2, 2:4, 3:6, 4:8, 5:10}</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+let $input := (11 to 21, 21 to 31)
+let $search := 21
+return fold-left($input, (),
+  fn($result, $curr, $pos) {
+    $result, if($curr = $search) { $pos }
+  }
+)
+</eg></fos:expression>
+               <fos:result>(11, 12)</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
    </fos:function>
+
    <fos:function name="fold-right" prefix="fn">
       <fos:signatures>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="zero" type="item()*"/>
-            <fos:arg name="action" type="function(item(), item()*) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="function(item(), item()*, xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
@@ -17994,33 +17970,14 @@ declare function fold-left(
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function fold-right(
-  $input  as item()*, 
-  $zero   as item()*, 
-  $action as function(item(), item()*) as item()*
-) as item()* {
+declare function fold-right($input, $zero, $action, $pos) {
   if (empty($input))
   then $zero
-  else $action(head($input), fold-right(tail($input), $zero, $action))
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="fold-right" as="item()*">
-  <xsl:param name="input" as="item()*"/>
-  <xsl:param name="zero" as="item()*"/>
-  <xsl:param name="action" as="function(item(), item()*) as item()*"/>
-  <xsl:choose>
-    <xsl:when test="empty($input)">
-      <xsl:sequence select="$zero"/>
-    </xsl:when>
-    <xsl:otherwise>
-      <xsl:sequence select="$action(head($input), fold-right(tail($input), $zero, $action))"/>
-    </xsl:otherwise>
-  </xsl:choose>
-</xsl:function>]]>
-         </eg>
+  else $action(head($input), fold-right(tail($input), $zero, $action, $pos - 1))
+};
+fold-left($input, $zero, $action, count($pos))]]></eg>
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
@@ -18028,7 +17985,6 @@ declare function fold-right(
             the first argument is any item in the sequence <code>$input</code>, and the second is either
             the value of <code>$zero</code> or the result of a previous application of
             <code>$action</code>.</p>
-
       </fos:errors>
       <fos:notes>
          <p>This operation is often referred to in the functional programming literature as
@@ -18042,6 +17998,8 @@ declare function fold-right(
          <p>In cases where the function performs an associative operation on its two arguments (such
             as addition or multiplication), <code>fn:fold-right</code> produces the same result as
                <code>fn:fold-left</code>.</p>
+         <p>In contrast to <code>fn:fold-right</code>, the value of the positional parameter
+            is decremented.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -18073,6 +18031,20 @@ declare function fold-right(
   concat("$f(", ?, ", ", ?, ")")
 )</eg></fos:expression>
                <fos:result>"$f(1, $f(2, $f(3, $f(4, $f(5, $zero)))))"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+let $input := (11 to 21, 21 to 31)
+let $search := 21
+return fold-right($input, (),
+  fn($curr, $result, $pos) {
+    $result, $pos[$curr = $search]
+  }
+)
+</eg></fos:expression>
+               <fos:result>(12, 11)</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -18122,24 +18094,20 @@ declare function fold-right(
                     </p>
                 </item>
             </olist>
-            <p>More formally, the function is equivalent to the following implementation in XPath:</p>
+            <p>More formally, the function is equivalent to the following expression in XPath:</p>
             <eg>
-<![CDATA[let $chain :=
-      (
-        let $apply := function($x, $f) 
-           {fn:apply($f, 
-                     if(function-arity($f) eq 1) then [$x]
-                        else if($x instance of array(*)) then $x 
-                               else array{$x}
-                    )
-            }
-          return
-            function($input as item()*, $functions as function(*)*) as item()*
-            {
-              fold-left($functions, $input, $apply)
-            }           
-      )
-     ]]>
+<![CDATA[
+let $apply := function($input, $function) {
+  apply($function, 
+    if(function-arity($function) eq 1) then [ $input ]
+    else if($input instance of array(*)) then $input
+    else array { $input }
+  )
+}
+return function($input, $functions) as item()* {
+  fold-left($functions, $input, $apply)
+}           
+]]>
             </eg>
         </fos:rules>
       <fos:errors>
@@ -18443,15 +18411,12 @@ chain((1, 2, 3, 4), $product3)
             </fos:history>            
         </fos:function>
 
-
-
-
    <fos:function name="iterate-while" prefix="fn">
       <fos:signatures>
          <fos:proto name="iterate-while" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()*) as xs:boolean" example="false#0"/>
-            <fos:arg name="action" type="function(item()*) as item()*"/>
+            <fos:arg name="predicate" type="function(item()*, xs:integer) as xs:boolean" example="false#0"/>
+            <fos:arg name="action" type="function(item()*, xs:integer) as item()*"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -18481,17 +18446,15 @@ chain((1, 2, 3, 4), $product3)
                   value of <code>$input</code>.</p>
             </item>
          </olist>
-         <p>More formally, the function is equivalent to the following implementation in XQuery:</p>
+         <p>More formally, the function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function iterate-while(
-  $input     as item()*,
-  $predicate as function(item()*) as xs:boolean,
-  $action    as function(item()*) as item()*
-) as item()* {
-  if ($predicate($input))
-  then iterate-while($action($input), $predicate, $action)
+declare function iterate-while($input, $predicate, $action, $pos) {
+  if ($predicate($input, $pos))
+  then iterate-while($action($input, $pos), $predicate, $action, $pos + 1)
   else $input
-};]]></eg>
+};
+iterate-while($input, $predicate, 1)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>While-loops are very common in procedural programming languages, and this function
@@ -18511,6 +18474,18 @@ declare function iterate-while(
   function { . * . }
 )]]></eg></fos:expression>
                <fos:result>256</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[
+iterate-while(
+  1,
+  fn($num, $pos) { $pos <= 10 },
+  fn($num, $pos) { $num * $pos }
+)
+]]></eg></fos:expression>
+               <fos:result>3628800</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -18569,12 +18544,13 @@ return $result?numbers
          <fos:version version="4.0">New in 4.0. Approved.</fos:version>
       </fos:history>
    </fos:function>
+
    <fos:function name="for-each-pair" prefix="fn">
       <fos:signatures>
          <fos:proto name="for-each-pair" return-type="item()*">
             <fos:arg name="input1" type="item()*" usage="navigation"/>
             <fos:arg name="input2" type="item()*" usage="navigation"/>
-            <fos:arg name="action" type="function(item(), item()) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="function(item(), item(), xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -18589,29 +18565,11 @@ return $result?numbers
             resulting sequences in order.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function for-each-pair(
-  $input1 as item()*,
-  $input2 as item()*,
-  $action as function(item(), item()) as item()*
-) as item()* {
-  if (empty($input1) or empty($input2)) 
-  then ()
-  else ($action(head($input1), head($input2)), for-each-pair(tail($input1), tail($input2), $action))
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="fn:for-each-pair">
-  <xsl:param name="input1"/>
-  <xsl:param name="input2"/>
-  <xsl:param name="action"/>
-  <xsl:if test="fn:exists($input1) and fn:exists($input2)">
-    <xsl:sequence select="$action(fn:head($input1), fn:head($input2))"/>
-    <xsl:sequence select="fn:for-each-pair(fn:tail($input1), fn:tail($input2), $action)"/>
-  </xsl:if>
-</xsl:function>]]>
-         </eg>
+for $pos in 1 to min(count($input1), count($input2))
+return $action($input1[$pos], $input2[$pos], $pos)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>If one sequence is longer than the other, excess items in the longer sequence are ignored.</p>
@@ -18651,6 +18609,23 @@ return for-each-pair($s, tail($s), function($a, $b) { $a * $b })</eg></fos:expre
                <fos:result>(2, 6, 12, 20, 30, 42, 56)</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[
+for-each-pair(
+  (1, 8, 2),
+  (3, 4, 3),
+  fn($item1, $item2, $pos) {
+    $pos || ': ' || max(($item1, $item2))
+  }
+)
+]]></eg></fos:expression>
+               <fos:result>("1: 1", "2: 4", "3: 2")</fos:result>
+            </fos:test>
+         </fos:example>
+      <fos:history>
+         <fos:version version="4.0">Positional parameter added to predicate function.</fos:version>
+      </fos:history>
       </fos:examples>
    </fos:function>
 
@@ -19724,7 +19699,7 @@ return fold-left($MAPS, map { },
          duplicate keys should be handled. The default is to form the sequence concatenation 
          of the corresponding values, retaining their order in the input sequence.</p>
          
-         <p>The effect of the function is equivalent to the expression:</p>
+         <p>The function is equivalent to the expression:</p>
          <eg>map:pairs($week) => map:build(fn { ?key }, fn { ?value }, $combine)</eg>
 
 
@@ -19847,16 +19822,12 @@ return fold-left($MAPS, map { },
                ref="properties-of-functions"
             />). This means that two calls with the same argument
             are not guaranteed to produce the results in the same order.</p>
-         <p>More formally, the effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>More formally, the function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function map:keys(
-  $map       as map(*),
-  $predicate as function(item()*) as xs:boolean
-) as xs:anyAtomicType* {
-  map:for-each($map, function($key, $value) {
-    if($predicate($value)) { $key }
-  })
-};]]></eg>
+map:for-each($map, fn($key, $value) {
+  if($predicate($value)) { $key }
+})
+]]></eg>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -19935,7 +19906,7 @@ return map:keys($birthdays, function($date) {
                ref="properties-of-functions"
             />). This means that two calls with the same argument
             are not guaranteed to produce the results in the same order.</p>
-         <p>The effect of the function is equivalent to <code>map:for-each($map, fn($k, $v) { $v })</code>.</p>
+         <p>The function is equivalent to <code>map:for-each($map, fn($k, $v) { $v })</code>.</p>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -19990,7 +19961,7 @@ return map:keys($birthdays, function($date) {
                ref="properties-of-functions"
             />). This means that two calls with the same argument
             are not guaranteed to produce the results in the same order.</p>
-         <p>The effect of the function is equivalent to the expression:</p>
+         <p>The function is equivalent to the expression:</p>
          <eg>map:for-each($map, fn($k, $v) { map { $k: $v } })</eg>
       </fos:rules>
       <fos:examples>
@@ -20036,7 +20007,7 @@ return map:keys($birthdays, function($date) {
                ref="properties-of-functions"
             />). This means that two calls with the same argument
             are not guaranteed to produce the results in the same order.</p>
-         <p>The effect of the function is equivalent to the expression:</p>
+         <p>The function is equivalent to the expression:</p>
          <eg>map:for-each($map, fn($k, $v) { map { "key": $k, "value": $v } })</eg>
       </fos:rules>
       <fos:examples>
@@ -20621,7 +20592,6 @@ return <box>{
       <fos:properties>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Selects entries from a map, returning a new map.</p>
@@ -24011,7 +23981,7 @@ else $fallback($position)</eg>
       <fos:signatures>
          <fos:proto name="index-where" return-type="xs:integer*">
             <fos:arg name="array" type="array(*)"/>
-            <fos:arg name="predicate" type="function(item()*) as xs:boolean"/>
+            <fos:arg name="predicate" type="function(item()*, xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -24023,7 +23993,6 @@ else $fallback($position)</eg>
          <p>Returns the position in an input array of members that match a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         
          <p>The result of the function is a sequence of integers, in monotonic ascending order, representing
             the 1-based positions in the input array of those members for which the supplied predicate function
             returns <code>true</code>.</p>
@@ -24063,6 +24032,13 @@ else $fallback($position)</eg>
   function($m) { count($m) = 3 }
 )</eg></fos:expression>
                <fos:result>(1, 2)</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[array:index-where(
+  [ 1, 8, 2, 7, 3 ],
+  fn($member, $pos) { $member < 5 and $pos > 2 }
+)]]></eg></fos:expression>
+               <fos:result>(3, 5)</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -24539,7 +24515,7 @@ else $fallback($position)</eg>
       <fos:signatures>
          <fos:proto name="for-each" return-type="array(*)">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="action" type="function(item()*) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="function(item()*, xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -24556,8 +24532,11 @@ else $fallback($position)</eg>
       <fos:rules>
          <p>Informally, the function returns an array whose members are obtained by applying 
          the supplied <code>$function</code> to each member of the input array in turn.</p>
-         <p>More formally, the function returns the result of the expression
-            <code>array:of-members(array:members($array) ! map { 'value': $action(?value) }</code>.</p>
+         <p>More formally, the function is equivalent to the following expression in XQuery:</p>
+         <eg><![CDATA[
+for member $member at $pos in $array
+return [ $action($member, $pos) ]
+]]></eg>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -24582,22 +24561,31 @@ else $fallback($position)</eg>
 )</eg></fos:expression>
                <fos:result>[("the", "cat"), "sat", ("on", "the", "mat")]</fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:for-each(
+  ['one', 'two', 'three'],
+  fn($member, $pos) { $pos || '. ' || $member }
+)</eg></fos:expression>
+               <fos:result>["1. one", "2. two", "3. three"]</fos:result>
+            </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Positional parameter added to predicate function.</fos:version>
+      </fos:history>
    </fos:function>
 
    <fos:function name="filter" prefix="array">
       <fos:signatures>
          <fos:proto name="filter" return-type="array(*)">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="predicate" type="function(item()*) as xs:boolean" usage="inspection"/>
+            <fos:arg name="predicate" type="function(item()*, xs:integer) as xs:boolean" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Returns an array containing those members of the <code>$array</code> for which 
@@ -24606,9 +24594,13 @@ else $fallback($position)</eg>
       <fos:rules>
          <p>Informally, the function returns an array containing those members of the input
          array that satisfy the supplied predicate.</p>
-         <p>More formally, the function returns the result of the expression
-            <code role="example">array:of-members(array:members($array) => fn:filter(function($m) { $predicate($m?value) })</code>.</p>
-
+         <p>More formally, the function is equivalent to the following expression in XQuery:</p>
+         <eg><![CDATA[
+array:of-members(
+  for $member at $pos in array:members($array)
+  where $predicate($member?value, $pos)
+  return $member
+)]]></eg>
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error occurs if the supplied
@@ -24636,10 +24628,20 @@ else $fallback($position)</eg>
                <fos:result>["A", "B", 1]</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>let $array := [1, 1, 2, 3, 4, 4, 5]
+return array:filter(
+  $array,
+  fn($item, $pos) { $pos > 1 and $item = $array($pos - 1) }
+)</eg></fos:expression>
+               <fos:result>[1, 4]</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:history>
          <fos:version version="3.1">First introduced in 3.1.</fos:version>
-         <fos:version version="4.0">Functionality unchanged in 4.0, but the specification has been formalized.</fos:version>
+         <fos:version version="4.0">Positional parameter added to predicate function; the specification has been formalized.</fos:version>
       </fos:history>
    </fos:function>
 
@@ -24648,23 +24650,30 @@ else $fallback($position)</eg>
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
             <fos:arg name="zero" type="item()*" usage="navigation"/>
-            <fos:arg name="action" type="function(item()*, item()*) as item()*" usage="inspection"
-            />
+            <fos:arg name="action" type="function(item()*, item()*, xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Evaluates the supplied function cumulatively on successive members of the supplied
             array.</p>
       </fos:summary>
       <fos:rules>
+         <p>The function is equivalent to the following expression in XQuery:</p>
+         <eg><![CDATA[
+fold-left(
+  array:members($array),
+  $zero,
+  fn($result, $member, $pos) { $action($member?value, $result, $pos) }
+)
+]]></eg>
+
          <p>The result of the function is the value of the expression 
-            <code role="example">array:members($array) => fold-left($zero, function($a, $b) { $action($a, $b?value })</code></p>
+            <code role="example">array:members($array) => fold-left($zero, function($result, $member, $pos) { $action($result, $member?value, $pos })</code></p>
       </fos:rules>
       <fos:notes>
          <p>If the supplied array is empty, the function returns <code>$zero</code>.</p>
@@ -24702,6 +24711,20 @@ else $fallback($position)</eg>
             </fos:test>
          </fos:example>
       </fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+let $input := array { 11 to 21, 21 to 31 }
+let $search := 21
+return array:fold-left($input, (),
+  fn($result, $curr, $pos) {
+    $result, if($curr = $search) { $pos }
+  }
+)
+</eg></fos:expression>
+               <fos:result>(11, 12)</fos:result>
+            </fos:test>
+         </fos:example>
       <fos:history>
          <fos:version version="3.1">First introduced in 3.1.</fos:version>
          <fos:version version="4.0">Functionality unchanged in 4.0, but the specification has been formalized.</fos:version>
@@ -24713,24 +24736,26 @@ else $fallback($position)</eg>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
             <fos:arg name="zero" type="item()*" usage="navigation"/>
-            <fos:arg name="action" type="function(item()*, item()*) as item()*" usage="inspection"
-            />
+            <fos:arg name="action" type="function(item()*, item()*, xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
-         <p>Evaluates the supplied function cumulatively on successive values of the supplied
-            array.</p>
+         <p>Evaluates the supplied function cumulatively on successive values of the supplied array.</p>
       </fos:summary>
       <fos:rules>
-         <p>The result of the function is the value of the expression 
-            <code role="example">array:members($array) => fn:fold-right($zero, function($a, $b) { $action($a, $b?value })</code></p>
- 
+         <p>The function is equivalent to the following expression in XQuery:</p>
+         <eg><![CDATA[
+fold-right(
+  array:members($array),
+  $zero,
+  fn($member, $result, $pos) { $action($member?value, $result, $pos) }
+)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>If the supplied array is empty, the function returns <code>$zero</code>.</p>
@@ -24767,6 +24792,19 @@ else $fallback($position)</eg>
                <fos:result>[1, [2, [3, []]]]</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+let $input := array { 11 to 21, 21 to 31 }
+let $search := 21
+return array:fold-right($input, (),
+  fn($curr, $result, $pos) {
+    $result, if($curr = $search) { $pos }
+  }
+)</eg></fos:expression>
+               <fos:result>(12, 11)</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:history>
          <fos:version version="3.1">First introduced in 3.1.</fos:version>
@@ -24779,27 +24817,24 @@ else $fallback($position)</eg>
          <fos:proto name="for-each-pair" return-type="array(*)">
             <fos:arg name="array1" type="array(*)" usage="inspection"/>
             <fos:arg name="array2" type="array(*)" usage="inspection"/>
-            <fos:arg name="action" type="function(item()*, item()*) as item()*" usage="inspection"
-            />
+            <fos:arg name="action" type="function(item()*, item()*, xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
-         
       </fos:properties>
       <fos:summary>
          <p>Returns an array obtained by evaluating the supplied function once for each pair of members at the same position in
             the two supplied arrays.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function returns the result of the expression:</p>
-         <eg><code>array:of-members(
-    for-each-pair(array:members($array1), 
-                     array:members($array2), 
-                     function($m, $n) {map{'value': $action($m?value, $n?value)}}))</code>
-         </eg>
+         <p>The function is equivalent to the following expression in XQuery:</p>
+         <eg><![CDATA[array:join(
+  for $pos in 1 to min(array:size($input1), array:size($input2))
+  return [ $action($input1($pos), $input2($pos), $pos) ]
+)]]></eg>
          
       </fos:rules>
       <fos:notes>
@@ -24825,10 +24860,24 @@ return array:for-each-pair(
                <fos:result>["AB", "BC", "CD"]</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[
+array:for-each-pair(
+  [1, 8, 2],
+  [3, 4, 3],
+  fn($member1, $member2, $pos) {
+    $pos || ': ' || max(($member1, $member2))
+  }
+)
+]]></eg></fos:expression>
+               <fos:result>["1: 1", "2: 4", "3: 2"]</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:history>
          <fos:version version="3.1">First introduced in 3.1.</fos:version>
-         <fos:version version="4.0">Functionality unchanged in 4.0, but the specification has been formalized.</fos:version>
+         <fos:version version="4.0">Positional parameter added to predicate function; the specification has been formalized.</fos:version>
       </fos:history>
    </fos:function>
 
@@ -25187,14 +25236,13 @@ return array:sort($in, $SWEDISH)
             </item>
          </ulist>
          <p>The process is then repeated so long as the sequence contains an array among its items.</p>
-         <p>The function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function flatten(
-  $input as item()*
-) as item()* {
+declare function flatten($input) {
   for $item in $input
   return if ($item instance of array(*)) then flatten($item?*) else $item
-};]]></eg>
+};
+flatten($input)]]></eg>
       </fos:rules>
       <fos:notes>
          <p>The argument to the function will often be a single array item, but this is not essential.</p>
@@ -25239,7 +25287,7 @@ declare function flatten(
          <p>The function concatenates the members of <code>$array</code> and returns them as
            a sequence. The values are returned in their original order.
            Arrays contained within members are returned unchanged.</p>
-         <p>The effect of the function is equivalent to <code>$array?*</code>.</p>
+         <p>The function is equivalent to <code>$array?*</code>.</p>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -26367,7 +26415,7 @@ r:random-sequence(200);
       <fos:signatures>
          <fos:proto name="every" return-type="xs:boolean">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean" 
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean" 
                default="fn:identity#1" example="fn:boolean#1"/>
          </fos:proto>
       </fos:signatures>
@@ -26380,22 +26428,12 @@ r:random-sequence(200);
          <p>Returns <code>true</code> if every item in the input sequence matches a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function every(
-  $input     as item()*,
-  $predicate as function(item()) as xs:boolean
-) as xs:boolean {
-  every $item in $input satisfies $predicate($item)
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="fn:every" as="xs:boolean">
-  <xsl:param name="input" as="item()*"/>
-  <xsl:param name="predicate" as="function(item()) as xs:boolean"/>
-  <xsl:sequence select="every $i in $input satisfies $predicate($i)"/>
-</xsl:function>]]>
-         </eg>
+not(
+  (for $item at $pos in $input return $predicate($item, $pos)) = false()
+)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>If the second argument is omitted, the first argument must be a sequence of
@@ -26439,6 +26477,10 @@ declare function every(
    "September", "October", "November", "December")
   =!> contains("r")
 )</eg></fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>every(1 to 5, fn($num, $pos) { $num = $pos })</fos:expression>
                <fos:result>true()</fos:result>
             </fos:test>
          </fos:example>
@@ -26748,7 +26790,7 @@ function($item) {
       <fos:signatures>
          <fos:proto name="index-where" return-type="xs:integer*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean"/>
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -26760,12 +26802,14 @@ function($item) {
          <p>Returns the position in an input sequence of items that match a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-
          <p>The result of the function is a sequence of integers, in monotonic ascending order, representing
             the 1-based positions in the input sequence of those items for which the supplied predicate function
             returns <code>true</code>.</p>
-         <p>More formally, the function returns the result of the expression:</p>
-         <eg>index-of($input ! $predicate(.), true())</eg>
+         <p>More formally, the function is equivalent to the following expression in XQuery:</p>
+         <eg>
+for $item at $pos in $input
+where $predicate($item, $pos)
+return $pos</eg>
       </fos:rules>
 
       <fos:examples>
@@ -26790,6 +26834,13 @@ function($item) {
   contains(?, "r")
 )</eg></fos:expression>
                <fos:result>(1, 2, 3, 4, 9, 10, 11, 12)</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[index-where(
+  ( 1, 8, 2, 7, 3 ),
+  fn($item, $pos) { $item < 5 and $pos > 2 }
+)]]></eg></fos:expression>
+               <fos:result>(3, 5)</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -26904,7 +26955,7 @@ function($item) {
       <fos:signatures>
          <fos:proto name="items-after" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean"/>
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -26916,17 +26967,15 @@ function($item) {
          <p>Returns the items from the input sequence that follow the first item to match a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         <p>The supplied <code>$predicate</code> function is called for each item in the input sequence <code>$input</code>,
-            to return a boolean value. Let <code>$P</code> be the 1-based position of the first item to match the predicate, 
-            or -1 if no item matches the predicate.</p>
-         <p>The function then returns <code>if ($P lt 0) then () else fn:subsequence($input, $P + 1)</code>.</p>
+         <p>The function is equivalent to the following expression:</p>
+         <eg><![CDATA[
+head(index-where($input, $predicate)) ! subsequence($input, . + 1)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>To retain the first matching item, use <code>fn:items-starting-where</code>.</p>
       </fos:notes>
-
       <fos:examples>
-
          <fos:example>
             <fos:test>
                <fos:expression>items-after(10 to 20, function { . gt 12 })</fos:expression>
@@ -26952,20 +27001,22 @@ function($item) {
 => items-after(function { boolean(self::h2) })]]></eg></fos:expression>
                <fos:result><![CDATA[<img/>]]></fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression><eg>items-after(10 to 20, fn($num, $pos) { $num > 15 and $pos > 8 })</eg></fos:expression>
+               <fos:result>(19, 20)</fos:result>
+            </fos:test>
          </fos:example>
-
       </fos:examples>
       <fos:history>
          <fos:version version="4.0">New in 4.0. Accepted 2022-10-25.</fos:version>
       </fos:history>
-
    </fos:function>
 
    <fos:function name="items-before">
       <fos:signatures>
          <fos:proto name="items-before" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean"/>
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -26977,18 +27028,15 @@ function($item) {
          <p>Returns the items from the input sequence that precede the first item to match a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         <p>The supplied <code>$predicate</code> function is called for each item in the input sequence <code>$input</code>,
-            to return a boolean value. Let <code>$P</code> be the 1-based position of the first item to match the predicate, 
-            or -1 if no item matches the predicate.</p>
-         <p>The function then returns <code>if ($P lt 0) then $input else fn:subsequence($input, 1, $P - 1)</code>.</p>
+         <p>The function is equivalent to the following expression:</p>
+         <eg><![CDATA[
+subsequence($input, 0, head(index-where($input, $predicate)))
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>To retain the first matching item, use <code>fn:items-ending-where</code>.</p>
       </fos:notes>
-      
-
       <fos:examples>
-
          <fos:example>
             <fos:test>
                <fos:expression>items-before(10 to 20, function { . gt 12 })</fos:expression>
@@ -27022,20 +27070,22 @@ function($item) {
 => items-before(starts-with(?, "D"))</eg></fos:expression>
                <fos:result>"Bison", "Buffalo", "Camel"</fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression><eg>items-before(10 to 20, fn($num, $pos) { $num > 11 and $pos > 2 })</eg></fos:expression>
+               <fos:result>(10, 11)</fos:result>
+            </fos:test>
          </fos:example>
-
       </fos:examples>
       <fos:history>
          <fos:version version="4.0">New in 4.0. Accepted 2022-10-25.</fos:version>
       </fos:history>
-
    </fos:function>
 
    <fos:function name="items-starting-where">
       <fos:signatures>
          <fos:proto name="items-starting-where" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean"/>
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -27047,18 +27097,15 @@ function($item) {
          <p>Returns the items from the input sequence starting from the first item to match a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         <p>The supplied <code>$predicate</code> function is called for each item in the input sequence <code>$input</code>,
-            to return a boolean value. Let <code>$P</code> be the 1-based position of the first item to match the predicate, 
-            or -1 if no item matches the predicate.</p>
-         <p>The function then returns <code>if ($P lt 0) then () else fn:subsequence($input, $P)</code>.</p>
+         <p>The function is equivalent to the following expression:</p>
+         <eg><![CDATA[
+head(index-where($input, $predicate)) ! subsequence($input, .)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>To exclude the first item, use <code>fn:items-after</code>.</p>
       </fos:notes>
-      
-
       <fos:examples>
-
          <fos:example>
             <fos:test>
                <fos:expression>items-starting-where(10 to 20, function { . gt 12 })</fos:expression>
@@ -27086,20 +27133,21 @@ function($item) {
                <fos:result>"h2", "img"</fos:result>
             </fos:test>
          </fos:example>
-
+         <fos:test>
+             <fos:expression><eg>items-starting-where(10 to 20, fn($num, $pos) { $num > 15 and $pos > 8 })</eg></fos:expression>
+             <fos:result>(18, 19, 20)</fos:result>
+         </fos:test>
       </fos:examples>
       <fos:history>
          <fos:version version="4.0">New in 4.0. Accepted 2022-10-25.</fos:version>
       </fos:history>
-
-
    </fos:function>
 
    <fos:function name="items-ending-where">
       <fos:signatures>
          <fos:proto name="items-ending-where" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean"/>
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -27111,18 +27159,15 @@ function($item) {
          <p>Returns the items from the input sequence ending with the first item to match a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         <p>The supplied <code>$predicate</code> function is called for each item in the input sequence <code>$input</code>,
-            to return a boolean value. Let <code>$P</code> be the 1-based position of the first item to match the predicate, 
-            or -1 if no item matches the predicate.</p>
-         <p>The function then returns <code>if ($P lt 0) then $input else fn:subsequence($input, 1, $P)</code>.</p>
+         <p>The function is equivalent to the following expression:</p>
+         <eg><![CDATA[
+subsequence($input, 0, head(index-where($input, $predicate)) + 1)
+]]></eg>
       </fos:rules>
       <fos:notes>
          <p>To exclude the last item, use <code>fn:items-before</code>.</p>
       </fos:notes>
-      
-
       <fos:examples>
-
          <fos:example>
             <fos:test>
                <fos:expression>items-ending-where(10 to 20, function { . gt 12 })</fos:expression>
@@ -27149,16 +27194,16 @@ function($item) {
 =!> name()]]></eg></fos:expression>
                <fos:result>"p", "p", "h2"</fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression><eg>items-ending-where(10 to 20, fn($num, $pos) { $num > 11 and $pos > 2 })</eg></fos:expression>
+               <fos:result>(10, 11, 12)</fos:result>
+            </fos:test>
          </fos:example>
-
       </fos:examples>
       <fos:history>
          <fos:version version="4.0">New in 4.0. Accepted 2022-10-25.</fos:version>
       </fos:history>
-
-
    </fos:function>
-
 
    <fos:function name="lowest" prefix="fn">
       <fos:signatures>
@@ -27295,7 +27340,7 @@ function($item) {
       <fos:signatures>
          <fos:proto name="some" return-type="xs:boolean">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item()) as xs:boolean" 
+            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean" 
                default="fn:identity#1" example="fn:boolean#1"/>
          </fos:proto>
       </fos:signatures>
@@ -27308,22 +27353,9 @@ function($item) {
          <p>Returns <code>true</code> if at least one item in the input sequence matches a supplied predicate.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The function is equivalent to the following expression in XQuery:</p>
          <eg><![CDATA[
-declare function some(
-  $input     as item()*,
-  $predicate as function(item()) as xs:boolean
-) as xs:boolean {
-  some $item in $input satisfies $predicate($item)
-};]]></eg>
-         <p>or its equivalent in XSLT:</p>
-         <eg><![CDATA[
-<xsl:function name="fn:some" as="xs:boolean">
-  <xsl:param name="input" as="item()*"/>
-  <xsl:param name="predicate" as="function(item()) as xs:boolean"/>
-  <xsl:sequence select="some $i in $input satisfies $predicate($i)"/>
-</xsl:function>]]>
-         </eg>
+(for $item at $pos in $input return $predicate($item, $pos)) = true()]]></eg>
       </fos:rules>
       <fos:notes>
          <p>If the second argument is omitted, the first argument must be a sequence of <code>xs:boolean</code>
@@ -27367,6 +27399,10 @@ declare function some(
    "September", "October", "November", "December")
   =!> contains("r")
 )</eg></fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>some(reverse(1 to 5), fn($num, $pos) { $num = $pos })</fos:expression>
                <fos:result>true()</fos:result>
             </fos:test>
          </fos:example>
@@ -28530,7 +28566,7 @@ path with an explicit <code>file:</code> scheme.</p>
       <fos:signatures>
          <fos:proto name="partition" return-type="array(item())*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="split-when" type="function(item()*, item()) as xs:boolean"/>
+            <fos:arg name="split-when" type="function(item()*, item(), xs:integer) as xs:boolean"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -28553,11 +28589,11 @@ path with an explicit <code>file:</code> scheme.</p>
             and a new current partition is created, initially containing the item <var>J</var> only. If the <code>$split-when</code> 
             function returns <code>false</code>, the item <var>J</var> is added to the current partition.</p>
          <p>More formally, the function returns the result of the expression:</p>
-         <eg>fold-left($input, (), function($partitions, $next) {
-              if (empty($partitions) or $split-when(foot($partitions)?*, $next))
-              then ($partitions, [$next])
-              else (trunk($partitions), array{foot($partitions)?*, $next}) 
-            })   
+         <eg>fold-left($input, (), fn($partitions, $next, $pos) {
+  if (empty($partitions) or $split-when(foot($partitions)?*, $next, $pos))
+  then ($partitions, [$next])
+  else (trunk($partitions), array { foot($partitions)?*, $next })
+})   
          </eg>  
       </fos:rules>
       <fos:notes>
@@ -28619,6 +28655,13 @@ path with an explicit <code>file:</code> scheme.</p>
   function($partition, $next) { $next != foot($partition) + 1 }
 )</eg></fos:expression>
                <fos:result>([1, 2, 3], [6, 7], [9, 10])</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>partition(
+  ('a', 'b', 'c', 'd', 'e'),
+  fn($all, $next, $p) { $p mod 2 = 1 }
+)</eg></fos:expression>
+               <fos:result>["a", "b"], ["c", "d"], ["e"]</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
