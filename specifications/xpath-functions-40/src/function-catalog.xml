@@ -1191,6 +1191,199 @@ compare($N * $arg2, 0) eq compare($arg1, 0).</eg>
             <code>NaN</code>, the function returns <code>false</code>.</p>
       </fos:notes>
    </fos:function>
+   
+   <fos:function name="deep-update" prefix="op">
+      <fos:signatures>
+         <fos:proto name="deep-update" return-type="function(*)">
+            <fos:arg name="input" type="function(*)"/>
+            <fos:arg name="select" type="function(function(*)) as item()*"/>
+            <fos:arg name="change" type="function(item()) as item()*"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns an updated copy of a tree of arrays and maps.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The value of <code>$input</code> must be a map or an array.</p>
+         <p>The <term>subtree</term> of a map or array is defined to include
+            the following items:</p>
+         <ulist>
+            <item><p>In the case of an array <var>A</var>, all items within the members of <var>A</var>.</p></item>
+            <item><p>In the case of map <var>M</var>, all items within the values of the key-value entries in <var>M</var>.</p></item>
+            <item><p>All items within the subtrees of items selected by the previous two rules.</p></item>
+         </ulist>
+         <p>Informally, the function does the following:</p>
+         <olist>
+            <item><p>Check that <code>$input</code> is a map or an array.</p></item>
+            <item><p>Call <code>$select($input)</code>to return a set of items <var>S</var>,
+               and check that all items in <var>S</var> are within the subtree of <code>$input</code>.</p></item>
+            <item><p>Return a modified version of <code>$input</code> in which every item <var>J</var> in <var>S</var>
+               is replaced by the value of <code>$change(J)</code>.</p></item>
+         </olist>
+         <p>The above description is informal, because it neglects to say how it is possible to check that an item
+            is within a subtree, or how to construct a new subtree containing a replacement item. A formal definition 
+            of the function requires the introduction of new concepts.</p>
+         <p>To underpin a more formal definition, we introduce an extended data model in which any item can be annotated with
+            a set of properties expressed as key-value pairs. These annotations do not affect the result of any operations
+            on the items, and they are not visible to applications; they are used temporarily during the execution of this
+            function. The value of a property <var>¶prop</var> of an item <var>$it</var>
+            is referred to using the notation <code>$it¶prop</code>.</p>
+         <p>The function then operates conceptually as follows:</p>
+         <olist>
+            <item><p>Construct a copy of the subtree of <code>$input</code> in which each item is annotated
+               with a property <var>¶ID</var> whose value is unique for each item, and in which non-root items are additionally
+               annotated with properties as follows:</p>
+               <olist>
+                  <item><p>A property <var>¶ROOT</var> whose value 
+                     is the <var>¶ID</var> property of the root item <code>$input</code>.</p></item>
+                  <item><p>A property <var>¶PARENT</var> whose value is 
+                     the <var>¶ID</var> property of the immediately containing map or array.</p></item>
+                  <item><p>A property <var>¶KEY</var> that identifies the containing array member or map entry within the 
+                     <var>¶PARENT</var> map or array; this will be the integer index in the case of an
+                     array, or any atomic value in the case of a map.</p></item>
+                  <item><p>A property <var>¶POSITION</var> that identifies the position of the item within the
+                     (sequence-valued) array member or map entry in which the item appears; this will be 1 if the
+                     relevant value is a singleton.</p></item>
+               </olist>
+            </item>
+            <item><p>Apply the function <code>$select</code> to the root of this copied subtree. Raise an error
+               if the function selects any item that does not have a <var>¶ROOT</var> property equal to the 
+               <var>¶ID</var> property of the root item.</p></item>
+            <item><p>Eliminate duplicates (that is, items where the result of evaluating the <code>$select</code> function includes
+               two or more items with the same <var>¶ID</var> property).</p></item>
+            <item><p>Raise an error if any item in the selected items is an ancestor of another item in the list; that is,
+               if any item can be reached from another by following the <var>¶PARENT</var> property repeatedly.</p></item>
+            <item>
+               <p>Process the remaining selected items as follows:</p>
+               <olist>
+                  <item><p>For each selected item, evaluate <code>$change($S)</code> to get its
+                     replacement value.</p></item>
+                  <item><p>Group items having the same value for <var>¶PARENT</var>, and for every <var>¶KEY</var>
+                     value found among the selected items, create a new map or array that updates the map or array
+                     identified by <var>¶PARENT</var> with a new entry for <var>¶KEY</var> in which the items
+                     at selected positions are replaced with the corresponding replacement values.</p></item>
+                  <item><p>Create a new list of selected items containing these affected <var>¶PARENT</var>
+                     maps and arrays, with their updated versions as the replacement values, and repeat the process
+                     so that all modifications are propagated upwards to the root.</p></item>
+               </olist>
+            </item>
+            <item><p>Make a copy of the updated subtree in which all annotations are removed, and return
+               this as the result of the function.</p></item>
+         </olist>
+      </fos:rules>
+      <fos:errors>
+         <p>An error is raised [TODO: code] if the result of the <code>$select</code> function includes an item that is
+         not in the subtree of <code>$input</code>.</p>
+         <p>An error is raised [TODO: code] if the result of the <code>$select</code> function includes two distinct items
+            <var>A</var> and <var>B</var> such that <var>A</var> is in the subtree of <var>B</var>.</p>
+      </fos:errors>
+      <fos:notes>
+         <p>The formal definition of the process is not intended to describe a real implementation.
+            Implementation techniques such as "zipped" data structures may be used to avoid making physical
+            copies of the entire subtree; a practical implementation might evaluate the <code>$select</code>
+            function in a special mode that retains a path to all items selected by downwards selection,
+            so the parentage of all selected items is known, enabling the updated values to be inserted
+            at the correct position in the tree.</p>
+         <p>For examples of usage, see <code>map:deep-update</code> and <code>array:deep-update</code>.</p>
+      </fos:notes>
+   </fos:function>
+   
+   <fos:function name="deep-update" prefix="array">
+      <fos:signatures>
+         <fos:proto name="deep-update" return-type="array(*)">
+            <fos:arg name="array" type="array(*)"/>
+            <fos:arg name="select" type="function(array(*)) as item()*"/>
+            <fos:arg name="change" type="function(item()) as item()*"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns an updated copy of a tree of arrays and maps that is rooted at an array.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The result of the function is given by the expression <code>op:deep-update($array, $select, $change)</code>.</p>
+      </fos:rules>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>array:deep-update(
+   [10, 11, 12, 13], 
+   fn{?*[. ge 12]}, 
+   fn{. + 1})</eg></fos:expression>
+               <fos:result>[10, 11, 13, 14]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:deep-update(
+   [[0,1], [10,11], [20,21]], 
+   array:members#1, 
+   array:remove(?, 2))</eg></fos:expression>
+               <fos:result>[[0], [10], [20]]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:deep-update(
+   [[0,1], [10,11], [20,21]]), 
+   fn{?*?2}, 
+   fn{.+1})</eg></fos:expression>
+               <fos:result>[[0,2], [10,12], [20,22]]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:deep-update(
+   parse-json('[{'x':1, 'y':2}, {'x':11, 'y':12}]'), 
+   fn{?*}, 
+   map:remove(?, 'y'))</eg></fos:expression>
+               <fos:result>[map{'x':1}, map{'x',11}]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:deep-update(
+   parse-json('[{'x':1, 'y':2}, {'x':11, 'y':12}]'), 
+   fn{?*?y}, 
+   fn{.*2})</eg></fos:expression>
+               <fos:result>[map{'x':1, 'y':4}, map{'x',11, 'y':24}]</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+   
+   <fos:function name="deep-update" prefix="map">
+      <fos:signatures>
+         <fos:proto name="deep-update" return-type="map(*)">
+            <fos:arg name="map" type="map(*)"/>
+            <fos:arg name="select" type="function(map(*)) as item()*"/>
+            <fos:arg name="change" type="function(item()) as item()*"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns an updated copy of a tree of arrays and maps that is rooted at a map.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The result of the function is given by the expression <code>op:deep-update($map, $select, $change)</code>.</p>
+      </fos:rules>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>map:deep-update(
+   map{'x':[10,20], 'y':[30,40]}, 
+   fn{?x?2}, 
+   fn{6})</eg></fos:expression>
+               <fos:result>map{'x':[10,6], 'y':[30,40]}</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>map:deep-update(
+   map{'x':map{'p':1, 'q':2}, 'y':map{'p':11, 'q':12}}, 
+   fn{map:find(.,'p')?*}, 
+   f{.+5})</eg></fos:expression>
+               <fos:result>map{'x':map{'p':6, 'q':2}, 'y':map{'p':16, 'q':12}}</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>map:deep-update(
+   map{'x':map{'p':[1,2], 'q':0}, 'y':map{'p':[11,12], 'q':0}}, 
+   fn{map:find(.,'p')?*}, 
+   fn{array:append(., sum(?*))})</eg></fos:expression>
+               <fos:result>map{'x':map{'p':[1,2,3], 'q':0}, 'y':map{'p':[11,12,23], 'q':0}}</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+   
 
    <fos:function name="abs" prefix="fn">
       <fos:signatures>
