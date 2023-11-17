@@ -26,7 +26,7 @@
      <xsl:comment> ************************************************** </xsl:comment>
      <xsl:text>&#10;</xsl:text>
 
-      <test-set name="misc-BuiltInKeywords" covers-40="keywords">
+      <test-set name="misc-BuiltInKeywords">
          <description>Tests for keyword argument names to built-in functions: 4.0 proposal</description>        
          <dependency type="spec" value="XP40+ XQ40+"/>
          <xsl:comment>Generated using generate-keyword-test-set.xsl from function-catalog.xml on {current-date()}</xsl:comment>
@@ -210,26 +210,52 @@
    </xsl:template>
    
    <xsl:template match="@type[starts-with(., 'function(')]" priority="5">
+      <xsl:variable name="arity" select="count(tokenize(., ','))"/>
+      <xsl:message><xsl:copy-of select=".."/>Arity = {$arity}</xsl:message>
+      <xsl:choose>
+         <xsl:when test="$arity=0">function()</xsl:when>
+         <xsl:when test="$arity=1">function($p)</xsl:when>
+         <xsl:when test="$arity=2">function($p, $q)</xsl:when>
+         <xsl:when test="$arity=3">function($p, $q, $r)</xsl:when>
+         <xsl:otherwise>function($p, $q, $r, $s)</xsl:otherwise>
+      </xsl:choose>
+      <xsl:choose expand-text="no">
+         <xsl:when test="ends-with(., '?') or ends-with(., '*')">{()}</xsl:when>
+         <xsl:when test="ends-with(., 'xs:boolean')">{true()}</xsl:when>
+         <xsl:when test="ends-with(., 'xs:integer')">{0}</xsl:when>
+         <xsl:when test="ends-with(., 'xs:string')">{''}</xsl:when>
+         <xsl:when test="ends-with(., 'xs:anyURI')">{xs:anyURI('')}</xsl:when>
+         <xsl:otherwise>{$p}</xsl:otherwise>
+      </xsl:choose>
+   </xsl:template>
+   
+   <!--<xsl:template match="@type[matches(., 'function\(item\(\)[*+?]?\).*')]" priority="8">
       <xsl:text>fn:boolean#1</xsl:text>
    </xsl:template>
    
-   <xsl:template match="@type[matches(., 'function\(item\(\)[*+?]?\).*')]" priority="8">
-      <xsl:text>fn:boolean#1</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[matches(., 'function\(item\(\)[*+?]?,\s*item\(\)[*+?]?\).*')]" priority="8">
+   <xsl:template match="@type[matches(., 'function\([^,]+,[^,]+\).*')]" priority="8">
       <xsl:text>fn:deep-equal#2</xsl:text>
    </xsl:template>
    
-   <xsl:template match="@type[starts-with(., 'function(xs:anyAtomicType, item()*)')]" priority="8">
+   <xsl:template match="@type[starts-with(., 'function(xs:anyAtomicType, item()*)')]" priority="9">
       <xsl:text>fn:deep-equal#2</xsl:text>
    </xsl:template>
    
-   <xsl:template match="@type[starts-with(., 'function(xs:string, xs:string*)')]" priority="8">
+   <xsl:template match="@type[starts-with(., 'function(xs:anyAtomicType, item()*)')]" priority="9">
+      <xsl:text>fn:deep-equal#2</xsl:text>
+   </xsl:template>
+   
+   <xsl:template match="@type[starts-with(., 'function(xs:string, xs:string*)')]" priority="9">
       <xsl:text>fn:contains#2</xsl:text>
    </xsl:template>
    
-   <xsl:template match="@type[starts-with(., 'union(')]" priority="8">
+   <xsl:template match="@type[starts-with(., 'function(item()*, item()*, xs:integer)')]" priority="9">
+      <xsl:text>function($x,$y,$z){0}</xsl:text>
+   </xsl:template>
+   -->
+   
+   
+   <xsl:template match="@type[starts-with(., 'union(')]" priority="9">
       <xsl:text>'data'</xsl:text>
    </xsl:template>
    
