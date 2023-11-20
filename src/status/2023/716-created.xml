@@ -57,15 +57,29 @@ When requested the next member of the collection the generator will always produ
 &lt;/ul&gt;
 &lt;h1&gt;Examples of operations on generators&lt;/h1&gt;
 &lt;p&gt;The following examples are written in pseudo-code as at the time of writing there was no available implementation of records. And also, the code for recursion in pure XPath makes any such example longer than necessary for grasping its meaning.&lt;/p&gt;
+&lt;h2&gt;The Empty Generator&lt;/h2&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;emptyGenerator() {
+             map{
+                 initialized : true(),
+                 endReached: true(),
+                 getCurrent: function($this as map(*)) {error()},
+                 moveNext: function($this as map(*)) {error()}
+                }
+              }
+&lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Take the first N members of the collection&lt;/h2&gt;
-&lt;pre&gt;&lt;code class="language-xq"&gt;take($gen as generator, $n as xs:integer, $result as array(*) = []) as array(*)
+&lt;pre&gt;&lt;code class="language-xq"&gt;take($gen as generator, $n as xs:integer) as generator
 {
   let $gen := if(not($gen?initialized)) then $gen?moveNext()
-                else $gen
-      $result := if(not($gen?endReached) and $n gt 0) then array:append($result, $gen?getCurrent())
-   return
-    if(not($gen?endReached) and $n gt 0) then take($gen?moveNext(), $n -1, $result)
-      else $result
+                      else $gen,
+      return
+         if( $gen?endReached or $n eq 0) then emptyGenerator()
+            else map{
+                     "initialized": true(),
+                     "endReached": false(),
+                     "getCurrent": $gen?getCurrent,
+                     "moveNext": take($gen?moveNext(), $n -1)
+                   }
 }
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Skip the first N members from the collection&lt;/h2&gt;
@@ -83,7 +97,7 @@ When requested the next member of the collection the generator will always produ
 }
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Subrange of size N starting at the M-th member&lt;/h2&gt;
-&lt;pre&gt;&lt;code class="language-xq"&gt;subrange($gen as generator, $m as xs:integer, $n as xs:integer)
+&lt;pre&gt;&lt;code class="language-xq"&gt;subrange($gen as generator, $m as xs:integer, $n as xs:integer) as generator
 {
   take(skip($gen, $m -1), $n)
 }
@@ -91,7 +105,7 @@ When requested the next member of the collection the generator will always produ
 &lt;h2&gt;Head of a generator&lt;/h2&gt;
 &lt;pre&gt;&lt;code class="language-xq"&gt;head($gen as generator)
 {
-  take($gen, 1)
+  take($gen, 1)?getCurrent()
 }
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;Tail of a generator&lt;/h2&gt;
@@ -103,7 +117,7 @@ When requested the next member of the collection the generator will always produ
 &lt;h2&gt;At index N&lt;/h2&gt;
 &lt;pre&gt;&lt;code class="language-xq"&gt;at($ind as xs:integer)
 {
-  subrange($ind, 1)
+  subrange($ind, 1)?getCurrent()
 }
 &lt;/code&gt;&lt;/pre&gt;
 &lt;h2&gt;For Each&lt;/h2&gt;
@@ -164,6 +178,53 @@ When requested the next member of the collection the generator will always produ
                "inputGen" : $gen
               }
         }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;strong&gt;Here are some other useful functions on generators -- with just their signature and summary&lt;/strong&gt;:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;concat($gen1 as generator , $gen2 as generator )&lt;/strong&gt; - produces a generator that behaves as &lt;code&gt;$gen1&lt;/code&gt; until &lt;code&gt;$gen1.endReached&lt;/code&gt; becomes &lt;code&gt;true()&lt;/code&gt;,  and then behaves as &lt;code&gt;$gen2&lt;/code&gt;&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;append($gen as generator, $value as item()*)&lt;/strong&gt; - produces a generator that behaves as &lt;code&gt;$gen&lt;/code&gt; until &lt;code&gt;$gen.endReached&lt;/code&gt; becomes &lt;code&gt;true()&lt;/code&gt;,  and then as a generator that has only the single value &lt;code&gt;value&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;prepend($gen as generator, $value as item()*)&lt;/strong&gt; - produces a generator whose first value is &lt;code&gt;value&lt;/code&gt; and then behaves as &lt;code&gt;$gen&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;some($gen as generator) as xs:boolean&lt;/strong&gt; - Produces &lt;code&gt;true()&lt;/code&gt; if &lt;code&gt;$gen&lt;/code&gt; has at least one value, and &lt;code&gt;false()&lt;/code&gt; otherwise.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;some($gen as generator, $pred as function(item()*) as xs:boolean) as xs:boolean&lt;/strong&gt; - Produces &lt;code&gt;true()&lt;/code&gt; if &lt;code&gt;$gen&lt;/code&gt; has at least one value for which $pred($thisValue) is true(), and &lt;code&gt;false()&lt;/code&gt; otherwise.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;ofType($gen as generator, $type as type)&lt;/strong&gt;  - Produces a new generator from &lt;code&gt;$gen&lt;/code&gt; that contains all values from &lt;code&gt;$gen&lt;/code&gt; of type &lt;code&gt;type&lt;/code&gt; -- for this we need to have added to the language the &lt;strong&gt;type&lt;/strong&gt; object.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;skipWhile($gen as generator, $pred as function(item()*) as xs:boolean)&lt;/strong&gt;  - Produces a new generator from &lt;code&gt;$gen&lt;/code&gt; by skipping all starting values for which &lt;code&gt;$pred($theValue)&lt;/code&gt; is &lt;code&gt;true()&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;takeWhile($gen as generator, $pred as function(item()*) as xs:boolean)&lt;/strong&gt;  - Produces a new generator from &lt;code&gt;$gen&lt;/code&gt; which contains all starting values of &lt;code&gt;$gen&lt;/code&gt; for which &lt;code&gt;$pred($theValue)&lt;/code&gt; is &lt;code&gt;true()&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;toArray($gen as generator)&lt;/strong&gt; - Produces an array that contains all values that are contained in &lt;code&gt;$gen&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;toSequence($gen as generator)&lt;/strong&gt; - Produces a sequence that contains all values that are contained in &lt;code&gt;$gen&lt;/code&gt;. Values of &lt;code&gt;$gen&lt;/code&gt; that are sequences themselves are flattened.&lt;/p&gt;
+&lt;/li&gt;
+&lt;li&gt;
+&lt;p&gt;&lt;strong&gt;toMap($gen as generator)&lt;/strong&gt; - If the values in $gen are all key-value pairs, produces a map that contains exactly all the key-value pairs from &lt;code&gt;$gen&lt;/code&gt;.&lt;/p&gt;
+&lt;/li&gt;
+&lt;/ul&gt;
+&lt;hr/&gt;
+&lt;p&gt;These and many other useful functions on generators can and should be added to every generator upon construction.&lt;/p&gt;
+&lt;p&gt;Thus, it would be good to have an explicit constructor function for a generator:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;     construct-generator($record as 
+                               record( initialized as xs:boolean,
+                                       endReached as xs:boolean,
+                                       getCurrent as function(..) as item()*,
+                                       moveNext as function(..) as .. ,
+                                      )
+                         ) as generator
 &lt;/code&gt;&lt;/pre&gt;
 &lt;/div&gt;&lt;/div&gt;</description>
 </item>
