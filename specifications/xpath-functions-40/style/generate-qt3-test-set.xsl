@@ -87,7 +87,7 @@
           <environment ref="global"/>
         </xsl:otherwise>
       </xsl:choose>
-      <xsl:if test="@use">
+      <xsl:if test="@spec = 'XQuery'">
         <dependency type="spec" value="XQ40+"/>
       </xsl:if>
       <test>
