@@ -15728,13 +15728,17 @@ map {
 
          </div3>
          <div3 id="id-lookup">
-            <head>The Lookup Operator ("?") for Maps and Arrays</head>
+            <head>The Lookup Operators ("?" and "??") for Maps and Arrays</head>
 
-            <p>&language; provides a lookup operator for maps and arrays that is
-  more convenient for some common cases. It provides a terse syntax
+            <p>&language; provides two lookup operators for maps and arrays. These provide a terse syntax
   for simple strings as keys in maps or integers as keys in arrays,
   supports wildcards, and iterates over sequences of maps and
   arrays.</p>
+            
+            <p diff="add" at="2023-11-15">The operator "?", known as the shallow lookup operator,
+               returns values found immediately in the operand map or array. The operator "??",
+            known as the deep lookup operator, also searches nested maps and arrays. The effect of the
+            deep lookup operator "??" is explained in <specref ref="id-deep-lookup"/>.</p>
             
          
 
@@ -15745,6 +15749,7 @@ map {
                   <head/>
                   <prodrecap id="UnaryLookup" ref="UnaryLookup"/>
                   <prodrecap id="KeySpecifier" ref="KeySpecifier"/>
+                  <prodrecap id="LookupWildcard" ref="LookupWildcard"/>
                </scrap>
 
 
@@ -15755,7 +15760,7 @@ map {
                
                
 
-               <p>UnaryLookup returns a sequence of values selected from the
+               <p>UnaryLookup, using the shallow lookup operator "?", returns a sequence of values selected from the
   context value.</p>
                
                <p>If the context value is anything other than a single item, the semantics
@@ -15803,16 +15808,16 @@ return .($k)
 ]]></eg>
                   </item>
                   <item>
-                     <p>If the <nt def="KeySpecifier"
-                           >KeySpecifier</nt> is a wildcard (<code>*</code>), the  <nt
+                     <p diff="chg" at="2023-11-15">If the <nt def="KeySpecifier"
+                           >KeySpecifier</nt> is a wildcard (<code>*</code>) qualified by a SequenceType <var>ST</var>, the  <nt
                            def="UnaryLookup"
                         >UnaryLookup</nt> operator is equivalent to the following expression:</p>
-                     <eg><![CDATA[
-for $k in map:keys(.)
-return .($k)
+                     <eg diff="chg" at="2023-11-15"><![CDATA[
+map:for-each(., function($k, $v){if ($v instance of ST) {$v}})                         
 ]]></eg>
+                     <p diff="add" at="2023-11-15">If no SequenceType is provided, it defaults to <code>item()*</code>.</p>
                      <note>
-                        <p>The order of keys in <code>map:keys()</code> is implementation-dependent, so
+                        <p>The order of entries in <code>map:for-each()</code> is implementation-dependent, so
   the order of values in the result sequence is also
   implementation-dependent.</p>
                      </note>
@@ -15853,14 +15858,16 @@ return .($k)
                   </item>
 
                   <item>
-                     <p>If the <nt def="KeySpecifier"
-                           >KeySpecifier</nt> is a wildcard (<code>*</code>), the  <nt
+                     <p diff="chg" at="2023-11-15">If the <nt def="KeySpecifier"
+                           >KeySpecifier</nt> is a wildcard (<code>*</code>) qualified by a SequenceType <var>ST</var>, the  <nt
                            def="UnaryLookup"
                         >UnaryLookup</nt> operator is equivalent to the following expression:</p>
-                     <eg><![CDATA[
+                     <eg diff="chg" at="2023-11-15"><![CDATA[
 for $k in 1 to array:size(.)
-return .($k)
+let $v := .($k)
+return if ($v instance of ST) {$v} 
 ]]></eg>
+                     <p diff="add" at="2023-11-15">If no SequenceType is provided, it defaults to <code>item()*</code>.</p>
                      <note>
                         <p>Note that array items are returned in order.</p>
                      </note>
@@ -15879,6 +15886,19 @@ return .($k)
                   <item>
                      <p>
                         <code>?2</code> is equivalent to <code>.(2)</code>, an appropriate lookup for an array or an integer-valued map.</p>
+                  </item>
+                  <item>
+                     <p>If the context item is the result of parsing the JSON input:</p>
+                     <eg>{
+   "name": "John Smith",
+   "address": {"street": "18 Acacia Avenue", "postcode": "MK12 2EX"},
+   "previous-address": {"street": "12 Seaview Road", "postcode": "EX8 9AA"}
+}</eg>
+                     <p>then <code>?*::record(street, postcode)?postcode</code>
+                        returns <code>("MK12 2EX", "EX8 9AA")</code> (or some permutation thereof).</p>
+                     <note><p>Writing <code>?*?postcode</code> would raise a type error, because the result of the initial
+                     step <code>?*</code> includes an item (the string <code>"John Smith"</code>) that is neither
+                     a map nor an array.</p></note>
                   </item>
                   <item diff="add" at="A">
                      <p><code>?"first name"</code> is equivalent to <code>.("first name")</code></p>
@@ -15902,6 +15922,7 @@ return .($k)
                      <p>
                         <code>?(3.5)</code> raises a type error if the context value is an array because the parameter must be an integer.</p>
                   </item>
+                  
                   <item role="xquery">
                      <p>If the context value is an array, <code>let $x:= &lt;node i="3"/&gt; return ?($x/@i)</code> does not raise a type error because the attribute is untyped.</p>
                      <p>But <code>let $x:= &lt;node i="3"/&gt; return ?($x/@i+1)</code> does raise a type error
@@ -15928,6 +15949,21 @@ return .($k)
                         <code>[[1, 2, 3], [4, 5, 6]]?*</code> evaluates to <code>([1, 2, 3], [4, 5, 6])</code>
                      </p>
                   </item>
+                  <item>
+                     <p>
+                        <code>[[1, 2, 3], 4, 5]?*::array(*)</code> evaluates to <code>([1, 2, 3])</code>
+                     </p>
+                  </item>
+                  <item>
+                     <p>
+                        <code>[[1, 2, 3], [4, 5, 6], 7]?*::array(*)?2</code> evaluates to <code>(2, 5)</code>
+                     </p>
+                  </item>
+                  <item>
+                     <p>
+                        <code>[[1, 2, 3], 4, 5]?*::xs:integer</code> evaluates to <code>(4, 5)</code>
+                     </p>
+                  </item>
                </ulist>
 
             </div4>
@@ -15939,16 +15975,19 @@ return .($k)
                   <prodrecap id="LookupExpr" ref="LookupExpr"/>
                   <prodrecap id="Lookup" ref="Lookup"/>
                   <prodrecap ref="KeySpecifier"/>
+                  <prodrecap ref="LookupWildcard"/>
                </scrap>
 
                <p>
-      The semantics of a Postfix Lookup expression depend on the form of the KeySpecifier, as follows:
+      The semantics of a Postfix Lookup expression, using the shallow lookup operator "?", depend on the form of the KeySpecifier, as follows:
       <ulist>
                      <item>
                         <p>If the <code>KeySpecifier</code> is an <code>NCName</code>, <code
                               diff="add" at="A"
                            >StringLiteral</code>, <code diff="add" at="A">VarRef</code>, <code>IntegerLiteral</code>, 
-                           or <code>Wildcard</code> (<code>*</code>), then the expression <code>E?S</code> is 
+                           or <code>LookupWildcard</code> (<code>*</code>, 
+                           <phrase diff="add" at="2023-11-15">optionally qualified by a <code>SequenceType</code></phrase>), 
+                           then the expression <code>E?S</code> is 
                            equivalent to <code>E!?S</code>. (That is, the semantics of the postfix lookup operator 
                            are defined in terms of the unary lookup operator).</p>
                      </item>
@@ -15998,6 +16037,86 @@ return .($k)
                   </item>
                </ulist>
             </div4>
+            
+            <div4 id="id-deep-lookup" diff="add" at="2023-11-15">
+               <head>Deep Lookup</head>
+               
+               <p>The deep lookup operator "??" has both unary and binary forms. The unary form <code>??KS</code>
+               (where <var>KS</var> is any KeySpecifier) has the same effect as the binary form <code>.??KS</code>.
+               The semantics are as follows.</p>
+               
+               <p>We define the recursive content of a value to consist of all items found in a depth-first traversal of the value
+               that proceeds as follows:</p>
+               
+               <p>For each item in the value:</p>
+               
+               <olist>
+                  <item><p>Add the item to the result.</p></item>
+                  <item><p>If the item is an array, process all the members of the array (in order) by applying these rules
+                     recursively.</p></item>
+                  <item><p>If the item is a map, process the values in each entry of the map (in arbitrary order) 
+                     by applying these rules recursively.</p></item>
+               </olist>
+               
+               <p>The effect of the deep lookup expression <code>E??KS</code> is obtained by evaluating
+                  <var>E</var>, establishing its recursive content <var>C</var>, removing any item that is not
+                  a map or array to yield a sequence <var>D</var>, and then evaluating the shallow lookup
+               expression <code>D?KS</code>, but with one exception: if evaluation of any shallow lookup fails,
+               then the error is not propagated, but instead its result is taken to be an empty sequence.</p>
+               
+               <p>Specifically, no dynamic error occurs when an item in the recursive content is an array
+               and the KeySpecifier is not an integer, or when it is an integer that is out of range for the
+               array.</p>
+               
+               <example id="ex-deep-lookup">
+                  <head>Examples of Deep Lookup Expressions</head>
+                  <p>Consider the tree <code>$tree</code> of maps and arrays that results from applying the <code>fn:parse-json</code>
+                  function to the following input:</p>
+                  <eg><![CDATA[
+{
+    "desc"    : "Distances between several cities, in kilometers.",
+    "updated" : "2014-02-04T18:50:45",
+    "uptodate": true,
+    "author"  : null,
+    "cities"  : {
+        "Brussels": [
+                      {"to": "London",    "distance": 322},
+                      {"to": "Paris",     "distance": 265},
+                      {"to": "Amsterdam", "distance": 173}
+                    ],
+        "London": [
+                      {"to": "Brussels",  "distance": 322},
+                      {"to": "Paris",     "distance": 344},
+                      {"to": "Amsterdam", "distance": 358}
+                  ],
+        "Paris": [
+                      {"to": "Brussels",  "distance": 265},
+                      {"to": "London",    "distance": 344},
+                      {"to": "Amsterdam", "distance": 431}
+                 ],
+        "Amsterdam": [
+                      {"to": "Brussels",  "distance": 173},
+                      {"to": "London",    "distance": 358},
+                      {"to": "Paris",     "distance": 431}
+                     ]
+     }
+}]]></eg>
+                  
+                  <p>Given two variables <code>$from</code> and <code>$to</code> containing the
+                  names of two cities that are present in this table, the distance between the
+                  two cities can be obtained with the expression:</p> 
+                     
+                     <eg>$tree ??$from ??*::record(to, distance) [?to=$to] ?distance</eg>
+                  
+                  <p>The names of all pairs of cities whose distance is represented in the data
+                  can be obtained with the expression:</p>
+                  
+                  <eg>$tree ??$cities => 
+     map:for-each( fn($key, $val){$val ??to ! ($key || "-" || .)} )</eg>
+                  
+               </example>
+            </div4>
+            
             <div4 id="id-implausible-lookup-expressions" diff="add" at="Issue602">
                <head>Implausible Lookup Expressions</head>
                <p>Under certain conditions a lookup expression that will never select anything
@@ -16005,7 +16124,7 @@ return .($k)
                   phase, a processor <rfc2119>may</rfc2119> (subject to the rules in
                   <specref ref="id-implausible-expressions"/>) report a static error
                   when such lookup expressions are encountered: <errorref class="TY" code="0145"/>.</p>
-               <p>More specifically, a unary or postfix lookup is classified as 
+               <p>More specifically, a shallow unary or postfix lookup is classified as 
                   <termref def="dt-implausible"/> if any of the following conditions applies:</p>
                <olist>
                   <item><p>The inferred type of the left-hand operand (or the context value, in the case
