@@ -162,7 +162,7 @@
                                      and f:has-label(map:get($issues,.), 'Propose for V4.0')]"/>
 
     <xsl:if test="exists($prs)">
-      <xsl:text>The following PRs appear to be candidates for a future XSLT-focussed&#10;</xsl:text>
+      <xsl:text>The following PRs appear to be candidates for a future XSLT-focused&#10;</xsl:text>
       <xsl:text>meeting.&#10;&#10;</xsl:text>
       <xsl:sequence select="f:pr-list($prs)"/>
     </xsl:if>
