@@ -23242,10 +23242,10 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       </fos:notes>
    </fos:function>
    
-   <fos:function name="json" prefix="fn">
+   <!--<fos:function name="items-to-json" prefix="fn">
       <fos:signatures>
-         <fos:proto name="json" return-type="xs:string">
-            <fos:arg name="input" type="xs:string?"/>
+         <fos:proto name="items-to-json" return-type="xs:string">
+            <fos:arg name="input" type="item()*"/>
             <fos:arg name="options" type="map(*)" usage="inspection"  default="map{}"/>
          </fos:proto>
       </fos:signatures>
@@ -23259,14 +23259,29 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       </fos:summary>
       <fos:rules>
          <p>This function returns a string, in JSON format, containing a representation of the
-         supplied input <code>$input</code>. The function is error-free (it accepts any input sequence
-         whatsoever), but it is not lossless: there are cases when two different XDM values will
+         supplied input <code>$input</code>.</p>
+         <p>The function can process any input sequence
+         whatsoever, but it is not lossless: there are cases when two different XDM values will
          have the same JSON representation. For example, the sequence <code>(1, 2)</code>
-            and the array <code>[1, 2]</code> are both output as <code>[1,2]</code>.</p>
+            and the array <code>[1, 2]</code> are both output as <code>"[1,2]"</code>.</p>
          
          <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
          
          <fos:options>
+            <fos:option key="escape-solidus">
+               <fos:meaning>Determines whether, when escaping strings, the solidus (<code>/</code>)
+                  should be escaped.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>true</fos:default>
+               <fos:values>
+                  <fos:value value="false">
+                     The solidus character is output as is.
+                  </fos:value>
+                  <fos:value value="true">
+                     The solidus character is escaped with a backslash, that is, as <code>"\/"</code>.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
             <fos:option key="indent">
                <fos:meaning>Determines whether additional whitespace should be added to the output to improve readability.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
@@ -23281,22 +23296,34 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                   </fos:value>
                </fos:values>
             </fos:option>
-            <fos:option key="element-map">
-               <fos:meaning>Determines whether elements whose children are element nodes with distinct
-                  names should be treated specially.</fos:meaning>
+            <fos:option key="uniform">
+               <fos:meaning>Indicates that all elements with the same name (except where schema type information is available)
+                  should use the same JSON layout. Setting this option requires the processor to analyze the entire input
+               before deciding what layout to use for each element; but by ensuring consistency across elements, it may
+               make the resulting JSON easier to process.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
-               <fos:default>true</fos:default>
+               <fos:default>false</fos:default>
                <fos:values>
                   <fos:value value="false">
-                     The processor treats such elements in the same way as any other element.
+                     The layout for each element node is decided independently, based on its individual content.
                   </fos:value>
                   <fos:value value="true">
-                     The processor generates a JSON object in which the child element names are used
-                     as JSON property names.
+                     In the absence of schema type information, and of an explicit entry in the <code>layouts</code>
+                     property, the layout chosen for a given element node must be the same as that for all other
+                     elements of the same name.
                   </fos:value>
                </fos:values>
             </fos:option>
+            <fos:option key="layouts">
+               <fos:meaning>A mapping from element names to layout names, used to override the default
+               formatting rules for a particular element name.</fos:meaning>
+               <fos:type>map{xs:QName, enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
+                  "record", "sequence", "mixed", "xml", "html", "xhtml")}</fos:type>
+               <fos:default>map{}</fos:default>
+            </fos:option>
          </fos:options>
+         
+         
          
          
          <p>An input sequence is handled as follows:</p>
@@ -23307,7 +23334,12 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             from the items by applying the rules below.</p></item>
          </ulist>
          
-         <p>Items are processed as follows:</p>
+         <p>Much of the complexity is concerned with the representation of element nodes: the principles are described
+            in <specref ref="xml-to-json-mappings"/>.</p>
+         
+        
+         
+         <p>Items in a supplied sequence are processed as follows:</p>
          
          <ulist>
             <item>
@@ -23315,120 +23347,116 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <ulist>
                   <item><p>An <code>xs:boolean</code> value is output as the JSON value <code>true</code> or <code>false</code>.</p></item>
                   <item><p>A numeric value, other than <code>INF</code>, <code>-INF</code>, or <code>NaN</code>,
-                  is output as a JSON number.</p></item>
+                  is output as a JSON number. The format of the number follows the rules for casting the number to
+                  a string.</p></item>
                   <item><p>Any other atomic value is cast to <code>xs:string</code>, and the result is output as a JSON string,
                   escaped as described below.</p></item>
                </ulist>
             </item>
             <item>
                <p><emph>Nodes</emph></p>
+               <p>A node is represented as a JSON object containing a single key-value pair. 
+                  For elements and attributes, the key
+               is derived from the element name as described in <specref ref="element-names-in-json"/>; 
+               for all other node kinds it represents the node kind (for example,
+               <code>#text</code> or <code>#comment</code>).</p>
+               <p>In the following rules, a node is considered to be <term>top-level</term> if it
+               is parentless, or if its parent is not itself part of the input being converted.
+               For example, if <code>$input</code> is a sequence of attribute nodes, then these
+               are considered to be top-level nodes, whether or not they have a parent element.</p>
                <ulist>
                   <item>
                      <p><emph>Document nodes</emph></p>
-                     <p>A document node is output as a JSON object with two properties, in order:</p>
-                     <ulist>
-                        <item><p>A property <code>#document</code> set to the value of the base URI of the document
-                           if available, or an empty string otherwise..</p></item>
-                        <item><p>A property <code>#content</code> whose value follows the rules for
-                        outputting the content of an element node, given below.</p></item>                       
-                     </ulist>
+                     <p>A document node is output as a JSON object comprising a single key-value pair, where the
+                        key is the string <code>"#document"</code> and the value represents the content, using
+                        the <code>mixed</code> layout described (for element nodes) in 
+                        <specref ref="mixed-json-layout"/>.</p>
+                     <p>For example, an XML document containing a single empty element <code>&lt;doc/></code>
+                     would be represented as <code>#document: [{"doc":""}]</code></p>
+                     <p>A document node with no children is represented by an empty JSON array: <code>#document: []</code>.</p>
+                     <note><p>The XDM model allows a a document node to have an arbitrary sequence of children, including text nodes,
+                     comments, processing instructions, and multiple elements.</p></note>
                   </item>
                   <item>
                      <p><emph>Element nodes</emph></p>
-                     <p>An element node is output as a JSON object with the following properties, in order:</p>
-                     <ulist>
-                        <item>
-                           <p><code>#element</code> set to the local name of the element.</p>
-                        </item>
-                        <item>
-                           <p>If the element name has a prefix, <code>#prefix</code>, set to the value of the prefix.</p>
-                        </item>
-                     
-                        <item>
-                           <p>If the element name is in a namespace, <code>#namespace</code>, set to the value of the 
-                           namespace URI.</p>
-                        </item>
-                        <item>
-                           <p>For each attribute of the element, in arbitrary order, a property whose
-                              name is derived from the attribute name as follows:</p>
-                                 <ulist>
-                                    <item><p>If the attribute name is in no namespace, then <code>"@"</code> followed
-                                    by the local name.</p></item>
-                                    <item><p>If the attribute name is in the XML namespace, then <code>"@xml:"</code> followed
-                                       by the local name.</p></item>
-                                    <item><p>Otherwise <code>"@Q{uri}local"</code> where <code>uri</code> is the namespace
-                                       URI and <code>local</code> is the local name.</p></item>
-                                 </ulist>
-                              
-                                 <p>The property value is the result of atomizing the attribute node and applying the
-                                 <code>fn:json</code> function to the result. (For untyped attributes, the result
-                                 will always be a single string.)</p>
-                              
-                           
-                        </item>
-                        <item>
-                           <p>The children of the element are processed as follows:</p>
-                           <ulist>
-                              <item>
-                                 <p>If there are no children, nothing is output.</p>
-                              </item>
-                              <item>
-                                 <p>If the element has a type annotation that is a simple type, or if its content
-                                 comprises a single text node, then a property <code>#value</code> set to the result
-                                 of atomizing the element node and applying the <code>fn:json</code> function
-                                 to the result.</p>
-                              </item>
-                              <item>
-                                 <p>If (a) the children consist exclusively of elements and whitespace-only
-                                 text nodes, and (b) the child element nodes are all in the same namespace, or all in no
-                                 namespace, and (c) each child element has a local name that is distinct from the local
-                                 name of any other child, and (d) the <code>element-map</code> option is not
-                                    present in <code>$options</code> with the value <code>false()</code>,
-                                    then a property <code>#content</code> whose value is a JSON
-                                 object having one property for each child element node. The name of this property
-                                 is the local name of the element, and the value of the property is obtained by applying
-                                 these rules recursively, except that for an empty element, the value is represented
-                                 as JSON <code>null</code>.</p>
-                              </item>
-                              <item><p>Otherwise, a property <code>#content</code> whose value is an array, with
-                              one member for each child node (including whitespace-only text nodes), obtained
-                              by applying the <code>fn:json</code> function to that child node.</p></item>
-                           </ulist>
-                        </item>
-                     </ulist>
+                     <p>A top-level element node is output as a JSON object comprising a single key-value pair, where the
+                        key is derived from the element name as described in <specref ref="element-names-in-json"/>, and the content
+                        follows the rules of a specific layout appropriate to that element. The available layouts 
+                        are described in <specref ref="xml-to-json-mappings"/>. A layout is selected for each element node <var>E</var>
+                        by applying the following rules in order:</p>
+                        <olist>
+                           <item><p>If the name of <var>E</var> is listed as the key of an entry in the <code>layouts</code> 
+                              option, then the corresponding named layout is used.</p></item>
+                           <item><p>If <var>E</var> has a type annotation <var>T</var> other than <code>xs:untyped</code>
+                           or <code>xs:anyType</code>, then the layout appropriate to its schema type
+                           is used. Specifically, taking the layouts in the order presented in 
+                              <specref ref="json-element-layouts"/>, the first layout whose <term>XSD conditions</term>
+                           are satisfied by <var>T</var> is chosen.</p></item>
+                           <item><p>If the option <code>uniform</code> is set to false (which is its default value),
+                              then the chosen layout is the first layout, in the order they are listed in 
+                              <specref ref="json-element-layouts"/>, whose <term>match pattern</term>
+                           matches <var>E</var>.</p></item>
+                           <item><p>If the option <code>uniform</code> is set to true, then let <var>S</var>
+                           be the set of all element nodes in the input having the same name as <var>E</var>,
+                           including element nodes that are not immediate items in the input sequence, but
+                           are rather contained recursively within nodes, maps, or arrays in the input sequence.
+                           The chosen layout is then the first layout, in the order they are listed in 
+                              <specref ref="json-element-layouts"/>, whose <term>match pattern</term> matches
+                              every element node in <var>S</var>.</p></item>
+                        </olist>
                   </item>
                   <item>
                      <p><emph>Text nodes</emph></p>
-                     <p>A JSON object with a single property <code>#text</code> whose value is the
-                        string value of the text node.</p>
+                     <p>A top-level text node is output as a JSON object comprising a single key-value pair.
+                        The key is the string <code>"#text"</code>, and the value is the string value of the text node
+                        as a JSON string.</p>
+                     <p>Text nodes appearing as children of an element node are formatted according to the rules of
+                        a specific element layout.</p>
                   </item>
                   <item>
                      <p><emph>Comment nodes</emph></p>
-                     <p>A JSON object with a single property <code>#comment</code> whose value is the
-                        string value of the comment.</p>
+                     <p>A top-level comment node is output as a JSON object comprising a single key-value pair.
+                        The key is the string <code>"#comment"</code>, and the value is the string value of the comment node
+                        as a JSON string.</p>
+                     <p>Comment nodes appearing as children of an element node are formatted according to the rules of
+                        a specific element layout. If the layout is one that does not ignore comments, then
+                        comments follow the above conventions.</p>
                   </item>
                   <item>
                      <p><emph>Processing instruction nodes</emph></p>
-                     <p>A JSON object with a two properties (in order): <code>#processing-instruction</code> set to the
-                        name of the processing instruction, and <code>#data</code> set to the
-                        string value of the processing instruction node.</p>
+                     <p>A top-level processing-instruction node is output as a JSON object comprising a single key-value pair.
+                        The key is the string <code>"#processing-instruction"</code>, and the value is a JSON object
+                        with two string-valued properties: <code>"#name"</code> holding the name of the processing instruction,
+                        and <code>"#data"</code> holding the data (in XDM terms, the string value of the node).</p>
+                     <p>Processing instruction nodes appearing as children of an element node are formatted according to the rules of
+                        a specific element layout. If the layout is one that does not ignore processing instructions, then
+                        they are output following the above conventions.</p>
                   </item>
                   <item>
                      <p><emph>Attribute nodes</emph></p>
                      <p>Attribute nodes that are reached via an element node are output as described
                         under “element nodes”, above.</p>
-                     <p>Free-standing attribute nodes are output as JSON objects with properties
-                     <code>#attribute</code> set to the local name of the attribute, <code>#prefix</code>
-                     (if non-empty) set to the prefix of the attribute’s name, <code>#namespace</code>
-                     (if non-empty) set to the namespace URI, and <code>#value</code> set to
-                        the result of atomizing the attribute value and applying the
-                        <code>fn:json</code> function to the result.</p>
+
+                     <p>A top-level attribute node is output as as a JSON object comprising a single key-value pair.
+                     The key is the string <code>"#attribute"</code>, and the value is a JSON object with
+                     two properties:</p>
+                     <ulist>
+                        <item><p><code>#name</code> set to the name of the attribute as a string, being the local name
+                        in the case of an attribute in no namespace, or a string in <code>Q{uri}local</code> format
+                        otherwise.</p></item>
+                        <item><p><code>#value</code> set to
+                           the result of atomizing the attribute value and applying the
+                           <code>fn:xdm-to-json</code> function to the result.</p></item>
+                     </ulist>
                   </item>
-                  <item><p><emph>Namespace nodes</emph></p></item>
-                  <item><p>Namespace nodes that are reached via an element node result in no output.</p></item>
-                  <item><p>Free-standing namespace nodes are output as JSON objects with properties
-                  <code>#namespace</code> set to the namespace prefix (<code>""</code> for the default
-                  namespace) and <code>#uri</code> set to the namespace URI.</p></item>
+                  <item><p><emph>Namespace nodes</emph></p>
+                  <p>Namespace nodes that are reached via an element node result in no output.</p>
+                     <p>A top-level namespace node is output as a JSON object comprising a single key-value pair.
+                        The key is the string <code>"#namespace"</code>, and the value is a JSON object
+                        with two string-valued properties: <code>"#prefix"</code> holding the name of the namespace node
+                        (or an empty string for a namespace node whose name is absent),
+                        and <code>"#uri"</code> holding the namespace URI (in XDM terms, the string value of the namespace node).</p>
+                  </item>
                </ulist>            
             </item>
             <item>
@@ -23436,15 +23464,15 @@ return $M(collation-key("a", $C))</eg></fos:expression>
                <p>An XDM map is output as a JSON object with one property for each entry in the map.</p>
                <p>The property name is derived from the key value by converting the value to a string
                and applying escaping rules. If the property name thus generated is the same as a previously output
-               property name, then it is made unique by appending <code>"(N)"</code> where <var>N</var> is the smallest
-               positive integer that makes the resulting value unique.</p>
-               <p>The property value is derived by applying the <code>fn:json</code> function to the value in the map entry.</p>
+               property name, then it is made unique by appending <code>"[N]"</code> where <var>N</var> is the smallest
+               positive integer, starting at 2, that makes the resulting value unique.</p>
+               <p>The property value is derived by applying the <code>fn:items-to-json</code> function to the value in the map entry.</p>
                
                <note><p>Conflicts between property names can arise because the XDM model allows keys of different types,
                   for example the <code>xs:date</code> value <code>2020-12-31</code> and the string value 
                   <code>"2020-12-31"</code> can co-exist. The map <code>map{xs:duration('PT1D'):20, "PT1D":30}</code>
-                  is converted to the JSON string <code>{"PT1D":20,"PT1D(1)":30}</code> or 
-                  <code>{"PT1D":30,"PT1D(1)":20}</code>, depending on the (unpredictable) order in which the
+                  is converted to the JSON string <code>{"PT1D":20,"PT1D[2]":30}</code> or 
+                  <code>{"PT1D":30,"PT1D[2]":20}</code>, depending on the (unpredictable) order in which the
                entries in the map are processed.</p></note>
                <note><p>Because the order of entries in a map is unpredictable, the order in which the
                properties are listed in the JSON output is also unpredictable.</p></note>
@@ -23452,103 +23480,283 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             <item>
                <p><emph>Arrays</emph></p>
                <p>An XDM array is output as a JSON array. Each member of the XDM array generates one entry in the
-                  JSON array, in order, obtained by applying the <code>fn:json</code> function to the XDM array member.</p>              
+                  JSON array, in order, obtained by applying the <code>fn:items-to-json</code> function to the XDM array member.</p>              
             </item>
             <item>
+
                <p><emph>Functions</emph></p>
-               <p>An XDM function, other than a map or array, is output as a JSON object with the following
-               properties:</p>
+               <p>An XDM function, other than a map or array, is output as a JSON object with the following properties:</p>
                <ulist>
-                  <item><p><code>#function</code>, set to the local name of the function
+                  <item><p><code>#function</code>, set to the name of the function
+                     in the format <code>Q{uri}local</code>
                   if it has a name, or the empty string otherwise.</p></item>
-                  <item><p><code>#namespace</code>, set to the namespace URI of the function. The property
-                  is omitted for an anonymous function.</p></item>
                   <item><p><code>#arity</code>, set to the arity of the function as a JSON number.</p></item>
                   <item><p><code>#arguments</code> whose value is an array
                   of strings, which identify the names and types of the function arguments,
                   in the format <code>$Q{uri}local as SequenceType</code>: for example 
-                     <code>["$x as double", "$y as string"]</code>. Namespace prefixes must not be used:
-                     unprefixed element names and variable names are taken to be in no namespace, and unprefixed
-                     type names are taken to be in the namespace <code>http://www.w3.org/2001/XMLSchema</code>.
+                     <code>["$x as xs:double", "$y as xs:string"]</code>. QNames in no namespace should be written
+                     as simple strings containing the local name only; QNames in a namespace should be written
+                     in the form <code>Q{uri}local</code>, except that the namespace 
+                     <code>http://www.w3.org/2001/XMLSchema</code> should be indicated
+                     using the conventional prefix <code>xs</code>, as in the above example.
                   </p></item>
-                  <item><p><code>#result</code> whose value is a string 
+                  <item><p><code>#result</code> whose value is a string. 
                      identifying the type of the function result, using the same conventions as for <code>#arguments</code>.</p></item>
-                  <item><p>Optionally at implementer discretion, <code>#implementation</code> whose value is a string 
-                     representing the function’s implementation in implementation-defined format.</p></item>
+                  <item><p>Optionally at implementer discretion, <code>#body</code> whose value is a string.</p></item> 
                </ulist>
-               <p>Strings are escaped as follows:</p>
-               <olist>
-                  <item>
-                     <p>Any occurrence of backslash is replaced by <code>\\</code></p>
-                  </item>
-                  
-                  <item>
-                     <p>Any occurrence of quotation mark, backspace, form-feed, newline, carriage return, or tab is 
-                        replaced by <code>\"</code>, <code>\b</code>, <code>\f</code>, <code>\n</code>, <code>\r</code>, or <code>\t</code> respectively; </p>
-                  </item>
-                  
-                  <item>
-                     <p>Any other codepoint in the range 1-31 or 127-159 is replaced by an escape in 
-                        the form <code>\uHHHH</code> where <code>HHHH</code> is the upper-case hexadecimal representation of the codepoint value.</p>
-                  </item>
-               </olist>
+
+               
+
+               
             </item>
-         </ulist>        
+         </ulist>
+         <p>Strings are escaped as follows:</p>
+         <olist>
+            <item>
+               <p>Any occurrence of backslash is replaced by <code>\\</code></p>
+            </item>
+            
+            <item>
+               <p>Any occurrence of quotation mark, backspace, form-feed, newline, carriage return, or tab is 
+                  replaced by <code>\"</code>, <code>\b</code>, <code>\f</code>, <code>\n</code>, <code>\r</code>, or <code>\t</code> respectively; </p>
+            </item>
+            
+            <item>
+               <p>Any solidus (<code>"/"</code>) is 
+                  replaced by <code>\/</code> if the <code>escape-solidus</code> option is set to
+                  true (its default value) but is output as <code>"/"</code> if the option is set
+                  to false; </p>
+            </item>
+            
+            <item>
+               <p>Any other codepoint in the range 1-31 or 127-159 is replaced by an escape in 
+                  the form <code>\uHHHH</code> where <code>HHHH</code> is the upper-case hexadecimal representation of the codepoint value.</p>
+            </item>
+         </olist>
       </fos:rules>
+      <fos:errors>
+         <p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
+            value (typically because it has been validated against an element-only content model): <errorref
+               class="TY" code="0012"/>.</p>
+      </fos:errors>
       <fos:notes>
-         <p>In the JSON output, names of properties defined in this specification are prefixed with <code>#</code>;
-         names not so prefixed are derived from names appearing in the input.</p>
-         <p>Namespace information may be lost (specifically, namespaces that are declared but not used are
-         not retained in the output).</p>
+         <p>The namespace URI and local name of all elements and attributes is available in the JSON output.
+            Prefixes are not retained, and namespaces that are declared but not used are not retained.</p>
          <p>The distinction between sequences and arrays is lost.</p>
-         <p>The distinction between different atomic types is lost, except for the boolean / number / string
+         <p>The distinction between different atomic types is lost, except for the boolean/number/string
          distinction present in JSON.</p>
-         <p>In elements whose children are elements with distinct names, whitespace text nodes are lost,
-         and the namespace URIs and prefixes of the child elements are lost.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>json(())</fos:expression>
+               <fos:expression>items-to-json(())</fos:expression>
                <fos:result>'null'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json(12)</fos:expression>
+               <fos:expression>items-to-json(12)</fos:expression>
                <fos:result>'12'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json((12, "December"))</fos:expression>
+               <fos:expression>items-to-json((12, "December"))</fos:expression>
                <fos:result>'[12,"December"]'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json(true())</fos:expression>
+               <fos:expression>items-to-json(true())</fos:expression>
                <fos:result>'true'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
+               <fos:expression>items-to-json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
                <fos:result>'{"a":1,"b":"NaN","c":[1,2,3]}'</fos:result>
                <fos:postamble>(or some permutation thereof)</fos:postamble>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a x="2">banana</a>)]]></fos:expression>
-               <fos:result>'{"#element":"a","@x":"2","#value":"banana"}'</fos:result>
+               <fos:expression><eg><![CDATA[items-to-json(<a x="2">banana</a>)]]></eg></fos:expression>
+               <fos:result>'{"a":{"@x":"2","#content":"banana"}}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a><b/><c>2</c></a>)]]></fos:expression>
-               <fos:result>'{"#element":"a","#content":{"b":null,"c":"2"}}'</fos:result>
+               <fos:expression><eg><![CDATA[items-to-json(<a><b/><c>2</c></a>)]]></eg></fos:expression>
+               <fos:result>'{"a":{"#content":{"b":"","c":"2"}}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a><b/><b/><c/></a>)]]></fos:expression>
-               <fos:result>'{"#name":"a","#content":[{"#name":"b"},{"#name":"b"},{"#name":"c}]}'</fos:result>
+               <fos:expression><eg><![CDATA[items-to-json(<a>A <i>nice</i> one!</a>)]]></eg></fos:expression>
+               <fos:result>'{"a":{"#content":["A ",{"i":"nice"}," one!"]}}'</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><![CDATA[json(<a>A <i>nice</i> one!</a>)]]></fos:expression>
-               <fos:result>'{"#name":"a","#content":["A ",{"#name":"i", "#value":"nice"}," one!"]}'</fos:result>
+               <fos:expression><eg><![CDATA[items-to-json(<a>A <i>nice</i> one!</a>, 
+              map{'layouts':map{QName('', 'a'): 'xml'}, 'escape-solidus':false()})]]></eg></fos:expression>
+               <fos:result>'{"a":"<a>A <i>nice</i> one!</a>"}'</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
       <fos:history>
-         <fos:version version="4.0">Proposed for 4.0; not yet reviewed.</fos:version>
+         <fos:version version="4.0">Proposed for 4.0; initial review on 2023-06-27.</fos:version>
+      </fos:history>
+   </fos:function>-->
+   
+ 
+   <fos:function name="elements-to-maps" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="elements-to-maps" return-type="map(xs:string, item()?)*">
+            <fos:arg name="elements" type="element(*)*"/>
+            <fos:arg name="options" type="map(*)" usage="inspection"  default="map{}"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Converts a sequence of element nodes to a sequence of maps, suitable for serialization as JSON.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The function converts the supplied element nodes to maps. The conversion is one-to-one and retains order:
+         for each element node in the input, there will be a corresponding map in the output. The form of the
+         generated maps is designed to be suitable for serialization as JSON using the JSON output method.</p>
+         <p>The conversion can process any element nodes
+            whatsoever, but it is not lossless. For example, information about  base URIs and unused in-scope namespaces
+         is lost.</p>
+         
+         <p>The element nodes actually present in the <code>$elements</code> argument are refered to as top-level
+         elements; their descendant elements are refered to as descendant elements.</p>
+         
+         <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
+         
+         <fos:options>
+            <fos:option key="uniform">
+               <fos:meaning>Indicates that all elements with the same name (except where schema type information is available)
+                  should use the same JSON layout. Setting this option requires the processor to analyze the entire input
+               before deciding what layout to use for each element; but by ensuring consistency across elements, it may
+               make the resulting JSON easier to process.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="false">
+                     The layout for each element node is decided independently, based on its individual content.
+                  </fos:value>
+                  <fos:value value="true">
+                     In the absence of schema type information, and of an explicit entry in the <code>layouts</code>
+                     property, the layout chosen for a given element node must be the same as that for all other
+                     elements of the same name.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="layouts">
+               <fos:meaning>A mapping from element names to layout names, used to override the default
+               formatting rules for a particular element name.</fos:meaning>
+               <fos:type>map{xs:QName, enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
+                  "record", "sequence", "mixed", "xml", "html", "xhtml")}</fos:type>
+               <fos:default>map{}</fos:default>
+            </fos:option>
+         </fos:options>
+         
+         
+         
+         
+ 
+         <p>A top-level element node is output as a map comprising a single key-value pair, where the
+            key is a string derived from the element name as described below, and the content
+            follows the rules of a specific layout appropriate to that element.</p>
+         
+         <p>The name of a top-level element is represented as follows:</p>
+         
+         <ulist>
+            <item><p>If the element name is in no namespace, as a string containing the
+               local part of the element name.</p></item>
+            <item><p>If the element name is in a namespace, as a string in the format
+               <code>Q{uri}local</code>, where <code>uri</code> is the namespace, and <code>local</code>
+               is the local part of the element name.</p></item>
+         </ulist>
+         
+         <p>For a descendant element, the name is represented as follows:</p>
+         
+         <ulist>
+            <item><p>If the element name is in the same namespace as its parent, or if both are
+               in no namespace, then as a string containing the
+               local part of the element name.</p></item>
+            <item><p>Otherwise, as a string in the format
+               <code>Q{uri}local</code>, where <code>uri</code> is the namespace (or the empty string
+               to represent no namespace), and <code>local</code> is the local part of the element name.</p></item>
+         </ulist>
+         
+         <p>Note that prefixes used in element names are not retained; neither are the prefix-to-uri mappings
+            represented by namespace nodes in the XDM tree.</p>
+         
+         <note><p>Where an element appears as a child of an element formatted using record layout
+            (see <specref ref="record-json-layout"/>), its name is when necessary suffixed by an index such as <code>"[1]"</code>
+            or <code>"[2]"</code> to make it unique.</p></note>
+         
+         <p>The available layouts 
+            are described in <specref ref="xml-to-json-mappings"/>. A layout is selected for each element node <var>E</var>
+            by applying the following rules in order:</p>
+            <olist>
+               <item><p>If the name of <var>E</var> is listed as the key of an entry in the <code>layouts</code> 
+                  option, then the corresponding named layout is used.</p></item>
+               <item><p>If <var>E</var> has a type annotation <var>T</var> other than <code>xs:untyped</code>
+               or <code>xs:anyType</code>, then the layout appropriate to its schema type
+               is used. Specifically, taking the layouts in the order presented in 
+                  <specref ref="json-element-layouts"/>, the first layout whose <term>XSD conditions</term>
+               are satisfied by <var>T</var> is chosen.</p></item>
+               <item><p>If the option <code>uniform</code> is set to false (which is its default value),
+                  then the chosen layout is the first layout, in the order they are listed in 
+                  <specref ref="json-element-layouts"/>, whose <term>match pattern</term>
+               matches <var>E</var>.</p></item>
+               <item><p>If the option <code>uniform</code> is set to true, then let <var>S</var>
+               be the set of all element nodes in the input having the same name as <var>E</var>,
+                  with type annotation <code>xs:untyped</code> or <code>xs:anyType</code>,
+               including both top-level element nodes and descendant element nodes.
+               The chosen layout is then the first layout, in the order they are listed in 
+                  <specref ref="json-element-layouts"/>, whose <term>match pattern</term> matches
+                  every element node in <var>S</var>.</p></item>
+            </olist>
+ 
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
+            value (typically because it has been validated against an element-only content model): <errorref
+               class="TY" code="0012"/>.</p>
+      </fos:errors>
+      <fos:notes>
+         <p>The namespace URI and local name of all elements and attributes is available in the JSON output.
+            Prefixes are not retained, and namespaces that are declared but not used are not retained.</p>
+         <p>The distinction between different atomic types is lost, except for the boolean/number/string
+         distinction present in JSON.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[elements-to-maps(<a x="2">banana</a>)]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[map{"a":
+   map{"@x":"2",
+       "#content":"banana"}
+}]]></eg></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[elements-to-maps(<a><b/><c>2</c></a>)]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[map{"a":
+   map{"b":"",
+       "c":"2"}
+}]]></eg></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[elements-to-maps(<a>A <i>nice</i> one!</a>)]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[map{"a":
+   ["A ",
+    map{"i":"nice"},
+    " one!"]
+}]]></eg></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[elements-to-maps(<a>A <i>nice</i> one!</a>, 
+              map{'layouts':map{QName('', 'a'): 'xml'}})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[[map{"a":
+   "<a>A <i>nice</i> one!</a>"
+}]]></eg></fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Proposed for 4.0.</fos:version>
       </fos:history>
    </fos:function>
 
