@@ -44,7 +44,7 @@
    <!-- Exclude functions that are either (a) difficult to test, or (b) not yet agreed / implemented -->
    <xsl:template match="function[@name=('error', 'concat', 'transform',  
       'load-xquery-module', 'parts', 'stack-trace', 'group-by', 'substitute', 'collection', 'uri-collection',
-      'items-starting-where', 'random-number-generator')]" priority="5"/>
+      'subsequence-starting-where', 'random-number-generator')]" priority="5"/>
    
    <xsl:template match="function[@prefix='array'][@name=('replace', 'slice', 'from-sequence', 'of', 'partition')]" priority="6"/>
    
