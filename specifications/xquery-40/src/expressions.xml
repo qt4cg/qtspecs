@@ -2957,12 +2957,13 @@ would raise an error because it has an <code>id</code> child whose value is not 
             
             <p><termdef id="dt-implausible" term="implausible">Certain expressions, while not
             erroneous, are classified as being <term>implausible</term>,
-            because there is a high probability that they were written incorrectly.</termdef></p>
+            because they achieve no useful effect.</termdef></p>
             
             <p>An example of an implausible expression is <code>@code/text()</code>. This expression
             will always evaluate to an empty sequence, because attribute nodes cannot have text
             node children. The semantics of the expression are well defined, but it is likely
-            that the user writing this expression intended something different.</p>
+            that the user writing this expression intended something different; if they wanted to an 
+            expression that evaluated to an empty sequence, there would be easier ways to write it.</p>
             
             <p>Where an expression is classified (by rules in this specification) as being
             <termref def="dt-implausible"/>, a processor <rfc2119>may</rfc2119> (but is
@@ -2973,6 +2974,34 @@ would raise an error because it has an <code>id</code> child whose value is not 
             provide a mode of operation in which <termref def="dt-implausible"/>
             expressions are not treated as static errors, but are evaluated
             with the defined semantics for the expression.</p>
+            
+            <p>Some other examples of implausible expressions include:</p>
+            
+            <ulist>
+            
+               <item><p><code>round(tokenize($input))</code>. The result of <code>fn:tokenize</code>
+               is a sequence of strings (<code>xs:string*</code>), while the required type for the
+               first argument of <code>fn:round</code> is optional numeric (<code>xs:numeric?</code>).
+               The expression can succeed only in the exceptional case where the result of <code>fn:tokenize</code>
+               is an empty sequence, in which case the result of <code>fn:round</code> will also be
+               an empty sequence; it is therefore highly likely that the expression was written in error.</p></item>
+                  
+               <item><p><code>parse-csv($input)?column-names</code>. The signature of the <code>parse-csv</code>
+               function declares its return type as <code>record(columns, rows)</code>. There is no field in this
+               record named <code>column-names</code>, and therefore the lookup expression will always
+               return an empty sequence. Again, there is no good reason that a user would write this,
+               so it is likely that it was written in error.</p></item>
+            </ulist>
+            
+            <note><p>The specification is deliberately conservative in the choice of constructs that have
+            been classified as implausible. Constructs have not been classified as implausible merely because there
+            are better ways of writing the same thing, but only in cases where it is considered that no user in full understanding
+            of the specification would intentionally write such a construct. All these cases correspond to situations
+            that would be classed as errors in a language with stricter static typing rules.</p></note>
+            
+            <note><p>In many cases the classification of constructs as implausible is designed to protect users
+            from usability problems that have been found with earlier versions of the language. without
+            introducing backwards incompatibilities.</p></note>
             
          </div3> 
       </div2>
@@ -6951,6 +6980,18 @@ declare function flatten($tree as tree) as item()* {
                   disjoint (for example <code>map(*)</code> and <code>array(*)</code>) is covered
                   by the general rules for type errors: that case can always be reported as a static
                   error.</p></note>
+               
+               <p>Examples of implausible coercions include the following:</p>
+               
+               <ulist>
+                  <item><p><code>round(timezone-from-time($now))</code>. The result of <code>fn:timezone-from-time</code>
+                  is of type <code>xs:dayTimeDuration?</code>, which is substantively disjoint with the required type
+                  of <code>fn:round</code>, namely <code>xs:numeric?</code>.</p></item>
+                  <item><p><code>function($x as xs:integer) as array(xs:string) { array{1 to $x} }</code>. The type
+                  of the function body is <code>array(xs:integer)</code>, which is substantively disjoint with the
+                  required type <code>array(xs:string)</code>: the function can succeed only in the exceptional case
+                  where the function body delivers an empty array.</p></item>
+               </ulist>
                   
             </div3>
                
@@ -8385,7 +8426,10 @@ At evaluation time, the value of a variable reference is the value to which the 
                      
                      <item><p>The result of evaluating the argument expression is converted to the required type (the
                      declared type associated with the corresponding parameter in the function declaration, defaulting
-                     to <code>item()*</code>) by applying the <termref def="dt-coercion-rules"/>.</p></item>
+                     to <code>item()*</code>) by applying the <termref def="dt-coercion-rules"/>. 
+                        <phrase diff="add" at="2023-12-12">This applies both to explicitly supplied arguments, and
+                        to values obtained by evaluating default value expressions. In both cases a type
+                        error will be raised if the value (after coercion) does not match the required type.</phrase></p></item>
                   
                   
 
@@ -8789,22 +8833,22 @@ return $f(5)]]></eg>
                                           class="DY" code="0002"/>:</p>
                                     <eg role="parse-test"><![CDATA[
 let $vat := function() { @vat + @price }
-return shop/article/$vat()]]></eg>
+return doc('wares.xml')/shop/article/$vat()]]></eg>
                                     <p>Instead, the context value can be used as an argument to the anonymous function:</p>
                                     <eg role="parse-test"><![CDATA[
 let $vat := function($art) { $art/@vat + $art/@price }
-return shop/article/$vat(.)]]></eg>
+return doc('wares.xml')/shop/article/$vat(.)]]></eg>
                                     <p>Alternatively, the value can be referenced as a nonlocal variable binding:</p>
                                     <eg role="parse-test"><![CDATA[
-let $ctx := shop/article,
-$vat := function() { for $a in $ctx return $a/@vat + $a/@price }
+let $ctx := doc('wares.xml')/shop/article
+let $vat := function() { for $a in $ctx return $a/@vat + $a/@price }
 return $vat()
 ]]></eg>
                                     <p>Finally, a <termref def="dt-focus-function"/> can be used.
                                        This binds the value of the argument to the context value within the function body:</p>
                                     <eg role="parse-test"><![CDATA[
 let $vat := function { @vat + @price }
-return $vat(shop/article)
+return $vat(doc('wares.xml')/shop/article)
 ]]></eg>
                                  </example>
 
@@ -8899,6 +8943,21 @@ return $vat(shop/article)
                   <item>
                      <p>Explicitly supplied parameters and defaulted parameters are evaluated and 
                         converted to the required type using the rules for a static function call.</p>
+                     
+                     <p diff="add" at="2023-12-12">A type error is raised if any of the explicitly supplied or defaulted
+                        parameters, after applying the
+                        <termref def="dt-coercion-rules"/>, does not match the required type 
+                        of the corresponding parameter.</p>
+                     
+                     <p diff="add" at="2023-12-12">In addition, a dynamic error <rfc2119>may</rfc2119> 
+                        be raised if any of the explicitly supplied or defaulted parameters does not match other constraints on the
+                        value of that parameter (for example, if the value supplied for a parameter expecting
+                        a regular expression is not a valid regular expression).</p>
+                     
+                     <p diff="add" at="2023-12-12">In both cases the error code is the same as for a static
+                        function call supplying the same invalid value.</p>
+                     
+
                   </item>
 
                   <item>
@@ -9015,6 +9074,18 @@ return $sum-of-squares(1 to 3)]]></eg>
                         and converted to the required
                      type of the parameter, using the rules for dynamic function calls.</p>
                      
+                     <p diff="add" at="2023-12-12">A type error is raised if any of the supplied
+                        parameters, after applying the
+                        <termref def="dt-coercion-rules"/>, does not match the required type.</p>
+                     
+                     <p diff="add" at="2023-12-12">In addition, a dynamic error <rfc2119>may</rfc2119> 
+                     be raised if any of the supplied parameters does not match other constraints on the
+                     value of that parameter (for example, if the value supplied for a parameter expecting
+                     a regular expression is not a valid regular expression).</p>
+                     
+                     <p diff="add" at="2023-12-12">In both cases the error code is the same as for a dynamic
+                     function call supplying the same invalid value.</p>
+                     
                      
                   </item>
 
@@ -9098,6 +9169,8 @@ return $paf(1 to 5)
                     </olist>
                
                
+               
+               
                <p>Partial function application never returns a map or an array.  If <code>$F</code> is a map or an array, then <code>$F(?)</code> is 
                   a partial function application that returns a function, but the function it returns is neither a map nor an array.</p>
                <example>
@@ -9162,14 +9235,21 @@ return $a("A")]]></eg>
             <example diff="add" at="B">
                <head>A Context-Dependent Named Function Reference</head>
                <p>Consider:</p>
-               <eg role="parse-test"><![CDATA[let $f := <foo/>/fn:name#0 return <bar>/$f()]]></eg>
+               <eg role="parse-test"><![CDATA[let $f := <foo/>/fn:name#0 return <bar/>/$f()]]></eg>
                <p>The function <code>fn:name()</code>, with no arguments, returns the name of the context node. The function
                item delivered by evaluating the expression <code>fn:name#0</code> returns the name of the element that was the
                context node at the point where the function reference was evaluated (that is, the <code>&lt;foo&gt;</code> element).
                This expression therefore returns <code>"foo"</code>, not <code>"bar"</code>.</p>
             </example>
             
- 
+
+               <p diff="add" at="2023-12-12">An error is raised if the identified function depends on components of the static or dynamic
+                  context that are not present, or that have unsuitable values. For example <xerrorref spec="XP"
+                     class="DY" code="0002" type="dynamic"/> is raised for the expression <code>fn:name#0</code>
+                  if the context item is absent, and <errorref class="DC" code="0001" type="dynamic"
+                  /> is raised for the call <code>fn:id#1</code> if the context item is not a node
+                  in a tree that is rooted at a document node. The error that is raised is the same as the error that would
+                  be raised by the corresponding function if called with the same static and dynamic context.</p>
            
             <p>If the <termref def="dt-expanded-qname"
                   >expanded QName</termref> and arity in a named function reference do not match the 
@@ -10573,6 +10653,15 @@ return $incrementors[2](4)]]></eg>
                   the axis step <code>child::li</code> will never select anything and is therefore
                   classified as <termref def="dt-implausible"/>.</p></item>
                </olist>
+               
+               <p>Examples of implausible axis steps include the following:</p>
+               
+               <ulist>
+                  <item><p><code>@code/text()</code>: attributes cannot have text node children.</p></item>
+                  <item><p><code>/@code</code>: document nodes cannot have attributes.</p></item>
+                  <item><p><code>ancestor::text()</code>: the ancestor axis never returns text nodes.</p></item>
+               </ulist>
+               
                <note><p>Processors may choose not to classify the expression <code>/..</code>
                as implausible, since XSLT 1.0 users were sometimes advised to use this construct
                as an explicit way of denoting the empty sequence.</p></note>
@@ -12086,6 +12175,9 @@ within an XML document, the XML escaping rules for special characters
 must be followed; thus <code>&lt;</code> must be written as
 <code>&amp;lt;</code>.</p>
          </note>
+         
+         <p>For a summary of the differences between different ways of comparing atomic values
+         in &language;, see <specref ref="id-atomic-comparisons"/>.</p>
 
 
          <div3 id="id-value-comparisons">
@@ -16147,6 +16239,18 @@ return if ($v instance of ST) {$v}
                </olist>
                <note><p>Other errors, such as using an <code>NCName</code> <code>KeySpecifier</code>
                for an array lookup, are handled under the general provisions for type errors.</p></note>
+               
+               <p>Examples of implausible lookup expressions include the following:</p>
+               
+               <ulist>
+                  <item><p><code>parse-uri($uri)?3</code>: the declared result type of <code>parse-uri</code> is a record
+                  test, so the selector <code>3</code> will never select anything.</p></item>
+                  <item><p><code>in-scope-namespaces($node)(current-date())</code>: the result type of
+                  <code>in-scope-namespaces</code> is a map with <code>xs:string</code> keys, so the selector
+                  <code>current-date()</code> will never select anything.</p></item>
+                  <item><p><code>array:subarray($a, 2, 5)?0</code>: the integer zero cannot select any member
+                  of an array, because numbering starts at 1.</p></item>
+               </ulist>
             </div4>
          </div3>
       <!--   <div3 id="id-composite-atomic-values" diff="add" at="A">
@@ -17727,25 +17831,14 @@ group by $g1, $g2, $g3 collation "Spanish"]]></eg>
   is deep-equal to the atomized value of <var>GV</var> in
   <var>T2</var>, as defined by applying the function
   <function>fn:deep-equal</function> using the appropriate
-  collation.</termdef>
+  collation.</termdef></p>
+                     
+                     <note diff="add" at="2023-12-05"><p>The <function>fn:deep-equal</function> has been changed
+                     in &language; so that it is now transitive; the problem that existed
+                     in earlier versions when comparing numeric values of different
+                     types has thereby been resolved.</p></note>
 
-  If these values are of different numeric types, and differ from
-  each other by small amounts, then the deep-equal relationship is not
-  transitive, because of rounding effects occurring during type
-  promotion. When comparing three values <code>A</code>,
-  <code>B</code>, and <code>C</code> such that <code>A eq B</code>,
-  <code>B eq C</code>, but <code>A ne C</code>, then the number of
-  items in the result of the function (as well as the choice of which
-  items are returned) is <termref
-                           def="dt-implementation-dependent"
-                           >implementation-dependent</termref>,
-  subject only to the constraints that (a) no two items in the result
-  sequence compare equal to each other, and (b) every input item that
-  does not appear in the result sequence compares equal to some item
-  that does appear in the result sequence. See <xspecref
-                           spec="FO40" ref="func-distinct-values"
-                        /> for further discussion of
-  this issue in a different context.</p> <note>
+  <note>
                         <p>The atomized grouping key will always be either an empty
      sequence or a single atomic value. Defining equivalence by
      reference to the <function>fn:deep-equal</function> function
@@ -18071,7 +18164,7 @@ the following rules:</p>
                </item>
 
 
-               <item>
+ <!--              <item>
                   <p>If the value of an orderspec has the <termref def="dt-dynamic-type"
                         >dynamic type</termref>
                      <code>xs:untypedAtomic</code> (such as character
@@ -18106,13 +18199,13 @@ the following rules:</p>
                         </note>
                      </item>
                   </olist>
-               </item>
+               </item>-->
             </ulist>
 
 
             <!-- <change diff="chg" at="XQ.E17"> -->
             <p>For the purpose of determining their relative position in the ordering sequence, the <emph>greater-than</emph>
-             relationship between two orderspec values <emph>W</emph> and <emph>V</emph> is defined as follows:</p>
+             relationship between two orderspec values <var>W</var> and <var>V</var> is defined as follows:</p>
             <ulist>
                <item>
                   <p>When the orderspec specifies <code>empty least</code>,
@@ -18120,25 +18213,24 @@ the following rules:</p>
                 </p>
                   <olist>
                      <item>
-                        <p>If <emph>V</emph> is an empty sequence and <emph>W</emph> is not an empty sequence,
-                         then <emph>W</emph>
+                        <p>If <var>V</var> is an empty sequence and <var>W</var> is not an empty sequence,
+                         then <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V </emph> is true.</p>
+                           <var>V </var> is true.</p>
                      </item>
                      <item>
-                        <p>If <emph>V</emph> is <code>NaN</code> and <emph>W</emph> is neither <code>NaN</code>
+                        <p>If <var>V</var> is <code>NaN</code> and <var>W</var> is neither <code>NaN</code>
                          nor an empty sequence, then
-                         <emph>W</emph>
+                         <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is true.</p>
+                           <var>V</var> is true.</p>
                      </item>
                      <item>
-                        <p>If a specific collation <emph>C</emph> is specified, and <emph>V</emph> and <emph>W</emph> are
-                         both of type <code>xs:string</code> or are convertible to
-                         <code>xs:string</code> by <termref
-                              def="dt-subtype-substitution"
-                              >subtype substitution</termref> and/or <termref
-                              def="dt-type-promotion">type promotion</termref>, then:</p>
+                        <p>If <var>V</var> and <var>W</var> are both instances of <code>xs:string</code>,
+                        <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code>, they are compared
+                           using the function <code>fn:compare(V, W, C)</code> where <var>C</var> is the
+                        requested collation, defaulting to the default collation from the static context.</p>
+                        
                         <p>If <code>fn:compare(V, W, C)</code> is less than
                          zero, then <emph>W</emph>
                            <emph>greater-than</emph>
@@ -18147,13 +18239,25 @@ the following rules:</p>
                            <emph>V</emph> is false.</p>
                      </item>
                      <item>
+                        <p>If <var>V</var> and <var>W</var> are both instances of <code>xs:numeric</code>,
+                           they are compared
+                           using the function <code>fn:numeric-compare(V, W)</code>.</p>
+                        
+                        <p>If <code>fn:numeric-compare(V, W)</code> is less than
+                           zero, then <var>W</var>
+                           <emph>greater-than</emph>
+                           <var>V</var> is true; otherwise <var>W</var>
+                           <emph>greater-than</emph>
+                           <var>V</var> is false.</p>
+                     </item>
+                     <item>
                         <p>If none of the above rules apply, then:</p>
                         <p>If <code>W gt V</code> is true,
-                         then <emph>W</emph>
+                         then <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is true; otherwise <emph>W</emph>
+                           <var>V</var> is true; otherwise <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is false.</p>
+                           <var>V</var> is false.</p>
                      </item>
                   </olist>
                </item>
@@ -18163,40 +18267,51 @@ the following rules:</p>
                 </p>
                   <olist>
                      <item>
-                        <p>If <emph>W</emph> is an empty sequence and <emph>V</emph> is not an empty sequence,
-                         then <emph>W</emph>
+                        <p>If <var>W</var> is an empty sequence and <emph>V</emph> is not an empty sequence,
+                         then <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is true.</p>
+                           <var>V</var> is true.</p>
                      </item>
                      <item>
-                        <p>If <emph>W</emph> is <code>NaN</code> and <emph>V</emph> is neither <code>NaN</code>
+                        <p>If <var>W</var> is <code>NaN</code> and <var>V</var> is neither <code>NaN</code>
                          nor an empty sequence, then
-                         <emph>W</emph>
+                         <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is true.</p>
+                           <var>V</var> is true.</p>
                      </item>
                      <item>
-                        <p>If a specific collation <emph>C</emph> is specified, and <emph>V</emph> and <emph>W</emph> are
-                         both of type <code>xs:string</code> or are convertible to
-                         <code>xs:string</code> by <termref
-                              def="dt-subtype-substitution"
-                              >subtype substitution</termref> and/or <termref
-                              def="dt-type-promotion">type promotion</termref>, then:</p>
+                        <p>If <var>V</var> and <var>W</var> are both instances of <code>xs:string</code>,
+                           <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code>, they are compared
+                           using the function <code>fn:compare(V, W, C)</code> where <var>C</var> is the
+                           requested collation, defaulting to the default collation from the static context.</p>
+                        
                         <p>If <code>fn:compare(V, W, C)</code> is less than
-                         zero, then <emph>W</emph>
+                           zero, then <emph>W</emph>
                            <emph>greater-than</emph>
                            <emph>V</emph> is true; otherwise <emph>W</emph>
                            <emph>greater-than</emph>
                            <emph>V</emph> is false.</p>
+                     </item>
+                     <item>
+                        <p>If <var>V</var> and <var>W</var> are both instances of <code>xs:numeric</code>,
+                           they are compared
+                           using the function <code>fn:numeric-compare(V, W)</code>.</p>
+                        
+                        <p>If <code>fn:numeric-compare(V, W)</code> is less than
+                           zero, then <var>W</var>
+                           <emph>greater-than</emph>
+                           <var>V</var> is true; otherwise <var>W</var>
+                           <emph>greater-than</emph>
+                           <var>V</var> is false.</p>
                      </item>
                      <item>
                         <p>If none of the above rules apply, then:</p>
                         <p>If <code>W gt V</code> is true,
-                         then <emph>W</emph>
+                           then <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is true; otherwise <emph>W</emph>
+                           <var>V</var> is true; otherwise <var>W</var>
                            <emph>greater-than</emph>
-                           <emph>V</emph> is false.</p>
+                           <var>V</var> is false.</p>
                      </item>
                   </olist>
                </item>
