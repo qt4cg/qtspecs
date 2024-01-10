@@ -12215,7 +12215,7 @@ let $newi := $o/tool</eg>
             </fos:test>
          </fos:example>
          <fos:example>
-            <p>Assuming <code>$in</code> is an element with no children:</p>
+            <p>Assuming <code>$break</code> is an element with no children:</p>
             <eg>
 let $break := &lt;br/&gt;
 return empty($break)
@@ -12274,7 +12274,7 @@ return empty($break)
             </fos:test>
          </fos:example>
          <fos:example>
-            <p>Assuming <code>$in</code> is an element with no children:</p>
+            <p>Assuming <code>$break</code> is an element with no children:</p>
             <eg>
 let $break := &lt;br/>
 return exists($break)
@@ -13145,6 +13145,9 @@ return error((), 'Duplicate IDs found: ' || string-join($ids, ', '))</eg>
          <p>If any integer in <code>$at</code> is outside the range <code>1 to count($input)</code>, that integer
          is effectively ignored: no error occurs.</p>
          <p>If either of the arguments is an empty sequence, the result is an empty sequence.</p>
+         <p>If <code>$at</code> contains duplicate integers, the result also contains duplicates. No de-duplication 
+            occurs. If the input sequence contains nodes, these are not copied: instead, the result
+            sequence contains multiple references to the same node.</p>
       </fos:notes>
       
       <fos:examples>
@@ -13168,6 +13171,10 @@ return error((), 'Duplicate IDs found: ' || string-join($ids, ', '))</eg>
             <fos:test>
                <fos:expression>items-at(characters("quintessential"), (4, 8, 3))</fos:expression>
                <fos:result>("n", "s", "i")</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>items-at(characters("quintessential"), (4, 8, 3, 1, 1))</fos:expression>
+               <fos:result>("n", "s", "i", "q", "q")</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>items-at((), 832)</fos:expression>
@@ -13239,6 +13246,9 @@ return error((), 'Duplicate IDs found: ' || string-join($ids, ', '))</eg>
             <code>$end</code> are positive and <code>$end > $start</code>, 
             <code>fn:slice($in, $start, $end)</code>
          returns the same result as <code>$in[position() = $start to $end]</code>.</p>
+         <p>This function can be used to enhance the <code>RangeExpression</code>, defined
+            in <xspecref spec="XP31" ref="id-range-expressions"/>, to construct a sequence
+            of integers based on steps other than 1.</p>
       </fos:notes>
       
       <fos:examples>
@@ -13323,6 +13333,18 @@ return error((), 'Duplicate IDs found: ' || string-join($ids, ', '))</eg>
             <fos:test use="v-slice">
                <fos:expression>slice(("a", "b", "c", "d"), 0)</fos:expression>
                <fos:result>("a", "b", "c", "d")</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>slice((1 to 5), step := 2)</fos:expression>
+               <fos:result>(1, 3, 5)</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>slice((1 to 5), step := -2)</fos:expression>
+               <fos:result>(5, 3, 1)</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -13708,6 +13730,8 @@ return contains-subsequence(
             not specified. For example, when retrieving prices from a purchase order, if an index
             exists on prices, it may be more efficient to return the prices in index order rather
             than in document order.</p>
+         <p>This function does not guarantee that the resulting sequence will be in an order
+            different from the input sequence. Many times the two sequences will be identical. </p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -14597,7 +14621,7 @@ declare function equal-strings(
   parse-xml("<para style=' bold'> <span>x</span></para>"),
   options := map { 'whitespace': 'normalize' }
 )]]></eg></fos:expression>
-               <fos:result>false()</fos:result>
+               <fos:result>true()</fos:result>
                <fos:postamble>The <code>whitespace</code> option causes both the leading space
                   in the attribute value and the whitespace preceding the 
                   <code>span</code> element to be ignored.</fos:postamble>
@@ -16058,7 +16082,8 @@ else $c[1] + sum(subsequence($c, 2))</eg>
          items that do not have any URI; or a URI collection might contain URIs that cannot be dereferenced to return any 
          resource.</p>
 
-         <p>Thus, some implementations might ensure that calling <code>fn:uri-collection</code> and then
+         <!-- Marked for deletion; assumes a collection() that returns only document nodes. -->
+         <p diff="del" at="2023-12-26">Thus, some implementations might ensure that calling <code>fn:uri-collection</code> and then
             applying <code>fn:doc</code> to each of the returned URIs delivers the same result as
             calling <code>fn:collection</code> with the same argument; however, this is not
             guaranteed.</p>
@@ -16199,7 +16224,7 @@ else $c[1] + sum(subsequence($c, 2))</eg>
             processor does not support the specified encoding, if
             the string representation of the retrieved resource contains octets that cannot be
             decoded into Unicode <termref def="character">characters</termref> using the specified
-            encoding, or if the resulting characters are not
+            encoding, or if any resulting character is not a
             <termref def="dt-permitted-character">permitted character</termref>.</p>
          <p>A dynamic error is raised <errorref class="UT" code="1200"
             /> if <code>$encoding</code>
@@ -16321,17 +16346,20 @@ else $c[1] + sum(subsequence($c, 2))</eg>
          <p>The <code>unparsed-text-lines</code> function reads an external resource (for example, a
             file) and returns its string representation as a sequence of strings, separated at
             newline boundaries. </p>
-         <p>The result of the single-argument function is the same as the result of the expression
-               <code>fn:tokenize(fn:unparsed-text($href), '\r\n|\r|\n')[not(position()=last() and
+         <!-- The line-end normalization of 4.0's unparsed-text requires a simplification of 
+            the regular expression, lest users think that  -->
+         <p diff="chg" at="2024-12-26">The result of the single-argument function is the same as the result of the expression
+               <code>fn:tokenize(fn:unparsed-text($href), '\n')[not(position()=last() and
                .='')]</code>. The result of the two-argument function is the same as the result of
             the expression <code>fn:tokenize(fn:unparsed-text($href, $encoding),
-               '\r\n|\r|\n')[not(position()=last() and .='')]</code>. </p>
+               '\n')[not(position()=last() and .='')]</code>. </p>
          <p>The result is thus a sequence of strings containing the text of the resource retrieved
-            using the URI, each string representing one line of text. Lines are separated by one of
-            the sequences x0A, x0D, or x0Dx0A. The characters representing the newline are not
+            using the URI, each string representing one line of text. End-of-line <code>x0D</code> is
+            removed or converted to <code>x0A</code> following the rules of <code>fn:unparsed-text</code>. 
+            Newline characters <code>xOA</code> are not
             included in the returned strings. If there are two adjacent newline sequences, a
             zero-length string will be returned to represent the empty line; but if the external
-            resource ends with the sequence x0A, x0D, or x0Dx0A, the result will be as if this final
+            resource ends with a newline character, the result will be as if this final
             line ending were not present.</p>
       </fos:rules>
       <fos:errors>
