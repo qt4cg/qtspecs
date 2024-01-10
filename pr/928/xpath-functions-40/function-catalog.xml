@@ -156,6 +156,45 @@
             part is the namespace prefix being bound.</p>
          <p>For all other kinds of node, the function returns the empty sequence.</p>
       </fos:notes>
+      <fos:examples>
+         <fos:variable name="e" id="v-node-name-e"><![CDATA[<doc>
+  <p id="alpha" xml:id="beta">One</p>
+  <p id="gamma" xmlns="http://example.com/ns">Two</p>
+  <ex:p id="delta" xmlns:ex="http://example.com/ns">Three</p>
+  <?pi 3.14159?>
+</doc>}]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//*[@id='alpha'])</fos:expression>
+               <fos:result>fn:QName("", "p")</fos:result>
+            </fos:test>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//*[@id='gamma'])</fos:expression>
+               <fos:result>fn:QName("http://example.com/ns", "p")</fos:result>
+            </fos:test>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//*[@id='delta'])</fos:expression>
+               <fos:result>fn:QName("http://example.com/ns", "ex:p")</fos:result>
+            </fos:test>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//processing-instruction[1])</fos:expression>
+               <fos:result>fn:QName("", "pi")</fos:result>
+            </fos:test>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//*[@id='alpha']/text())</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//*[@id='alpha']/@id)</fos:expression>
+               <fos:result>fn:QName("", "id")</fos:result>
+            </fos:test>
+            <fos:test use="v-node-name-e" spec="XQuery">
+               <fos:expression>node-name($e//*[@id='alpha']/@xml:id</fos:expression>
+               <fos:result>fn:QName("http://www.w3.org/XML/1998/namespace", "xml:id")</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
    </fos:function>
    <fos:function name="nilled" prefix="fn">
       <fos:signatures>
@@ -518,23 +557,29 @@
 
       </fos:errors>
       <fos:notes>
-         <p>In the case of a document node <code>$D</code> returned by the <code>fn:doc</code>
-            function, or a document node at the root of a tree containing a node returned by the
-               <code>fn:collection</code> function, it will always be true that either
-               <code>fn:document-uri($D)</code> returns the empty sequence, or that the following
-            expression is <code>true</code>: <code>fn:doc(fn:document-uri($D))</code> is <code>$D</code>. It is
-               <termref
-               def="implementation-defined"
-            >implementation-defined</termref> whether this guarantee also holds for
-            document nodes obtained by other means, for example a document node passed as the
-            initial context node of a query or transformation.</p>
-         <p diff="add" at="A">A consequence of these rules is that it is not possible (within the
-         execution scope of a transformation) for two different documents to have the same
-         value for their <code>document-uri</code> property. This means that in situations where
-         URI stability is not guaranteed (for example, with streamed input documents in XSLT,
-         or for documents returned by <code>fn:collection</code> if document stability has been
-            disabled), the <code>document-uri</code> property <rfc2119>should</rfc2119> be absent, and
-            <code>fn:document-uri</code> <rfc2119>should</rfc2119> return an empty sequence.</p>
+         <p diff="chg" at="issue898">In the case of a document node <code>$D</code> returned by the <code>fn:doc</code>
+            function, it will generally be the case that <code>fn:document-uri($D)</code> returns a URI <code>$U</code>
+            such that a call on <code>fn:doc($U)</code> in the same dynamic context will return the same document
+            node <code>$D</code>. The URI <code>$U</code> will not necessarily be the same URI that was originally
+            passed to the <code>fn:doc</code> function, since several URIs may identify the same resource.</p>
+         
+         <p>This equivalence
+            does not apply if the second call on <code>fn:doc</code> uses a different dynamic context. For example,
+            in XSLT, a call on <code>fn:doc</code> in one stylesheet package might perform whitespace stripping
+            or schema validation, while the same call in a different stylesheet package does not; the two calls
+            might therefore return different documents both having the same <code>fn:document-uri</code> property.</p>
+         
+         <p diff="chg" at="issue898">It is <rfc2119>recommended</rfc2119> that implementations of <code>fn:collection</code>
+            should follow the same principle: any documents included in the returned collection, if they have a non-empty
+            <code>fn:document-uri</code> property, should be such that a call on <code>fn:doc</code> supplying this URI
+            (in the same dynamic context) returns the same document node.</p>
+         
+         <p diff="chg" at="issue898">The same guarantees do not hold for document nodes obtained by other mechanisms,
+            for example document nodes supplied as external parameters to a query or stylesheet. The <code>fn:document-uri</code>
+            property of such documents is under user control; it is entirely possible for two such documents to have
+            the same <code>fn:document-uri</code> property, in which case it is clearly impossible to use this property
+            to retrieve the original document.</p>
+         
       </fos:notes>
    </fos:function>
    <fos:function name="error" prefix="fn">
@@ -1341,7 +1386,7 @@
       <fos:signatures>
          <fos:proto name="round" return-type="xs:numeric?">
             <fos:arg name="value" type="xs:numeric?"/>
-            <fos:arg name="precision" type="xs:integer" default="0"/>
+            <fos:arg name="precision" type="xs:integer?" default="0"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -1368,9 +1413,9 @@
             <code>$value</code> is an instance of <code>xs:decimal</code> and <code>$precision</code> is 
             less than one, then the result <rfc2119>may</rfc2119>
             be an instance of <code>xs:integer</code>.</p>
-         <p>The single-argument version of this function produces the same result as the
-            two-argument version with <code>$precision=0</code> (that is, it rounds to a whole
-            number).</p>
+         <p>If the second argument is omitted or an empty sequence,
+            the function produces the same result as the two-argument version with
+            <code>$precision=0</code> (that is, it rounds to a whole number).</p>
          <p>When <code>$value</code> is of type <code>xs:float</code> and <code>xs:double</code>:</p>
          <olist>
             <item>
@@ -1450,7 +1495,7 @@
       <fos:signatures>
          <fos:proto name="round-half-to-even" return-type="xs:numeric?">
             <fos:arg name="value" type="xs:numeric?"/>
-            <fos:arg name="precision" type="xs:integer" default="0"/>
+            <fos:arg name="precision" type="xs:integer?" default="0"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -1477,8 +1522,9 @@
             <code>$value</code> is an instance of <code>xs:decimal</code> and <code>$precision</code>
             is less than one, then the result <rfc2119>may</rfc2119>
             be an instance of <code>xs:integer</code>.</p>
-         <p diff="chg" at="2023-01-17"> The one-argument form of this function produces the same result as the two-argument form
-            with <code>$precision=0</code>.</p>
+         <p diff="chg" at="2023-01-17"> If the second argument is omitted or an empty sequence,
+            the function produces the same result as the two-argument version with
+            <code>$precision=0</code>.</p>
          <p>For arguments of type <code>xs:float</code> and <code>xs:double</code>:</p>
          <olist>
             <item>
@@ -2258,6 +2304,11 @@
             Both in the picture string and in the result string, digits with higher significance (that is, 
             representing higher powers of ten) always precede digits with lower significance, even when 
             the rendered text flow is from right to left.</p>
+         <p diff="add" at="issue780">The type of the third argument changes in version 4.0 from 
+            <code>xs:string</code> to <code>union(xs:string, xs:QName)</code>. This introduces a
+            minor incompatibility: for example, it is no longer possible to supply a value
+         of type <code>xs:anyURI</code>.</p>
+
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -2324,7 +2375,7 @@
       <fos:signatures>
          <fos:proto name="parse-integer" return-type="xs:integer">
             <fos:arg name="value" type="xs:string" example="'12345'"/>
-            <fos:arg name="radix" type="xs:integer" default="10"/>
+            <fos:arg name="radix" type="xs:integer?" default="10"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -3624,8 +3675,8 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
    <fos:function name="compare" prefix="fn">
       <fos:signatures>
          <fos:proto name="compare" return-type="xs:integer?">
-            <fos:arg name="value1" type="xs:string?"/>
-            <fos:arg name="value2" type="xs:string?"/>
+            <fos:arg name="value1" type="xs:anyAtomicType?"/>
+            <fos:arg name="value2" type="xs:anyAtomicType?"/>
             <fos:arg name="collation" type="xs:string?" default="fn:default-collation()"/>
          </fos:proto>
       </fos:signatures>
@@ -3640,22 +3691,133 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns <code>-1</code>, <code>0</code>, or <code>1</code>,
-            depending on whether <code>$value1</code> collates before,
-            equal to, or after <code>$value2</code> according to the rules of a selected
-            collation.</p>
+         <p>Returns <code>-1</code>, <code>0</code>, or <code>1</code>, depending on whether
+            the first value is less than, equal to, or greater than the second value.</p>
       </fos:summary>
       <fos:rules>
-         <p>Returns <code>-1</code>, <code>0</code>, or <code>1</code>,
-            depending on whether <code>$value1</code> is
-            respectively less than, equal to, or greater than <code>$value2</code>,
-            according to the rules of the collation that is used. </p>
-         <p>The collation used by this function is determined according to the rules in <specref
-               ref="choosing-a-collation"/>. </p>
+         <p>Compares two atomic values <code>$value1</code> and <code>$value2</code> for order, and
+            returns the integer value <code>-1</code>, <code>0</code>, or <code>1</code>,
+            depending on whether <code>$value1</code> is less than, equal to, or greater than
+            <code>$value2</code>, respectively.</p>
          <p>If either <code>$value1</code> or <code>$value2</code> is the empty sequence,
             the function returns the empty sequence.</p>
-         <p>This function, <phrase diff="chg" at="2023-01-17">when used with the default collation,</phrase> defines the semantics of the <code>eq</code>, <code>ne</code>,
-            <code>gt</code>, <code>lt</code>, <code>le</code> and <code>ge</code> operators on <code>xs:string</code> values.</p>
+         <p>Otherwise, the result is determined as follows:</p>
+         <olist>
+            <item>
+               <p>If <code>$value1</code> is an instance of <code>xs:string</code>,
+                  <code>xs:anyURI</code> or <code>xs:untypedAtomic</code>, and if
+                  <code>$value2</code> is an instance of <code>xs:string</code>, <code>xs:anyURI</code>
+                  or <code>xs:untypedAtomic</code>, the values are compared as strings, and the
+                  result reflects the order according to the rules of the collation that is used.</p>
+               <p>The collation is determined according to the rules in
+                  <specref ref="choosing-a-collation"/>.</p>
+               <p><phrase diff="chg" at="2023-01-17">When used with the default collation,</phrase>
+                  the function defines the semantics of the <code>eq</code>, <code>ne</code>,
+                  <code>gt</code>, <code>lt</code>, <code>le</code> and <code>ge</code>
+                  operators on <code>xs:string</code> values.</p>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:numeric</code>, the result of
+                  <code>fn:numeric-compare($value1, $value2)</code> is returned.</p>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:boolean</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:boolean-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:boolean-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>If <code>$value1</code> is an instance of <code>xs:hexBinary</code> or
+                  <code>xs:base64Binary</code>, and if <code>$value2</code> is an instance of
+                  <code>xs:hexBinary</code> or <code>xs:base64Binary</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:binary-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:binary-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:date</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:date-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:date-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:time</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:time-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:time-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:dateTime</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:dateTime-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:dateTime-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:dayTimeDuration</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:dayTimeDuration-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:duration-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>If both <code>$value1</code> and <code>$value2</code> are instances of
+                  <code>xs:yearMonthDuration</code>, then:</p>
+               <olist>
+                  <item><p><code>-1</code> is returned if
+                     <code>op:yearMonthDuration-less-than($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>0</code> is returned if
+                     <code>op:duration-equal($value1, $value2)</code> returns <code>true</code>.</p>
+                  </item>
+                  <item><p><code>1</code> is returned otherwise.</p></item>
+               </olist>
+            </item>
+            <item>
+               <p>For any other combination of types, a type error
+                  <xerrorref spec="XP" class="TY" code="0004"/> is raised.</p>
+            </item>
+         </olist>
       </fos:rules>
       <fos:examples>
          <fos:example>
@@ -3698,7 +3860,46 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
                   base characters, such as the final <quote>n</quote>. </fos:postamble>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>compare(9, 10)</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>compare(123, 123.0)</fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>compare(false(), true())</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><![CDATA[compare('text', parse-xml('<xml>text</xml>'))]]></fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>compare(xs:time('23:59:59'), xs:time('00:00:00'))</fos:expression>
+               <fos:result>1</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>compare(xs:date('2001-01-01'), xs:date('2001-01-01'))</fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Changed in 4.0: Enhanced to accept types other than strings.</fos:version>
+      </fos:history>
    </fos:function>
    <fos:function name="codepoint-equal" prefix="fn">
       <fos:signatures>
@@ -3868,7 +4069,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:signatures>
          <fos:proto name="string-join" return-type="xs:string">
             <fos:arg name="values" type="xs:anyAtomicType*"/>
-            <fos:arg name="separator" type="xs:string" default='""'/>
+            <fos:arg name="separator" type="xs:string?" default='""'/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -3881,7 +4082,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
             separator between adjacent items.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of calling the single-argument version of this function is the same as
+         <p>If the second argument is omitted or an empty sequence, the effect is the same as
             calling the two-argument version with <code>$separator</code> set to a zero-length
             string.</p>
          <p>The function returns an <code>xs:string</code> created by <phrase>casting each item 
@@ -4243,7 +4444,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:signatures>
          <fos:proto name="normalize-unicode" return-type="xs:string">
             <fos:arg name="value" type="xs:string?"/>
-            <fos:arg name="form" type="xs:string" default='"NFC"'/>
+            <fos:arg name="form" type="xs:string?" default='"NFC"'/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -4257,7 +4458,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:rules>
          <p>If <code>$value</code> is the empty sequence, the function returns the
             zero-length string.</p>
-         <p>If the single-argument version of the function is used, the result is the same as
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
             calling the two-argument version with <code>$form</code> set to the string
             <code>"NFC"</code>.</p>
          <p>Otherwise, the function returns <code>$value</code> normalized according to
@@ -10984,6 +11185,45 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
          document uses an unexpected namespace prefix. Such a test (assuming it relates to an element node) 
          is better written as <code>boolean(self::my:profile)</code>.</p>
       </fos:notes>
+      <fos:examples>
+         <fos:variable name="e" id="v-name-e"><![CDATA[<doc>
+  <p id="alpha" xml:id="beta">One</p>
+  <p id="gamma" xmlns="http://example.com/ns">Two</p>
+  <ex:p id="delta" xmlns:ex="http://example.com/ns">Three</p>
+  <?pi 3.14159?>
+</doc>}]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//*[@id='alpha'])</fos:expression>
+               <fos:result>"p"</fos:result>
+            </fos:test>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//*[@id='gamma'])</fos:expression>
+               <fos:result>"p"</fos:result>
+            </fos:test>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//*[@id='delta'])</fos:expression>
+               <fos:result>"ex:p"</fos:result>
+            </fos:test>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//processing-instruction[1])</fos:expression>
+               <fos:result>"pi"</fos:result>
+            </fos:test>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//*[@id='alpha']/text())</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//*[@id='alpha']/@id)</fos:expression>
+               <fos:result>"id"</fos:result>
+            </fos:test>
+            <fos:test use="v-name-e" spec="XQuery">
+               <fos:expression>name($e//*[@id='alpha']/@xml:id</fos:expression>
+               <fos:result>"xml:id"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
    </fos:function>
    <fos:function name="local-name" prefix="fn">
       <fos:signatures>
@@ -11019,7 +11259,7 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
             identified by <code>$node</code>, as determined by the <code>dm:node-name</code> accessor
             defined in <xspecref
                spec="DM40" ref="dm-node-name"
-               />). This will be an
+               />. This will be an
                <code>xs:string</code> whose lexical form is an <code>xs:NCName</code>.</p>
       </fos:rules>
       <fos:errors>
@@ -11038,6 +11278,45 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
          </ulist>
 
       </fos:errors>
+      <fos:examples>
+         <fos:variable name="e" id="v-local-name-e"><![CDATA[<doc>
+  <p id="alpha" xml:id="beta">One</p>
+  <p id="gamma" xmlns="http://example.com/ns">Two</p>
+  <ex:p id="delta" xmlns:ex="http://example.com/ns">Three</p>
+  <?pi 3.14159?>
+</doc>}]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//*[@id='alpha'])</fos:expression>
+               <fos:result>"p"</fos:result>
+            </fos:test>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//*[@id='gamma'])</fos:expression>
+               <fos:result>"p"</fos:result>
+            </fos:test>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//*[@id='delta'])</fos:expression>
+               <fos:result>"p"</fos:result>
+            </fos:test>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//processing-instruction[1])</fos:expression>
+               <fos:result>"pi"</fos:result>
+            </fos:test>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//*[@id='alpha]/text())</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//*[@id='alpha]/@id)</fos:expression>
+               <fos:result>"id"</fos:result>
+            </fos:test>
+            <fos:test use="v-local-name-e" spec="XQuery">
+               <fos:expression>local-name($e//*[@id='alpha]/@xml:id</fos:expression>
+               <fos:result>"id"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
    </fos:function>
    <fos:function name="namespace-uri" prefix="fn">
       <fos:signatures>
@@ -11092,6 +11371,45 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
             </item>
          </ulist>
       </fos:errors>
+      <fos:examples>
+         <fos:variable name="e" id="v-namespace-uri-e"><![CDATA[<doc>
+  <p id="alpha" xml:id="beta">One</p>
+  <p id="gamma" xmlns="http://example.com/ns">Two</p>
+  <ex:p id="delta" xmlns:ex="http://example.com/ns">Three</p>
+  <?pi 3.14159?>
+</doc>}]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//*[@id='alpha'])</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//*[@id='gamma'])</fos:expression>
+               <fos:result>"http://example.com/ns"</fos:result>
+            </fos:test>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//*[@id='delta'])</fos:expression>
+               <fos:result>"http://example.com/ns"</fos:result>
+            </fos:test>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//processing-instruction[1])</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//*[@id='alpha']/text())</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//*[@id='alpha']/@id)</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+            <fos:test use="v-namespace-uri-e" spec="XQuery">
+               <fos:expression>namespace-uri($e//*[@id='alpha']/@xml:id</fos:expression>
+               <fos:result>"http://www.w3.org/XML/1998/namespace"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
    </fos:function>
    <fos:function name="number" prefix="fn">
       <fos:signatures>
@@ -11150,21 +11468,44 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
             result of atomization does not match the required argument type.</p>
       </fos:notes>
       <fos:examples>
+         <fos:variable name="e" id="v-number-e"><![CDATA[<e price="12.1" discount="NONE"/>]]></fos:variable>
          <fos:example>
-            <fos:test use="v-po v-item1" spec="XQuery">
-               <fos:expression>number($item1/quantity)</fos:expression>
-               <fos:result>5.0e0</fos:result>
+            <fos:test>
+               <fos:expression>number(12)</fos:expression>
+               <fos:result>1.2e1</fos:result>
             </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test use="v-po v-item2" spec="XQuery">
-               <fos:expression>number($item2/description)</fos:expression>
+            <fos:test>
+               <fos:expression>number('12')</fos:expression>
+               <fos:result>1.2e1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>number('INF')</fos:expression>
+               <fos:result>xs:double('INF')</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>number('NaN')</fos:expression>
                <fos:result>xs:double('NaN')</fos:result>
             </fos:test>
-         </fos:example>
-         <fos:example>
-            <p>Assume that the context item is the <code>xs:string</code> value <code>"15"</code>.
-               Then <code>fn:number()</code> returns <code>1.5e1</code>.</p>
+            <fos:test>
+               <fos:expression>number('non-numeric')</fos:expression>
+               <fos:result>xs:double('NaN')</fos:result>
+            </fos:test>
+            <fos:test use="v-number-e" spec="XQuery">
+               <fos:expression>number($e/@price)</fos:expression>
+               <fos:result>1.21e1</fos:result>
+            </fos:test>
+            <fos:test use="v-number-e" spec="XQuery">
+               <fos:expression>number($e/@discount)</fos:expression>
+               <fos:result>xs:double('NaN')</fos:result>
+            </fos:test>
+            <fos:test use="v-number-e" spec="XQuery">
+               <fos:expression>number($e/@misspelt)</fos:expression>
+               <fos:result>xs:double('NaN')</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>("10", "11", "12")!number()</fos:expression>
+               <fos:result>1.0e1, 1.1e1, 1.2e1</fos:result>
+            </fos:test>
          </fos:example>
       </fos:examples>
 
@@ -11173,7 +11514,7 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
       <fos:signatures>
          <fos:proto name="lang" return-type="xs:boolean">
             <fos:arg name="language" type="xs:string?"/>
-            <fos:arg name="node" type="node()" default="." usage="inspection"/>
+            <fos:arg name="node" type="node()?" default="." usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="1">
@@ -11194,8 +11535,9 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
       <fos:rules>
          <p>The behavior of the function if the second argument is omitted is exactly the same as if
             the context item (<code>.</code>) had been passed as the second argument.</p>
-         <p>The language of the argument <code>$node</code>, or the context item if the second
-            argument is omitted, is determined by the value of the <code>xml:lang</code> attribute
+         <p>The language of the argument <code>$node</code> (or the context item if the second
+            argument is omitted or an empty sequence)
+            is determined by the value of the <code>xml:lang</code> attribute
             on the node, or, if the node has no such attribute, by the value of the
                <code>xml:lang</code> attribute on the nearest ancestor of the node that has an
                <code>xml:lang</code> attribute. If there is no such ancestor, then the function
@@ -11611,6 +11953,45 @@ let $newi := $o/tool</eg>
          <p>Although the function was introduced to support streaming use cases, it has general
             utility as a convenience function.</p>
       </fos:notes>
+      <fos:examples>
+         <fos:variable name="e" id="v-has-children-e"><![CDATA[<doc>
+  <p id="alpha">One</p>
+  <p/>
+  <p> </p>
+  <?pi 3.14159?>
+</doc>}]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e)</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e//p[1])</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e//p[2])</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e//p[3])</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e//processing-instruction[1])</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e//p[1]/text())</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            <fos:test use="v-has-children-e" spec="XQuery">
+               <fos:expression>has-children($e//p[1]/@id)</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
 
    </fos:function>
    <fos:function name="innermost" prefix="fn">
@@ -12749,7 +13130,7 @@ return error((), 'Duplicate IDs found: ' || string-join($ids, ', '))</eg>
          <p>Returns the value of <code>$at ! fn:subsequence($input, ., 1)</code></p>
       </fos:rules>
       <fos:notes>
-         <p>The effect of the function is to return those items from <code>$items</code>
+         <p>The effect of the function is to return those items from <code>$input</code>
          at the positions given by the integers in <code>$at</code>, in the order
          represented by the integers in <code>$at</code>.</p>
          <p>In the simplest case where <code>$at</code> is a single integer,
@@ -12955,7 +13336,7 @@ return error((), 'Duplicate IDs found: ' || string-join($ids, ', '))</eg>
          <fos:proto name="starts-with-subsequence" return-type="xs:boolean">
             <fos:arg name="input" type="item()*" usage="transmission"/>
             <fos:arg name="subsequence" type="item()*" usage="transmission"/>
-            <fos:arg name="compare" type="function(item(), item()) as xs:boolean" default="fn:deep-equal#2"/>
+            <fos:arg name="compare" type="(function(item(), item()) as xs:boolean)?" default="fn:deep-equal#2"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="2">
@@ -13071,7 +13452,7 @@ return starts-with-subsequence(
          <fos:proto name="ends-with-subsequence" return-type="xs:boolean">
             <fos:arg name="input" type="item()*" usage="transmission"/>
             <fos:arg name="subsequence" type="item()*" usage="transmission"/>
-            <fos:arg name="compare" type="function(item(), item()) as xs:boolean" default="fn:deep-equal#2"/>
+            <fos:arg name="compare" type="(function(item(), item()) as xs:boolean)?" default="fn:deep-equal#2"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="2">
@@ -13185,7 +13566,7 @@ return ends-with-subsequence(
          <fos:proto name="contains-subsequence" return-type="xs:boolean">
             <fos:arg name="input" type="item()*" usage="transmission"/>
             <fos:arg name="subsequence" type="item()*" usage="transmission"/>
-            <fos:arg name="compare" type="function(item(), item()) as xs:boolean" default="fn:deep-equal#2"/>
+            <fos:arg name="compare" type="(function(item(), item()) as xs:boolean)?" default="fn:deep-equal#2"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="2">
@@ -13469,7 +13850,7 @@ return contains-subsequence(
             <fos:arg name="input1" type="item()*" usage="absorption"/>
             <fos:arg name="input2" type="item()*" usage="absorption"/>
             <fos:arg name="collation" type="xs:string?" default="fn:default-collation()"/>
-            <fos:arg name="options" type="map(*)" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="2">
@@ -13507,15 +13888,16 @@ return contains-subsequence(
          <p>If the two sequences are of different lengths, the function returns
             <code>false</code>.</p>
          <p>If the two sequences are of the same length, the comparison is controlled by the 
-            <code>unordered</code> option:</p>
+            <code>ordered</code> option:</p>
          <ulist>
-            <item><p>If the option is <code>false</code>, the function returns <code>true</code> if
-            and only if every item in the sequence <code>$input1</code> is deep-equal to the
-            item at the same position in the sequence <code>$input2</code>.
+            <item><p>By default, the option is <code>true</code>: The function returns
+            <code>true</code> if and only if every item in the sequence <code>$input1</code> is
+            deep-equal to the item at the same position in the sequence <code>$input2</code>.
             </p></item>
-            <item><p>Otherwise, the function returns <code>true</code> if for every item in
-            <code>$input1</code> there is a deep-equal item in <code>$input2</code> that
-            has not been matched to another item.</p></item>
+            <item><p>If the option is set to <code>false</code>, the function returns
+            <code>false</code> if and only if every item in the sequence <code>$input1</code>
+            is deep-equal to an item at some position in the sequence <code>$input2</code>,
+            and vice versa.</p></item>
          </ulist>
          <p>The rules for
             deciding whether two items are deep-equal appear below.</p>
@@ -13584,6 +13966,13 @@ return contains-subsequence(
                   <fos:type>xs:string?</fos:type>
                   <fos:default>()</fos:default>
                </fos:option>              
+               <fos:option key="orderd">
+                  <fos:meaning>Controls whether the top-level order of the items of the input sequences
+                    is considered.
+                  </fos:meaning>
+                  <fos:type>xs:boolean</fos:type>
+                  <fos:default>true</fos:default>
+               </fos:option>
                <fos:option key="processing-instructions">
                   <fos:meaning>Determines whether processing instructions are significant.
                   </fos:meaning>
@@ -13615,13 +14004,6 @@ return contains-subsequence(
                   </fos:meaning>
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>true</fos:default>
-               </fos:option>
-               <fos:option key="unorderd">
-                  <fos:meaning>Controls whether the top-level order of the items of the input sequences
-                    is considered.
-                  </fos:meaning>
-                  <fos:type>xs:boolean</fos:type>
-                  <fos:default>false</fos:default>
                </fos:option>
                <fos:option key="unordered-elements">
                   <fos:meaning>A list of QNames of elements considered to be unordered: that is, their child
@@ -14128,7 +14510,7 @@ declare function equal-strings(
                <fos:expression><eg>deep-equal(
   (1, 2, 3, 4),
   (1, 4, 3, 2),
-  map { 'unordered': true() }
+  map { 'ordered': false() }
 )</eg></fos:expression>
                <fos:result>true()</fos:result>
             </fos:test>
@@ -14138,7 +14520,7 @@ declare function equal-strings(
                <fos:expression><eg>deep-equal(
   (1, 1, 2, 3),
   (1, 2, 3, 3),
-  map { 'unordered': true() }
+  map { 'ordered': false() }
 )</eg></fos:expression>
                <fos:result>false()</fos:result>
             </fos:test>
@@ -14252,13 +14634,13 @@ declare function equal-strings(
          <p>returns <code>0</code>.if <code>$input</code> is the empty sequence.</p>
       </fos:notes>
       <fos:examples>
-         <fos:variable name="seq1" id="v-count-seq1" select="($item1, $item2)"/>
+         <fos:variable name="tree" id="v-count-tree"><![CDATA[<doc><chap><p/><p/><p/></chap></doc>]]></fos:variable>
          <fos:variable name="seq2" id="v-count-seq2" select="(98.5, 98.3, 98.9)"/>
          <fos:variable name="seq3" id="v-count-seq3" select="()"/>
          <fos:example>
-            <fos:test use="v-po v-item1 v-item2 v-count-seq1" spec="XQuery">
-               <fos:expression>count($seq1)</fos:expression>
-               <fos:result>2</fos:result>
+            <fos:test use="v-count-tree">
+               <fos:expression>count($tree//chap/p)</fos:expression>
+               <fos:result>3</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -14290,7 +14672,7 @@ declare function equal-strings(
                <fos:expression>count([1,2,3])</fos:expression>
                <fos:result>1</fos:result>
             </fos:test>
-         </fos:example>
+         </fos:example>        
       </fos:examples>
    </fos:function>
    <fos:function name="avg" prefix="fn">
@@ -14474,13 +14856,13 @@ declare function equal-strings(
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>max((3,4,5))</fos:expression>
+               <fos:expression>max((3,2,1))</fos:expression>
                <fos:result>3</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>max([3,4,5])</fos:expression>
+               <fos:expression>max([3,2,1])</fos:expression>
                <fos:result>3</fos:result>
                <fos:postamble>Arrays are atomized</fos:postamble>
             </fos:test>
@@ -14847,7 +15229,7 @@ else $c[1] + sum(subsequence($c, 2))</eg>
       <fos:signatures>
          <fos:proto name="id" return-type="element()*">
             <fos:arg name="values" type="xs:string*"/>
-            <fos:arg name="node" type="node()" default="." usage="navigation"/>
+            <fos:arg name="node" type="node()?" default="." usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="1">
@@ -14874,8 +15256,8 @@ else $c[1] + sum(subsequence($c, 2))</eg>
                   <code>E</code> is in the target document. The target document is the document
                   containing <code>$node</code>, or the document containing the context item
                      (<code>.</code>) if the second argument is omitted. The behavior of the
-                  function if <code>$node</code> is omitted is exactly the same as if the context
-                  item had been passed as <code>$node</code>.</p>
+                  function if <code>$node</code> is omitted or an empty sequence is exactly the
+                  same as if the context item had been passed as <code>$node</code>.</p>
             </item>
             <item>
                <p><code>E</code> has an <code>ID</code> value equal to one of the candidate
@@ -14993,8 +15375,7 @@ else $c[1] + sum(subsequence($c, 2))</eg>
                <last>Brown</last>
             </employee>
           }
-        }]]>
-         </fos:variable>
+        }]]></fos:variable>
          <fos:example>
             <fos:test xslt-version="3.0" use="v-id-emp" spec="XQuery">
                <fos:expression>$emp/id('ID21256')/name()</fos:expression>
@@ -15019,7 +15400,7 @@ else $c[1] + sum(subsequence($c, 2))</eg>
       <fos:signatures>
          <fos:proto name="element-with-id" return-type="element()*">
             <fos:arg name="values" type="xs:string*"/>
-            <fos:arg name="node" type="node()" default="." usage="navigation"/>
+            <fos:arg name="node" type="node()?" default="." usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="1">
@@ -15054,8 +15435,9 @@ else $c[1] + sum(subsequence($c, 2))</eg>
                <p>
                   <code>E</code> is in the target document. The target document is the document
                   containing <code>$node</code>, or the document containing the context item
-                     (<code>.</code>) if the second argument is omitted. The behavior of the
-                  function if <code>$node</code> is omitted is exactly the same as if the context
+                     (<code>.</code>) if the second argument is omitted or an empty sequence.
+                  The behavior of the function if <code>$node</code> is omitted or an empty sequence
+                  is exactly the same as if the context
                   item had been passed as <code>$node</code>.</p>
             </item>
             <item>
@@ -15194,7 +15576,7 @@ else $c[1] + sum(subsequence($c, 2))</eg>
       <fos:signatures>
          <fos:proto name="idref" return-type="node()*">
             <fos:arg name="values" type="xs:string*"/>
-            <fos:arg name="node" type="node()" default="." usage="navigation"/>
+            <fos:arg name="node" type="node()?" default="." usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="1">
@@ -15219,10 +15601,10 @@ else $c[1] + sum(subsequence($c, 2))</eg>
          <olist>
             <item>
                <p><code>$N</code> is in the target document. The target document is the document
-                  containing <code>$node</code> or the document containing the context item
+                  containing <code>$node</code>, or the document containing the context item
                      (<code>.</code>) if the second argument is omitted. The behavior of the
-                  function if <code>$node</code> is omitted is exactly the same as if the context
-                  item had been passed as <code>$node</code>.</p>
+                  function if <code>$node</code> is omitted or an empty sequence is exactly the
+                  same as if the context item had been passed as <code>$node</code>.</p>
             </item>
             <item>
                <p><code>$N</code> has an <code>IDREF</code> value equal to one of the candidate
@@ -15388,9 +15770,18 @@ else $c[1] + sum(subsequence($c, 2))</eg>
             resolution to an absolute URI Reference) is supplied to both calls. Thus, the following
             expression (if it does not raise an error) will always return <code>true</code>:</p>
          <eg xml:space="preserve">doc("foo.xml") is doc("foo.xml")</eg>
-         <p>However, for performance reasons, implementations may provide a user option to evaluate
+         <note diff="add" at="issue898"><p>This equivalence applies only because the two calls on
+            the <code>doc</code> function have the same dynamic context. If two calls on <code>doc</code>
+           have different dynamic contexts, then the mapping from URIs to document
+         nodes in the two contexts may differ, which means that different document nodes may be returned
+         for the same URI.
+         This can happen, for example, if the two calls appear in different XSLT packages with different
+         validation options or whitespace-stripping options; one call might produce a schema-validated
+         document, the other an untyped document.</p></note>
+         <p>The requirement to deliver a deterministic result has performance implications, 
+            and for this reason implementations may provide a user option to evaluate
             the function without a guarantee of determinism. The manner in which any such option is
-            provided is implementation-defined. If the user has not selected such an option, a call
+            provided is <termref def="implementation-defined"/>. If the user has not selected such an option, a call
             of the function must either return a deterministic result or must raise a dynamic error
                <errorref
                class="DC" code="0003"/>.</p>
@@ -18831,7 +19222,7 @@ else +1</eg>
                <fos:result>(1, 3, 4, 5, 6)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>sort((1, 4, 4e0, 6, 5, 3), order:="descending")</fos:expression>
+               <fos:expression>sort((1, 4, 4e0, 6, 5, 3), orders := "descending")</fos:expression>
                <fos:result>(6, 5, 4, 4e0, 3, 1)</fos:result>
             </fos:test>
             <fos:test>
@@ -19507,7 +19898,7 @@ declare function transitive-closure (
       <fos:signatures>
          <fos:proto name="merge" return-type="map(*)">
             <fos:arg name="maps" type="map(*)*" usage="inspection"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -19547,8 +19938,8 @@ declare function transitive-closure (
 
          <olist>
             <item>
-               <p>The effect of calling the single-argument function is the same as the effect of
-            calling the two-argument function with an empty map as the value of <code>$options</code>.</p>
+               <p>If the second argument is omitted or an empty sequence, the effect is the same as
+                  calling the two-argument function with an empty map as the value of <code>$options</code>.</p>
             </item>
             <item>
                <p>The <code>$options</code> argument can be used to control the way in which duplicate keys are handled.
@@ -19951,7 +20342,7 @@ return fold-left($MAPS, map { },
       <fos:signatures>
          <fos:proto name="keys" return-type="xs:anyAtomicType*">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
-            <fos:arg name="predicate" type="function(item()*) as xs:boolean" default="true#0"/>
+            <fos:arg name="predicate" type="(function(item()*) as xs:boolean)?" default="true#0"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -21212,7 +21603,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="json-to-xml" return-type="document-node()?">
             <fos:arg name="value" type="xs:string?" example="'[22,23]'"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -21225,8 +21616,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             of an XML <phrase>document node</phrase>.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the one-argument form of this function is the same as calling the
-            two-argument form with an empty map as the value of the <code>$options</code>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
             argument.</p>
 
          <p>The first argument is a JSON text as defined in <bibref ref="rfc7159"
@@ -21566,7 +21957,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="xml-to-json" return-type="xs:string?">
             <fos:arg name="node" type="node()?" usage="absorption" example="()"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -21579,8 +21970,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             in this specification, into a string conforming to the JSON grammar.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the one-argument form of this function is the same as calling the
-            two-argument form with an empty map as the value of the <code>$options</code>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
             argument.</p>
 
          <p>The first argument <code>$node</code> is a node; the subtree rooted at this node will typically be
@@ -21891,7 +22282,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="parse-csv" return-type-ref="parsed-csv-structure-record">
             <fos:arg name="csv" type="xs:string?"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -21906,8 +22297,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             <code>csv-row-record</code> records.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the one-argument form of this function is the same as calling the
-            two-argument form with an empty map as the value of the <code>$options</code>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
             argument.</p>
 
          <p>The first argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of a
@@ -22325,8 +22716,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
          <p>Parses CSV data supplied as a string, returning the results in the form of a sequence of arrays of strings.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the one-argument form of this function is the same as calling the
-            two-argument form with an empty map as the value of the <code>$options</code>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
             argument.</p>
 
          <p>The first argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of a
@@ -22499,7 +22890,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="csv-to-xml" return-type="element(fn:csv)">
             <fos:arg name="csv" type="xs:string?"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -22512,8 +22903,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             <specref ref="csv-represent-as-xml"/>.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the one-argument form of this function is the same as calling the
-            two-argument form with an empty map as the value of the <code>$options</code>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
             argument.</p>
 
          <p>The first argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of a
@@ -22916,7 +23307,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="parse-json" return-type="item()?">
             <fos:arg name="value" type="xs:string?" example="'[22,23]'"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -22929,8 +23320,8 @@ return $M(collation-key("a", $C))</eg></fos:expression>
             of a map or array.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the one-argument form of this function is the same as calling the
-            two-argument form with an empty map as the value of the <code>$options</code>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
             argument.</p>
 
          <p>The first argument is a JSON text as defined in <bibref ref="rfc7159"
@@ -23240,7 +23631,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="json-doc" return-type="item()?">
             <fos:arg name="href" type="xs:string?" example="'JSONTestSuite/test_parsing/y_number.json'"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -23252,8 +23643,9 @@ return $M(collation-key("a", $C))</eg></fos:expression>
          <p>Reads an external resource containing JSON, and returns the result of parsing the resource as JSON.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the single-argument call <code>fn:json-doc($H)</code> is the same as the effect of the two-argument call
-            <code>fn:json-doc($H, map{})</code> where an empty map is supplied as the second argument.</p>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
+            argument.</p>
          <p>The effect of the two-argument function call <code>fn:json-doc($H, $M)</code>is equivalent to the function composition
             <code>fn:unparsed-text($H) => fn:parse-json($M)</code>; except that:</p>
 
@@ -23303,7 +23695,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
       <fos:signatures>
          <fos:proto name="json" return-type="xs:string">
             <fos:arg name="input" type="xs:string?"/>
-            <fos:arg name="options" type="map(*)" usage="inspection"  default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection"  default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -25351,7 +25743,7 @@ return deep-equal(
                <fos:result>[1, 3, 4, 5, 6]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:sort([1, 4, 4e0, 6, 5, 3], order:="descending")</fos:expression>
+               <fos:expression>array:sort([1, 4, 4e0, 6, 5, 3], orders := "descending")</fos:expression>
                <fos:result>[6, 5, 4, 4e0, 3, 1]</fos:result>
             </fos:test>
             <fos:test>
@@ -25488,7 +25880,7 @@ declare function flatten(
       <fos:signatures>
          <fos:proto name="load-xquery-module" return-type="map(*)">
             <fos:arg name="module-uri" type="xs:string"/>
-            <fos:arg name="options" type="map(*)" usage="inspection" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -25502,8 +25894,9 @@ declare function flatten(
       </fos:summary>
       <fos:rules>
          <p>The function loads an implementation-defined set of modules having the target namespace <code>$module-uri</code>.</p>
-         <p>Calling the one-argument version of the function has the same effect as calling the two-argument version with an empty map
-            as the second argument.</p>
+         <p>If the second argument is omitted or an empty sequence, the result is the same as
+            calling the two-argument form with an empty map as the value of the <code>$options</code>
+            argument.</p>
          <p>The <code>$options</code> argument can be used to control the way in which the function operates. 
             The <termref
                def="option-parameter-conventions">option parameter conventions</termref> apply.</p>
@@ -26596,7 +26989,7 @@ r:random-sequence(200);
       <fos:signatures>
          <fos:proto name="every" return-type="xs:boolean">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean" 
+            <fos:arg name="predicate" type="(function(item(), xs:integer) as xs:boolean)?"
                default="fn:identity#1" example="fn:boolean#1"/>
          </fos:proto>
       </fos:signatures>
@@ -26619,8 +27012,8 @@ every $boolean in (
 
       </fos:rules>
       <fos:notes>
-         <p>If the second argument is omitted, the first argument must be a sequence of
-         <code>xs:boolean</code> values.</p>
+         <p>If the second argument is omitted or an empty sequence, the first argument must be
+            a sequence of <code>xs:boolean</code> values.</p>
          <p>The implementation <rfc2119>may</rfc2119> deliver a result as soon as one item is found for which the predicate
             returns <code>false</code>; it is not required to evaluate the predicate for every item.</p>
       </fos:notes>
@@ -27558,7 +27951,7 @@ subsequence($input, 1, head(index-where($input, $predicate)) + 1)
       <fos:signatures>
          <fos:proto name="some" return-type="xs:boolean">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="predicate" type="function(item(), xs:integer) as xs:boolean" 
+            <fos:arg name="predicate" type="(function(item(), xs:integer) as xs:boolean)?"
                default="fn:identity#1" example="fn:boolean#1"/>
          </fos:proto>
       </fos:signatures>
@@ -27580,8 +27973,8 @@ some $boolean in (
 ]]></eg>
       </fos:rules>
       <fos:notes>
-         <p>If the second argument is omitted, the first argument must be a sequence of <code>xs:boolean</code>
-         values.</p>
+         <p>If the second argument is omitted or an empty sequence, the first argument must be
+            a sequence of <code>xs:boolean</code> values.</p>
          <p>The implementation <rfc2119>may</rfc2119> deliver a result as soon as one item is found for which the predicate
          returns <code>true</code>; it is not required to evaluate the predicate for every item.</p>
       </fos:notes>
@@ -27837,7 +28230,7 @@ some $boolean in (
       <fos:signatures>
          <fos:proto name="parse-uri" return-type-ref="uri-structure-record">
             <fos:arg name="uri" type="xs:string"/>
-            <fos:arg name="options" type="map(*)" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -28617,7 +29010,7 @@ path with an explicit <code>file:</code> scheme.</p>
                "port": (),
                "path": "/specifications/index.html"
                }'/>
-            <fos:arg name="options" type="map(*)" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -28899,7 +29292,7 @@ path with an explicit <code>file:</code> scheme.</p>
       <fos:signatures>
          <fos:proto name="invisible-xml" return-type="function(xs:string) as item()">
             <fos:arg name="grammar" type="item()?" default="()"/>
-            <fos:arg name="options" type="map(*)" default="map{}"/>
+            <fos:arg name="options" type="map(*)?" default="map{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
