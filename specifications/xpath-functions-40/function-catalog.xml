@@ -18896,12 +18896,9 @@ chain((1, 2, 3, 4), $product3)
             </fos:history>            
         </fos:function>
 
-
-
-
-   <fos:function name="iterate-while" prefix="fn">
+   <fos:function name="while-do" prefix="fn">
       <fos:signatures>
-         <fos:proto name="iterate-while" return-type="item()*">
+         <fos:proto name="while-do" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
             <fos:arg name="predicate" type="function(item()*, xs:integer) as xs:boolean" example="false#0"/>
             <fos:arg name="action" type="function(item()*, xs:integer) as item()*"/>
@@ -18921,64 +18918,63 @@ chain((1, 2, 3, 4), $product3)
          <p>Informally, the function behaves as follows:</p>
          <olist>
             <item>
-               <p>The supplied <code>$input</code> value is tested against the supplied
-                  <code>$predicate</code>.</p>
+               <p><code>$pos</code> is initially set to <code>1</code>.</p>
             </item>
             <item>
-               <p>If the result of the predicate is <code>true</code>, <code>$action($input, $pos)</code>
-                  is evaluated, the resulting value is used as a new <code>$input</code>, and the
-                  process repeats from step 1 with <code>$pos</code> incremented by <code></code>1.</p>
+               <p><code>$predicate($input, $pos)</code> is evaluated. If the result is
+                  <code>false</code>, the function returns the value of <code>$input</code>.</p>
             </item>
             <item>
-               <p>If the result of the predicate is <code>false</code>, the function returns the
-                  value of <code>$input</code>.</p>
+               <p>Otherwise, <code>$action($input, $pos)</code> is evaluated, the resulting value is
+                  used as a new <code>$input</code>, and the process repeats from step 2 with
+                  <code>$pos</code> incremented by <code>1</code>.</p>
             </item>
          </olist>
          <p>More formally, the function is equivalent to the following implementation in XQuery:</p>
          <eg><![CDATA[
-declare %private function iterate-while-helper(
+declare %private function while-do-helper(
   $input     as item()*,
-  $predicate as function(item()*) as xs:boolean,
-  $action    as function(item()*) as item()*,
+  $predicate as function(item()*, xs:integer) as xs:boolean,
+  $action    as function(item()*, xs:integer) as item()*,
   $pos       as xs:integer
 ) as item()* {
   if ($predicate($input, $pos))
-  then iterate-while-helper($action($input, $pos), $predicate, $action, $pos + 1)
+  then while-do-helper($action($input, $pos), $predicate, $action, $pos + 1)
   else $input
 };
 
-declare function iterate-while(
+declare function while-do(
   $input     as item()*,
-  $predicate as function(item()*) as xs:boolean,
-  $action    as function(item()*) as item()*
+  $predicate as function(item()*, xs:integer) as xs:boolean,
+  $action    as function(item()*, xs:integer) as item()*
 ) as item()* {
-  iterate-while-helper($input, $predicate, $action, 1)
+  while-do-helper($input, $predicate, $action, 1)
 };]]></eg>
       </fos:rules>
       <fos:notes>
-         <p>While-loops are very common in procedural programming languages, and this function
+         <p>While-do loops are very common in procedural programming languages, and this function
             provides a way to write functionally clean and interruptible iterations without
-            side-effects. An initial value is tested and replaced by new values until it matches
-            a given condition. Depending on the use case, the value can be a simple atomic item
-            or an arbitrarily complex data structure.</p>
+            side-effects. As long as a given condition is met, an new value is computed and tested
+            again. Depending on the use case, the value can be a simple atomic item or an arbitrarily
+            complex data structure.</p>
+         <p>The function <code>fn:do-until</code> can be used to perform the action before the
+            first predicate test.</p>
          <p>Note that, just as when writing recursive functions, it is easy to construct infinite
             loops.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression><eg><![CDATA[iterate-while(
-  2,
-  function { . < 100 },
-  function { . * . }
-)]]></eg></fos:expression>
+               <fos:expression><eg><![CDATA[while-do(2, fn { . <= 100 }, fn { . * . })]]></eg></fos:expression>
                <fos:result>256</fos:result>
+               <fos:postamble>The loop is interrupted as soon as the computed product is greater
+                  than 100.</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[
-iterate-while(
+while-do(
   1,
   fn($num, $pos) { $pos <= 10 },
   fn($num, $pos) { $num * $pos }
@@ -18991,7 +18987,7 @@ iterate-while(
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[let $input := (0 to 4, 6 to 10)
-return iterate-while(
+return while-do(
   0, 
   function($n) { $n = $input }, 
   function($n) { $n + 1 }
@@ -19002,10 +18998,11 @@ return iterate-while(
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression><eg><![CDATA[iterate-while(
+               <fos:expression><eg><![CDATA[
+while-do(
   1 to 9,
-  function($seq) { head($seq) < 5 },
-  function($seq) { tail($seq) }
+  function($value) { head($value) < 5 },
+  function($value) { tail($value) }
 )]]></eg></fos:expression>
                <fos:result>(5, 6, 7, 8, 9)</fos:result>
                <fos:postamble>The first number of a sequence is removed as long as it is smaller than 5.</fos:postamble>
@@ -19013,12 +19010,14 @@ return iterate-while(
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression><eg><![CDATA[let $input := 3936256
-return iterate-while(
+               <fos:expression><eg><![CDATA[
+let $input := 3936256
+return while-do(
   $input,
   function($result) { abs($result * $result - $input) >= 0.0000000001 },
   function($guess) { ($guess + $input div $guess) div 2 }
-) => round(5)]]></eg></fos:expression>
+) => round(5)
+]]></eg></fos:expression>
                <fos:result>1984</fos:result>
                <fos:postamble>This computes the square root of a number.</fos:postamble>
             </fos:test>
@@ -19027,7 +19026,7 @@ return iterate-while(
             <p>The following example generates random doubles. It is interrupted once a number
                exceeds a given limit:</p>
             <eg><![CDATA[
-let $result := iterate-while(
+let $result := while-do(
   random-number-generator(),
   function($random) {
     $random?number < 0.8
@@ -19041,9 +19040,115 @@ return $result?numbers
          </fos:example>
       </fos:examples>
       <fos:history>
-         <fos:version version="4.0">New in 4.0. Approved.</fos:version>
+         <fos:version version="4.0">New in 4.0.</fos:version>
       </fos:history>
    </fos:function>
+
+   <fos:function name="do-until" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="do-until" return-type="item()*">
+            <fos:arg name="input" type="item()*"/>
+            <fos:arg name="action" type="function(item()*, xs:integer) as item()*"/>
+            <fos:arg name="predicate" type="function(item()*, xs:integer) as xs:boolean"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+         
+      </fos:properties>
+      <fos:summary>
+         <p>Processes a supplied value repeatedly, continuing when some condition is false,
+            and returning the value that satisfies the condition.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>Informally, the function behaves as follows:</p>
+         <olist>
+            <item>
+               <p><code>$pos</code> is initially set to <code>1</code>.</p>
+            </item>
+            <item>
+               <p><code>$action($input, $pos)</code> is evaluated, and the resulting value
+                  is used as a new <code>$input</code>.</p>
+            </item>
+            <item>
+               <p><code>$predicate($input, $pos)</code> is evaluated. If the result is
+                  <code>true</code>, the function returns the value of <code>$input</code>.
+                  Otherwise , the process repeats from step 2 with <code>$pos</code> incremented by
+                  <code>1</code>.</p>
+            </item>
+         </olist>
+         <p>More formally, the function is equivalent to the following implementation in XQuery:</p>
+         <eg><![CDATA[
+declare %private function do-until-helper(
+  $input     as item()*,
+  $action    as function(item()*, xs:integer) as item()*,
+  $predicate as function(item()*, xs:integer) as xs:boolean,
+  $pos       as xs:integer
+) as item()* {
+  let $result := $action($input, $pos)
+  return if ($predicate($result, $pos)) then (
+    $result
+  ) else (
+    do-until-helper($result, $action, $predicate, $pos + 1)
+  )
+};
+
+declare function do-until(
+  $input     as item()*,
+  $action    as function(item()*, xs:integer) as item()*,
+  $predicate as function(item()*, xs:integer) as xs:boolean
+) as item()* {
+  do-until-helper($input, $action, $predicate, 1)
+};]]></eg>
+      </fos:rules>
+      <fos:notes>
+         <p>Do-until loops are very common in procedural programming languages, and this function
+            provides a way to write functionally clean and interruptible iterations without
+            side-effects. A new value is computed and tested until a given condition fails. Depending
+            on the use case, the value can be a simple atomic item or an arbitrarily complex data
+            structure.</p>
+         <p>The function <code>fn:while-do</code> can be used to perform the action after the
+            first predicate test.</p>
+         <p>Note that, just as when writing recursive functions, it is easy to construct infinite
+            loops.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[
+do-until(
+  (),
+  fn($value, $pos) { $value, $pos * $pos },
+  fn($value) { foot($value) > 50  }
+)
+]]></eg></fos:expression>
+               <fos:result>1, 4, 9, 16, 25, 36, 49, 64</fos:result>
+               <fos:postamble>The loop is interrupted once the last value of the generated sequence
+                  is greater than 50.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[
+do-until(
+  (1, 0),
+  fn($value) { $value[1] + $value[2], $value },
+  fn($value) { avg($value) > 10 }
+)
+]]></eg></fos:expression>
+               <fos:result>55, 34, 21, 13, 8, 5, 3, 2, 1, 1, 0</fos:result>
+               <fos:postamble>The computation is continued as long as the average of the first
+                  Fibonacci numbers is smaller than 10.</fos:postamble>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">New in 4.0.</fos:version>
+      </fos:history>
+   </fos:function>
+
    <fos:function name="for-each-pair" prefix="fn">
       <fos:signatures>
          <fos:proto name="for-each-pair" return-type="item()*">
