@@ -22,7 +22,7 @@
          
          <h1><a id="title"></a>XQuery 4.0 and XPath 4.0 WG Review Draft</h1>
          
-         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 16&nbsp;January&nbsp;2024</h2>
+         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 23&nbsp;January&nbsp;2024</h2>
          <dl>
             <dt>This version:</dt>
             <dd>
@@ -17421,33 +17421,121 @@ return if ($m instance of ST) {$m}</pre>
                      <div class="div4">
                         
                         <h5><a id="id-deep-lookup"></a>4.16.3.3 Deep Lookup</h5>
-                        <p>The deep lookup operator "??" has both unary and binary forms. The unary form <code>??KS</code>
-               (where <var>KS</var> is any KeySpecifier) has the same effect as the binary form <code>.??KS</code>.
-               The semantics are as follows.</p>
-                        <p>We define the recursive content of a value to consist of all items found in a depth-first traversal of the value
-               that proceeds as follows:</p>
-                        <p>For each item in the value:</p>
-                        <ol class="enumar">
-                           <li>
-                              <p>Add the item to the result.</p>
-                           </li>
-                           <li>
-                              <p>If the item is an array, process all the members of the array (in order) by applying these rules
-                     recursively.</p>
-                           </li>
-                           <li>
-                              <p>If the item is a map, process the values in each entry of the map (in arbitrary order) 
-                     by applying these rules recursively.</p>
-                           </li>
-                        </ol>
-                        <p>The effect of the deep lookup expression <code>E??KS</code> is obtained by evaluating
-                  <var>E</var>, establishing its recursive content <var>C</var>, removing any item that is not
-                  a map or array to yield a sequence <var>D</var>, and then evaluating the shallow lookup
-               expression <code>D?KS</code>, but with one exception: if evaluation of any shallow lookup fails,
-               then the error is not propagated, but instead its result is taken to be an empty sequence.</p>
-                        <p>Specifically, no dynamic error occurs when an item in the recursive content is an array
-               and the KeySpecifier is not an integer, or when it is an integer that is out of range for the
-               array.</p>
+                        <p>The deep lookup operator "??" has both unary and postfix forms. The unary form <code>??KS</code>
+               (where <var>KS</var> is any <code>KeySpecifier</code>) has the same effect as the binary form <code>.??KS</code>.
+               </p>
+                        <p>The semantics are defined as follows.</p>
+                        <p>First we define the <b>recursive content</b> of an item as follows:</p>
+                        <div class="exampleInner">
+                           <pre> declare function immediate-content($item as item()) as map(*)* {
+   if ($item instance of map(*)) {
+      map:entries($item)
+   } else if ($item instance of array(*)) {
+      (1 to array:size($A))!map:entry(., array:get(.))
+   }
+};    
+declare function recursive-content($item as item()) as map(*)* {
+   immediate-content($item) ! (., map:values(.) =!&gt; recursive-content())
+};</pre>
+                        </div>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>Explanation: the immediate content of a map is obtained by splitting it
+               into a sequence of singleton maps, each representing one entry. The immediate
+               content of an array is obtained by consructing a sequence of singleton maps,
+               one for each array member, where the key of the map is the array index and the
+               value is the corresponding member. The recursive content of an item contains
+               the singleton maps in its immediate content, each followed by the recursive
+               content obtained by expanding any maps or arrays in the immediate content.
+               </p>
+                        </div>
+                        <p>The result of the expression <code>E??KS</code>, where <code>E</code> is any expression
+               and <code>KS</code> is any <code>KeySpecifier</code>, is then <code>(E ! recursive-content(.))?KS</code>.</p>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>This is best explained by considering examples.</p>
+                           <p>Consider the expression <code>let $value := [map{"first":"John", "last":"Smith"}, map{"first":"Mary", "last":"Evans"}]</code>.</p>
+                           <p>The recursive content of this array is the sequence of six singleton maps:</p>
+                           <ol class="enumar">
+                              <li>
+                                 <p>
+                              <code>map{1: map{"first":"John", "last":"Smith"}}</code>
+                           </p>
+                              </li>
+                              <li>
+                                 <p>
+                              <code>map{2: map{"first":"Mary", "last":"Evans"}}</code>
+                           </p>
+                              </li>
+                              <li>
+                                 <p>
+                              <code>map{"first":"John"}</code>
+                           </p>
+                              </li>
+                              <li>
+                                 <p>
+                              <code>map{"last":"Smith"}</code>
+                           </p>
+                              </li>
+                              <li>
+                                 <p>
+                              <code>map{"first":"Mary"}</code>
+                           </p>
+                              </li>
+                              <li>
+                                 <p>
+                              <code>map{"last":"Evans"}</code>
+                           </p>
+                              </li>
+                           </ol>
+                           <p>The expression <code>$value??*</code> returns the sequence 
+                     <code>map{"first":"John", "last":"Smith"}, map{"first":"Mary", "last":"Evans"},
+                     "John", "Smith", "Mary", "Evans"</code>.</p>
+                           <p>The expression <code>$value??first</code> returns the sequence <code>"John", "Mary"</code>.</p>
+                           <p>The expression <code>$value??last</code> returns the sequence <code>"Smith", "Evans"</code>.</p>
+                           <p>The expression <code>$value??1</code> returns the sequence <code>map{"first":"John", "last":"Smith"}</code>.</p>
+                        </div>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>The effect of evaluating all shallow lookups on maps rather than arrays is that no error arises
+                  if an array subscript is out of bounds. In the above example, <code>$value?3</code> would
+                  return an empty sequence, it would not raise an error.</p>
+                           <p>This also affects the way an <code>xs:untypedAtomic</code> key value is handled. 
+                     Given the shallow lookup
+                     expression <code>$A?$x</code>, if <code>$A</code> is an array and <code>$x</code>
+                     (after atomization) is <code>xs:untypedAtomic</code> then the value of <code>$x</code>
+                     is converted to an integer (by virtue of the coercion rules applying to a call
+                     on <code>array:get</code>). With a deep lookup expression <code>$A??$x</code>, by
+                     contrast, the semantics are defined in terms of a map lookup, in which 
+                     <code>xs:untypedAtomic</code> values are always treated as strings.
+                  </p>
+                        </div>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>The definition of the <code>recursive-content</code> function is such that items
+                  in the top-level value that are not maps or arrays are ignored, whereas items that
+                  are not themselves maps or arrays, but which appear in the content of a map or array
+                  at the top level, are included. This means that <code>E??X</code> mirrors the
+                  behavior of <code>E//X</code>, in that it includes all items that are one-or-more levels
+                  deep in the tree.</p>
+                        </div>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>The result of the deep lookup operator retains order when processing sequences and
+                  arrays, but not when processing maps.</p>
+                        </div>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>An expression involving multiple deep lookup operators may return duplicates.
+                     For example, the result of the expression 
+                     <code>[[["a"],["b"]],[["c"],["d"]]] ?? 1 ?? 1</code>
+                     is <code>(["a"], "a", "b", "a", "c")</code>. This is because the first <code>??</code> operator
+                     selects members in position 1 at all three levels, that is it selects the arrays
+                     <code>[["a"],["b"]]</code>, <code>["a"]</code>, and <code>["c"]</code> as well
+                     as each of the four string values. The second <code>??</code> operator 
+                  selects members in position 1 within each of these values, which results in the string
+                  <code>"a"</code> being selected twice.</p>
+                        </div>
                         <div class="example">
                            
                            <div class="exampleHeader"><a id="ex-deep-lookup"></a>Example: Examples of Deep Lookup Expressions</div>
@@ -17495,6 +17583,172 @@ return if ($m instance of ST) {$m}</pre>
                            <div class="exampleInner">
                               <pre>$tree ??$cities =&gt; 
      map:for-each( fn($key, $val){$val ??to ! ($key || "-" || .)} )</pre>
+                           </div>
+                        </div>
+                        <p>&nbsp;</p>
+                        <div class="example">
+                           
+                           <div class="exampleHeader"><a id="d5e24929"></a>Example: Comparison with JSONPath</div>
+                           <p>This example provides XPath equivalents to some examples given in the
+                  JSONPath specification. [TODO: add a reference].</p>
+                           <p>The examples query the result of parsing the following JSON value, representing
+                     a store whose stock consists of four books and a bicycle:</p>
+                           <div class="exampleInner">
+                              <pre>{ "store": {
+       "book": [
+         { "category": "reference",
+           "author": "Nigel Rees",
+           "title": "Sayings of the Century",
+           "price": 8.95
+         },
+         { "category": "fiction",
+           "author": "Evelyn Waugh",
+           "title": "Sword of Honour",
+           "price": 12.99
+         },
+         { "category": "fiction",
+           "author": "Herman Melville",
+           "title": "Moby Dick",
+           "isbn": "0-553-21311-3",
+           "price": 8.99
+         },
+         { "category": "fiction",
+           "author": "J. R. R. Tolkien",
+           "title": "The Lord of the Rings",
+           "isbn": "0-395-19395-8",
+           "price": 22.99
+         }
+       ],
+       "bicycle": {
+         "color": "red",
+         "price": 399
+       }
+     }
+   }</pre>
+                           </div>
+                           <p>The following table illustrates some queries on this data, expressed
+                  both in JSONPath and in XQuery 4.0 and XPath 4.0.</p>
+                           <div class="small">
+                              <table style="width:100%" class="small">
+                                 <caption>JSONPath vs XQuery 4.0 and XPath 4.0 Comparison</caption>
+                                 <thead>
+                                    <tr>
+                                       <th>Query</th>
+                                       <th>JSONPath</th>
+                                       <th>XQuery 4.0 and XPath 4.0</th>
+                                    </tr>
+                                 </thead>
+                                 <tbody>
+                                    <tr>
+                                       <td>The authors of all books in the store</td>
+                                       <td>
+                                          <code>$.store.book[*].author</code>
+                                          </td>
+                                       <td>
+                                          <code>$m?store?book??author</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>All authors</td>
+                                       <td>
+                                          <code>$..author</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??author</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>All things in store (four books and a red bicycle)</td>
+                                       <td>
+                                          <code>$.store.*  </code>
+                                          </td>
+                                       <td>
+                                          <code>$m?store?*</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>The prices of everything in the store</td>
+                                       <td>
+                                          <code>$.store..price</code>
+                                          </td>
+                                       <td>
+                                          <code>$m?store??price</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>The third book</td>
+                                       <td>
+                                          <code>$..book[2]  </code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book?3</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>The third book's author</td>
+                                       <td>
+                                          <code>$..book[2].author</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book?3?author</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>The third book's publisher (empty result)</td>
+                                       <td>
+                                          <code>$..book[2].publisher</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book?3?publisher</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>The last book (in order)</td>
+                                       <td>
+                                          <code>$..book[-1]</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book =&gt; array:foot()</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>The first two books</td>
+                                       <td>
+                                          <code>$..book[0,1]</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book?(1,2)</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>All books with an ISBN</td>
+                                       <td>
+                                          <code>$..book[?@.isbn]</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book[?isbn]</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>All books cheaper than 10</td>
+                                       <td>
+                                          <code>$..book[?@.price&lt;10]</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??book[?price lt 10]</code>
+                                          </td>
+                                    </tr>
+                                    <tr>
+                                       <td>All member values and array elements contained in the input value</td>
+                                       <td>
+                                          <code>$..*</code>
+                                          </td>
+                                       <td>
+                                          <code>$m??*</code>
+                                          </td>
+                                    </tr>
+                                 </tbody>
+                              </table>
                            </div>
                         </div>
                      </div>
@@ -17608,7 +17862,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22367.doc-xpath40-ForClause" id="noid_d4e22367.doc-xpath40-ForClause"></a>[60]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22639.doc-xpath40-ForClause" id="noid_d4e22639.doc-xpath40-ForClause"></a>[60]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-ForClause" class="xquery">ForClause</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"for"  <a href="#doc-xpath40-ForBinding" class="xquery">ForBinding</a>  (","  <a href="#doc-xpath40-ForBinding" class="xquery">ForBinding</a>)*</code></td>
@@ -17616,7 +17870,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22368.doc-xpath40-ForBinding" id="noid_d4e22368.doc-xpath40-ForBinding"></a>[61]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22640.doc-xpath40-ForBinding" id="noid_d4e22640.doc-xpath40-ForBinding"></a>[61]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-ForBinding" class="xquery">ForBinding</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -17626,7 +17880,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22369.doc-xpath40-ForItemBinding" id="noid_d4e22369.doc-xpath40-ForItemBinding"></a>[62]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22641.doc-xpath40-ForItemBinding" id="noid_d4e22641.doc-xpath40-ForItemBinding"></a>[62]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-ForItemBinding" class="xquery">ForItemBinding</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -17636,7 +17890,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22370.doc-xpath40-ForMemberBinding" id="noid_d4e22370.doc-xpath40-ForMemberBinding"></a>[63]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22642.doc-xpath40-ForMemberBinding" id="noid_d4e22642.doc-xpath40-ForMemberBinding"></a>[63]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-ForMemberBinding" class="xquery">ForMemberBinding</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"member"  "$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -17646,7 +17900,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22371.doc-xpath40-LetClause" id="noid_d4e22371.doc-xpath40-LetClause"></a>[66]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22643.doc-xpath40-LetClause" id="noid_d4e22643.doc-xpath40-LetClause"></a>[66]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-LetClause" class="xquery">LetClause</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"let"  <a href="#doc-xpath40-LetBinding" class="xquery">LetBinding</a>  (","  <a href="#doc-xpath40-LetBinding" class="xquery">LetBinding</a>)*</code></td>
@@ -17654,7 +17908,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22372.doc-xpath40-LetBinding" id="noid_d4e22372.doc-xpath40-LetBinding"></a>[67]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22644.doc-xpath40-LetBinding" id="noid_d4e22644.doc-xpath40-LetBinding"></a>[67]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-LetBinding" class="xquery">LetBinding</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -17773,7 +18027,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22387.doc-xpath40-CountClause" id="noid_d4e22387.doc-xpath40-CountClause"></a>[77]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22659.doc-xpath40-CountClause" id="noid_d4e22659.doc-xpath40-CountClause"></a>[77]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-CountClause" class="xquery">CountClause</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"count"  "$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -17782,7 +18036,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22388.doc-xpath40-WhereClause" id="noid_d4e22388.doc-xpath40-WhereClause"></a>[78]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22660.doc-xpath40-WhereClause" id="noid_d4e22660.doc-xpath40-WhereClause"></a>[78]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-WhereClause" class="xquery">WhereClause</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"where"  <a href="#doc-xpath40-ExprSingle" class="xquery">ExprSingle</a>
@@ -17827,7 +18081,7 @@ return if ($m instance of ST) {$m}</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e22393.doc-xpath40-OrderByClause" id="noid_d4e22393.doc-xpath40-OrderByClause"></a>[83]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e22665.doc-xpath40-OrderByClause" id="noid_d4e22665.doc-xpath40-OrderByClause"></a>[83]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-OrderByClause" class="xquery">OrderByClause</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>(("order"  "by")  |  ("stable"  "order"  "by"))  <a href="#doc-xpath40-OrderSpecList" class="xquery">OrderSpecList</a>
@@ -17992,7 +18246,7 @@ let $z := g($x, $y)</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e22602.doc-xpath40-TypeDeclaration" id="noid_d4e22602.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e22874.doc-xpath40-TypeDeclaration" id="noid_d4e22874.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-TypeDeclaration" class="xquery">TypeDeclaration</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"as"  <a href="#doc-xpath40-SequenceType" class="xquery">SequenceType</a>
@@ -18001,7 +18255,7 @@ let $z := g($x, $y)</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e22603.doc-xpath40-AllowingEmpty" id="noid_d4e22603.doc-xpath40-AllowingEmpty"></a>[64]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e22875.doc-xpath40-AllowingEmpty" id="noid_d4e22875.doc-xpath40-AllowingEmpty"></a>[64]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-AllowingEmpty" class="xquery">AllowingEmpty</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"allowing"  "empty"</code></td>
@@ -18009,7 +18263,7 @@ let $z := g($x, $y)</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e22604.doc-xpath40-PositionalVar" id="noid_d4e22604.doc-xpath40-PositionalVar"></a>[65]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e22876.doc-xpath40-PositionalVar" id="noid_d4e22876.doc-xpath40-PositionalVar"></a>[65]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-PositionalVar" class="xquery">PositionalVar</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"at"  "$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -18334,7 +18588,7 @@ for member $y in $expr2</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23062.doc-xpath40-TypeDeclaration" id="noid_d4e23062.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23334.doc-xpath40-TypeDeclaration" id="noid_d4e23334.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-TypeDeclaration" class="xquery">TypeDeclaration</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"as"  <a href="#doc-xpath40-SequenceType" class="xquery">SequenceType</a>
@@ -18369,7 +18623,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      <table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23158.doc-xpath40-WindowClause" id="noid_d4e23158.doc-xpath40-WindowClause"></a>[68]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23430.doc-xpath40-WindowClause" id="noid_d4e23430.doc-xpath40-WindowClause"></a>[68]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-WindowClause" class="xquery">WindowClause</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"for"  (<a href="#doc-xpath40-TumblingWindowClause" class="xquery">TumblingWindowClause</a>  |  <a href="#doc-xpath40-SlidingWindowClause" class="xquery">SlidingWindowClause</a>)</code></td>
@@ -18377,7 +18631,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23159.doc-xpath40-TumblingWindowClause" id="noid_d4e23159.doc-xpath40-TumblingWindowClause"></a>[69]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23431.doc-xpath40-TumblingWindowClause" id="noid_d4e23431.doc-xpath40-TumblingWindowClause"></a>[69]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-TumblingWindowClause" class="xquery">TumblingWindowClause</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"tumbling"  "window"  "$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -18387,7 +18641,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23160.doc-xpath40-SlidingWindowClause" id="noid_d4e23160.doc-xpath40-SlidingWindowClause"></a>[70]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23432.doc-xpath40-SlidingWindowClause" id="noid_d4e23432.doc-xpath40-SlidingWindowClause"></a>[70]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-SlidingWindowClause" class="xquery">SlidingWindowClause</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"sliding"  "window"  "$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -18398,7 +18652,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23161.doc-xpath40-WindowStartCondition" id="noid_d4e23161.doc-xpath40-WindowStartCondition"></a>[71]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23433.doc-xpath40-WindowStartCondition" id="noid_d4e23433.doc-xpath40-WindowStartCondition"></a>[71]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-WindowStartCondition" class="xquery">WindowStartCondition</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"start"  <a href="#doc-xpath40-WindowVars" class="xquery">WindowVars</a>  ("when"  <a href="#doc-xpath40-ExprSingle" class="xquery">ExprSingle</a>)?</code></td>
@@ -18406,7 +18660,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23162.doc-xpath40-WindowEndCondition" id="noid_d4e23162.doc-xpath40-WindowEndCondition"></a>[72]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23434.doc-xpath40-WindowEndCondition" id="noid_d4e23434.doc-xpath40-WindowEndCondition"></a>[72]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-WindowEndCondition" class="xquery">WindowEndCondition</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"only"?  "end"  <a href="#doc-xpath40-WindowVars" class="xquery">WindowVars</a>  ("when"  <a href="#doc-xpath40-ExprSingle" class="xquery">ExprSingle</a>)?</code></td>
@@ -18414,7 +18668,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23163.doc-xpath40-WindowVars" id="noid_d4e23163.doc-xpath40-WindowVars"></a>[73]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23435.doc-xpath40-WindowVars" id="noid_d4e23435.doc-xpath40-WindowVars"></a>[73]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-WindowVars" class="xquery">WindowVars</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>("$"  <a href="#doc-xpath40-CurrentItem" class="xquery">CurrentItem</a>)?  <a href="#doc-xpath40-PositionalVar" class="xquery">PositionalVar</a>?  ("previous"  "$"  <a href="#doc-xpath40-PreviousItem" class="xquery">PreviousItem</a>)?  ("next"  "$"  <a href="#doc-xpath40-NextItem" class="xquery">NextItem</a>)?</code></td>
@@ -18422,7 +18676,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23164.doc-xpath40-CurrentItem" id="noid_d4e23164.doc-xpath40-CurrentItem"></a>[74]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23436.doc-xpath40-CurrentItem" id="noid_d4e23436.doc-xpath40-CurrentItem"></a>[74]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-CurrentItem" class="xquery">CurrentItem</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -18432,7 +18686,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23165.doc-xpath40-PositionalVar" id="noid_d4e23165.doc-xpath40-PositionalVar"></a>[65]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23437.doc-xpath40-PositionalVar" id="noid_d4e23437.doc-xpath40-PositionalVar"></a>[65]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-PositionalVar" class="xquery">PositionalVar</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"at"  "$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -18441,7 +18695,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23166.doc-xpath40-PreviousItem" id="noid_d4e23166.doc-xpath40-PreviousItem"></a>[75]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23438.doc-xpath40-PreviousItem" id="noid_d4e23438.doc-xpath40-PreviousItem"></a>[75]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-PreviousItem" class="xquery">PreviousItem</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -18451,7 +18705,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23167.doc-xpath40-NextItem" id="noid_d4e23167.doc-xpath40-NextItem"></a>[76]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e23439.doc-xpath40-NextItem" id="noid_d4e23439.doc-xpath40-NextItem"></a>[76]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-NextItem" class="xquery">NextItem</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -19047,7 +19301,7 @@ return
                      <table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23857.doc-xpath40-GroupByClause" id="noid_d4e23857.doc-xpath40-GroupByClause"></a>[79]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24129.doc-xpath40-GroupByClause" id="noid_d4e24129.doc-xpath40-GroupByClause"></a>[79]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-GroupByClause" class="xquery">GroupByClause</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"group"  "by"  <a href="#doc-xpath40-GroupingSpecList" class="xquery">GroupingSpecList</a>
@@ -19056,7 +19310,7 @@ return
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23858.doc-xpath40-GroupingSpecList" id="noid_d4e23858.doc-xpath40-GroupingSpecList"></a>[80]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24130.doc-xpath40-GroupingSpecList" id="noid_d4e24130.doc-xpath40-GroupingSpecList"></a>[80]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-GroupingSpecList" class="xquery">GroupingSpecList</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -19065,7 +19319,7 @@ return
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23859.doc-xpath40-GroupingSpec" id="noid_d4e23859.doc-xpath40-GroupingSpec"></a>[81]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24131.doc-xpath40-GroupingSpec" id="noid_d4e24131.doc-xpath40-GroupingSpec"></a>[81]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-GroupingSpec" class="xquery">GroupingSpec</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -19074,7 +19328,7 @@ return
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e23860.doc-xpath40-GroupingVariable" id="noid_d4e23860.doc-xpath40-GroupingVariable"></a>[82]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24132.doc-xpath40-GroupingVariable" id="noid_d4e24132.doc-xpath40-GroupingVariable"></a>[82]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-GroupingVariable" class="xquery">GroupingVariable</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"$"  <a href="#doc-xpath40-VarName" class="xquery">VarName</a>
@@ -19439,7 +19693,7 @@ return
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e24177.doc-xpath40-OrderSpecList" id="noid_d4e24177.doc-xpath40-OrderSpecList"></a>[84]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24449.doc-xpath40-OrderSpecList" id="noid_d4e24449.doc-xpath40-OrderSpecList"></a>[84]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-OrderSpecList" class="xquery">OrderSpecList</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -19448,7 +19702,7 @@ return
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e24178.doc-xpath40-OrderSpec" id="noid_d4e24178.doc-xpath40-OrderSpec"></a>[85]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24450.doc-xpath40-OrderSpec" id="noid_d4e24450.doc-xpath40-OrderSpec"></a>[85]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-OrderSpec" class="xquery">OrderSpec</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>
@@ -19459,7 +19713,7 @@ return
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e24179.doc-xpath40-OrderModifier" id="noid_d4e24179.doc-xpath40-OrderModifier"></a>[86]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24451.doc-xpath40-OrderModifier" id="noid_d4e24451.doc-xpath40-OrderModifier"></a>[86]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-OrderModifier" class="xquery">OrderModifier</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>("ascending"  |  "descending")?  ("empty"  ("greatest"  |  "least"))?  ("collation"
@@ -19690,7 +19944,7 @@ sort(
                      <table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td><a name="noid_d4e24639.doc-xpath40-ReturnClause" id="noid_d4e24639.doc-xpath40-ReturnClause"></a>[87]&nbsp;&nbsp;&nbsp;</td>
+                              <td><a name="noid_d4e24911.doc-xpath40-ReturnClause" id="noid_d4e24911.doc-xpath40-ReturnClause"></a>[87]&nbsp;&nbsp;&nbsp;</td>
                               <td><code><a href="#prod-xpath40-ReturnClause" class="xquery">ReturnClause</a></code></td>
                               <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td><code>"return"  <a href="#doc-xpath40-ExprSingle" class="xquery">ExprSingle</a>
@@ -19788,7 +20042,7 @@ return ($i, $j)</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e24754.doc-xpath40-EnclosedExpr" id="noid_d4e24754.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e25026.doc-xpath40-EnclosedExpr" id="noid_d4e25026.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-EnclosedExpr" class="xquery">EnclosedExpr</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"{"  <a href="#doc-xpath40-Expr" class="xquery">Expr</a>?  "}"</code></td>
@@ -19891,7 +20145,7 @@ Also, within a <a title="path expression" class="termref" href="#dt-path-express
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td class="diff-chg"><a name="noid_d4e24965.doc-xpath40-EnclosedExpr" id="noid_d4e24965.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
+                           <td class="diff-chg"><a name="noid_d4e25237.doc-xpath40-EnclosedExpr" id="noid_d4e25237.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
                            <td class="diff-chg"><code><a href="#prod-xpath40-EnclosedExpr">EnclosedExpr</a></code></td>
                            <td class="diff-chg">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td class="diff-chg"><code>"{"  <a href="#doc-xpath40-Expr">Expr</a>?  "}"</code></td>
@@ -20299,7 +20553,7 @@ value of a quantified expression is always <code>true</code> or <code>false</cod
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a name="noid_d4e25324.doc-xpath40-TypeDeclaration" id="noid_d4e25324.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a name="noid_d4e25596.doc-xpath40-TypeDeclaration" id="noid_d4e25596.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
                         <td><code><a href="#prod-xpath40-TypeDeclaration">TypeDeclaration</a></code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"as"  <a href="#doc-xpath40-SequenceType">SequenceType</a>
@@ -20505,7 +20759,7 @@ query using the <code>fn:error()</code> function.</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e25596.doc-xpath40-NameTestUnion" id="noid_d4e25596.doc-xpath40-NameTestUnion"></a>[111]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e25868.doc-xpath40-NameTestUnion" id="noid_d4e25868.doc-xpath40-NameTestUnion"></a>[111]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-NameTestUnion" class="xquery">NameTestUnion</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -20514,7 +20768,7 @@ query using the <code>fn:error()</code> function.</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e25597.doc-xpath40-NameTest" id="noid_d4e25597.doc-xpath40-NameTest"></a>[154]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e25869.doc-xpath40-NameTest" id="noid_d4e25869.doc-xpath40-NameTest"></a>[154]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-NameTest" class="xquery">NameTest</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -20524,7 +20778,7 @@ query using the <code>fn:error()</code> function.</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e25598.doc-xpath40-EnclosedExpr" id="noid_d4e25598.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e25870.doc-xpath40-EnclosedExpr" id="noid_d4e25870.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-EnclosedExpr" class="xquery">EnclosedExpr</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"{"  <a href="#doc-xpath40-Expr" class="xquery">Expr</a>?  "}"</code></td>
@@ -21024,7 +21278,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26078.doc-xpath40-TypeName" id="noid_d4e26078.doc-xpath40-TypeName"></a>[252]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26350.doc-xpath40-TypeName" id="noid_d4e26350.doc-xpath40-TypeName"></a>[252]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-TypeName">TypeName</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -21034,7 +21288,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26079.doc-xpath40-LocalUnionType" id="noid_d4e26079.doc-xpath40-LocalUnionType"></a>[265]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26351.doc-xpath40-LocalUnionType" id="noid_d4e26351.doc-xpath40-LocalUnionType"></a>[265]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-LocalUnionType">LocalUnionType</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -21042,7 +21296,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26080.doc-xpath40-EnumerationType" id="noid_d4e26080.doc-xpath40-EnumerationType"></a>[266]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26352.doc-xpath40-EnumerationType" id="noid_d4e26352.doc-xpath40-EnumerationType"></a>[266]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-EnumerationType">EnumerationType</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -21175,7 +21429,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26231.doc-xpath40-SingleType" id="noid_d4e26231.doc-xpath40-SingleType"></a>[229]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26503.doc-xpath40-SingleType" id="noid_d4e26503.doc-xpath40-SingleType"></a>[229]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-SingleType">SingleType</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -21184,7 +21438,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26233.doc-xpath40-TypeName" id="noid_d4e26233.doc-xpath40-TypeName"></a>[252]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26505.doc-xpath40-TypeName" id="noid_d4e26505.doc-xpath40-TypeName"></a>[252]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-TypeName">TypeName</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -21194,7 +21448,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26234.doc-xpath40-LocalUnionType" id="noid_d4e26234.doc-xpath40-LocalUnionType"></a>[265]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26506.doc-xpath40-LocalUnionType" id="noid_d4e26506.doc-xpath40-LocalUnionType"></a>[265]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-LocalUnionType">LocalUnionType</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -21202,7 +21456,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26235.doc-xpath40-EnumerationType" id="noid_d4e26235.doc-xpath40-EnumerationType"></a>[266]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e26507.doc-xpath40-EnumerationType" id="noid_d4e26507.doc-xpath40-EnumerationType"></a>[266]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-EnumerationType">EnumerationType</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -21621,7 +21875,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a name="noid_d4e26760.doc-xpath40-InlineFunctionExpr" id="noid_d4e26760.doc-xpath40-InlineFunctionExpr"></a>[213]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a name="noid_d4e27032.doc-xpath40-InlineFunctionExpr" id="noid_d4e27032.doc-xpath40-InlineFunctionExpr"></a>[213]&nbsp;&nbsp;&nbsp;</td>
                         <td><code><a href="#prod-xpath40-InlineFunctionExpr">InlineFunctionExpr</a></code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -21631,7 +21885,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a name="noid_d4e26761.doc-xpath40-ArgumentList" id="noid_d4e26761.doc-xpath40-ArgumentList"></a>[159]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a name="noid_d4e27033.doc-xpath40-ArgumentList" id="noid_d4e27033.doc-xpath40-ArgumentList"></a>[159]&nbsp;&nbsp;&nbsp;</td>
                         <td><code><a href="#prod-xpath40-ArgumentList">ArgumentList</a></code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  ((<a href="#doc-xpath40-PositionalArguments">PositionalArguments</a>  (","  <a href="#prod-xpath40-KeywordArguments">KeywordArguments</a>)?)  |  <a href="#prod-xpath40-KeywordArguments">KeywordArguments</a>)?  ")"</code></td>
@@ -21639,7 +21893,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a name="noid_d4e26762.doc-xpath40-PositionalArgumentList" id="noid_d4e26762.doc-xpath40-PositionalArgumentList"></a>[160]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a name="noid_d4e27034.doc-xpath40-PositionalArgumentList" id="noid_d4e27034.doc-xpath40-PositionalArgumentList"></a>[160]&nbsp;&nbsp;&nbsp;</td>
                         <td><code><a href="#prod-xpath40-PositionalArgumentList">PositionalArgumentList</a></code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  <a href="#doc-xpath40-PositionalArguments">PositionalArguments</a>?  ")"</code></td>
@@ -21835,7 +22089,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e26993.doc-xpath40-EnclosedExpr" id="noid_d4e26993.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e27265.doc-xpath40-EnclosedExpr" id="noid_d4e27265.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-EnclosedExpr" class="xquery">EnclosedExpr</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"{"  <a href="#doc-xpath40-Expr" class="xquery">Expr</a>?  "}"</code></td>
@@ -23064,7 +23318,7 @@ return (
       variables declared in module C. </p>
                   <div class="example">
                      
-                     <div class="exampleHeader"><a id="d5e32431"></a>Example: Schema Information and Module Import</div>
+                     <div class="exampleHeader"><a id="d5e32703"></a>Example: Schema Information and Module Import</div>
                      <p>A module import does not import schema definitions from the imported module. In the
         following query, the type geometry:triangle is not defined, even if it is known in the
         imported module, so the variable declaration raises an error [<a href="#ERRXPST0051" title="err:XPST0051">err:XPST0051</a>]:</p>
@@ -23407,7 +23661,7 @@ return $i/xx:bing</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e28950.doc-xpath40-InlineFunctionExpr" id="noid_d4e28950.doc-xpath40-InlineFunctionExpr"></a>[213]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e29222.doc-xpath40-InlineFunctionExpr" id="noid_d4e29222.doc-xpath40-InlineFunctionExpr"></a>[213]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-InlineFunctionExpr" class="xquery">InlineFunctionExpr</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -23498,7 +23752,7 @@ return $i/xx:bing</pre>
                   <table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e29050.doc-xpath40-AnnotatedDecl" id="noid_d4e29050.doc-xpath40-AnnotatedDecl"></a>[27]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e29322.doc-xpath40-AnnotatedDecl" id="noid_d4e29322.doc-xpath40-AnnotatedDecl"></a>[27]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-AnnotatedDecl" class="xquery">AnnotatedDecl</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"declare"  <a href="#doc-xpath40-Annotation" class="xquery">Annotation</a>*  (<a href="#doc-xpath40-VarDecl" class="xquery">VarDecl</a>  |  <a href="#doc-xpath40-FunctionDecl" class="xquery">FunctionDecl</a>  |  <a href="#doc-xpath40-ItemTypeDecl" class="xquery">ItemTypeDecl</a>)</code></td>
@@ -23506,7 +23760,7 @@ return $i/xx:bing</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e29051.doc-xpath40-Annotation" id="noid_d4e29051.doc-xpath40-Annotation"></a>[28]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e29323.doc-xpath40-Annotation" id="noid_d4e29323.doc-xpath40-Annotation"></a>[28]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-Annotation" class="xquery">Annotation</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"%"  <a href="#doc-xpath40-EQName" class="xquery">EQName</a>  ("("  <a href="#doc-xpath40-AnnotationValue" class="xquery">AnnotationValue</a>  (","  <a href="#doc-xpath40-AnnotationValue" class="xquery">AnnotationValue</a>)*  ")")?</code></td>
@@ -23523,7 +23777,7 @@ return $i/xx:bing</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e29053.doc-xpath40-VarName" id="noid_d4e29053.doc-xpath40-VarName"></a>[176]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e29325.doc-xpath40-VarName" id="noid_d4e29325.doc-xpath40-VarName"></a>[176]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-VarName" class="xquery">VarName</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -23533,7 +23787,7 @@ return $i/xx:bing</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a name="noid_d4e29054.doc-xpath40-TypeDeclaration" id="noid_d4e29054.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a name="noid_d4e29326.doc-xpath40-TypeDeclaration" id="noid_d4e29326.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
                            <td><code><a href="#prod-xpath40-TypeDeclaration" class="xquery">TypeDeclaration</a></code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"as"  <a href="#doc-xpath40-SequenceType" class="xquery">SequenceType</a>
@@ -23925,7 +24179,7 @@ declare context value as document-node()* := collection($uri);</pre>
                      <table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td class="diff-chg"><a name="noid_d4e29544.doc-xpath40-AnnotatedDecl" id="noid_d4e29544.doc-xpath40-AnnotatedDecl"></a>[27]&nbsp;&nbsp;&nbsp;</td>
+                              <td class="diff-chg"><a name="noid_d4e29816.doc-xpath40-AnnotatedDecl" id="noid_d4e29816.doc-xpath40-AnnotatedDecl"></a>[27]&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code><a href="#prod-xpath40-AnnotatedDecl" class="xquery">AnnotatedDecl</a></code></td>
                               <td class="diff-chg">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code>"declare"  <a href="#doc-xpath40-Annotation" class="xquery">Annotation</a>*  (<a href="#doc-xpath40-VarDecl" class="xquery">VarDecl</a>  |  <a href="#doc-xpath40-FunctionDecl" class="xquery">FunctionDecl</a>  |  <a href="#doc-xpath40-ItemTypeDecl" class="xquery">ItemTypeDecl</a>)</code></td>
@@ -23933,7 +24187,7 @@ declare context value as document-node()* := collection($uri);</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td class="diff-chg"><a name="noid_d4e29545.doc-xpath40-Annotation" id="noid_d4e29545.doc-xpath40-Annotation"></a>[28]&nbsp;&nbsp;&nbsp;</td>
+                              <td class="diff-chg"><a name="noid_d4e29817.doc-xpath40-Annotation" id="noid_d4e29817.doc-xpath40-Annotation"></a>[28]&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code><a href="#prod-xpath40-Annotation" class="xquery">Annotation</a></code></td>
                               <td class="diff-chg">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code>"%"  <a href="#doc-xpath40-EQName" class="xquery">EQName</a>  ("("  <a href="#doc-xpath40-AnnotationValue" class="xquery">AnnotationValue</a>  (","  <a href="#doc-xpath40-AnnotationValue" class="xquery">AnnotationValue</a>)*  ")")?</code></td>
@@ -23989,7 +24243,7 @@ declare context value as document-node()* := collection($uri);</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td class="diff-chg"><a name="noid_d4e29551.doc-xpath40-TypeDeclaration" id="noid_d4e29551.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
+                              <td class="diff-chg"><a name="noid_d4e29823.doc-xpath40-TypeDeclaration" id="noid_d4e29823.doc-xpath40-TypeDeclaration"></a>[230]&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code><a href="#prod-xpath40-TypeDeclaration" class="xquery">TypeDeclaration</a></code></td>
                               <td class="diff-chg">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code>"as"  <a href="#doc-xpath40-SequenceType" class="xquery">SequenceType</a>
@@ -23998,7 +24252,7 @@ declare context value as document-node()* := collection($uri);</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td class="diff-chg"><a name="noid_d4e29552.doc-xpath40-EnclosedExpr" id="noid_d4e29552.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
+                              <td class="diff-chg"><a name="noid_d4e29824.doc-xpath40-EnclosedExpr" id="noid_d4e29824.doc-xpath40-EnclosedExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code><a href="#prod-xpath40-EnclosedExpr" class="xquery">EnclosedExpr</a></code></td>
                               <td class="diff-chg">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-chg"><code>"{"  <a href="#doc-xpath40-Expr" class="xquery">Expr</a>?  "}"</code></td>
@@ -24016,7 +24270,7 @@ declare context value as document-node()* := collection($uri);</pre>
       sequence of <code>dept</code> elements.</p>
                   <div class="example">
                      
-                     <div class="exampleHeader"><a id="d5e33680"></a>Example: Using a function, prepare a summary of employees that are located in Denver.</div>
+                     <div class="exampleHeader"><a id="d5e33952"></a>Example: Using a function, prepare a summary of employees that are located in Denver.</div>
                      <div class="parse-test">
                         <div class="exampleInner">
                            <pre>declare function local:summary($emps as element(employee)*) as element(dept)* 
@@ -24290,7 +24544,7 @@ local:summary(fn:doc("acme_corp.xml")//employee[location = "Denver"])</pre>
       recursive functions, whose bodies reference each other, are also allowed.</p>
                      <div class="example">
                         
-                        <div class="exampleHeader"><a id="d5e34048"></a>Example: A recursive function to compute the maximum depth of a document</div>
+                        <div class="exampleHeader"><a id="d5e34320"></a>Example: A recursive function to compute the maximum depth of a document</div>
                         <p>The following
       example declares a recursive function that computes the maximum depth of a node hierarchy, and
       calls the function to find the maximum depth of a particular document. The function
@@ -24328,7 +24582,7 @@ local:depth(doc("partlist.xml"))</pre>
                      <table class="scrap">
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td class="diff-add"><a name="noid_d4e29971.doc-xpath40-AnnotatedDecl" id="noid_d4e29971.doc-xpath40-AnnotatedDecl"></a>[27]&nbsp;&nbsp;&nbsp;</td>
+                              <td class="diff-add"><a name="noid_d4e30243.doc-xpath40-AnnotatedDecl" id="noid_d4e30243.doc-xpath40-AnnotatedDecl"></a>[27]&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-add"><code><a href="#prod-xpath40-AnnotatedDecl" class="xquery">AnnotatedDecl</a></code></td>
                               <td class="diff-add">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-add"><code>"declare"  <a href="#doc-xpath40-Annotation" class="xquery">Annotation</a>*  (<a href="#doc-xpath40-VarDecl" class="xquery">VarDecl</a>  |  <a href="#doc-xpath40-FunctionDecl" class="xquery">FunctionDecl</a>  |  <a href="#doc-xpath40-ItemTypeDecl" class="xquery">ItemTypeDecl</a>)</code></td>
@@ -24336,7 +24590,7 @@ local:depth(doc("partlist.xml"))</pre>
                         </tbody>
                         <tbody>
                            <tr style="vertical-align:baseline;">
-                              <td class="diff-add"><a name="noid_d4e29972.doc-xpath40-Annotation" id="noid_d4e29972.doc-xpath40-Annotation"></a>[28]&nbsp;&nbsp;&nbsp;</td>
+                              <td class="diff-add"><a name="noid_d4e30244.doc-xpath40-Annotation" id="noid_d4e30244.doc-xpath40-Annotation"></a>[28]&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-add"><code><a href="#prod-xpath40-Annotation" class="xquery">Annotation</a></code></td>
                               <td class="diff-add">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                               <td class="diff-add"><code>"%"  <a href="#doc-xpath40-EQName" class="xquery">EQName</a>  ("("  <a href="#doc-xpath40-AnnotationValue" class="xquery">AnnotationValue</a>  (","  <a href="#doc-xpath40-AnnotationValue" class="xquery">AnnotationValue</a>)*  ")")?</code></td>

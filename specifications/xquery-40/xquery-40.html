@@ -14,7 +14,7 @@
          
          <h1><a id="title"></a>XQuery 4.0: An XML Query Language </h1>
          
-         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 16&nbsp;January&nbsp;2024</h2>
+         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 23&nbsp;January&nbsp;2024</h2>
          <dl>
             <dt>This version:</dt>
             <dd>
@@ -16070,33 +16070,121 @@ return if ($m instance of ST) {$m}</pre>
                   <div class="div4">
                      
                      <h5><a id="id-deep-lookup"></a>4.14.3.3 Deep Lookup</h5>
-                     <p>The deep lookup operator "??" has both unary and binary forms. The unary form <code>??KS</code>
-               (where <var>KS</var> is any KeySpecifier) has the same effect as the binary form <code>.??KS</code>.
-               The semantics are as follows.</p>
-                     <p>We define the recursive content of a value to consist of all items found in a depth-first traversal of the value
-               that proceeds as follows:</p>
-                     <p>For each item in the value:</p>
-                     <ol class="enumar">
-                        <li>
-                           <p>Add the item to the result.</p>
-                        </li>
-                        <li>
-                           <p>If the item is an array, process all the members of the array (in order) by applying these rules
-                     recursively.</p>
-                        </li>
-                        <li>
-                           <p>If the item is a map, process the values in each entry of the map (in arbitrary order) 
-                     by applying these rules recursively.</p>
-                        </li>
-                     </ol>
-                     <p>The effect of the deep lookup expression <code>E??KS</code> is obtained by evaluating
-                  <var>E</var>, establishing its recursive content <var>C</var>, removing any item that is not
-                  a map or array to yield a sequence <var>D</var>, and then evaluating the shallow lookup
-               expression <code>D?KS</code>, but with one exception: if evaluation of any shallow lookup fails,
-               then the error is not propagated, but instead its result is taken to be an empty sequence.</p>
-                     <p>Specifically, no dynamic error occurs when an item in the recursive content is an array
-               and the KeySpecifier is not an integer, or when it is an integer that is out of range for the
-               array.</p>
+                     <p>The deep lookup operator "??" has both unary and postfix forms. The unary form <code>??KS</code>
+               (where <var>KS</var> is any <code>KeySpecifier</code>) has the same effect as the binary form <code>.??KS</code>.
+               </p>
+                     <p>The semantics are defined as follows.</p>
+                     <p>First we define the <b>recursive content</b> of an item as follows:</p>
+                     <div class="exampleInner">
+                        <pre> declare function immediate-content($item as item()) as map(*)* {
+   if ($item instance of map(*)) {
+      map:entries($item)
+   } else if ($item instance of array(*)) {
+      (1 to array:size($A))!map:entry(., array:get(.))
+   }
+};    
+declare function recursive-content($item as item()) as map(*)* {
+   immediate-content($item) ! (., map:values(.) =!&gt; recursive-content())
+};</pre>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>Explanation: the immediate content of a map is obtained by splitting it
+               into a sequence of singleton maps, each representing one entry. The immediate
+               content of an array is obtained by consructing a sequence of singleton maps,
+               one for each array member, where the key of the map is the array index and the
+               value is the corresponding member. The recursive content of an item contains
+               the singleton maps in its immediate content, each followed by the recursive
+               content obtained by expanding any maps or arrays in the immediate content.
+               </p>
+                     </div>
+                     <p>The result of the expression <code>E??KS</code>, where <code>E</code> is any expression
+               and <code>KS</code> is any <code>KeySpecifier</code>, is then <code>(E ! recursive-content(.))?KS</code>.</p>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>This is best explained by considering examples.</p>
+                        <p>Consider the expression <code>let $value := [map{"first":"John", "last":"Smith"}, map{"first":"Mary", "last":"Evans"}]</code>.</p>
+                        <p>The recursive content of this array is the sequence of six singleton maps:</p>
+                        <ol class="enumar">
+                           <li>
+                              <p>
+                              <code>map{1: map{"first":"John", "last":"Smith"}}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{2: map{"first":"Mary", "last":"Evans"}}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"first":"John"}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"last":"Smith"}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"first":"Mary"}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"last":"Evans"}</code>
+                           </p>
+                           </li>
+                        </ol>
+                        <p>The expression <code>$value??*</code> returns the sequence 
+                     <code>map{"first":"John", "last":"Smith"}, map{"first":"Mary", "last":"Evans"},
+                     "John", "Smith", "Mary", "Evans"</code>.</p>
+                        <p>The expression <code>$value??first</code> returns the sequence <code>"John", "Mary"</code>.</p>
+                        <p>The expression <code>$value??last</code> returns the sequence <code>"Smith", "Evans"</code>.</p>
+                        <p>The expression <code>$value??1</code> returns the sequence <code>map{"first":"John", "last":"Smith"}</code>.</p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>The effect of evaluating all shallow lookups on maps rather than arrays is that no error arises
+                  if an array subscript is out of bounds. In the above example, <code>$value?3</code> would
+                  return an empty sequence, it would not raise an error.</p>
+                        <p>This also affects the way an <code>xs:untypedAtomic</code> key value is handled. 
+                     Given the shallow lookup
+                     expression <code>$A?$x</code>, if <code>$A</code> is an array and <code>$x</code>
+                     (after atomization) is <code>xs:untypedAtomic</code> then the value of <code>$x</code>
+                     is converted to an integer (by virtue of the coercion rules applying to a call
+                     on <code>array:get</code>). With a deep lookup expression <code>$A??$x</code>, by
+                     contrast, the semantics are defined in terms of a map lookup, in which 
+                     <code>xs:untypedAtomic</code> values are always treated as strings.
+                  </p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>The definition of the <code>recursive-content</code> function is such that items
+                  in the top-level value that are not maps or arrays are ignored, whereas items that
+                  are not themselves maps or arrays, but which appear in the content of a map or array
+                  at the top level, are included. This means that <code>E??X</code> mirrors the
+                  behavior of <code>E//X</code>, in that it includes all items that are one-or-more levels
+                  deep in the tree.</p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>The result of the deep lookup operator retains order when processing sequences and
+                  arrays, but not when processing maps.</p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>An expression involving multiple deep lookup operators may return duplicates.
+                     For example, the result of the expression 
+                     <code>[[["a"],["b"]],[["c"],["d"]]] ?? 1 ?? 1</code>
+                     is <code>(["a"], "a", "b", "a", "c")</code>. This is because the first <code>??</code> operator
+                     selects members in position 1 at all three levels, that is it selects the arrays
+                     <code>[["a"],["b"]]</code>, <code>["a"]</code>, and <code>["c"]</code> as well
+                     as each of the four string values. The second <code>??</code> operator 
+                  selects members in position 1 within each of these values, which results in the string
+                  <code>"a"</code> being selected twice.</p>
+                     </div>
                      <div class="example">
                         
                         <div class="exampleHeader"><a id="ex-deep-lookup"></a>Example: Examples of Deep Lookup Expressions</div>
@@ -16145,6 +16233,170 @@ return if ($m instance of ST) {$m}</pre>
                            <pre>$tree ??$cities =&gt; 
      map:for-each( fn($key, $val){$val ??to ! ($key || "-" || .)} )</pre>
                         </div>
+                     </div>
+                     <p>&nbsp;</p>
+                     <div class="example">
+                        
+                        <div class="exampleHeader"><a id="d3e23751"></a>Example: Comparison with JSONPath</div>
+                        <p>This example provides XPath equivalents to some examples given in the
+                  JSONPath specification. [TODO: add a reference].</p>
+                        <p>The examples query the result of parsing the following JSON value, representing
+                     a store whose stock consists of four books and a bicycle:</p>
+                        <div class="exampleInner">
+                           <pre>{ "store": {
+       "book": [
+         { "category": "reference",
+           "author": "Nigel Rees",
+           "title": "Sayings of the Century",
+           "price": 8.95
+         },
+         { "category": "fiction",
+           "author": "Evelyn Waugh",
+           "title": "Sword of Honour",
+           "price": 12.99
+         },
+         { "category": "fiction",
+           "author": "Herman Melville",
+           "title": "Moby Dick",
+           "isbn": "0-553-21311-3",
+           "price": 8.99
+         },
+         { "category": "fiction",
+           "author": "J. R. R. Tolkien",
+           "title": "The Lord of the Rings",
+           "isbn": "0-395-19395-8",
+           "price": 22.99
+         }
+       ],
+       "bicycle": {
+         "color": "red",
+         "price": 399
+       }
+     }
+   }</pre>
+                        </div>
+                        <p>The following table illustrates some queries on this data, expressed
+                  both in JSONPath and in XQuery 4.0.</p>
+                        <table style="width:100%" class="small">
+                           <caption>JSONPath vs XQuery 4.0 Comparison</caption>
+                           <thead>
+                              <tr>
+                                 <th>Query</th>
+                                 <th>JSONPath</th>
+                                 <th>XQuery 4.0</th>
+                              </tr>
+                           </thead>
+                           <tbody>
+                              <tr>
+                                 <td>The authors of all books in the store</td>
+                                 <td>
+                                    <code>$.store.book[*].author</code>
+                                    </td>
+                                 <td>
+                                    <code>$m?store?book??author</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All authors</td>
+                                 <td>
+                                    <code>$..author</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??author</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All things in store (four books and a red bicycle)</td>
+                                 <td>
+                                    <code>$.store.*  </code>
+                                    </td>
+                                 <td>
+                                    <code>$m?store?*</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The prices of everything in the store</td>
+                                 <td>
+                                    <code>$.store..price</code>
+                                    </td>
+                                 <td>
+                                    <code>$m?store??price</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The third book</td>
+                                 <td>
+                                    <code>$..book[2]  </code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?3</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The third book's author</td>
+                                 <td>
+                                    <code>$..book[2].author</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?3?author</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The third book's publisher (empty result)</td>
+                                 <td>
+                                    <code>$..book[2].publisher</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?3?publisher</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The last book (in order)</td>
+                                 <td>
+                                    <code>$..book[-1]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book =&gt; array:foot()</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The first two books</td>
+                                 <td>
+                                    <code>$..book[0,1]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?(1,2)</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All books with an ISBN</td>
+                                 <td>
+                                    <code>$..book[?@.isbn]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book[?isbn]</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All books cheaper than 10</td>
+                                 <td>
+                                    <code>$..book[?@.price&lt;10]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book[?price lt 10]</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All member values and array elements contained in the input value</td>
+                                 <td>
+                                    <code>$..*</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??*</code>
+                                    </td>
+                              </tr>
+                           </tbody>
+                        </table>
                      </div>
                   </div>
                   <div class="div4">
@@ -16219,7 +16471,7 @@ return if ($m instance of ST) {$m}</pre>
                <h3><a id="id-flwor-expressions"></a>4.15 FLWOR Expressions</h3>
                <p>XQuery provides a versatile expression called a FLWOR expression that may contain multiple clauses. The FLWOR expression can be used for many purposes, including iterating over sequences, joining multiple documents, and performing grouping and aggregation. The name FLWOR, pronounced "flower", is suggested by the keywords <code>for</code>, <code>let</code>, <code>where</code>, <code>order by</code>, and <code>return</code>, which introduce some of the clauses used in FLWOR expressions (but this is not a complete list of such clauses.)</p>
                <p>The complete syntax of a FLWOR expression is shown here, and relevant parts of the syntax are repeated in subsequent sections of this document.</p>
-               <a id="d3e23732"></a><table class="scrap">
+               <a id="d3e24004"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-FLWORExpr"></a>[49]&nbsp;&nbsp;&nbsp;</td>
@@ -16256,7 +16508,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21290.doc-xquery40-ForClause"></a>[52]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21562.doc-xquery40-ForClause"></a>[52]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ForClause</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"for"  <a href="#doc-xquery40-ForBinding">ForBinding</a>  (","  <a href="#doc-xquery40-ForBinding">ForBinding</a>)*</code></td>
@@ -16265,7 +16517,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21291.doc-xquery40-ForBinding"></a>[53]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21563.doc-xquery40-ForBinding"></a>[53]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ForBinding</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -16276,7 +16528,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21292.doc-xquery40-ForItemBinding"></a>[54]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21564.doc-xquery40-ForItemBinding"></a>[54]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ForItemBinding</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -16287,7 +16539,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21293.doc-xquery40-ForMemberBinding"></a>[55]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21565.doc-xquery40-ForMemberBinding"></a>[55]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ForMemberBinding</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"member"  "$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -16298,7 +16550,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21294.doc-xquery40-LetClause"></a>[58]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21566.doc-xquery40-LetClause"></a>[58]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>LetClause</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"let"  <a href="#doc-xquery40-LetBinding">LetBinding</a>  (","  <a href="#doc-xquery40-LetBinding">LetBinding</a>)*</code></td>
@@ -16307,7 +16559,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21295.doc-xquery40-LetBinding"></a>[59]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21567.doc-xquery40-LetBinding"></a>[59]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>LetBinding</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -16439,7 +16691,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21310.doc-xquery40-CountClause"></a>[69]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21582.doc-xquery40-CountClause"></a>[69]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>CountClause</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"count"  "$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -16449,7 +16701,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21311.doc-xquery40-WhereClause"></a>[70]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21583.doc-xquery40-WhereClause"></a>[70]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>WhereClause</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"where"  <a href="#doc-xquery40-ExprSingle">ExprSingle</a>
@@ -16499,7 +16751,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e21316.doc-xquery40-OrderByClause"></a>[75]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e21588.doc-xquery40-OrderByClause"></a>[75]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>OrderByClause</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>(("order"  "by")  |  ("stable"  "order"  "by"))  <a href="#doc-xquery40-OrderSpecList">OrderSpecList</a>
@@ -16626,7 +16878,7 @@ let $z := g($x, $y)</pre>
                <div class="div3">
                   
                   <h4><a id="id-xquery-for-clause"></a>4.15.2 For Clause</h4>
-                  <a id="d3e24274"></a><table class="scrap">
+                  <a id="d3e24546"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-ForClause"></a>[52]&nbsp;&nbsp;&nbsp;</td>
@@ -16671,7 +16923,7 @@ let $z := g($x, $y)</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e21525.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e21797.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeDeclaration</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"as"  <a href="#doc-xquery40-SequenceType">SequenceType</a>
@@ -16681,7 +16933,7 @@ let $z := g($x, $y)</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e21526.doc-xquery40-AllowingEmpty"></a>[56]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e21798.doc-xquery40-AllowingEmpty"></a>[56]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>AllowingEmpty</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"allowing"  "empty"</code></td>
@@ -16690,7 +16942,7 @@ let $z := g($x, $y)</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e21527.doc-xquery40-PositionalVar"></a>[57]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e21799.doc-xquery40-PositionalVar"></a>[57]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PositionalVar</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"at"  "$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -16987,7 +17239,7 @@ for member $y in $expr2</pre>
                <div class="div3">
                   
                   <h4><a id="id-xquery-let-clause"></a>4.15.3 Let Clause</h4>
-                  <a id="d3e24801"></a><table class="scrap">
+                  <a id="d3e25073"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-LetClause"></a>[58]&nbsp;&nbsp;&nbsp;</td>
@@ -17010,7 +17262,7 @@ for member $y in $expr2</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e21985.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22257.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeDeclaration</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"as"  <a href="#doc-xquery40-SequenceType">SequenceType</a>
@@ -17043,10 +17295,10 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                <div class="div3">
                   
                   <h4><a id="id-windows"></a>4.15.4 Window Clause</h4>
-                  <a id="d3e24926"></a><table class="scrap">
+                  <a id="d3e25198"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22081.doc-xquery40-WindowClause"></a>[60]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22353.doc-xquery40-WindowClause"></a>[60]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>WindowClause</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"for"  (<a href="#doc-xquery40-TumblingWindowClause">TumblingWindowClause</a>  |  <a href="#doc-xquery40-SlidingWindowClause">SlidingWindowClause</a>)</code></td>
@@ -17055,7 +17307,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22082.doc-xquery40-TumblingWindowClause"></a>[61]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22354.doc-xquery40-TumblingWindowClause"></a>[61]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TumblingWindowClause</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"tumbling"  "window"  "$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -17066,7 +17318,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22083.doc-xquery40-SlidingWindowClause"></a>[62]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22355.doc-xquery40-SlidingWindowClause"></a>[62]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>SlidingWindowClause</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"sliding"  "window"  "$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -17078,7 +17330,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22084.doc-xquery40-WindowStartCondition"></a>[63]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22356.doc-xquery40-WindowStartCondition"></a>[63]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>WindowStartCondition</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"start"  <a href="#doc-xquery40-WindowVars">WindowVars</a>  ("when"  <a href="#doc-xquery40-ExprSingle">ExprSingle</a>)?</code></td>
@@ -17087,7 +17339,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22085.doc-xquery40-WindowEndCondition"></a>[64]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22357.doc-xquery40-WindowEndCondition"></a>[64]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>WindowEndCondition</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"only"?  "end"  <a href="#doc-xquery40-WindowVars">WindowVars</a>  ("when"  <a href="#doc-xquery40-ExprSingle">ExprSingle</a>)?</code></td>
@@ -17096,7 +17348,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22086.doc-xquery40-WindowVars"></a>[65]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22358.doc-xquery40-WindowVars"></a>[65]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>WindowVars</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>("$"  <a href="#doc-xquery40-CurrentItem">CurrentItem</a>)?  <a href="#doc-xquery40-PositionalVar">PositionalVar</a>?  ("previous"  "$"  <a href="#doc-xquery40-PreviousItem">PreviousItem</a>)?  ("next"  "$"  <a href="#doc-xquery40-NextItem">NextItem</a>)?</code></td>
@@ -17105,7 +17357,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22087.doc-xquery40-CurrentItem"></a>[66]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22359.doc-xquery40-CurrentItem"></a>[66]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>CurrentItem</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -17116,7 +17368,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22088.doc-xquery40-PositionalVar"></a>[57]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22360.doc-xquery40-PositionalVar"></a>[57]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PositionalVar</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"at"  "$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -17126,7 +17378,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22089.doc-xquery40-PreviousItem"></a>[67]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22361.doc-xquery40-PreviousItem"></a>[67]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>PreviousItem</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -17137,7 +17389,7 @@ let $e := doc("emps.xml")/emps/emp[deptno eq $d]</pre>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22090.doc-xquery40-NextItem"></a>[68]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e22362.doc-xquery40-NextItem"></a>[68]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>NextItem</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -17574,7 +17826,7 @@ group by $symbol</pre>
                <div class="div3">
                   
                   <h4><a id="id-where"></a>4.15.5 Where Clause</h4>
-                  <a id="d3e25624"></a><table class="scrap">
+                  <a id="d3e25896"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-WhereClause"></a>[70]&nbsp;&nbsp;&nbsp;</td>
@@ -17625,7 +17877,7 @@ return $x</span></pre>
                <div class="div3">
                   
                   <h4><a id="id-count"></a>4.15.6 Count Clause</h4>
-                  <a id="d3e25680"></a><table class="scrap">
+                  <a id="d3e25952"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-CountClause"></a>[69]&nbsp;&nbsp;&nbsp;</td>
@@ -17705,10 +17957,10 @@ return
                <div class="div3">
                   
                   <h4><a id="id-group-by"></a>4.15.7 Group By Clause</h4>
-                  <a id="d3e25739"></a><table class="scrap">
+                  <a id="d3e26011"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22780.doc-xquery40-GroupByClause"></a>[71]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23052.doc-xquery40-GroupByClause"></a>[71]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>GroupByClause</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"group"  "by"  <a href="#doc-xquery40-GroupingSpecList">GroupingSpecList</a>
@@ -17718,7 +17970,7 @@ return
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22781.doc-xquery40-GroupingSpecList"></a>[72]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23053.doc-xquery40-GroupingSpecList"></a>[72]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>GroupingSpecList</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -17728,7 +17980,7 @@ return
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22782.doc-xquery40-GroupingSpec"></a>[73]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23054.doc-xquery40-GroupingSpec"></a>[73]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>GroupingSpec</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -17738,7 +17990,7 @@ return
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e22783.doc-xquery40-GroupingVariable"></a>[74]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23055.doc-xquery40-GroupingVariable"></a>[74]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>GroupingVariable</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"$"  <a href="#doc-xquery40-VarName">VarName</a>
@@ -18079,7 +18331,7 @@ return
                <div class="div3">
                   
                   <h4><a id="id-order-by-clause"></a>4.15.8 Order By Clause</h4>
-                  <a id="d3e26094"></a><table class="scrap">
+                  <a id="d3e26366"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-OrderByClause"></a>[75]&nbsp;&nbsp;&nbsp;</td>
@@ -18092,7 +18344,7 @@ return
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e23100.doc-xquery40-OrderSpecList"></a>[76]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23372.doc-xquery40-OrderSpecList"></a>[76]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>OrderSpecList</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -18102,7 +18354,7 @@ return
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e23101.doc-xquery40-OrderSpec"></a>[77]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23373.doc-xquery40-OrderSpec"></a>[77]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>OrderSpec</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -18114,7 +18366,7 @@ return
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e23102.doc-xquery40-OrderModifier"></a>[78]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23374.doc-xquery40-OrderModifier"></a>[78]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>OrderModifier</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>("ascending"  |  "descending")?  ("empty"  ("greatest"  |  "least"))?  ("collation"
@@ -18337,10 +18589,10 @@ sort(
                <div class="div3">
                   
                   <h4><a id="id-return-clause"></a>4.15.9 Return Clause</h4>
-                  <a id="d3e26587"></a><table class="scrap">
+                  <a id="d3e26859"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e23562.doc-xquery40-ReturnClause"></a>[79]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e23834.doc-xquery40-ReturnClause"></a>[79]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>ReturnClause</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"return"  <a href="#doc-xquery40-ExprSingle">ExprSingle</a>
@@ -18408,7 +18660,7 @@ return ($i, $j)</pre>
             <div class="div2 xquery">
                
                <h3><a id="id-unordered-expressions"></a>4.16 Ordered and Unordered Expressions</h3>
-               <a id="d3e26708"></a><table class="scrap">
+               <a id="d3e26980"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-OrderedExpr"></a>[171]&nbsp;&nbsp;&nbsp;</td>
@@ -18431,7 +18683,7 @@ return ($i, $j)</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e23677.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e23949.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xquery40-Expr">Expr</a>?  "}"</code></td>
@@ -18471,7 +18723,7 @@ Also, within a <a title="path expression" class="termref" href="#dt-path-express
                
                <h3><a id="id-conditionals"></a>4.17 Conditional Expressions</h3>
                <p>XQuery 4.0 allows conditional expressions to be written in several different ways.</p>
-               <a id="d3e26933"></a><table class="scrap">
+               <a id="d3e27205"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-IfExpr"></a>[93]&nbsp;&nbsp;&nbsp;</td>
@@ -18535,7 +18787,7 @@ Also, within a <a title="path expression" class="termref" href="#dt-path-express
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e23888.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e24160.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xquery40-Expr">Expr</a>?  "}"</code></td>
@@ -18659,7 +18911,7 @@ named <code>discounted</code>, independently of its value:</p>
             <div class="div2">
                
                <h3><a id="id-otherwise"></a>4.18 Otherwise Expressions</h3>
-               <a id="d3e27181"></a><table class="scrap">
+               <a id="d3e27453"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-OtherwiseExpr"></a>[111]&nbsp;&nbsp;&nbsp;</td>
@@ -18699,7 +18951,7 @@ named <code>discounted</code>, independently of its value:</p>
             <div class="div2 xquery">
                
                <h3><a id="id-switch"></a>4.19 Switch Expressions</h3>
-               <a id="d3e27229"></a><table class="scrap">
+               <a id="d3e27501"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-SwitchExpr"></a>[82]&nbsp;&nbsp;&nbsp;</td>
@@ -18861,7 +19113,7 @@ switch {
                <h3><a id="id-quantified-expressions"></a>4.20 Quantified Expressions</h3>
                <p>Quantified expressions support existential and universal quantification. The
 value of a quantified expression is always <code>true</code> or <code>false</code>.</p>
-               <a id="d3e27413"></a><table class="scrap">
+               <a id="d3e27685"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-QuantifiedExpr"></a>[80]&nbsp;&nbsp;&nbsp;</td>
@@ -18885,7 +19137,7 @@ value of a quantified expression is always <code>true</code> or <code>false</cod
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e24247.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e24519.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>TypeDeclaration</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"as"  <a href="#doc-xquery40-SequenceType">SequenceType</a>
@@ -19025,7 +19277,7 @@ phase</a>.</p>
 and type errors raised during dynamic evaluation, including errors
 raised by the XQuery implementation and errors explicitly raised in a
 query using the <code>fn:error()</code> function.</p>
-               <a id="d3e27713"></a><table class="scrap">
+               <a id="d3e27985"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-TryCatchExpr"></a>[99]&nbsp;&nbsp;&nbsp;</td>
@@ -19071,7 +19323,7 @@ query using the <code>fn:error()</code> function.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e24519.doc-xquery40-NameTestUnion"></a>[103]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e24791.doc-xquery40-NameTestUnion"></a>[103]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>NameTestUnion</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -19081,7 +19333,7 @@ query using the <code>fn:error()</code> function.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e24520.doc-xquery40-NameTest"></a>[146]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e24792.doc-xquery40-NameTest"></a>[146]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>NameTest</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -19092,7 +19344,7 @@ query using the <code>fn:error()</code> function.</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e24521.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e24793.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xquery40-Expr">Expr</a>?  "}"</code></td>
@@ -19335,7 +19587,7 @@ type.
                <div class="div3">
                   
                   <h4><a id="id-instance-of"></a>4.22.1 Instance Of</h4>
-                  <a id="d3e27982"></a><table class="scrap">
+                  <a id="d3e28254"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-InstanceofExpr"></a>[114]&nbsp;&nbsp;&nbsp;</td>
@@ -19403,7 +19655,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                <div class="div3 xquery">
                   
                   <h4><a id="id-typeswitch"></a>4.22.2 Typeswitch</h4>
-                  <a id="d3e28097"></a><table class="scrap">
+                  <a id="d3e28369"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-TypeswitchExpr"></a>[88]&nbsp;&nbsp;&nbsp;</td>
@@ -19543,7 +19795,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                <div class="div3">
                   
                   <h4><a id="id-cast"></a>4.22.3 Cast</h4>
-                  <a id="d3e28310"></a><table class="scrap">
+                  <a id="d3e28582"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-CastExpr"></a>[117]&nbsp;&nbsp;&nbsp;</td>
@@ -19566,7 +19818,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25001.doc-xquery40-TypeName"></a>[244]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25273.doc-xquery40-TypeName"></a>[244]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeName</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -19577,7 +19829,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25002.doc-xquery40-LocalUnionType"></a>[257]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25274.doc-xquery40-LocalUnionType"></a>[257]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xquery40-ItemType">ItemType</a>  (","  <a href="#doc-xquery40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -19586,7 +19838,7 @@ be used to process an expression in a way that depends on its <a title="dynamic 
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25003.doc-xquery40-EnumerationType"></a>[258]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25275.doc-xquery40-EnumerationType"></a>[258]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>EnumerationType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xquery40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xquery40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -19706,7 +19958,7 @@ The result of a cast expression is one of the following:
                <div class="div3">
                   
                   <h4><a id="id-castable"></a>4.22.4 Castable</h4>
-                  <a id="d3e28503"></a><table class="scrap">
+                  <a id="d3e28775"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-CastableExpr"></a>[116]&nbsp;&nbsp;&nbsp;</td>
@@ -19719,7 +19971,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25154.doc-xquery40-SingleType"></a>[221]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25426.doc-xquery40-SingleType"></a>[221]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>SingleType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -19729,7 +19981,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25156.doc-xquery40-TypeName"></a>[244]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25428.doc-xquery40-TypeName"></a>[244]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeName</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -19740,7 +19992,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25157.doc-xquery40-LocalUnionType"></a>[257]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25429.doc-xquery40-LocalUnionType"></a>[257]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xquery40-ItemType">ItemType</a>  (","  <a href="#doc-xquery40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -19749,7 +20001,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e25158.doc-xquery40-EnumerationType"></a>[258]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e25430.doc-xquery40-EnumerationType"></a>[258]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>EnumerationType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xquery40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xquery40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -19889,7 +20141,7 @@ usa:zipcode?)</code>.</p>
                <div class="div3">
                   
                   <h4><a id="id-treat"></a>4.22.6 Treat</h4>
-                  <a id="d3e28742"></a><table class="scrap">
+                  <a id="d3e29014"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xquery40-TreatExpr"></a>[115]&nbsp;&nbsp;&nbsp;</td>
@@ -19975,7 +20227,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-map-operator"></a>4.23 Simple map operator (<code>!</code>)</h3>
-               <a id="d3e28884"></a><table class="scrap">
+               <a id="d3e29156"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-SimpleMapExpr"></a>[132]&nbsp;&nbsp;&nbsp;</td>
@@ -20088,7 +20340,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-arrow-operator"></a>4.24 Arrow Expressions</h3>
-               <a id="d3e29076"></a><table class="scrap">
+               <a id="d3e29348"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ArrowExpr"></a>[118]&nbsp;&nbsp;&nbsp;</td>
@@ -20154,7 +20406,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e25676.doc-xquery40-InlineFunctionExpr"></a>[205]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e25948.doc-xquery40-InlineFunctionExpr"></a>[205]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>InlineFunctionExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -20165,7 +20417,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e25677.doc-xquery40-ArgumentList"></a>[151]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e25949.doc-xquery40-ArgumentList"></a>[151]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  ((<a href="#doc-xquery40-PositionalArguments">PositionalArguments</a>  (","  <a href="#prod-xquery40-KeywordArguments">KeywordArguments</a>)?)  |  <a href="#prod-xquery40-KeywordArguments">KeywordArguments</a>)?  ")"</code></td>
@@ -20174,7 +20426,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e25678.doc-xquery40-PositionalArgumentList"></a>[152]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e25950.doc-xquery40-PositionalArgumentList"></a>[152]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>PositionalArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  <a href="#doc-xquery40-PositionalArguments">PositionalArguments</a>?  ")"</code></td>
@@ -20301,7 +20553,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2 xquery">
                
                <h3><a id="id-validate"></a>4.25 Validate Expressions</h3>
-               <a id="d3e29400"></a><table class="scrap">
+               <a id="d3e29672"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ValidateExpr"></a>[127]&nbsp;&nbsp;&nbsp;</td>
@@ -20322,7 +20574,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e25909.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e26181.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xquery40-Expr">Expr</a>?  "}"</code></td>
@@ -20515,7 +20767,7 @@ by some implementations and not by others. The syntax is designed so that
 extension expressions can be successfully parsed by all implementations, and
 so that fallback behavior can be defined for implementations that do not
 recognize a particular extension.</p>
-               <a id="d3e29723"></a><table class="scrap">
+               <a id="d3e29995"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ExtensionExpr"></a>[129]&nbsp;&nbsp;&nbsp;</td>
@@ -20634,7 +20886,7 @@ raise a <a title="static error" class="termref" href="#dt-static-error">static e
          <div class="div1 xquery">
             
             <h2><a id="id-query-prolog"></a>5 Modules and Prologs</h2>
-            <a id="d3e29875"></a><table class="scrap">
+            <a id="d3e30147"></a><table class="scrap">
                <tbody>
                   <tr style="vertical-align:baseline;">
                      <td><a id="doc-xquery40-Module"></a>[1]&nbsp;&nbsp;&nbsp;</td>
@@ -20768,7 +21020,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-version-declaration"></a>5.1 Version Declaration</h3>
-               <a id="d3e30095"></a><table class="scrap">
+               <a id="d3e30367"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-VersionDecl"></a>[2]&nbsp;&nbsp;&nbsp;</td>
@@ -20863,7 +21115,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-module-declaration"></a>5.2 Module Declaration</h3>
-               <a id="d3e30231"></a><table class="scrap">
+               <a id="d3e30503"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ModuleDecl"></a>[5]&nbsp;&nbsp;&nbsp;</td>
@@ -20906,7 +21158,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-boundary-space-decls"></a>5.3 Boundary-space Declaration</h3>
-               <a id="d3e30317"></a><table class="scrap">
+               <a id="d3e30589"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-BoundarySpaceDecl"></a>[9]&nbsp;&nbsp;&nbsp;</td>
@@ -20936,7 +21188,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-default-collation-declaration"></a>5.4 Default Collation Declaration</h3>
-               <a id="d3e30356"></a><table class="scrap">
+               <a id="d3e30628"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-DefaultCollationDecl"></a>[10]&nbsp;&nbsp;&nbsp;</td>
@@ -20974,7 +21226,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-base-uri-decl"></a>5.5 Base URI Declaration</h3>
-               <a id="d3e30414"></a><table class="scrap">
+               <a id="d3e30686"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-BaseURIDecl"></a>[11]&nbsp;&nbsp;&nbsp;</td>
@@ -21027,7 +21279,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-construction-declaration"></a>5.6 Construction Declaration</h3>
-               <a id="d3e30501"></a><table class="scrap">
+               <a id="d3e30773"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ConstructionDecl"></a>[12]&nbsp;&nbsp;&nbsp;</td>
@@ -21059,7 +21311,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-default-ordering-decl"></a>5.7 Ordering Mode Declaration</h3>
-               <a id="d3e30544"></a><table class="scrap">
+               <a id="d3e30816"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-OrderingModeDecl"></a>[13]&nbsp;&nbsp;&nbsp;</td>
@@ -21086,7 +21338,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-empty-order-decl"></a>5.8 Empty Order Declaration</h3>
-               <a id="d3e30588"></a><table class="scrap">
+               <a id="d3e30860"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-EmptyOrderDecl"></a>[14]&nbsp;&nbsp;&nbsp;</td>
@@ -21125,7 +21377,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-copy-namespaces-decl"></a>5.9 Copy-Namespaces Declaration</h3>
-               <a id="d3e30650"></a><table class="scrap">
+               <a id="d3e30922"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-CopyNamespacesDecl"></a>[15]&nbsp;&nbsp;&nbsp;</td>
@@ -21170,7 +21422,7 @@ Processing</b></a>. Each module is either a <a title="main module" class="termre
             <div class="div2">
                
                <h3><a id="id-decimal-format-decl"></a>5.10 Decimal Format Declaration</h3>
-               <a id="d3e30695"></a><table class="scrap">
+               <a id="d3e30967"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-DecimalFormatDecl"></a>[18]&nbsp;&nbsp;&nbsp;</td>
@@ -21266,7 +21518,7 @@ return (
             <div class="div2">
                
                <h3><a id="id-schema-import"></a>5.11 Schema Import</h3>
-               <a id="d3e30819"></a><table class="scrap">
+               <a id="d3e31091"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-SchemaImport"></a>[21]&nbsp;&nbsp;&nbsp;</td>
@@ -21443,7 +21695,7 @@ return (
             <div class="div2">
                
                <h3><a id="id-module-import"></a>5.12 Module Import</h3>
-               <a id="d3e31067"></a><table class="scrap">
+               <a id="d3e31339"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ModuleImport"></a>[23]&nbsp;&nbsp;&nbsp;</td>
@@ -21511,7 +21763,7 @@ return (
       variables declared in module C. </p>
                <div class="example">
                   
-                  <div class="exampleHeader"><a id="d3e31248"></a>Example: Schema Information and Module Import</div>
+                  <div class="exampleHeader"><a id="d3e31520"></a>Example: Schema Information and Module Import</div>
                   <p>A module import does not import schema definitions from the imported module. In the
         following query, the type geometry:triangle is not defined, even if it is known in the
         imported module, so the variable declaration raises an error [<a href="#ERRXPST0051" title="err:XPST0051">err:XPST0051</a>]:</p>
@@ -21609,7 +21861,7 @@ declare variable $t as geometry:triangle := geo:make-triangle(); $t</pre>
             <div class="div2">
                
                <h3><a id="id-namespace-declaration"></a>5.13 Namespace Declaration</h3>
-               <a id="d3e31318"></a><table class="scrap">
+               <a id="d3e31590"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-NamespaceDecl"></a>[24]&nbsp;&nbsp;&nbsp;</td>
@@ -21733,7 +21985,7 @@ return $i/xx:bing</pre>
             <div class="div2">
                
                <h3><a id="id-default-namespace"></a>5.14 Default Namespace Declaration</h3>
-               <a id="d3e31518"></a><table class="scrap">
+               <a id="d3e31790"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-DefaultNamespaceDecl"></a>[25]&nbsp;&nbsp;&nbsp;</td>
@@ -21825,7 +22077,7 @@ return $i/xx:bing</pre>
             <div class="div2">
                
                <h3><a id="id-annotations"></a>5.15 Annotations</h3>
-               <a id="d3e31645"></a><table class="scrap">
+               <a id="d3e31917"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
@@ -21837,7 +22089,7 @@ return $i/xx:bing</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e27867.doc-xquery40-InlineFunctionExpr"></a>[205]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28139.doc-xquery40-InlineFunctionExpr"></a>[205]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>InlineFunctionExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -21920,10 +22172,10 @@ return $i/xx:bing</pre>
             <div class="div2">
                
                <h3><a id="id-variable-declarations"></a>5.16 Variable Declaration</h3>
-               <a id="d3e31794"></a><table class="scrap">
+               <a id="d3e32066"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e27967.doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28239.doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>AnnotatedDecl</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"declare"  <a href="#doc-xquery40-Annotation">Annotation</a>*  (<a href="#doc-xquery40-VarDecl">VarDecl</a>  |  <a href="#doc-xquery40-FunctionDecl">FunctionDecl</a>  |  <a href="#doc-xquery40-ItemTypeDecl">ItemTypeDecl</a>)</code></td>
@@ -21932,7 +22184,7 @@ return $i/xx:bing</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e27968.doc-xquery40-Annotation"></a>[27]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28240.doc-xquery40-Annotation"></a>[27]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>Annotation</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"%"  <a href="#doc-xquery40-EQName">EQName</a>  ("("  <a href="#doc-xquery40-AnnotationValue">AnnotationValue</a>  (","  <a href="#doc-xquery40-AnnotationValue">AnnotationValue</a>)*  ")")?</code></td>
@@ -21951,7 +22203,7 @@ return $i/xx:bing</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e27970.doc-xquery40-VarName"></a>[168]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28242.doc-xquery40-VarName"></a>[168]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>VarName</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>
@@ -21962,7 +22214,7 @@ return $i/xx:bing</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e27971.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28243.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>TypeDeclaration</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"as"  <a href="#doc-xquery40-SequenceType">SequenceType</a>
@@ -22185,7 +22437,7 @@ declare function local:f() { $b };</pre>
             <div class="div2">
                
                <h3><a id="id-context-value-declarations"></a>5.17 Context Value Declaration</h3>
-               <a id="d3e32193"></a><table class="scrap">
+               <a id="d3e32465"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-ContextValueDecl"></a>[32]&nbsp;&nbsp;&nbsp;</td>
@@ -22326,10 +22578,10 @@ declare context value as document-node()* := collection($uri);</pre>
         The associated functions also become available in the
         <a title="dynamically known function definitions" class="termref" href="#dt-dynamically-known-function-definitions">dynamically known function definitions</a> 
         of the <a title="dynamic context" class="termref" href="#dt-dynamic-context">dynamic context</a>.</p>
-               <a id="d3e32369"></a><table class="scrap">
+               <a id="d3e32641"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e28461.doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28733.doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>AnnotatedDecl</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"declare"  <a href="#doc-xquery40-Annotation">Annotation</a>*  (<a href="#doc-xquery40-VarDecl">VarDecl</a>  |  <a href="#doc-xquery40-FunctionDecl">FunctionDecl</a>  |  <a href="#doc-xquery40-ItemTypeDecl">ItemTypeDecl</a>)</code></td>
@@ -22338,7 +22590,7 @@ declare context value as document-node()* := collection($uri);</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e28462.doc-xquery40-Annotation"></a>[27]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28734.doc-xquery40-Annotation"></a>[27]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>Annotation</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"%"  <a href="#doc-xquery40-EQName">EQName</a>  ("("  <a href="#doc-xquery40-AnnotationValue">AnnotationValue</a>  (","  <a href="#doc-xquery40-AnnotationValue">AnnotationValue</a>)*  ")")?</code></td>
@@ -22399,7 +22651,7 @@ declare context value as document-node()* := collection($uri);</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e28468.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28740.doc-xquery40-TypeDeclaration"></a>[222]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>TypeDeclaration</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"as"  <a href="#doc-xquery40-SequenceType">SequenceType</a>
@@ -22409,7 +22661,7 @@ declare context value as document-node()* := collection($uri);</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e28469.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e28741.doc-xquery40-EnclosedExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xquery40-Expr">Expr</a>?  "}"</code></td>
@@ -22427,7 +22679,7 @@ declare context value as document-node()* := collection($uri);</pre>
       sequence of <code>dept</code> elements.</p>
                <div class="example">
                   
-                  <div class="exampleHeader"><a id="d3e32497"></a>Example: Using a function, prepare a summary of employees that are located in Denver.</div>
+                  <div class="exampleHeader"><a id="d3e32769"></a>Example: Using a function, prepare a summary of employees that are located in Denver.</div>
                   <div class="exampleInner">
                      <pre>declare function local:summary($emps as element(employee)*) as element(dept)* 
 { 
@@ -22681,7 +22933,7 @@ local:summary(fn:doc("acme_corp.xml")//employee[location = "Denver"])</pre>
       recursive functions, whose bodies reference each other, are also allowed.</p>
                   <div class="example">
                      
-                     <div class="exampleHeader"><a id="d3e32865"></a>Example: A recursive function to compute the maximum depth of a document</div>
+                     <div class="exampleHeader"><a id="d3e33137"></a>Example: A recursive function to compute the maximum depth of a document</div>
                      <p>The following
       example declares a recursive function that computes the maximum depth of a node hierarchy, and
       calls the function to find the maximum depth of a particular document. The function
@@ -22711,10 +22963,10 @@ local:depth(doc("partlist.xml"))</pre>
                <p>An item type declaration defines a name for an item type. Defining a name for an item type
     allows it to be referenced <span>by name</span> rather than repeating
     the item type definition in full. It also allows recursive types to be defined.</p>
-               <a id="d3e32888"></a><table class="scrap">
+               <a id="d3e33160"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e28888.doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e29160.doc-xquery40-AnnotatedDecl"></a>[26]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>AnnotatedDecl</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"declare"  <a href="#doc-xquery40-Annotation">Annotation</a>*  (<a href="#doc-xquery40-VarDecl">VarDecl</a>  |  <a href="#doc-xquery40-FunctionDecl">FunctionDecl</a>  |  <a href="#doc-xquery40-ItemTypeDecl">ItemTypeDecl</a>)</code></td>
@@ -22723,7 +22975,7 @@ local:depth(doc("partlist.xml"))</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e28889.doc-xquery40-Annotation"></a>[27]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e29161.doc-xquery40-Annotation"></a>[27]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>Annotation</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"%"  <a href="#doc-xquery40-EQName">EQName</a>  ("("  <a href="#doc-xquery40-AnnotationValue">AnnotationValue</a>  (","  <a href="#doc-xquery40-AnnotationValue">AnnotationValue</a>)*  ")")?</code></td>
@@ -22811,7 +23063,7 @@ local:depth(doc("partlist.xml"))</pre>
           declaration</b> declares an option that affects the behavior of a particular
         implementation. Each option consists of an identifying EQName and a StringLiteral.]
             </p>
-               <a id="d3e33031"></a><table class="scrap">
+               <a id="d3e33303"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xquery40-OptionDecl"></a>[43]&nbsp;&nbsp;&nbsp;</td>
@@ -26515,7 +26767,7 @@ local:depth(doc("partlist.xml"))</pre>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.3.1 Terminal Symbols</h4>
-                  <a id="d3e37745"></a><table class="scrap">
+                  <a id="d3e38017"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xquery40-IntegerLiteral"></a>[265]&nbsp;&nbsp;&nbsp;</td>
@@ -26797,7 +27049,7 @@ local:depth(doc("partlist.xml"))</pre>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e38040"></a><table class="scrap">
+                  <a id="d3e38312"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xquery40-Digits"></a>[288]&nbsp;&nbsp;&nbsp;</td>

@@ -14,7 +14,7 @@
          
          <h1><a id="title"></a>XML Path Language (XPath) 4.0 WG Review Draft</h1>
          
-         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 16&nbsp;January&nbsp;2024</h2>
+         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 23&nbsp;January&nbsp;2024</h2>
          <dl>
             <dt>This version:</dt>
             <dd>
@@ -13454,33 +13454,121 @@ return if ($m instance of ST) {$m}</pre>
                   <div class="div4">
                      
                      <h5><a id="id-deep-lookup"></a>4.15.3.3 Deep Lookup</h5>
-                     <p>The deep lookup operator "??" has both unary and binary forms. The unary form <code>??KS</code>
-               (where <var>KS</var> is any KeySpecifier) has the same effect as the binary form <code>.??KS</code>.
-               The semantics are as follows.</p>
-                     <p>We define the recursive content of a value to consist of all items found in a depth-first traversal of the value
-               that proceeds as follows:</p>
-                     <p>For each item in the value:</p>
-                     <ol class="enumar">
-                        <li>
-                           <p>Add the item to the result.</p>
-                        </li>
-                        <li>
-                           <p>If the item is an array, process all the members of the array (in order) by applying these rules
-                     recursively.</p>
-                        </li>
-                        <li>
-                           <p>If the item is a map, process the values in each entry of the map (in arbitrary order) 
-                     by applying these rules recursively.</p>
-                        </li>
-                     </ol>
-                     <p>The effect of the deep lookup expression <code>E??KS</code> is obtained by evaluating
-                  <var>E</var>, establishing its recursive content <var>C</var>, removing any item that is not
-                  a map or array to yield a sequence <var>D</var>, and then evaluating the shallow lookup
-               expression <code>D?KS</code>, but with one exception: if evaluation of any shallow lookup fails,
-               then the error is not propagated, but instead its result is taken to be an empty sequence.</p>
-                     <p>Specifically, no dynamic error occurs when an item in the recursive content is an array
-               and the KeySpecifier is not an integer, or when it is an integer that is out of range for the
-               array.</p>
+                     <p>The deep lookup operator "??" has both unary and postfix forms. The unary form <code>??KS</code>
+               (where <var>KS</var> is any <code>KeySpecifier</code>) has the same effect as the binary form <code>.??KS</code>.
+               </p>
+                     <p>The semantics are defined as follows.</p>
+                     <p>First we define the <b>recursive content</b> of an item as follows:</p>
+                     <div class="exampleInner">
+                        <pre> declare function immediate-content($item as item()) as map(*)* {
+   if ($item instance of map(*)) {
+      map:entries($item)
+   } else if ($item instance of array(*)) {
+      (1 to array:size($A))!map:entry(., array:get(.))
+   }
+};    
+declare function recursive-content($item as item()) as map(*)* {
+   immediate-content($item) ! (., map:values(.) =!&gt; recursive-content())
+};</pre>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>Explanation: the immediate content of a map is obtained by splitting it
+               into a sequence of singleton maps, each representing one entry. The immediate
+               content of an array is obtained by consructing a sequence of singleton maps,
+               one for each array member, where the key of the map is the array index and the
+               value is the corresponding member. The recursive content of an item contains
+               the singleton maps in its immediate content, each followed by the recursive
+               content obtained by expanding any maps or arrays in the immediate content.
+               </p>
+                     </div>
+                     <p>The result of the expression <code>E??KS</code>, where <code>E</code> is any expression
+               and <code>KS</code> is any <code>KeySpecifier</code>, is then <code>(E ! recursive-content(.))?KS</code>.</p>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>This is best explained by considering examples.</p>
+                        <p>Consider the expression <code>let $value := [map{"first":"John", "last":"Smith"}, map{"first":"Mary", "last":"Evans"}]</code>.</p>
+                        <p>The recursive content of this array is the sequence of six singleton maps:</p>
+                        <ol class="enumar">
+                           <li>
+                              <p>
+                              <code>map{1: map{"first":"John", "last":"Smith"}}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{2: map{"first":"Mary", "last":"Evans"}}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"first":"John"}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"last":"Smith"}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"first":"Mary"}</code>
+                           </p>
+                           </li>
+                           <li>
+                              <p>
+                              <code>map{"last":"Evans"}</code>
+                           </p>
+                           </li>
+                        </ol>
+                        <p>The expression <code>$value??*</code> returns the sequence 
+                     <code>map{"first":"John", "last":"Smith"}, map{"first":"Mary", "last":"Evans"},
+                     "John", "Smith", "Mary", "Evans"</code>.</p>
+                        <p>The expression <code>$value??first</code> returns the sequence <code>"John", "Mary"</code>.</p>
+                        <p>The expression <code>$value??last</code> returns the sequence <code>"Smith", "Evans"</code>.</p>
+                        <p>The expression <code>$value??1</code> returns the sequence <code>map{"first":"John", "last":"Smith"}</code>.</p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>The effect of evaluating all shallow lookups on maps rather than arrays is that no error arises
+                  if an array subscript is out of bounds. In the above example, <code>$value?3</code> would
+                  return an empty sequence, it would not raise an error.</p>
+                        <p>This also affects the way an <code>xs:untypedAtomic</code> key value is handled. 
+                     Given the shallow lookup
+                     expression <code>$A?$x</code>, if <code>$A</code> is an array and <code>$x</code>
+                     (after atomization) is <code>xs:untypedAtomic</code> then the value of <code>$x</code>
+                     is converted to an integer (by virtue of the coercion rules applying to a call
+                     on <code>array:get</code>). With a deep lookup expression <code>$A??$x</code>, by
+                     contrast, the semantics are defined in terms of a map lookup, in which 
+                     <code>xs:untypedAtomic</code> values are always treated as strings.
+                  </p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>The definition of the <code>recursive-content</code> function is such that items
+                  in the top-level value that are not maps or arrays are ignored, whereas items that
+                  are not themselves maps or arrays, but which appear in the content of a map or array
+                  at the top level, are included. This means that <code>E??X</code> mirrors the
+                  behavior of <code>E//X</code>, in that it includes all items that are one-or-more levels
+                  deep in the tree.</p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>The result of the deep lookup operator retains order when processing sequences and
+                  arrays, but not when processing maps.</p>
+                     </div>
+                     <div class="note">
+                        <p class="prefix"><b>Note:</b></p>
+                        <p>An expression involving multiple deep lookup operators may return duplicates.
+                     For example, the result of the expression 
+                     <code>[[["a"],["b"]],[["c"],["d"]]] ?? 1 ?? 1</code>
+                     is <code>(["a"], "a", "b", "a", "c")</code>. This is because the first <code>??</code> operator
+                     selects members in position 1 at all three levels, that is it selects the arrays
+                     <code>[["a"],["b"]]</code>, <code>["a"]</code>, and <code>["c"]</code> as well
+                     as each of the four string values. The second <code>??</code> operator 
+                  selects members in position 1 within each of these values, which results in the string
+                  <code>"a"</code> being selected twice.</p>
+                     </div>
                      <div class="example">
                         
                         <div class="exampleHeader"><a id="ex-deep-lookup"></a>Example: Examples of Deep Lookup Expressions</div>
@@ -13529,6 +13617,170 @@ return if ($m instance of ST) {$m}</pre>
                            <pre>$tree ??$cities =&gt; 
      map:for-each( fn($key, $val){$val ??to ! ($key || "-" || .)} )</pre>
                         </div>
+                     </div>
+                     <p>&nbsp;</p>
+                     <div class="example">
+                        
+                        <div class="exampleHeader"><a id="d3e19928"></a>Example: Comparison with JSONPath</div>
+                        <p>This example provides XPath equivalents to some examples given in the
+                  JSONPath specification. [TODO: add a reference].</p>
+                        <p>The examples query the result of parsing the following JSON value, representing
+                     a store whose stock consists of four books and a bicycle:</p>
+                        <div class="exampleInner">
+                           <pre>{ "store": {
+       "book": [
+         { "category": "reference",
+           "author": "Nigel Rees",
+           "title": "Sayings of the Century",
+           "price": 8.95
+         },
+         { "category": "fiction",
+           "author": "Evelyn Waugh",
+           "title": "Sword of Honour",
+           "price": 12.99
+         },
+         { "category": "fiction",
+           "author": "Herman Melville",
+           "title": "Moby Dick",
+           "isbn": "0-553-21311-3",
+           "price": 8.99
+         },
+         { "category": "fiction",
+           "author": "J. R. R. Tolkien",
+           "title": "The Lord of the Rings",
+           "isbn": "0-395-19395-8",
+           "price": 22.99
+         }
+       ],
+       "bicycle": {
+         "color": "red",
+         "price": 399
+       }
+     }
+   }</pre>
+                        </div>
+                        <p>The following table illustrates some queries on this data, expressed
+                  both in JSONPath and in XPath 4.0.</p>
+                        <table style="width:100%" class="small">
+                           <caption>JSONPath vs XPath 4.0 Comparison</caption>
+                           <thead>
+                              <tr>
+                                 <th>Query</th>
+                                 <th>JSONPath</th>
+                                 <th>XPath 4.0</th>
+                              </tr>
+                           </thead>
+                           <tbody>
+                              <tr>
+                                 <td>The authors of all books in the store</td>
+                                 <td>
+                                    <code>$.store.book[*].author</code>
+                                    </td>
+                                 <td>
+                                    <code>$m?store?book??author</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All authors</td>
+                                 <td>
+                                    <code>$..author</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??author</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All things in store (four books and a red bicycle)</td>
+                                 <td>
+                                    <code>$.store.*  </code>
+                                    </td>
+                                 <td>
+                                    <code>$m?store?*</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The prices of everything in the store</td>
+                                 <td>
+                                    <code>$.store..price</code>
+                                    </td>
+                                 <td>
+                                    <code>$m?store??price</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The third book</td>
+                                 <td>
+                                    <code>$..book[2]  </code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?3</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The third book's author</td>
+                                 <td>
+                                    <code>$..book[2].author</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?3?author</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The third book's publisher (empty result)</td>
+                                 <td>
+                                    <code>$..book[2].publisher</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?3?publisher</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The last book (in order)</td>
+                                 <td>
+                                    <code>$..book[-1]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book =&gt; array:foot()</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>The first two books</td>
+                                 <td>
+                                    <code>$..book[0,1]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book?(1,2)</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All books with an ISBN</td>
+                                 <td>
+                                    <code>$..book[?@.isbn]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book[?isbn]</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All books cheaper than 10</td>
+                                 <td>
+                                    <code>$..book[?@.price&lt;10]</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??book[?price lt 10]</code>
+                                    </td>
+                              </tr>
+                              <tr>
+                                 <td>All member values and array elements contained in the input value</td>
+                                 <td>
+                                    <code>$..*</code>
+                                    </td>
+                                 <td>
+                                    <code>$m??*</code>
+                                    </td>
+                              </tr>
+                           </tbody>
+                        </table>
                      </div>
                   </div>
                   <div class="div4">
@@ -13602,7 +13854,7 @@ return if ($m instance of ST) {$m}</pre>
                
                <h3><a id="id-conditionals"></a>4.16 Conditional Expressions</h3>
                <p>XPath 4.0 allows conditional expressions to be written in several different ways.</p>
-               <a id="d3e19897"></a><table class="scrap">
+               <a id="d3e20169"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-IfExpr"></a>[23]&nbsp;&nbsp;&nbsp;</td>
@@ -13666,7 +13918,7 @@ return if ($m instance of ST) {$m}</pre>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e17991.doc-xpath40-EnclosedExpr"></a>[9]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e18263.doc-xpath40-EnclosedExpr"></a>[9]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>EnclosedExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"{"  <a href="#doc-xpath40-Expr">Expr</a>?  "}"</code></td>
@@ -13790,7 +14042,7 @@ named <code>discounted</code>, independently of its value:</p>
             <div class="div2">
                
                <h3><a id="id-otherwise"></a>4.17 Otherwise Expressions</h3>
-               <a id="d3e20145"></a><table class="scrap">
+               <a id="d3e20417"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-OtherwiseExpr"></a>[37]&nbsp;&nbsp;&nbsp;</td>
@@ -13832,7 +14084,7 @@ named <code>discounted</code>, independently of its value:</p>
                <h3><a id="id-quantified-expressions"></a>4.18 Quantified Expressions</h3>
                <p>Quantified expressions support existential and universal quantification. The
 value of a quantified expression is always <code>true</code> or <code>false</code>.</p>
-               <a id="d3e20199"></a><table class="scrap">
+               <a id="d3e20471"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-QuantifiedExpr"></a>[21]&nbsp;&nbsp;&nbsp;</td>
@@ -13981,7 +14233,7 @@ type.
                <div class="div3">
                   
                   <h4><a id="id-instance-of"></a>4.19.1 Instance Of</h4>
-                  <a id="d3e20458"></a><table class="scrap">
+                  <a id="d3e20730"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-InstanceofExpr"></a>[40]&nbsp;&nbsp;&nbsp;</td>
@@ -14043,7 +14295,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                <div class="div3">
                   
                   <h4><a id="id-cast"></a>4.19.2 Cast</h4>
-                  <a id="d3e20563"></a><table class="scrap">
+                  <a id="d3e20835"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-CastExpr"></a>[43]&nbsp;&nbsp;&nbsp;</td>
@@ -14066,7 +14318,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18555.doc-xpath40-TypeName"></a>[132]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18827.doc-xpath40-TypeName"></a>[132]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeName</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -14077,7 +14329,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18556.doc-xpath40-LocalUnionType"></a>[145]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18828.doc-xpath40-LocalUnionType"></a>[145]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -14086,7 +14338,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18557.doc-xpath40-EnumerationType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18829.doc-xpath40-EnumerationType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>EnumerationType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -14206,7 +14458,7 @@ The result of a cast expression is one of the following:
                <div class="div3">
                   
                   <h4><a id="id-castable"></a>4.19.3 Castable</h4>
-                  <a id="d3e20756"></a><table class="scrap">
+                  <a id="d3e21028"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-CastableExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
@@ -14219,7 +14471,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18708.doc-xpath40-SingleType"></a>[109]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18980.doc-xpath40-SingleType"></a>[109]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>SingleType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -14229,7 +14481,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18710.doc-xpath40-TypeName"></a>[132]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18982.doc-xpath40-TypeName"></a>[132]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeName</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -14240,7 +14492,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18711.doc-xpath40-LocalUnionType"></a>[145]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18983.doc-xpath40-LocalUnionType"></a>[145]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -14249,7 +14501,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18712.doc-xpath40-EnumerationType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e18984.doc-xpath40-EnumerationType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>EnumerationType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -14389,7 +14641,7 @@ usa:zipcode?)</code>.</p>
                <div class="div3">
                   
                   <h4><a id="id-treat"></a>4.19.5 Treat</h4>
-                  <a id="d3e20995"></a><table class="scrap">
+                  <a id="d3e21267"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-TreatExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
@@ -14475,7 +14727,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-map-operator"></a>4.20 Simple map operator (<code>!</code>)</h3>
-               <a id="d3e21137"></a><table class="scrap">
+               <a id="d3e21409"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-SimpleMapExpr"></a>[53]&nbsp;&nbsp;&nbsp;</td>
@@ -14588,7 +14840,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-arrow-operator"></a>4.21 Arrow Expressions</h3>
-               <a id="d3e21329"></a><table class="scrap">
+               <a id="d3e21601"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-ArrowExpr"></a>[44]&nbsp;&nbsp;&nbsp;</td>
@@ -14654,7 +14906,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e19230.doc-xpath40-InlineFunctionExpr"></a>[97]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e19502.doc-xpath40-InlineFunctionExpr"></a>[97]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>InlineFunctionExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>("function"  |  "fn")  <a href="#doc-xpath40-FunctionSignature">FunctionSignature</a>?  <a href="#prod-xpath40-FunctionBody">FunctionBody</a>
@@ -14664,7 +14916,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e19231.doc-xpath40-ArgumentList"></a>[72]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e19503.doc-xpath40-ArgumentList"></a>[72]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  ((<a href="#doc-xpath40-PositionalArguments">PositionalArguments</a>  (","  <a href="#prod-xpath40-KeywordArguments">KeywordArguments</a>)?)  |  <a href="#prod-xpath40-KeywordArguments">KeywordArguments</a>)?  ")"</code></td>
@@ -14673,7 +14925,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e19232.doc-xpath40-PositionalArgumentList"></a>[73]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e19504.doc-xpath40-PositionalArgumentList"></a>[73]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>PositionalArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  <a href="#doc-xpath40-PositionalArguments">PositionalArguments</a>?  ")"</code></td>
@@ -16928,7 +17180,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.3.1 Terminal Symbols</h4>
-                  <a id="d3e24255"></a><table class="scrap">
+                  <a id="d3e24527"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-IntegerLiteral"></a>[152]&nbsp;&nbsp;&nbsp;</td>
@@ -17157,7 +17409,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e24485"></a><table class="scrap">
+                  <a id="d3e24757"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-Digits"></a>[170]&nbsp;&nbsp;&nbsp;</td>
