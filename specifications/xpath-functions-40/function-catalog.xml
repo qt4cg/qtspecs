@@ -3672,6 +3672,7 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
          </fos:example>
       </fos:examples>
    </fos:function>
+
    <fos:function name="compare" prefix="fn">
       <fos:signatures>
          <fos:proto name="compare" return-type="xs:integer?">
@@ -3699,6 +3700,11 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
             returns the integer value <code>-1</code>, <code>0</code>, or <code>1</code>,
             depending on whether <code>$value1</code> is less than, equal to, or greater than
             <code>$value2</code>, respectively.</p>
+         <p>This function differs from the operators <code>lt</code>, <code>eq</code>,
+            and <code>gt</code> in that decimal values are not converted to doubles. This means that
+            the comparison is fully transitive, which makes it safe for use in sorting algorithms.
+            It is used to underpin sorting in XQuery 4.0 and XSLT 4.0, and is also available as a
+            free-standing function in its own right.</p>
          <p>If either <code>$value1</code> or <code>$value2</code> is the empty sequence,
             the function returns the empty sequence.</p>
          <p>Otherwise, the result is determined as follows:</p>
@@ -3718,8 +3724,27 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
             </item>
             <item>
                <p>If both <code>$value1</code> and <code>$value2</code> are instances of
-                  <code>xs:numeric</code>, the result of
-                  <code>fn:numeric-compare($value1, $value2)</code> is returned.</p>
+                  <code>xs:numeric</code>, the function relies on a total order, which is
+                  defined as follows:</p>
+               <olist>
+                  <item><p>A value <code>$f</code> of type <code>xs:float</code> is in all cases equal
+                     to the value <code>xs:double($f)</code>. The remaining rules therefore only consider
+                     instances of <code>xs:double</code> and <code>xs:decimal</code>.</p></item>
+                  <item><p><code>NaN</code> is equal to itself and less than any other value.</p></item>
+                  <item><p>Negative infinity is equal to itself and less than any other
+                     value except <code>NaN</code>.</p></item>
+                  <item><p>Positive infinity is equal to itself and greater than any other
+                     value.</p></item>
+                  <item><p>Negative zero is equal to positive zero.</p></item>
+                  <item><p>Other <code>xs:double</code> and <code>xs:decimal</code> values (that is,
+                     values other than the infinities, <code>NaN</code>, and negative zero) are ordered
+                     according to their mathematical magnitude, the comparison being done without any
+                     rounding or loss of precision. This effect can be achieved by converting
+                     <code>xs:double</code> values to <code>xs:decimal</code> using an implementation
+                     of <code>xs:decimal</code> that imposes no limits on precision or scale, or an
+                     implementation whose limits are such that all <code>xs:double</code> values can
+                     be represented precisely.</p></item>
+               </olist>
             </item>
             <item>
                <p>If both <code>$value1</code> and <code>$value2</code> are instances of
@@ -3819,6 +3844,20 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
             </item>
          </olist>
       </fos:rules>
+      <fos:notes>
+         <p>For numeric values, consider the <code>xs:double</code> value written as
+            <code>0.1e0</code> and the <code>xs:decimal</code> value written as <code>0.1</code>:
+            The mathematical magnitude of this <code>xs:double</code> value is 
+            <code>0.1000000000000000055511151231257827021181583404541015625</code>.
+            Therefore, <code>compare(0.1e0, 0.1)</code> returns <code>+1</code>. By contrast,
+            <code>0.1e0 lt 0.1</code> is <code>false</code> and <code>0.1e0 eq 0.1</code>
+            is <code>true</code>, because those expressions convert the <code>xs:decimal</code> value
+            <code>0.1</code> to the <code>xs:double</code> value <code>0.1e0</code>
+            before the comparison.</p>
+         <p>Although operations such as sorting and the <code>fn:min</code> and <code>fn:max</code>
+            functions invoke <code>fn:compare</code> to perform numeric comparison, these functions
+            in some cases treat <code>NaN</code> differently.</p>
+      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -3827,17 +3866,17 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
             </fos:test>
          </fos:example>
          <fos:example>
+            <fos:test>
+               <fos:expression>compare('Strasse', 'Straße')</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
             <fos:test
                default-collation="http://www.w3.org/2013/collation/UCA?lang=de;strength=primary">
                <fos:expression>compare('Strasse', 'Straße')</fos:expression>
                <fos:result>0</fos:result>
-               <fos:postamble>Assuming the default collation includes provisions that equate
-                     <quote>ss</quote> and the (German) character <quote>ß</quote>
-                     (<quote>sharp-s</quote>). Otherwise, the returned value depends on the
-                  semantics of the default collation.</fos:postamble>
+               <fos:postamble>Assuming the default collation equates <quote>ss</quote> and
+                  the German letter <quote>ß</quote>.</fos:postamble>
             </fos:test>
-         </fos:example>
-         <fos:example>
             <fos:test>
                <fos:expression><eg>compare(
   'Strasse',
@@ -3845,55 +3884,64 @@ return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs]]></eg>
   'http://www.w3.org/2013/collation/UCA?lang=de;strength=primary'
 )</eg></fos:expression>
                <fos:result>0</fos:result>
-               <fos:postamble>The specified collation equates
-                     <quote>ss</quote> and the (German) character <quote>ß</quote>
-                     (<quote>sharp-s</quote>).</fos:postamble>
+               <fos:postamble>The specified collation equates <quote>ss</quote> and the German
+                  letter <quote>ß</quote>.</fos:postamble>
             </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test default-collation="http://www.w3.org/2013/collation/UCA?lang=de">
-               <fos:expression>compare('Strassen', 'Straße')</fos:expression>
-               <fos:result>1</fos:result>
-               <fos:postamble>Assuming the default collation includes provisions that treat
-                  differences between <quote>ss</quote> and the (German) character <quote>ß</quote>
-                     (<quote>sharp-s</quote>) with less strength than the differences between the
-                  base characters, such as the final <quote>n</quote>. </fos:postamble>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>compare(9, 10)</fos:expression>
-               <fos:result>-1</fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>compare(123, 123.0)</fos:expression>
-               <fos:result>0</fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>compare(false(), true())</fos:expression>
-               <fos:result>-1</fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
             <fos:test>
                <fos:expression><![CDATA[compare('text', parse-xml('<xml>text</xml>'))]]></fos:expression>
                <fos:result>0</fos:result>
             </fos:test>
-         </fos:example>
-         <fos:example>
+            <fos:test>
+               <fos:expression>compare(9, 10)</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(123, 123.0)</fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(xs:double('NaN'), xs:float('NaN'))</fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(xs:double('NaN'), xs:double('-INF'))</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>            
+            <fos:test>
+               <fos:expression>compare(xs:double('-INF'), -23)</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(1, 1e0)</fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(1.1, 1.1e0)</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(1.2, 1.2e0)</fos:expression>
+               <fos:result>+1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(9999, xs:double('INF'))</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(false(), true())</fos:expression>
+               <fos:result>-1</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>compare(xs:hexBinary(''), xs:base64Binary(''))</fos:expression>
+               <fos:result>0</fos:result>
+            </fos:test>
             <fos:test>
                <fos:expression>compare(xs:time('23:59:59'), xs:time('00:00:00'))</fos:expression>
                <fos:result>1</fos:result>
             </fos:test>
-         </fos:example>
-         <fos:example>
             <fos:test>
-               <fos:expression>compare(xs:date('2001-01-01'), xs:date('2001-01-01'))</fos:expression>
-               <fos:result>0</fos:result>
+               <fos:expression>compare(xs:date('2001-01-01+01:00'), xs:date('2001-01-01+00:00'))</fos:expression>
+               <fos:result>-1</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -14846,7 +14894,7 @@ declare function equal-strings(
                is determined by the rules in <specref ref="choosing-a-collation"/>.</p>
                <note><p>In other cases, <code>$collation</code> is ignored.</p></note></item>
             <item><p>If both values are instances of <code>xs:numeric</code>, they are compared
-               using <code>fn:numeric-compare($v1, $v2)</code>.</p></item>
+               using <code>fn:compare($v1, $v2)</code>.</p></item>
             <item><p>In all other cases, the values are compared using the <code>lt</code> and <code>eq</code>
                operators appropriate to their type.</p></item>
          </olist>
@@ -14989,7 +15037,7 @@ declare function equal-strings(
             is determined by the rules in <specref ref="choosing-a-collation"/>.</p>
             <note><p>In other cases, <code>$collation</code> is ignored.</p></note></item>
             <item><p>If both values are instances of <code>xs:numeric</code>, they are compared
-            using <code>fn:numeric-compare($v1, $v2)</code>.</p></item>
+            using <code>fn:compare($v1, $v2)</code>.</p></item>
             <item><p>In all other cases, the values are compared using the <code>lt</code> and <code>eq</code>
                operators appropriate to their type.</p></item>
          </olist>
@@ -19207,7 +19255,7 @@ else let $rel = op:simple-compare(head($a), head($b), $C)
     and $k2 instance of union(xs:string, xs:anyURI, xs:untypedAtomic))
 then compare($k1, $k2, $C)
 else if ($k1 instance of xs:numeric and $k2 instance of xs:numeric)
-then numeric-compare($k1, $k2)
+then compare($k1, $k2)
 else if ($k1 eq $k2) then 0
 else if ($k2 lt $k2) then -1
 else +1</eg>
@@ -19829,104 +19877,6 @@ declare function transitive-closure (
       </fos:history>
       
    </fos:function>
-   
-   <fos:function name="numeric-compare" prefix="fn">
-      <fos:signatures>
-         <fos:proto name="numeric-compare" return-type="xs:integer">
-            <fos:arg name="value1" type="xs:numeric"/>
-            <fos:arg name="value2" type="xs:numeric"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-         
-      </fos:properties>
-      <fos:summary>
-         <p>Returns <code>-1</code>, <code>0</code>, or <code>+1</code> depending on whether <code>$value1</code>
-         is numerically less than, equal to, or greater than <code>$value2</code>.</p>
-      </fos:summary>
-      <fos:rules>
-         
-         <p>This function differs from the operators <code>lt</code>, <code>eq</code>, and <code>gt</code> in that
-            decimal values are not converted to doubles. This means that the comparison is fully transitive, which makes
-            it safe for use in sorting algorithms. It is used to underpin sorting in XQuery 4.0 and XSLT 4.0, and is also
-            available as a free-standing function in its own right.
-         </p>
-         
-         <p>The function relies on a total ordering of <code>xs:numeric</code> values which is defined as follows:</p>
-         
-         <olist>
-            <item><p>A value <code>$f</code> of type <code>xs:float</code> is in all cases equal to the value
-               <code>xs:double($f)</code>. The remaining rules therefore only consider instances of <code>xs:double</code>
-                and <code>xs:decimal</code>.</p></item>
-            <item><p>NaN is equal to itself and less than any other value.</p></item>
-            <item><p>Negative infinity is equal to itself and less than any other value except NaN.</p></item>
-            <item><p>Positive infinity is equal to itself and greater than any other value.</p></item>
-            <item><p>Negative zero is equal to positive zero.</p></item>
-            <item><p>Other <code>xs:double</code> and <code>xs:decimal</code> values (that is, values other than the infinities,
-             NaN, and negative zero) are ordered according to their mathematical magnitude, the comparison being done without any rounding or
-            loss of precision. This effect can be achieved by converting <code>xs:double</code> values to <code>xs:decimal</code>
-            using an implementation of <code>xs:decimal</code> that imposes no limits on precision or scale, or an implementation
-            whose limits are such that all <code>xs:double</code> values can be represented precisely.</p></item>
-         </olist>
-         <p>The function returns <code>-1</code> if <code>$value1</code> is less than <code>$value2</code> according to this
-            ordering, <code>0</code> if they are equal, or <code>+1</code> if <code>$value1</code> is greater.</p>
-         
-
-         
-      </fos:rules>
-      <fos:notes>
-         <p>Consider the <code>xs:double</code> value written as <code>0.1e0</code> and the 
-            <code>xs:decimal</code> value written as <code>0.1</code>.</p>
-         <p>The mathematical magnitude of this <code>xs:double</code> value is 
-            <code>0.1000000000000000055511151231257827021181583404541015625</code>.
-         Therefore, <code>fn:numeric-compare(0.1e0, 0.1)</code> returns <code>+1</code>. By contrast,
-            <code>0.1e0 lt 0.1</code> is false, and <code>0.1e0 eq 0.1</code> is true, because those expressions
-         convert the <code>xs:decimal</code> value <code>0.1</code> to the <code>xs:double</code> value <code>0.1e0</code>
-         before the comparison.</p>
-         <p>Although operations such as sorting and the <code>fn:min</code> and <code>fn:max</code> functions
-         invoke <code>fn:numeric-compare</code> to perform numeric comparison, these functions in some cases treat
-         <code>NaN</code> differently.</p>
-
- 
-      </fos:notes>
-      <fos:examples>
-       
-         <fos:example>
-            <fos:test>
-               <fos:expression>numeric-compare(xs:double('NaN'), xs:float('NaN'))</fos:expression>
-               <fos:result>0</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>numeric-compare(xs:double('NaN'), xs:double('-INF'))</fos:expression>
-               <fos:result>-1</fos:result>
-            </fos:test>            
-            <fos:test>
-               <fos:expression>numeric-compare(xs:double('-INF'), -23)</fos:expression>
-               <fos:result>-1</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>numeric-compare(1, 1e0)</fos:expression>
-               <fos:result>0</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>numeric-compare(1.1, 1.1e0)</fos:expression>
-               <fos:result>-1</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>numeric-compare(1.2, 1.2e0)</fos:expression>
-               <fos:result>+1</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>numeric-compare(9999, xs:double('INF'))</fos:expression>
-               <fos:result>-1</fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-   </fos:function>
-
    <fos:function name="merge" prefix="map">
       <fos:signatures>
          <fos:proto name="merge" return-type="map(*)">
