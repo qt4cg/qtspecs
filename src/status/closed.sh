@@ -5,5 +5,5 @@ cat qtspecs-issues.json \
 | jq -s '.' \
 | jq '.[] | select(.state == "closed")' \
 | jq -s '.'  \
-| jq '.[].number'
+| jq '.[] | "\(.closed_at) \(.number)"'
 
