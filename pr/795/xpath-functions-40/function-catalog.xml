@@ -19559,7 +19559,7 @@ return sort($in, $SWEDISH)</eg>
       <fos:signatures>
          <fos:proto name="sort-with" return-type="item()*">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="comparator" type="function(item(), item()) as xs:boolean"/>
+            <fos:arg name="comparator" type="function(item(), item()) as xs:integer"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -19571,57 +19571,81 @@ return sort($in, $SWEDISH)</eg>
          <p>Sorts a supplied sequence, according to the order induced by the supplied comparator function.</p>
       </fos:summary>
       <fos:rules>
-         <p>The items of the supplied <code>$input</code> are compared against each other,
+         <p>Informally, the items of the supplied <code>$input</code> are compared against each other,
             using the supplied <code>$comparator</code> function. The result is a sorted sequence.</p>
-         <p>The comparator function takes two items and returns an <code>xs:boolean</code>, which
-            defines the less-than relationship between these items.</p>
-         <p>More formally, the effect of the function is equivalent to the following implementation in XQuery:</p>
+         <p>The comparator function takes two items and returns an <code>xs:integer</code> that
+            defines the relationship between these items, in accordance with the
+            <code>fn:compare</code> function:</p>
+         <ulist>
+            <item><p>If the integer is negative or <code>0</code>, the first item is returned
+               before the second.</p></item>
+            <item><p>Otherwise, the first is returned after the second.</p></item>
+         </ulist>
+         <p>Sorting is <emph>stable</emph>, which means that the relative order of the input items
+            is maintained.</p>
+         <p>More formally, the effect of the function is equivalent to the following implementation
+            in XQuery:</p>
          <eg><![CDATA[
 declare function sort-with(
   $input      as item()*,
-  $comparator as function(item(), item()) as xs:boolean
+  $comparator as function(item(), item()) as xs:integer
 ) as item()* {
   if (count($input) < 2) then (
     $input
   ) else (
     let $head := head($input), $sorted-tail := sort-with(tail($input), $comparator)
-    return if ($comparator($head, head($sorted-tail))) then (
+    return if ($comparator($head, head($sorted-tail)) <= 0) then (
       $head, $sorted-tail
     ) else (
       head($sorted-tail), sort-with(($head, tail($sorted-tail)), $comparator)
     )
   )
-};]]></eg>
+};
+]]></eg>
       </fos:rules>
+      <fos:notes>
+         <p>An implementation is free to choose any sorting algorithm, as long as the result
+            returned is stable and matches the result of the implementation in XQuery.</p>
+         <p>Users are responsible for supplying a transitive comparator; otherwise, the result
+            might not be correctly sorted. An example for a non-transitive and thus unsuitable
+            comparator is <code>fn($a, $b) { if($a mod 2 = 1) then 1 else -1 }</code>,
+            as it considers odd numbers to be greater than even numbers.</p>
+      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>sort-with((1, 4, 6, 5, 3), op('&lt;'))</fos:expression>
+               <fos:expression>sort-with((1, 4, 6, 5, 3), compare#2)</fos:expression>
                <fos:result>(1, 3, 4, 5, 6)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>sort((1, 4, 4e0, 6, 5, 3), op('>'))</fos:expression>
+               <fos:expression>sort-with((1, 4, 6, 5, 3), op('-'))</fos:expression>
+               <fos:result>(1, 3, 4, 5, 6)</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>sort-with((1, 4, 4e0, 6, 5, 3), fn($a, $b) { compare($b, $a) })</fos:expression>
                <fos:result>(6, 5, 4, 4e0, 3, 1)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><eg>sort(
+               <fos:expression><eg>sort-with(
   (1, -2, 5, 10, -12, 8),
-  fn($a, $b) { abs($a) &lt; abs($b) }
+  fn($a, $b) { abs($a) - abs($b) }
 )</eg></fos:expression>
                <fos:result>(1, -2, 5, 8, 10, -12)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><eg><![CDATA[let $persons := <persons>
+               <fos:expression><eg><![CDATA[
+let $persons := <persons>
   <person name='John' age='8'/>
   <person name='Jack' age='6'/>
   <person name='Jim' age='8'/>
 </persons>
 let $cmp := fn($a, $b) {
-  if($a/@age != $b/@age)
-  then $a/@age < $b/@age
-  else $a/@name < $b/@name
+  let $age := compare($a/@age, $b/@age)
+  let $name := compare($a/@name, $b/@name)
+  return if ($age != 0) then $age else $name
 }
-return local:sort-with($persons/person, $cmp)]]></eg></fos:expression>
+return sort-with($persons/person, $cmp)
+]]></eg></fos:expression>
                <fos:result><![CDATA[<person name='Jack' age='6'/>,
 <person name='Jim' age='8'/>,
 <person name='John' age='8'/>]]></fos:result>
