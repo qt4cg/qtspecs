@@ -9722,7 +9722,7 @@ return $incrementors[2](4)]]></eg>
                <p>Focus functions are often useful as arguments to simple higher-order functions such as <code>fn:sort</code>.
                For example, to sort employees by salary, write <code>sort(//employee, (), fn { +@salary })</code>.
                (The unary plus has the effect of converting the attribute’s value to a number, for numeric sorting).</p>
-               <p>Focus functions can also be useful on the right-hand side of the <termref def="dt-arrow-operator"/>
+               <p>Focus functions can also be useful on the right-hand side of the <termref def="dt-sequence-arrow-operator"/>
                   and <termref def="dt-mapping-arrow-operator"/>.
                For example, <code>$s => tokenize() =!> fn { `"{.}"` }()</code> first tokenizes the string <code>$s</code>,
                then wraps each token in double quotation marks.</p>
@@ -20325,12 +20325,16 @@ raised <errorref
 
       <div2 id="id-arrow-operator">
          <head>Arrow Expressions</head>
+         
+         <p>Arrow expressions apply a function to a value, using the value of the
+         left-hand expression as the first argument to the function.</p>
 
          <scrap>
             <head/>
             <prodrecap id="ArrowExpr" ref="ArrowExpr"/>
             <prodrecap id="SequenceArrowTarget" ref="SequenceArrowTarget"/>
             <prodrecap id="MappingArrowTarget" ref="MappingArrowTarget"/>
+            <prodrecap id="LookupArrowTarget" ref="LookupArrowTarget"/>
             <prodrecap id="ArrowTarget" ref="ArrowTarget"/>
             <prodrecap id="ArrowStaticFunction" ref="ArrowStaticFunction"/>
             <prodrecap id="ArrowDynamicFunction" ref="ArrowDynamicFunction"/>
@@ -20338,12 +20342,109 @@ raised <errorref
             <prodrecap ref="ArgumentList"/>
             <prodrecap ref="PositionalArgumentList"/>
          </scrap>
-
-         <p>
-            <termdef term="arrow operator" id="dt-arrow-operator"
-               >The <term>arrow operator</term>  applies a function to the value of an expression, using the value as the first argument to the function.</termdef>  
+         
+         <p>The arrow syntax is particularly helpful when applying multiple
+            functions to a value in turn. For example, the following
+            expression invites syntax errors due to misplaced parentheses:
          </p>
-         <p diff="chg" at="2023-04-18">The <term>sequence arrow</term> operator <code>=></code> is defined as follows:
+         
+         <eg role="parsetest"
+            ><![CDATA[tokenize((normalize-unicode(upper-case($string))),"\s+")]]></eg>
+         
+         <p>In the following reformulation, it is easier to see that the parentheses are balanced:</p>
+         
+         <eg role="parse-test"
+            ><![CDATA[$string => upper-case() => normalize-unicode() => tokenize("\s+")]]></eg>
+         
+         <p diff="add" at="A">When the operator is written as <code>=!></code>, the function
+            is applied to each item in the sequence in turn. 
+            Assuming that <code>$string</code> is a single string, the above example could
+            equally be written:</p>
+         
+         <eg role="parse-test"
+            ><![CDATA[$string =!> upper-case() =!> normalize-unicode() =!> tokenize("\s+")]]></eg>
+         
+         <p diff="add" at="A">The difference between the two operators is seen when the left-hand
+            operand evaluates to a sequence:</p>
+         
+         <eg role="parse-test"><![CDATA[(1, 2, 3) => avg()]]></eg>
+         
+         <p diff="add" at="2023-07-24">returns a value of only one item, <code>2</code>, the average of all three items, whereas </p>
+         
+         <eg role="parse-test"><![CDATA[(1, 2, 3) =!> avg()]]></eg>
+         
+         <p diff="add" at="2023-07-24">returns the original sequence of three items, <code>(1, 2, 3)</code>, 
+            each item being the average of itself. The following example:</p>
+         
+         <eg role="parse-test"
+            ><![CDATA["The cat sat on the mat" => tokenize() =!> concat(".") =!> upper-case() => string-join(" ")]]></eg>
+         
+         <p diff="add" at="A">returns <code>"THE. CAT. SAT. ON. THE. MAT."</code>. The first arrow
+            could be written either as <code>=></code> or <code>=!></code> because the operand is a singleton; the next two
+            arrows have to be <code>=!></code> because the function is applied to each item in the tokenized
+            sequence individually; the final arrow must be <code>=></code> because the <code>string-join</code>
+            function applies to the sequence as a whole.</p>
+         
+         <note diff="add" at="A"><p>It may be useful to think of this as a map/reduce pipeline. The functions
+            introduced by <code>=!></code> are mapping operations; the function introduced by <code>=></code>
+            is a reduce operation.</p></note>
+         
+         <p diff="add" at="A">The following example introduces an inline function to the pipeline:</p>
+         <eg role="parse-test" diff="add" at="A"
+            ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn($a){$a+1}() => sum()]]></eg>
+         
+         <p diff="add" at="A">This is equivalent to <code>sum((1 to 5) ! (math:sqrt(xs:double(.))+1))</code>.</p>
+         
+         <p diff="add" at="A">The same effect can be achieved using a <termref def="dt-focus-function"/>:</p>
+         
+         <eg role="parse-test" diff="add" at="A"
+            ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn{.+1}() => sum()]]></eg>
+         
+         <p>Where the value of an expression is a map containing functions, simulating the behavior
+         of objects in object-oriented languages, then the <term>lookup arrow operator</term> <code>=?></code>
+         can be used to retrive a function from the map and to invoke the function with the map as its
+         first argument. For example, if <code>my:rectangle</code> returns a map with entries <code>width</code>,
+         <code>height</code>, <code>expand</code>, and <code>area</code>, then it becomes possible to
+         write:</p>
+         
+         <eg role="parse-test" diff="add" at="A"
+            ><![CDATA[my:rectangle(3,5) =?> expand(2) =?> area()]]></eg>
+         
+         <note diff="add" at="A"><p>The <code>ArgumentList</code> may include <code>PlaceHolders</code>,
+            though this is not especially useful. For example, the expression <code>"$" => concat(?)</code> is equivalent
+            to <code>concat("$", ?)</code>: its value is a function that prepends a supplied string with
+            a <code>$</code> symbol.</p></note>
+         
+         <note diff="add" at="A"><p>The <code>ArgumentList</code> may include keyword arguments if the
+            function is identified statically (that is, by name). For example,
+            the following is valid: <code>$xml => xml-to-json(indent:=true()) => parse-json(escape:=false())</code>.</p></note>
+         
+         <p diff="add" at="A">The sequence arrow operator thus applies the supplied function to 
+            the left-hand operand as a whole, while the mapping arrow operator applies the function to
+            each item in the value of the left-hand operand individually. In the case where the result
+            of the left-hand operand is a single item, the two operators have the same effect.</p>
+         
+         <note><p>The mapping arrow symbol <code>=!></code> is intended to suggest a combination of
+            function application (<code>=></code>) and sequence mapping
+            (<code>!</code>) combined in a single operation.</p>
+            <p>Similarly, the lookup arrow symbol <code>=?></code> is intended to suggest a combination
+               of function application (<code>=></code>) and map lookup (<code>?</code>) in a single
+            operation.</p>
+         </note>
+         
+         
+         
+
+        
+         
+         <div3 id="id-sequence-arrow-expression">
+            <head>Sequence Arrow Expressions</head>
+            
+            <p diff="add" at="2023-04-18"><termdef term="sequence arrow operator" id="dt-sequence-arrow-operator">
+               The <term>sequence arrow operator</term> <code>=></code> applies a function to a
+               supplied sequence.</termdef> It is defined as follows:</p>
+       
+         
             <ulist>
                <item><p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
                   <code>U</code>, an <nt def="ArrowStaticFunction">ArrowStaticFunction</nt>
@@ -20356,12 +20457,16 @@ raised <errorref
                   <code>(A, B, C...)</code>, the expression <code>U =&gt; F(A, B, C...)</code> is equivalent to the
                   expression <code>F(U, A, B, C...)</code>.</p></item>
             </ulist>
-            </p>
+            
+         </div3>
          
+         
+         <div3 id="id-mapping-arrow-expression">
+            <head>Mapping Arrow Expressions</head>
          
         
          
-         <p diff="add" at="A"><termdef term="dt-mapping-arrow operator" id="dt-mapping-arrow-operator">
+         <p diff="add" at="A"><termdef term="mapping arrow operator" id="dt-mapping-arrow-operator">
             The <term>mapping arrow operator</term> <code>=!></code> applies a function to each
             item in a sequence.</termdef> It is defined as follows:</p>
             
@@ -20387,82 +20492,53 @@ raised <errorref
             
          </ulist>
          
-            
+         </div3>
          
-            
-            <p diff="add" at="A">The sequence arrow operator thus applies the supplied function to 
-               the left-hand operand as a whole, while the mapping arrow operator applies the function to
-               each item in the value of the left-hand operand individually. In the case where the result
-               of the left-hand operand is a single item, the two operators have the same effect.</p>
-         
-         <note><p>The mapping arrow symbol <code>=!></code> is intended to suggest a combination of
-         function application (<code>=></code>) and sequence mapping (<code>!</code>) combined in a single operation.</p></note>
-            
-    <p>The arrow syntax is particularly helpful when applying multiple
-    functions to a value in turn. For example, the following
-    expression invites syntax errors due to misplaced parentheses:
-  </p>
-
-         <eg role="parsetest"
-            ><![CDATA[tokenize((normalize-unicode(upper-case($string))),"\s+")]]></eg>
-
-         <p>In the following reformulation, it is easier to see that the parentheses are balanced:</p>
-
-         <eg role="parse-test"
-            ><![CDATA[$string => upper-case() => normalize-unicode() => tokenize("\s+")]]></eg>
-            
-            <p diff="add" at="A">Assuming that <code>$string</code> is a single string, the above example could
-            equally be written:</p>
-            
-            <eg role="parse-test"
-               ><![CDATA[$string =!> upper-case() =!> normalize-unicode() =!> tokenize("\s+")]]></eg>
-            
-            <p diff="add" at="A">The difference between the two operators is seen when the left-hand
-            operand evaluates to a sequence:</p>
-            
-            <eg role="parse-test"><![CDATA[(1, 2, 3) => avg()]]></eg>
-         
-            <p diff="add" at="2023-07-24">returns a value of only one item, <code>2</code>, the average of all three items, whereas </p>
-            
-            <eg role="parse-test"><![CDATA[(1, 2, 3) =!> avg()]]></eg>
-         
-            <p diff="add" at="2023-07-24">returns the original sequence of three items, <code>(1, 2, 3)</code>, each item being the average of itself. The following example:</p>
-         
-            <eg role="parse-test"
-               ><![CDATA["The cat sat on the mat" => tokenize() =!> concat(".") =!> upper-case() => string-join(" ")]]></eg>
-            
-            <p diff="add" at="A">returns <code>"THE. CAT. SAT. ON. THE. MAT."</code>. The first arrow
-            could be written either as <code>=></code> or <code>=!></code> because the operand is a singleton; the next two
-            arrows have to be <code>=!></code> because the function is applied to each item in the tokenized
-            sequence individually; the final arrow must be <code>=></code> because the <code>string-join</code>
-            function applies to the sequence as a whole.</p>
-            
-            <note diff="add" at="A"><p>It may be useful to think of this as a map/reduce pipeline. The functions
-            introduced by <code>=!></code> are mapping operations; the function introduced by <code>=></code>
-            is a reduce operation.</p></note>
-         
-         <p diff="add" at="A">The following example introduces an inline function to the pipeline:</p>
-         <eg role="parse-test" diff="add" at="A"
-            ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn($a){$a+1}() => sum()]]></eg>
-         
-         <p diff="add" at="A">This is equivalent to <code>sum((1 to 5) ! (math:sqrt(xs:double(.))+1))</code>.</p>
-         
-         <p diff="add" at="A">The same effect can be achieved using a <termref def="dt-focus-function"/>:</p>
-         
-         <eg role="parse-test" diff="add" at="A"
-            ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn{.+1}() => sum()]]></eg>
-         
-            <note diff="add" at="A"><p>The <code>ArgumentList</code> may include <code>PlaceHolders</code>,
-            though this is not especially useful. For example, the expression <code>"$" => concat(?)</code> is equivalent
-            to <code>concat("$", ?)</code>: its value is a function that prepends a supplied string with
-            a <code>$</code> symbol.</p></note>
-         
-         <note diff="add" at="A"><p>The <code>ArgumentList</code> may include keyword arguments if the
-            function is identified statically (that is, by name). For example,
-         the following is valid: <code>$xml => xml-to-json(indent:=true()) => parse-json(escape:=false())</code>.</p></note>
+         <div3 id="lookup-arrow-expression">
+            <head>Lookup Arrow Expressions</head>
          
          
-            
+         <p>The lookup arrow expression simulates the behavior of method invocations in object-oriented
+         languages. It is useful for invoking functions that are contained as entries in maps.</p>
+         
+         <p>For example, the expression</p>
+         
+         <eg>let $rectangle := map {
+   "width": 20,
+   "height": 12,
+   "area": fn($this){$this?width * $this?height}
+} 
+return $rectangle =?> area()</eg>
+         
+         <p>returns the value <code>240</code>.</p>
+         
+         <p>An expression such as <code>M =?> N(A, B, C)</code> is evaluated as follows:</p>
+         
+         <olist>
+            <item><p>The left-hand expression <var>M</var> is evaluated. If the value is an
+               empty sequence, then the result of the expression is an empty
+               sequence. If it is non-empty then it must be a single map: call it <code>$m</code>.</p></item>
+            <item><p>The lookup expression <code>$m?N</code> is evaluated. The result must be a single
+            function item: call it <code>$f</code>.</p></item>
+            <item><p>The dynamic function call <code>$f($m, A, B, C)</code> is evaluated, and the
+            result is returned.</p></item>
+         </olist>
+         
+         <p>Any of the above steps can lead to errors:</p>
+         
+         <olist>
+            <item><p>A type error <errorref class="TY" code="0004"/> is raised if the value of the left hand 
+               expression does not match the type <code>map(*)?</code>.</p></item>
+            <item><p>A type error <errorref class="TY" code="0004"/> is raised if the value of the lookup 
+               expression <code>$m?N</code> does not match the type <code>function(*)</code>, or if the
+               arity of the function is not equal to the number of arguments in the argument list
+            plus one.</p></item>
+            <item><p>An error may occur in evaluating the dynamic function call, for example if the
+            function does not expect a map to be supplied as the first argument.</p></item>
+         </olist>
+         
+          
+         </div3>    
             
             
       </div2>
