@@ -1,82 +1,223 @@
 <!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses</title></head><body><main><article><h1>@qt4cg statuses</h1><p>This page displays recent status
             updates
             about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2024/">2024</a>, <a href="2023/">2023</a>, <a href="2022/">2022</a>, <a href="2021/">2021</a>, <a href="2020/">2020</a></p><div class="toots">
+<div class="toot" id="agenda-02-13"><h2>QT4 CG meeting 065 draft agenda<span class="toot-id"> #agenda-02-13</span></h2><div class="pubdate">12 Feb at 11:45:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2024/02-13">https://qt4cg.org/meeting/agenda/2024/02-13</a></div><p>Draft agenda published.</p></div>
+<div class="toot" id="created-1020"><h2>Issue #1020 created<span class="toot-id"> #created-1020</span></h2><div class="pubdate">11 Feb at 23:56:50 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1020">https://github.com/qt4cg/qtspecs/issues/1020</a></div><details><summary>When to apply the coercion rules</summary><div class="markup"><p>The rules for function calling say that the coercion rules are applied to the values supplied as function arguments; they are also applied in other circumstances such as when binding values to variables. The coercion rules are applied (as far as the spec is concerned) whether or not the supplied value already matches the required type.</p>
+<p>Saxon has always attempted to optimise this process: if the supplied value is already an instance of the required type, no coercion takes place.</p>
+<p>I have discovered at least one case where this assumption is incorrect: the coercion rules are not idempotent in the case where the supplied value matches the required type. This case concerns function coercion, exemplified by the new test case FunctionCall-058: if the expected type of a callback parameter is <code>function(xs:integer) as xs:boolean</code>, and the supplied value for the callback is a function that accepts <code>xs:decimal</code>, then the coercion rules say that a call to the supplied function that supplies an <code>xs:decimal</code> must be rejected as a type error even though the supplied function accepts it.</p>
+<p>Note that this means we have introduced a rather subtle backwards incompatibility. In XQuery 3.1, coercion was not applied to variable bindings, so the following would work (the supplied function matches the declared type of the variable):</p>
+<pre><code>declare variable $f as function(xs:integer) as xs:boolean 
+              := function($x as item()) as xs:boolean {string($x)};
+return $f("banana");
+</code></pre>
+<p>(see new tests VarDecl065/066)</p>
+<p>In 4.0 I believe this is supposed to throw a type error, because the supplied function is wrapped in a wrapper function that checks that the supplied argument is an integer.</p>
+<p>We have extended the coercion rules considerably in 4.0, and we need to be confident that there are no other similar cases where the coercion rules are no longer idempotent.</p>
+</div></details></div>
+<div class="toot" id="created-1019"><h2>Issue #1019 created<span class="toot-id"> #created-1019</span></h2><div class="pubdate">11 Feb at 15:23:07 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1019">https://github.com/qt4cg/qtspecs/issues/1019</a></div><details><summary>XQFO: Unknown option parameters</summary><div class="markup"><p>The current <a href="https://qt4cg.org/specifications/xpath-functions-40/Overview.html#option-parameter-conventions">option parameter conventions</a> are:</p>
+<blockquote>
+<ol start="4">
+<li>It is not an error if the options map contains options with names other than those described in this specification. Implementations MAY attach an ·implementation-defined· meaning to such entries, and MAY define errors that arise if such entries are present with invalid values. Implementations MUST ignore such entries unless they have a specific ·implementation-defined· meaning. Implementations that define additional options in this way SHOULD use values of type <code>xs:QName</code> as the option names, using an appropriate namespace.</li>
+</ol>
+</blockquote>
+<p>The obvious consequence is that wrongly typed or unsupported options are not reported as such:</p>
+<pre><code class="language-xquery">serialize($node, map { 'format': 'html' })
+</code></pre>
+<p>I think we should still allow proprietary options, but raise errors when an option is neither defined in the specification nor supported by the given implementation. On the one hand, this will help users to spot typos (e.g., <code>byte-order-mask</code> or instead of <code>byte-order-mark</code>). On the other hand, options that are supported by one implementation will be rejected, which feels reasonable to me, as options usually change either the result, or the way how the input is treated.</p>
+<p>If we believe that this change is too disruptive, we could tolerate entries with <code>xs:QName</code> keys.</p>
+</div></details></div>
+<div class="toot" id="created-1018"><h2>Issue #1018 created<span class="toot-id"> #created-1018</span></h2><div class="pubdate">11 Feb at 07:01:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1018">https://github.com/qt4cg/qtspecs/issues/1018</a></div><details><summary>Output of parse-csv()</summary><div class="markup"><p>I propose making some simplifications to the output of parse-csv() to make it more amenable to processing.</p>
+<ol>
+<li>Represent each row as a map, rather than as a structure with a data field and an accessor function. Note that implementations worried about memory usage can devise a custom map implementation optimised for the case where many maps have the same regular structure. (cf recent thread about Javascript "shapes")</li>
+<li>The key for a field in this map should be an integer if (i) column-names is set to false, or (ii) the column in question does not have a unique header name; in other cases it should be the name from the header.</li>
+<li>Replace the top-level <code>columns</code> record with a simple array of field names. It's easy enough to map names to positions using index-of.</li>
+</ol>
+<p>I also propose changing the name to <code>csv-to-maps</code> for consistency with <code>csv-to-table</code> and <code>csv-to-arrays</code>.</p>
+<p>We should advocate use of csv-to-arrays where data is to be accessed positionally, and csv-to-maps where it is to be accessed by column names, and optimise the design accordingly.</p>
+<p>Looking at a use case, the first example (§15.4.7.1) would be unnecessary if as proposed we change csv-to-xml to generate XHTML directly, But if it were needed, it would change from</p>
+<pre><code>let $csv := fn:parse-csv(`name,city{$crlf}Bob,Berlin`)
+return &lt;table&gt;
+   &lt;thead&gt;{
+      for $column in $csv?columns?fields
+         return &lt;th&gt;{ $column }&lt;/th&gt;
+   }&lt;/thead&gt;
+   &lt;tbody&gt;{
+      for $row in $csv?rows return &lt;tr&gt;
+         { for $field in $row?fields return &lt;td&gt;{ $field }&lt;/td&gt; }
+      &lt;/tr&gt;
+   }&lt;/tbody&gt;
+&lt;/table&gt;
+</code></pre>
+<p>to</p>
+<pre><code>let $csv := fn:parse-csv(`name,city{$crlf}Bob,Berlin`)
+return &lt;table&gt;
+   &lt;thead&gt;{
+      for $column in $csv?columns
+         return &lt;th&gt;{ $column }&lt;/th&gt;
+   }&lt;/thead&gt;
+   &lt;tbody&gt;{
+      for $row in $csv?rows return &lt;tr&gt;
+         { for $column in $csv?columns return &lt;td&gt;{ $row?$column }&lt;/td&gt; }
+      &lt;/tr&gt;
+   }&lt;/tbody&gt;
+&lt;/table&gt;
+
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-1017"><h2>Issue #1017 created<span class="toot-id"> #created-1017</span></h2><div class="pubdate">11 Feb at 06:20:37 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1017">https://github.com/qt4cg/qtspecs/issues/1017</a></div><details><summary>Change csv-to-xml() to produce an XHTML table</summary><div class="markup"><p>I propose (a) renaming <code>csv-to-xml</code> as <code>csv-to-table</code>, and (b) changing the output to be an XHTML table. Specifically, instead of outputting</p>
+<pre><code>&lt;csv xmlns="http://www.w3.org/2005/xpath-functions"&gt;
+   &lt;columns&gt;
+      &lt;column&gt;name&lt;/column&gt;
+      &lt;column&gt;city&lt;/column&gt;
+   &lt;/columns&gt;
+   &lt;rows&gt;
+      &lt;row&gt;
+         &lt;field column="name"&gt;Bob&lt;/field&gt;
+         &lt;field column="city"&gt;Berlin&lt;/field&gt;
+      &lt;/row&gt;
+      &lt;row&gt;
+         &lt;field column="name"&gt;Alice&lt;/field&gt;
+         &lt;field column="city"&gt;Aachen&lt;/field&gt;
+      &lt;/row&gt;
+   &lt;/rows&gt;
+&lt;/csv&gt;
+</code></pre>
+<p>it should output:</p>
+<pre><code>&lt;table xmlns="http://www.w3.org/1999/xhtml"&gt;
+   &lt;thead&gt;
+      &lt;tr&gt;
+          &lt;th&gt;name&lt;/th&gt;
+          &lt;th&gt;city&lt;/th&gt;
+      &lt;/tr&gt;
+   &lt;/thead&gt;
+   &lt;tbody&gt;
+      &lt;tr&gt;
+         &lt;td title="name"&gt;Bob&lt;/td&gt;
+         &lt;td title="city"&gt;Berlin&lt;/td&gt;
+      &lt;/tr&gt;
+      &lt;tr&gt;
+         &lt;td title="name"&gt;Alice&lt;/td&gt;
+         &lt;td title="city"&gt;Aachen&lt;/td&gt;
+      &lt;/tr&gt;
+   &lt;/thead&gt;
+&lt;/table&gt;
+</code></pre>
+<h3>Benefits:</h3>
+<p>(a) the data is just as easy to manipulate or transform as the current output
+(b) it can be copied directly into HTML transformation output if required
+(c) it is familiar to users
+(d) we don't have to write, test, and document a schema
+(e) there may well be libraries that can perform further transformations on the structure, for example conversion to other table representations, extraction to spreadsheet formats, etc.</p>
+</div></details></div>
+<div class="toot" id="created-1016"><h2>Issue #1016 created<span class="toot-id"> #created-1016</span></h2><div class="pubdate">10 Feb at 21:02:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1016">https://github.com/qt4cg/qtspecs/issues/1016</a></div><details><summary>Editorial comments on fn:parse-csv()</summary><div class="markup"><p>(a) The spec says:</p>
+<blockquote>
+<p>The first argument is CSV data, as defined in ..., in the form of a sequence of xs:string values.</p>
+</blockquote>
+<p>But in fact, the argument is a single (optional) xs:string value, not a sequence.</p>
+<p>(b) The spec says:</p>
+<blockquote>
+<p>If $csv is the empty sequence, implementations must return a parsed-csv-structure-record whose rows entry is the empty sequence.</p>
+<p>If $csv is the empty sequence, but column name extraction has been requested, or explicit column names have been supplied, then the parsed-csv-structure-record returned by implementations must have a rows entry whose value is the empty sequence.</p>
+</blockquote>
+<p>The second paragraph seems to add nothing to the first.</p>
+<p>(c) And the phrase "<em>implementations must return XXX</em>" is unidiomatic. The normal form of words is "<em>the function returns XXX</em>".</p>
+<p>(d) The grammar of the sentence "Handling of delimiters, and whitespace trimming, are handled using..." is inelegant.</p>
+<p>(e) References to the record type names (such as parsed-csv-structure-record) should be hyperlinked.</p>
+</div></details></div>
+<div class="toot" id="created-1015"><h2>Pull request #1015 created<span class="toot-id"> #created-1015</span></h2><div class="pubdate">09 Feb at 12:52:40 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1015">https://github.com/qt4cg/qtspecs/pull/1015</a></div><details><summary>1013 [XSLT] Clarify effect of accumulator capture on non-element nodes</summary><div class="markup"><p>Adds a sentence saying that when an accumulator rule with capture="yes" matches a non-element node, the capture attribute has no effect.</p>
+<p>Fix #1013</p>
+</div></details></div>
+<div class="toot" id="created-1014"><h2>Issue #1014 created<span class="toot-id"> #created-1014</span></h2><div class="pubdate">08 Feb at 13:43:32 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1014">https://github.com/qt4cg/qtspecs/issues/1014</a></div><details><summary>Predicates, sequences of numbers: Feedback</summary><div class="markup"><p>Feedback on #996:</p>
+<h3>Successful result: early exit</h3>
+<p>If the EBV is computed, and if the first item is a node, the remaining items are ignored:</p>
+<pre><code class="language-xquery">'OK'[ &lt;a/&gt;, 1, 'x' ]  →  'OK'
+</code></pre>
+<p>I would suggest doing the same for predicates that start with a number:</p>
+<ul>
+<li>If a comparison is successful, an implementation should be allowed to skip the remaining comparisons.</li>
+<li>If <code>$seq</code> starts with a number, <code>E[$seq]</code> and <code>E[position() = $seq]</code> will become equivalent:</li>
+</ul>
+<pre><code class="language-xquery">$seq[1 to 100, 'x']
+$seq[position() = (1 to 100, 'x')]
+</code></pre>
+<p>Obviously, an error still needs to be raised if a comparisons leads to a type error.</p>
+<h3>Error Codes</h3>
+<p>If we don’t equate <code>E[$seq]</code> and <code>E[position() = $seq]</code>, it would be useful to stick with <code>FORG0006</code> (instead of <code>XPTY0004</code>) [1]:</p>
+<ul>
+<li>It would be confusing to get <code>FORG0006</code> for <code>E['x', 1]</code> and <code>XPTY0004</code> for <code>E[1, 'x']</code>.</li>
+<li>If a processor uses unified implementations for EBV and predicate checks, it leads to additional effort just because the error code differs.</li>
+</ul>
+<p>If we use different error codes, existing tests need to be revised ([2], maybe others).</p>
+<p>[1] https://github.com/qt4cg/qtspecs/pull/996/files#diff-b37a92a9eb3ab9ba48a00de9627a1124466b9c86ecb2b4989d04be3942c597a6R8240
+[2] https://github.com/qt4cg/qt4tests/blob/70e52c690a26bbeee0641af14ccb319a2cc98081/prod/Predicate.xml#L1158-L1165</p>
+</div></details></div>
+<div class="toot" id="closed-1012"><h2>Issue #1012 closed<span class="toot-id"> #closed-1012</span></h2><div class="pubdate">08 Feb at 10:50:17 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1012">https://github.com/qt4cg/qtspecs/pull/1012</a></div><p>Fix some incorrect examples in the F&amp;O spec</p></div>
+<div class="toot" id="created-1013"><h2>Issue #1013 created<span class="toot-id"> #created-1013</span></h2><div class="pubdate">08 Feb at 09:14:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1013">https://github.com/qt4cg/qtspecs/issues/1013</a></div><details><summary>[XSLT] Need to say what happens when a capturing accumulator rule matches a non-element node</summary><div class="markup"><p>The option capture="yes" has been added to <code>xsl:accumulator-rule</code>; its purpose is to indicate that the entire subtree under an element is to be captured during streamed processing of the document, and is made available as an in-memory tree once the element end tag has been processed.</p>
+<p>We need to say what happens when such a rule matches a node other than an element. I think it makes sense for the capture="yes" to be ignored, optionally with a warning.</p>
+</div></details></div>
+<div class="toot" id="created-1012"><h2>Pull request #1012 created<span class="toot-id"> #created-1012</span></h2><div class="pubdate">08 Feb at 00:57:07 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1012">https://github.com/qt4cg/qtspecs/pull/1012</a></div><details><summary>Fix some incorrect examples in the F&amp;O spec</summary><div class="markup"><p>No issue raised; the errors are revealed by the generated QT4 tests.</p>
+</div></details></div>
+<div class="toot" id="created-1011"><h2>Issue #1011 created<span class="toot-id"> #created-1011</span></h2><div class="pubdate">07 Feb at 20:52:49 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1011">https://github.com/qt4cg/qtspecs/issues/1011</a></div><details><summary>fn:transform() improvements</summary><div class="markup"><ol>
+<li>The spec talks about how to invoke an XSLT 1.0, 2.0, or 3.0 processor, but not a 4.0 processor.</li>
+<li>There is no way of supplying a source document in a way that allows streaming. Saxon has added a <code>source-location</code> parameter for this purpose; this should be in the standard.</li>
+<li>If the stylesheet is to read streamed input, then there also needs to be control over whether and how it does schema validation.</li>
+<li>When calling from XSLT, the best default for <code>base-output-uri</code> is probably the value of <code>current-output-uri()</code>. The default is currently implementation-defined, but we should recommend this possibility.</li>
+<li>The post-process option was added with the aspiration that it would enable secondary result documents (xsl:result-document output) to be written directly (e.g. to filestore) as a side-effect. However, it fails to achieve this. There should probably be an option to request this even though we cannot define its semantics precisely.</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-1010"><h2>Pull request #1010 created<span class="toot-id"> #created-1010</span></h2><div class="pubdate">07 Feb at 16:09:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1010">https://github.com/qt4cg/qtspecs/pull/1010</a></div><details><summary>1009 Examples, Return type of parse-json:fallback</summary><div class="markup"><p>Issue: #1009</p>
+<p>I’ve used this PR to fix some other buggy examples in the XQFO spec.</p>
+</div></details></div>
+<div class="toot" id="created-1009"><h2>Issue #1009 created<span class="toot-id"> #created-1009</span></h2><div class="pubdate">07 Feb at 13:59:20 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1009">https://github.com/qt4cg/qtspecs/issues/1009</a></div><details><summary>QT4CG-064-03, QT4CG-064-04: Examples, Return type of `fallback`</summary><div class="markup"><p>Thanks for the attentive inspection of #975.</p>
+<p>The type <code>xs:untypedAtomic</code> for the <code>fallback</code> function of <code>fn:parse-json</code> made no sense indeed: JSON escape sequence can never be converted to numbers. The return type will be <code>xs:anyAtomicType</code> instead of <code>item()</code> (the result will be converted to a string).</p>
+<p>I’ll revise the rules and add some examples.</p>
+</div></details></div>
+<div class="toot" id="closed-977"><h2>Issue #977 closed<span class="toot-id"> #closed-977</span></h2><div class="pubdate">07 Feb at 13:09:37 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/977">https://github.com/qt4cg/qtspecs/pull/977</a></div><p>Ignore this, it's just a test</p></div>
+<div class="toot" id="created-1008"><h2>Pull request #1008 created<span class="toot-id"> #created-1008</span></h2><div class="pubdate">07 Feb at 11:12:30 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1008">https://github.com/qt4cg/qtspecs/pull/1008</a></div><details><summary>1002 Add fn:take-while function (replacing subsequence-before)</summary><div class="markup"><p>Adds function <code>fn:take-while</code>, replacing/reinstating previously proposed <code>items-before()</code> and <code>subsequence-before()</code>.</p>
+<p>Fix #1002</p>
+</div></details></div>
+<div class="toot" id="created-1007"><h2>Issue #1007 created<span class="toot-id"> #created-1007</span></h2><div class="pubdate">07 Feb at 09:45:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1007">https://github.com/qt4cg/qtspecs/issues/1007</a></div><details><summary>How to invert a predicate function</summary><div class="markup"><p>It's nice to be able to write</p>
+<p><code>index-where($in, contains(?, 'e'))</code></p>
+<p>to select all the items that contain an 'e'.</p>
+<p>What should we write in order to select all the items that do not contain an 'e'? All formulations seem a bit clumsy in comparison:</p>
+<p><code>index-where($in, fn{not(contains(., 'e'))})</code>
+<code>index-where($in, chain((contains(?, 'e'), not#1))</code></p>
+<p>Perhaps this is a sufficiently common requirement that it would be helpful to allow</p>
+<p><code>index-where($in, inverse(contains(?, 'e')))</code></p>
+<p>where <code>inverse($predicate)</code> is defined as <code>fn($it, $pos){not($predicate($it, $pos))}</code></p>
+</div></details></div>
+<div class="toot" id="created-1006"><h2>Issue #1006 created<span class="toot-id"> #created-1006</span></h2><div class="pubdate">07 Feb at 07:34:40 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1006">https://github.com/qt4cg/qtspecs/issues/1006</a></div><details><summary>regular expression addition - word boundaries</summary><div class="markup"><p>Could we provide support for the regex character sequence <code>\w</code> for matching word boundaries?</p>
+<p>It’s already support by some processors via vendor-specific flags, and would be very helpful even if didn’t over the full Unicode range.</p>
+</div></details></div>
+<div class="toot" id="created-1005"><h2>Issue #1005 created<span class="toot-id"> #created-1005</span></h2><div class="pubdate">07 Feb at 07:26:23 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1005">https://github.com/qt4cg/qtspecs/issues/1005</a></div><details><summary>regular expressions - whitespace</summary><div class="markup"><p>There is some confusion about the rationale for defining the multi-character escape for whitespaces in a <a href="https://xmlcom.slack.com/archives/C011NLXE4DU/p1707158555769749">recent discussion</a> on Slack:</p>
+<ul>
+<li><code>\s</code> is limited to <code>[#x20\t\n\r]</code></li>
+<li>In contrast, <code>\w\</code> covers <code>[#x0000-#x10FFFF]-[\p{P}\p{Z}\p{C}]</code>, i.e., considers the full Unicode range</li>
+</ul>
+<p>Do we know the reason?</p>
+<p>I assume it’s both too late and out of scope to change that in our specs, but maybe we can improve the XQFO spec and…</p>
+<ul>
+<li>mention why <code>\s</code> does not include <code>\p{Zs}</code> or <code>\p{Z}</code></li>
+<li>add an example for looking up non-breaking spaces… for example:</li>
+</ul>
+<pre><code class="language-xquery">matches(
+  string-join(('my', 'pleasure'), char(0xA0)),
+  '\p{Z}'
+)
+</code></pre>
+</div></details></div>
+<div class="toot" id="closed-1004"><h2>Issue #1004 closed<span class="toot-id"> #closed-1004</span></h2><div class="pubdate">07 Feb at 06:56:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1004">https://github.com/qt4cg/qtspecs/pull/1004</a></div><p>Updated as agreed 2024-02-06. </p></div>
+<div class="toot" id="created-1004"><h2>Pull request #1004 created<span class="toot-id"> #created-1004</span></h2><div class="pubdate">07 Feb at 06:43:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1004">https://github.com/qt4cg/qtspecs/pull/1004</a></div><details><summary>Updated as agreed 2024-02-06. </summary><div class="markup"><p>The forms char('#32`) and char('#x20') are dropped.</p>
+</div></details></div>
+<div class="toot" id="closed-963"><h2>Issue #963 closed<span class="toot-id"> #closed-963</span></h2><div class="pubdate">07 Feb at 06:41:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/963">https://github.com/qt4cg/qtspecs/issues/963</a></div><p>Errors in forming function items (continued)</p></div>
+<div class="toot" id="closed-888"><h2>Issue #888 closed<span class="toot-id"> #closed-888</span></h2><div class="pubdate">07 Feb at 06:41:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/888">https://github.com/qt4cg/qtspecs/issues/888</a></div><p>Reclassify XPDY0002 as a type error</p></div>
+<div class="toot" id="closed-992"><h2>Issue #992 closed<span class="toot-id"> #closed-992</span></h2><div class="pubdate">07 Feb at 06:41:56 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/992">https://github.com/qt4cg/qtspecs/pull/992</a></div><p>888, 963: Error handling for unsatisfied context dependencies</p></div>
+<div class="toot" id="created-1003"><h2>Pull request #1003 created<span class="toot-id"> #created-1003</span></h2><div class="pubdate">07 Feb at 00:05:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1003">https://github.com/qt4cg/qtspecs/pull/1003</a></div><details><summary>919 Use EBV in boolean callbacks</summary><div class="markup"><p>Changes functions with a $predicate callback function to use the effective boolean value of the result, mainly to allow things like <code>index-where(*, fn{self::x})</code>.</p>
+<p>Fix #919</p>
+</div></details></div>
 <div class="toot" id="minutes-02-06"><h2>QT4 CG meeting 064 draft minutes<span class="toot-id"> #minutes-02-06</span></h2><div class="pubdate">06 Feb at 18:00:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/minutes/2024/02-06">https://qt4cg.org/meeting/minutes/2024/02-06</a></div><p>Draft minutes published.</p></div>
 <div class="toot" id="closed-187"><h2>Issue #187 closed<span class="toot-id"> #closed-187</span></h2><div class="pubdate">06 Feb at 17:50:00 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/187">https://github.com/qt4cg/qtspecs/issues/187</a></div><p>Add a 'while' clause to FLWOR expressions</p></div>
 <div class="toot" id="closed-943"><h2>Issue #943 closed<span class="toot-id"> #closed-943</span></h2><div class="pubdate">06 Feb at 17:49:59 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/943">https://github.com/qt4cg/qtspecs/pull/943</a></div><p>187 Add FLWOR expression while clause</p></div>
 <div class="toot" id="closed-260"><h2>Issue #260 closed<span class="toot-id"> #closed-260</span></h2><div class="pubdate">06 Feb at 17:46:54 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/260">https://github.com/qt4cg/qtspecs/issues/260</a></div><p>array:index-of</p></div>
-<div class="toot" id="closed-968"><h2>Issue #968 closed<span class="toot-id"> #closed-968</span></h2><div class="pubdate">06 Feb at 17:46:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/968">https://github.com/qt4cg/qtspecs/pull/968</a></div><p>260 array:index-of</p></div>
-<div class="toot" id="closed-969"><h2>Issue #969 closed<span class="toot-id"> #closed-969</span></h2><div class="pubdate">06 Feb at 17:43:40 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/969">https://github.com/qt4cg/qtspecs/pull/969</a></div><p>843-partial Standard, array &amp; map functions: Equivalencies</p></div>
-<div class="toot" id="closed-973"><h2>Issue #973 closed<span class="toot-id"> #closed-973</span></h2><div class="pubdate">06 Feb at 17:40:54 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/973">https://github.com/qt4cg/qtspecs/issues/973</a></div><p>fn:parse-json, fn:json-to-xml: `number-parser`, `fallback`</p></div>
-<div class="toot" id="closed-975"><h2>Issue #975 closed<span class="toot-id"> #closed-975</span></h2><div class="pubdate">06 Feb at 17:40:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/975">https://github.com/qt4cg/qtspecs/pull/975</a></div><p>973 fn:parse-json, fn:json-to-xml: number-parser, fallback</p></div>
-<div class="toot" id="closed-984"><h2>Issue #984 closed<span class="toot-id"> #closed-984</span></h2><div class="pubdate">06 Feb at 17:37:43 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/984">https://github.com/qt4cg/qtspecs/pull/984</a></div><p>959-partial Add fn:seconds function</p></div>
-<div class="toot" id="closed-993"><h2>Issue #993 closed<span class="toot-id"> #closed-993</span></h2><div class="pubdate">06 Feb at 17:34:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/993">https://github.com/qt4cg/qtspecs/pull/993</a></div><p>989 (partial) Allow char() to take integer argument</p></div>
-<div class="toot" id="closed-830"><h2>Issue #830 closed<span class="toot-id"> #closed-830</span></h2><div class="pubdate">06 Feb at 17:31:34 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/830">https://github.com/qt4cg/qtspecs/issues/830</a></div><p>Revise appendix D.4 of F+O: Illustrative user-written functions</p></div>
-<div class="toot" id="closed-997"><h2>Issue #997 closed<span class="toot-id"> #closed-997</span></h2><div class="pubdate">06 Feb at 17:31:33 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/997">https://github.com/qt4cg/qtspecs/pull/997</a></div><p>830 Drop F+O appendix D.4</p></div>
-<div class="toot" id="closed-816"><h2>Issue #816 closed<span class="toot-id"> #closed-816</span></h2><div class="pubdate">06 Feb at 17:28:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/816">https://github.com/qt4cg/qtspecs/issues/816</a></div><p>Predicates: Support for numeric sequences </p></div>
-<div class="toot" id="closed-996"><h2>Issue #996 closed<span class="toot-id"> #closed-996</span></h2><div class="pubdate">06 Feb at 17:28:27 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/996">https://github.com/qt4cg/qtspecs/pull/996</a></div><p>816 Allow a predicate in a filter expression to be a sequence of numbers</p></div>
-<div class="toot" id="closed-995"><h2>Issue #995 closed<span class="toot-id"> #closed-995</span></h2><div class="pubdate">06 Feb at 17:25:36 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/995">https://github.com/qt4cg/qtspecs/pull/995</a></div><p>937 revised in light of CG feedback</p></div>
-<div class="toot" id="closed-628"><h2>Issue #628 closed<span class="toot-id"> #closed-628</span></h2><div class="pubdate">06 Feb at 17:22:23 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/628">https://github.com/qt4cg/qtspecs/issues/628</a></div><p>distinct-values and duplicate-values: order of results</p></div>
-<div class="toot" id="closed-987"><h2>Issue #987 closed<span class="toot-id"> #closed-987</span></h2><div class="pubdate">06 Feb at 17:22:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/987">https://github.com/qt4cg/qtspecs/pull/987</a></div><p>628 Define result order for distinct-values and duplicate-values</p></div>
-<div class="toot" id="closed-911"><h2>Issue #911 closed<span class="toot-id"> #closed-911</span></h2><div class="pubdate">06 Feb at 17:19:03 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/911">https://github.com/qt4cg/qtspecs/issues/911</a></div><p>Type "Promotion" in the coercion rules</p></div>
-<div class="toot" id="closed-980"><h2>Issue #980 closed<span class="toot-id"> #closed-980</span></h2><div class="pubdate">06 Feb at 17:19:02 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/980">https://github.com/qt4cg/qtspecs/pull/980</a></div><p>911 Coercion to allow double to decimal etc</p></div>
-<div class="toot" id="closed-966"><h2>Issue #966 closed<span class="toot-id"> #closed-966</span></h2><div class="pubdate">06 Feb at 17:14:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/966">https://github.com/qt4cg/qtspecs/issues/966</a></div><p>Rewrite spec of deep lookup operator: edits</p></div>
-<div class="toot" id="closed-979"><h2>Issue #979 closed<span class="toot-id"> #closed-979</span></h2><div class="pubdate">06 Feb at 17:14:34 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/979">https://github.com/qt4cg/qtspecs/pull/979</a></div><p>966 Minor fixes to deep lookup </p></div>
-<div class="toot" id="closed-964"><h2>Issue #964 closed<span class="toot-id"> #closed-964</span></h2><div class="pubdate">06 Feb at 17:12:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/964">https://github.com/qt4cg/qtspecs/issues/964</a></div><p>fn:has-attributes</p></div>
-<div class="toot" id="closed-970"><h2>Issue #970 closed<span class="toot-id"> #closed-970</span></h2><div class="pubdate">06 Feb at 17:11:15 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/970">https://github.com/qt4cg/qtspecs/issues/970</a></div><p>XQFO: Context item → value</p></div>
-<div class="toot" id="closed-971"><h2>Issue #971 closed<span class="toot-id"> #closed-971</span></h2><div class="pubdate">06 Feb at 17:11:13 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/971">https://github.com/qt4cg/qtspecs/pull/971</a></div><p>970 XQFO: Context item → value</p></div>
-<div class="toot" id="created-1002"><h2>Issue #1002 created<span class="toot-id"> #created-1002</span></h2><div class="pubdate">06 Feb at 10:10:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1002">https://github.com/qt4cg/qtspecs/issues/1002</a></div><details><summary>Reinstate subsequence-before</summary><div class="markup"><p>There's a question on StackOverflow today:</p>
-<p>https://stackoverflow.com/questions/77944304/</p>
-<p>that makes me think dropping <code>subsequence-before</code> might have been a mistake (the replacement, <code>subsequence-where</code>, doesn't allow the end condition to be exclusive).</p>
-<p>The question is how to find all the consecutive <code>list</code> elements that follow a given <code>para</code> element. That would be solved with <code>subsequence-before(following-sibling::*, fn{not(self::list)})</code>. Doing it with <code>subsequence-where</code> is much harder - you need to drop the final element in the result if it is not a <code>list</code> element, while also taking into account that the result might be empty.</p>
-<p>I would like to propose reinstating subsequence-before; or perhaps inverting the predicate and naming it <code>subsequence-while()</code>, so it becomes <code>subsequence-while(following-sibling::*, fn{self::list})</code> assuming we accept the proposal in issue #919 to allow a callback predicate to use EBV.</p>
-</div></details></div>
-<div class="toot" id="created-1001"><h2>Issue #1001 created<span class="toot-id"> #created-1001</span></h2><div class="pubdate">05 Feb at 13:32:23 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1001">https://github.com/qt4cg/qtspecs/issues/1001</a></div><details><summary>fn:subsequence-where: equivalent `fn:slice` expression</summary><div class="markup"><p>I probably should have tagged #940 with »Request Changes«, as I believe the equivalent expression with <code>fn:slice</code> needs to be fixed (or removed if it turns out to be too quirky): https://github.com/qt4cg/qtspecs/pull/940#issuecomment-1919399348.</p>
-</div></details></div>
-<div class="toot" id="agenda-02-06"><h2>QT4 CG meeting 064 draft agenda<span class="toot-id"> #agenda-02-06</span></h2><div class="pubdate">05 Feb at 12:30:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2024/02-06">https://qt4cg.org/meeting/agenda/2024/02-06</a></div><p>Draft agenda published.</p></div>
-<div class="toot" id="closed-940"><h2>Issue #940 closed<span class="toot-id"> #closed-940</span></h2><div class="pubdate">05 Feb at 12:19:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/940">https://github.com/qt4cg/qtspecs/pull/940</a></div><p>878 Add subsequence-where function</p></div>
-<div class="toot" id="created-1000"><h2>Issue #1000 created<span class="toot-id"> #created-1000</span></h2><div class="pubdate">04 Feb at 08:34:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1000">https://github.com/qt4cg/qtspecs/issues/1000</a></div><details><summary>XQFO Code in the Rules sections</summary><div class="markup"><p>In #978, it’s being discussed what is the best language for presenting code in the Rules sections of the XQFO specification. Currently, XPath is used for compact equivalencies, for example…</p>
-<pre><code class="language-xquery">(: array:size :)
-count(array:members($array))
-
-(: fn:remove :)
-$input[not(position() = $positions)].
-</code></pre>
-<p>...while XQuery is used for more complex expressions, including function declarations, or when the XPath representation would be syntactically more complex. Examples:</p>
-<pre><code class="language-xquery">(: fn:deep-equal :)
-declare function equal-strings(
-  $string1   as xs:string,
-  $string2   as xs:string, 
-  $collation as xs:string,
-  $options   as map(*)
-) as xs:boolean {
-  let $n1 := if ($options?whitespace = "normalize"))
-             then normalize-unicode(?, $options?normalization-form) 
-             else identity#1
-  let $n2 := if ($options?normalize-space)
-             then normalize-space#1 
-             else identity#1               
-  return compare($n1($n2($string1)), $n1($n2($string2)), $collation) eq 0    
-}
-
-(: fn:index-where :)
-for $item at $pos in $input
-where $predicate($item, $pos)
-return $pos
-
-(: …flatten, fold-left, while-do, others :)
-</code></pre>
-<p>Finally, we have many cases in which XPath/XQuery code is omitted, either because the presented feature is basic enough, because the equivalent code would get too complicated, or (e.g., for <code>fn:doc</code>) because it does not provide means to express the feature.</p>
-<p>We should strive for consistency and decide which language(s) the majority of us believes is the best choice…</p>
-<ol>
-<li>XPath &amp; XQuery (what we currently have)</li>
-<li>XPath only</li>
-<li>XPath, XQuery and XSLT (whatever seems most appropriate)</li>
-<li>Other pseudocode</li>
-</ol>
-</div></details></div>
-<div class="toot" id="created-999"><h2>Issue #999 created<span class="toot-id"> #created-999</span></h2><div class="pubdate">04 Feb at 04:00:09 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/999">https://github.com/qt4cg/qtspecs/issues/999</a></div><details><summary>regular expression addition - comments</summary><div class="markup"><p>The original Perl regular expression syntax allows comments with the x flag. They use # to introduce comments up to a newline.</p>
-<p>Maybe we could support XPath-style comments in regular expressions, such as <code>(:#.......#:)</code> when the x flag is present?</p>
-<p>Today i use <code>(?:comment: stuff here )?</code> but this requires that "stuff here" can be compiled into a regular expression!</p>
-</div></details></div></div><p>See 1900
+<div class="toot" id="closed-968"><h2>Issue #968 closed<span class="toot-id"> #closed-968</span></h2><div class="pubdate">06 Feb at 17:46:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/968">https://github.com/qt4cg/qtspecs/pull/968</a></div><p>260 array:index-of</p></div></div><p>See 1925
             more statuses in yearly archives.</p></article></main></body></html>
