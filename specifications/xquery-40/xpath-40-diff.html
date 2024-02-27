@@ -253,6 +253,7 @@ made since XPath 3.1 can be found in <a href="#id-revision-log"><b>J Change Log<
                            <a href="#id-deep-lookup"><span class="secno">4.15.3.3 </span><span class="content"><span class="diff-chg">Deep Lookup</span></span></a>
                            <a href="#id-implausible-lookup-expressions"><span class="secno">4.15.3.4 </span><span class="content"><span class="diff-chg">Implausible Lookup Expressions</span></span></a>
                            </li>
+                        <li><a href="#id-pinned-maps-and-arrays"><span class="secno">4.15.4 </span><span class="content">Pinned Maps and Arrays</span></a></li>
                      </ol>
                   </li>
                   <li><a href="#id-conditionals"><span class="secno">4.16 </span><span class="content"><span class="diff-chg">Conditional Expressions</span></span></a></li>
@@ -14480,6 +14481,108 @@ declare function recursive-content($item as item()) as map(*)* {
                      </div>
                   </div>
                </div>
+               <div class="div3">
+                  
+                  <h4><a id="id-pinned-maps-and-arrays"></a>4.15.4 Pinned Maps and Arrays</h4>
+                  <p>Unlike navigation within node trees derived from XML, navigation within a tree of maps and
+               arrays derived from JSON is normally “downwards only”: there is no equivalent of the parent
+            or ancestor axis. This means, for example, that having selected leav nodes in the tree
+            with an expression such as <code>??name</code>, there is no way of navigating from 
+               the items in the result to any related items. 
+               Pinned maps and arrays provide a solution to this problem; if a map or array
+            is pinned (by calling the <code>fn:pin</code> function), then values found by navigating
+            within the map or array are <b>labeled</b>, which provides supplementary information
+            about their location within the containing tree structure.</p>
+                  <p>For further information about pinned and labeled values 
+               see <span class="markup-error">[TITLE OF DM40 SPEC, TITLE OF id-labeled-items SECTION]<sup><small>DM40</small></sup></span>. </p>
+                  <p>More specifically, if a map <code>$M</code> or an array <code>$A</code> is pinned,
+            then any value returned by <code>map:get($M, $key)</code> or <code>array:get($A, $index)</code>
+            will be a sequence of labeled items. The label can be obtained by calling the function
+            <code>fn:label</code>, and the result will be a map having the following properties:</p>
+                  <ul>
+                     <li>
+                        <p>
+                        <code>pinned</code>: set to <code>true</code>. This means that any
+               further selections from this value (if it is itself a map or array) will
+               also deliver labeled items.</p>
+                     </li>
+                     <li>
+                        <p>
+                        <code>parent</code>: the containing map (<code>$M</code>) or array
+               (<code>$A</code>).</p>
+                     </li>
+                     <li>
+                        <p>
+                        <code>key</code>: the key (<code>$key</code>) or index (<code>$index</code>)
+               that was used to select the item.</p>
+                     </li>
+                     <li>
+                        <p>
+                        <code>position</code>: in the general case the value returned by
+               <code>map:get</code> or <code>array:get</code> is a sequence, and each item in the
+                  sequence is labeled with its 1-based position in that sequence.</p>
+                     </li>
+                     <li>
+                        <p>
+                        <code>ancestors</code>: a zero-arity function that delivers the item's parent (its
+               containing map or array), that item's parent, and so on, recursively, up to
+               the map or array that was the root of the selection. The sequence is in upwards
+               navigation order (the immediate parent comes first).</p>
+                     </li>
+                     <li>
+                        <p>
+                        <code>path</code>: a zero-arity function that delivers the sequence of
+               keys (in the case of maps) or integer indexes (in the case of arrays) by which the
+               item was reached. The sequence is in downwards navigation order (the immediate
+               key or index of the item comes last).</p>
+                     </li>
+                  </ul>
+                  <p>The formal model for the <code>fn:pin</code> is that it returns a deep copy of the 
+               supplied map or array in which all items in the recursive content have been labeled.
+            This is a useful model because it avoids the need to specify the effect of each individual
+            function and operator on the structure. For example, the rule has the consequence that the result of
+            <code>pin([11,12,13,14]) =&gt; array:remove(3) =&gt; array:for-each(fn{label(.)?key})</code> is
+            <code>[1,2,4]</code>. In a practical implementation, however, it is likely that labels
+            will be attached to items lazily, at the time they are retrieved. Such an implementation will need
+            to recognize pinned maps and arrays and treat them specially when operations such as
+            <code>array:get</code>, <code>array:remove</code>, <code>array:for-each</code>,
+            <code>array:subarray</code>, and their map counterparts, are evaluated.</p>
+                  <p>Because maps and arrays selected from a pinned map or array are themselves pinned,
+            deep lookup operations (whether conducted using the deep lookup operator <code>??</code>,
+            or the <code>map:find</code> function, or by user-written recursive code) will deliver
+            a labeled value whose <code>parent</code> or <code>ancestor</code> properties can 
+               be used to navigate back up through the tree.</p>
+                  <p>For example, given the example map shown in <a href="#id-map-constructors"><b>4.15.1.1 Map Constructors</b></a>,
+            the expression <code>$map??last[. = "Suciu"]</code> selects the map entry with key 
+            <code>"last"</code> and value <code>"Suciu"</code>, but by itself gives no information
+            about where this entry was found. By first pinning the map, this extra information
+            can be made available through the label on the result. For example you can select
+            all co-authors of "Suciu" by writing:</p>
+                  <div class="exampleInner">
+                     <pre>pin($map)??last[. = "Suciu"] =&gt; label()?ancestors()?author??last</pre>
+                  </div>
+                  <div class="note">
+                     <p class="prefix"><b>Note:</b></p>
+                     <p>When an entry in a map, or a member of an array, has the empty sequence
+            as its value, the value contains no items and is therefore unchanged in the pinned
+            version of the containing structure. In addition, the lookup operators <code>?</code>
+            and <code>??</code> flatten their result to a single sequence, so any empty values
+            are effectively discarded from the result. For this reason, pinned arrays and maps
+            work best when all values in arrays and maps are singleton items. An option is therefore provided
+            on the <code>fn:parse-json</code> and <code>fn:json-doc</code> functions to change
+            the representation of JSON <code>null</code> values (whose default is an empty
+            sequence, <code>()</code>) to a user-supplied value.</p>
+                  </div>
+                  <table class="ednote" caption="Editorial note">
+                     <tr>
+                        <td style="text-align: left; vertical-align:top; width: 50%;"><b>Editorial note</b></td>
+                        <td style="text-align: right; vertical-align:top; width: 50%;">&nbsp;</td>
+                     </tr>
+                     <tr style="text-align: left; vertical-align: top;">
+                        <td colspan="2">That note is anticipating a proposal in a separate PR.</td>
+                     </tr>
+                  </table>
+               </div>
             </div>
             <div class="div2">
                
@@ -14488,7 +14591,7 @@ declare function recursive-content($item as item()) as map(*)* {
                   <p>XPath 4.0 allows conditional expressions to be written in several different ways.</p>
                </div>
                <div class="diff-chg">
-                  <a id="d3e20312"></a><table class="scrap">
+                  <a id="d3e20440"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td class="diff-chg"><a id="doc-xpath40-IfExpr"></a>[23]&nbsp;&nbsp;&nbsp;</td>
@@ -14552,7 +14655,7 @@ declare function recursive-content($item as item()) as map(*)* {
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td class="diff-chg"><a id="noid_d4e18406.doc-xpath40-EnclosedExpr"></a>[9]&nbsp;&nbsp;&nbsp;</td>
+                           <td class="diff-chg"><a id="noid_d4e18534.doc-xpath40-EnclosedExpr"></a>[9]&nbsp;&nbsp;&nbsp;</td>
                            <td class="diff-chg"><code>EnclosedExpr</code></td>
                            <td class="diff-chg">&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td class="diff-chg"><code>"{"  <a href="#doc-xpath40-Expr">Expr</a>?  "}"</code></td>
@@ -14709,7 +14812,7 @@ named <code>discounted</code>, independently of its value:</p>
                <div class="div2">
                   
                   <h3><a id="id-otherwise"></a>4.17 Otherwise Expressions</h3>
-                  <a id="d3e20560"></a><table class="scrap">
+                  <a id="d3e20688"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td class="diff-add"><a id="doc-xpath40-OtherwiseExpr"></a>[33]&nbsp;&nbsp;&nbsp;</td>
@@ -14744,7 +14847,7 @@ named <code>discounted</code>, independently of its value:</p>
                <h3><a id="id-quantified-expressions"></a>4.18 Quantified Expressions</h3>
                <p>Quantified expressions support existential and universal quantification. The
 value of a quantified expression is always <code>true</code> or <code>false</code>.</p>
-               <a id="d3e20619"></a><table class="scrap">
+               <a id="d3e20747"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-QuantifiedExpr"></a>[21]&nbsp;&nbsp;&nbsp;</td>
@@ -14897,7 +15000,7 @@ type.
                <div class="div3">
                   
                   <h4><a id="id-instance-of"></a>4.19.1 Instance Of</h4>
-                  <a id="d3e20878"></a><table class="scrap">
+                  <a id="d3e21006"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-InstanceofExpr"></a>[40]&nbsp;&nbsp;&nbsp;</td>
@@ -14960,7 +15063,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                <div class="div3">
                   
                   <h4><a id="id-cast"></a>4.19.2 Cast</h4>
-                  <a id="d3e20982"></a><table class="scrap">
+                  <a id="d3e21110"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-CastExpr"></a>[43]&nbsp;&nbsp;&nbsp;</td>
@@ -14983,7 +15086,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18974.doc-xpath40-TypeName"></a>[133]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19102.doc-xpath40-TypeName"></a>[133]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeName</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -14994,7 +15097,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18975.doc-xpath40-LocalUnionType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19103.doc-xpath40-LocalUnionType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -15003,7 +15106,7 @@ matching</a>; otherwise it returns <code>false</code>. For example:</p>
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e18976.doc-xpath40-EnumerationType"></a>[147]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19104.doc-xpath40-EnumerationType"></a>[147]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>EnumerationType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -15125,7 +15228,7 @@ The result of a cast expression is one of the following:
                <div class="div3">
                   
                   <h4><a id="id-castable"></a>4.19.3 Castable</h4>
-                  <a id="d3e21175"></a><table class="scrap">
+                  <a id="d3e21303"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-CastableExpr"></a>[42]&nbsp;&nbsp;&nbsp;</td>
@@ -15138,7 +15241,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e19127.doc-xpath40-SingleType"></a>[110]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19255.doc-xpath40-SingleType"></a>[110]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>SingleType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -15148,7 +15251,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e19129.doc-xpath40-TypeName"></a>[133]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19257.doc-xpath40-TypeName"></a>[133]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>TypeName</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>
@@ -15159,7 +15262,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e19130.doc-xpath40-LocalUnionType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19258.doc-xpath40-LocalUnionType"></a>[146]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>LocalUnionType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"union"  "("  <a href="#doc-xpath40-ItemType">ItemType</a>  (","  <a href="#doc-xpath40-ItemType">ItemType</a>)*  ")"</code></td>
@@ -15168,7 +15271,7 @@ The result of a cast expression is one of the following:
                      </tbody>
                      <tbody>
                         <tr style="vertical-align:baseline;">
-                           <td><a id="noid_d4e19131.doc-xpath40-EnumerationType"></a>[147]&nbsp;&nbsp;&nbsp;</td>
+                           <td><a id="noid_d4e19259.doc-xpath40-EnumerationType"></a>[147]&nbsp;&nbsp;&nbsp;</td>
                            <td><code>EnumerationType</code></td>
                            <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                            <td><code>"enum"  "("  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>  (","  <a href="#doc-xpath40-StringLiteral">StringLiteral</a>)*  ")"</code></td>
@@ -15343,7 +15446,7 @@ usa:zipcode?)</code>.</p>
                <div class="div3">
                   
                   <h4><a id="id-treat"></a>4.19.5 Treat</h4>
-                  <a id="d3e21447"></a><table class="scrap">
+                  <a id="d3e21575"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-TreatExpr"></a>[41]&nbsp;&nbsp;&nbsp;</td>
@@ -15429,7 +15532,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
             <div class="div2">
                
                <h3><a id="id-map-operator"></a>4.20 Simple map operator (<code>!</code>)</h3>
-               <a id="d3e21589"></a><table class="scrap">
+               <a id="d3e21717"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-SimpleMapExpr"></a>[54]&nbsp;&nbsp;&nbsp;</td>
@@ -15544,7 +15647,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                <h3><a id="id-arrow-operator"></a>4.21 Arrow Expressions</h3>
                <p>Arrow expressions apply a function to a value, using the value of the
          left-hand expression as the first argument to the function.</p>
-               <a id="d3e21782"></a><table class="scrap">
+               <a id="d3e21910"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-ArrowExpr"></a>[44]&nbsp;&nbsp;&nbsp;</td>
@@ -15621,7 +15724,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e19684.doc-xpath40-InlineFunctionExpr"></a>[98]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e19812.doc-xpath40-InlineFunctionExpr"></a>[98]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>InlineFunctionExpr</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>("function"  |  "fn")  <a href="#doc-xpath40-FunctionSignature">FunctionSignature</a>?  <a href="#prod-xpath40-FunctionBody">FunctionBody</a>
@@ -15631,7 +15734,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e19685.doc-xpath40-ArgumentList"></a>[73]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e19813.doc-xpath40-ArgumentList"></a>[73]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>ArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  ((<a href="#doc-xpath40-PositionalArguments">PositionalArguments</a>  (","  <a href="#prod-xpath40-KeywordArguments">KeywordArguments</a>)?)  |  <a href="#prod-xpath40-KeywordArguments">KeywordArguments</a>)?  ")"</code></td>
@@ -15640,7 +15743,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                   </tbody>
                   <tbody>
                      <tr style="vertical-align:baseline;">
-                        <td><a id="noid_d4e19686.doc-xpath40-PositionalArgumentList"></a>[74]&nbsp;&nbsp;&nbsp;</td>
+                        <td><a id="noid_d4e19814.doc-xpath40-PositionalArgumentList"></a>[74]&nbsp;&nbsp;&nbsp;</td>
                         <td><code>PositionalArgumentList</code></td>
                         <td>&nbsp;&nbsp;&nbsp;::=&nbsp;&nbsp;&nbsp;</td>
                         <td><code>"("  <a href="#doc-xpath40-PositionalArguments">PositionalArguments</a>?  ")"</code></td>
@@ -18052,7 +18155,7 @@ return $rectangle =?&gt; area()</pre>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.3.1 Terminal Symbols</h4>
-                  <a id="d3e24818"></a><table class="scrap">
+                  <a id="d3e24946"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-IntegerLiteral"></a>[153]&nbsp;&nbsp;&nbsp;</td>
@@ -18281,7 +18384,7 @@ return $rectangle =?&gt; area()</pre>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e25048"></a><table class="scrap">
+                  <a id="d3e25176"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-Digits"></a>[171]&nbsp;&nbsp;&nbsp;</td>
