@@ -257,19 +257,16 @@ in-scope-prefixes($e) ! namespace {.}{ namespace-uri-for-prefix(., $e)}
                <code>xml</code>: <code>http://www.w3.org/XML/1998/namespace</code>
             </p>
          </item>
-
          <item>
             <p>
                <code>xs</code>: <code>http://www.w3.org/2001/XMLSchema</code>
             </p>
          </item>
-
          <item role="xquery">
             <p>
                <code>xsi</code>: <code>http://www.w3.org/2001/XMLSchema-instance</code>
             </p>
          </item>
-
          <item>
             <p>
                <code>fn</code>: <code>http://www.w3.org/2005/xpath-functions</code>
@@ -290,17 +287,23 @@ in-scope-prefixes($e) ! namespace {.}{ namespace-uri-for-prefix(., $e)}
                <code>math</code>: <code>http://www.w3.org/2005/xpath-functions/math</code>
             </p>
          </item>
-         <item role="xquery">
-            <p>
-               <code>local</code>: <code>http://www.w3.org/2005/xquery-local-functions</code> (see <specref
-                  ref="FunctionDeclns"/>.)</p>
-         </item>
          <item diff="add" at="2023-05-10">
             <p>
-               <code>err</code>: <code>http://www.w3.org/2005/xqt-errors</code> (see <specref
-                  ref="id-identifying-errors"/>).</p>
+               <code>err</code>: <code>http://www.w3.org/2005/xqt-errors</code>
+                  (see <specref ref="id-identifying-errors"/>).</p>
          </item>
-         <item diff="add" at="2023-12-14">
+         <item role="xquery">
+            <p>
+               <code>local</code>: <code>http://www.w3.org/2005/xquery-local-functions</code>
+                  (see <specref ref="FunctionDeclns"/>.)
+            </p>
+         </item>
+         <item>
+            <p>
+               <code>output</code>: <code>http://www.w3.org/2010/xslt-xquery-serialization</code>
+            </p>
+         </item>
+         <item role="xquery" diff="add" at="2023-12-14">
             <p>
                <code>xq</code>: <code>http://www.w3.org/2012/xquery</code>
             </p>
@@ -7170,8 +7173,7 @@ declare function t:flatten($tree as t:tree) as item()* {
         <termdef
                      term="function coercion" id="dt-function-coercion">
                      <term>Function coercion</term> wraps a <termref def="dt-function-item"/>
-        in a new function
-        whose signature is the same as the expected type.
+        in a new function whose signature is the same as the expected type.
         This effectively delays the checking
         of the argument and return types
         until the function is called.</termdef>
@@ -7204,7 +7206,7 @@ declare function t:flatten($tree as t:tree) as item()* {
                      to work, because callback functions that are not interested in the value of the second
                      argument simply ignore it.                    
                   </p>
-                        <p>TODO: this change to fn:filter has not yet been made.</p>
+                        
                      </note>
                   </item>
 
@@ -7298,7 +7300,8 @@ declare function t:flatten($tree as t:tree) as item()* {
       For instance, consider the following query:
       <eg
                      role="parse-test"><![CDATA[
-declare function local:filter($s as item()*, $p as function(xs:string) as xs:boolean) as item()*
+declare function local:filter($s as item()*, 
+                              $p as function(xs:string) as xs:boolean) as item()*
 {
   $s[$p(.)]
 };
@@ -7449,6 +7452,47 @@ return filter($days,$m)
 
                <p>The result of the expression is the sequence <code>("Monday", "Wednesday", "Friday")</code>
                </p>
+               
+               <note diff="add" at="issue1020">
+                  <p>Function coercion applies even if the supplied function matches the required type.</p>
+                  <p>For example, consider this case:</p>
+                  <eg
+                     role="parse-test"><![CDATA[
+declare function local:filter($s as item()*, 
+                              $p as function(xs:string) as xs:boolean) 
+                              as item()*
+{
+  $s[$p(.)]
+};
+
+let $f := function($a) { $a mod 2 = 0 }
+return
+  local:filter(1 to 10, $f)
+      ]]></eg>
+                  
+                  <p>Here the supplied function <code>$f</code> is an instance of the required type,
+                  because its signature defaults the argument type to <code>item()*</code>, which
+                  is a supertype of <code>xs:string</code>. The expression <code>$s[$p(.)]</code>
+                  could in principle succeed. However, function coercion ensures that the supplied function 
+                  is wrapped in a function that requires the argument to be of type <code>xs:string</code>,
+                  so the call fails with a type error when the wrapping function is invoked supplying an
+                  <code>xs:integer</code> as the argument.</p>
+                  
+                  <p role="xquery">This has the consequence that in XQuery 4.0, there is a backwards
+                     incompatibility introduced because coercion rules
+                  now apply to global variable declarations (<code>declare variable</code>) and
+                  local variable bindings (for example <code>let</code> clauses). Previously
+                  the following would execute without error:</p>
+                  
+                  <eg role="xquery"><![CDATA[let $f as function(xs:integer) as item()* 
+        := function($x){$x+1}
+return $f(12.3)]]></eg>
+                  
+                  <p role="xquery">With XQuery 4.0, as a consequence of function coercion,
+                     this fails with a type error because the
+                  argument supplied in the function call is not of type <code>xs:integer</code>.</p>
+               </note>
+               
             </div3>
             </div2>
          
@@ -16627,6 +16671,89 @@ declare function recursive-content($item as item()) as map(*)* {
                </ulist>
             </div4>
          </div3>
+         
+         <div3 id="id-pinned-maps-and-arrays">
+            <head>Pinned Maps and Arrays</head>
+            <p>Unlike navigation within node trees derived from XML, navigation within a tree of maps and
+               arrays derived from JSON is normally “downwards only”: there is no equivalent of the parent
+            or ancestor axis. This means, for example, that having selected leav nodes in the tree
+            with an expression such as <code>??name</code>, there is no way of navigating from 
+               the items in the result to any related items. 
+               Pinned maps and arrays provide a solution to this problem; if a map or array
+            is pinned (by calling the <code>fn:pin</code> function), then values found by navigating
+            within the map or array are <term>labeled</term>, which provides supplementary information
+            about their location within the containing tree structure.</p>
+            
+            <p>For further information about pinned and labeled values 
+               see <xspecref spec="DM40" ref="id-labeled-items"/>. </p>
+           
+            
+            <p>More specifically, if a map <code>$M</code> or an array <code>$A</code> is pinned,
+            then any value returned by <code>map:get($M, $key)</code> or <code>array:get($A, $index)</code>
+            will be a sequence of labeled items. The label can be obtained by calling the function
+            <code>fn:label</code>, and the result will be a map having the following properties:</p>
+            
+            <ulist>
+               <item><p><code>pinned</code>: set to <code>true</code>. This means that any
+               further selections from this value (if it is itself a map or array) will
+               also deliver labeled items.</p></item>
+               <item><p><code>parent</code>: the containing map (<code>$M</code>) or array
+               (<code>$A</code>).</p></item>
+               <item><p><code>key</code>: the key (<code>$key</code>) or index (<code>$index</code>)
+               that was used to select the item.</p></item>
+               <item><p><code>position</code>: in the general case the value returned by
+               <code>map:get</code> or <code>array:get</code> is a sequence, and each item in the
+                  sequence is labeled with its 1-based position in that sequence.</p></item>
+               <item><p><code>ancestors</code>: a zero-arity function that delivers the item's parent (its
+               containing map or array), that item's parent, and so on, recursively, up to
+               the map or array that was the root of the selection. The sequence is in upwards
+               navigation order (the immediate parent comes first).</p></item>
+               <item><p><code>path</code>: a zero-arity function that delivers the sequence of
+               keys (in the case of maps) or integer indexes (in the case of arrays) by which the
+               item was reached. The sequence is in downwards navigation order (the immediate
+               key or index of the item comes last).</p></item>
+            </ulist>
+            
+            <p>The formal model for the <code>fn:pin</code> is that it returns a deep copy of the 
+               supplied map or array in which all items in the recursive content have been labeled.
+            This is a useful model because it avoids the need to specify the effect of each individual
+            function and operator on the structure. For example, the rule has the consequence that the result of
+            <code>pin([11,12,13,14]) => array:remove(3) => array:for-each(fn{label(.)?key})</code> is
+            <code>[1,2,4]</code>. In a practical implementation, however, it is likely that labels
+            will be attached to items lazily, at the time they are retrieved. Such an implementation will need
+            to recognize pinned maps and arrays and treat them specially when operations such as
+            <code>array:get</code>, <code>array:remove</code>, <code>array:for-each</code>,
+            <code>array:subarray</code>, and their map counterparts, are evaluated.</p>
+            
+           
+            <p>Because maps and arrays selected from a pinned map or array are themselves pinned,
+            deep lookup operations (whether conducted using the deep lookup operator <code>??</code>,
+            or the <code>map:find</code> function, or by user-written recursive code) will deliver
+            a labeled value whose <code>parent</code> or <code>ancestor</code> properties can 
+               be used to navigate back up through the tree.</p>
+            
+            <p>For example, given the example map shown in <specref ref="id-map-constructors"/>,
+            the expression <code>$map??last[. = "Suciu"]</code> selects the map entry with key 
+            <code>"last"</code> and value <code>"Suciu"</code>, but by itself gives no information
+            about where this entry was found. By first pinning the map, this extra information
+            can be made available through the label on the result. For example you can select
+            all co-authors of "Suciu" by writing:</p>
+            
+            <eg>pin($map)??last[. = "Suciu"] => label()?ancestors()?author??last</eg>
+            
+            <note><p>When an entry in a map, or a member of an array, has the empty sequence
+            as its value, the value contains no items and is therefore unchanged in the pinned
+            version of the containing structure. In addition, the lookup operators <code>?</code>
+            and <code>??</code> flatten their result to a single sequence, so any empty values
+            are effectively discarded from the result. For this reason, pinned arrays and maps
+            work best when all values in arrays and maps are singleton items. An option is therefore provided
+            on the <code>fn:parse-json</code> and <code>fn:json-doc</code> functions to change
+            the representation of JSON <code>null</code> values (whose default is an empty
+            sequence, <code>()</code>) to a user-supplied value.</p></note>
+            
+            <ednote><edtext>That note is anticipating a proposal in a separate PR.</edtext></ednote>
+            
+         </div3>
       <!--   <div3 id="id-composite-atomic-values" diff="add" at="A">
             <head>Composite Atomic Values</head>
             <p>Some <termref def="dt-atomic-value">atomic values</termref> (despite the name) can be divided into
@@ -19199,12 +19326,13 @@ named <code>discounted</code>, independently of its value:</p>
          <note>
             <p>The operator is associative (even under error conditions): <code>A otherwise (B otherwise C)</code> returns
          the same result as <code>(A otherwise B) otherwise C</code>.</p>
+            <p>The <code>otherwise</code> operator binds more tightly than comparison operators such as
+            <code>=</code>, but less tightly than string concatenation (<code>||</code>) or arithemetic
+            operators. The expression <code>$a = @x otherwise @y + 1</code> parses as 
+               <code>$a = (@x otherwise (@y + 1))</code>.</p>
          </note>
 
-         <ednote><date>2022-12-20</date><edtext>This change
-         <loc href="https://qt4cg.org/meeting/minutes/2022/12-20.html#issue-170">was
-         approved</loc>
-         during QT4CG meeting 016 on 20 December, 2022</edtext></ednote>
+         
       </div2>
       <div2 id="id-switch" role="xquery">
          <head>Switch Expressions</head>
@@ -20183,20 +20311,38 @@ if ($x castable as hatsize)
          <div3 id="id-constructor-functions">
             <head>Constructor Functions</head>
             <p>For every simple type in the <termref def="dt-is-types"
-                  >in-scope schema types</termref>  (except <code>xs:NOTATION</code> and <code>xs:anyAtomicType</code>, and <code>xs:anySimpleType</code>, which are not instantiable), a <term>constructor function</term> is implicitly defined. In each case, the name of the constructor function is the same as the name of its target type (including namespace). The signature of the constructor function for  a given type depends on the type that is being constructed, and can be found in  <xspecref
-
-                  spec="FO40" ref="constructor-functions"/>.
-               There is also a constructor function for every <termref def="dt-named-item-type"/> in the <termref def="dt-static-context"/>
-            that maps to a <termref def="dt-generalized-atomic-type"/>.</p> 
+                  >in-scope schema types</termref>  (except <code>xs:NOTATION</code> and 
+               <code>xs:anyAtomicType</code>, and <code>xs:anySimpleType</code>, which 
+               are not instantiable), a <term>constructor function</term> is implicitly defined. 
+               In each case, the name of the constructor function is the same as the name of 
+               its target type (including namespace). The signature of the constructor 
+               function for  a given type depends on the type that is being constructed, 
+               and can be found in <xspecref spec="FO40" ref="constructor-functions"/>.</p>
+            
+            
+               <p>There is also a constructor function for every <termref def="dt-named-item-type"/> 
+               in the <termref def="dt-static-context"/>
+            that expands either to a <termref def="dt-generalized-atomic-type"/> 
+            <phrase diff="add" at="issue617">or to
+            a <nt def="RecordTest">RecordTest</nt></phrase>.</p> 
             
                <p>All such constructor functions are classified as
                <termref def="dt-system-function">system functions</termref>.</p>
 
-
+            <note diff="add" at="issue617"><p>The constructor function is present in the static
+            context if and only if the corresponding type is present in the static context.</p>
+            <p>For XSLT, this means that a constructor function corresponding to an imported
+            schema type is private to the stylesheet package, and a constructor function
+            corresponding to an <code>xsl:item-type</code> declaration has the same visibility
+               as the <code>xsl:item-type</code> declaration.</p>
+               <p>For XQuery, this means that a constructor function corresponding to an imported
+                  schema type is private to the query module, and a constructor function
+                  corresponding to a named item type declaration is <code>%public</code>
+                  or <code>%private</code> according to the annotations on the item type declaration.</p></note>
 
             <p>
                <termdef term="constructor function" id="dt-constructor-function"
-                     >The <term>constructor function</term> for a given type is used to convert instances of other  simple types into the given type. 
+                     >The <term>constructor function</term> for a given simple type is used to convert instances of other  simple types into the given type. 
                   The semantics of the constructor function call <code>T($arg)</code> are defined to be equivalent to the expression <code
                      role="parse-test">(($arg) cast as T?)</code>.</termdef>
             </p>
@@ -20254,6 +20400,12 @@ usa:zipcode?)</code>.</p>
                      <code>union(xs:date, xs:time, xs:dateTime)</code>, then the result
                      of <code>my:chrono("12:00:00Z")</code> is the <code>xs:time</code>
                      value <code>12:00:00Z</code>.</p>
+               </item>
+               <item diff="add" at="issue617">
+                  <p>If <code>my:location</code> is a named item type that expands
+                  to <code>record(latitude as xs:double, longitude as xs:double)</code>,
+                  then the result of <code>my:location(50.52, -3.02)</code> is
+                  the map <code>map{'latitude':50.52e0, 'longitude':-3.02e0}</code>.</p>
                </item>
             </ulist>
 
