@@ -20357,9 +20357,131 @@ declare function recursive-content($item as item()) as record(key, value)* {
             the representation of JSON <code>null</code> values (whose default is an empty
             sequence, <code>()</code>) to a user-supplied value.</p></note>
             
-            <ednote><edtext>That note is anticipating a proposal in a separate PR.</edtext></ednote>
             
          </div3>
+         
+         <div3 id="update-expressions" role="xquery">
+            <head>Update Expressions</head>
+            
+            <scrap>
+               <head/>
+               <prodrecap id="UpdateExpr" ref="UpdateExpr"/>
+            </scrap>
+            
+            <p>An update expression returns a modified copy of a map or array.</p>
+            
+            <p>For example:</p>
+            
+            <eg>update map $m replace ?age with .+1</eg>
+            
+            <p>returns a modified copy of the map <code>$m</code> in which the 
+               value of <code>?age</code> has been incremented by one.</p>
+            
+            <eg>update array $a replace ?*?age with .+1</eg>
+            
+            <p>returns a modified copy of the array <code>$a</code> in which every 
+               value selected by <code>?*?age</code> has been
+            incremented by one.</p>
+            
+            <p>The input map or array is unaffected by the change; the result is a new map or array.</p>
+            
+            <p>The following informal explanation gives the main rules that a query author needs to be
+               aware of; it is followed by a more formal definition of the semantics.</p>
+            
+            <ulist>
+               <item><p>If the form <code>update map</code> is used, then the value of the
+               first expression must evaluate to a single map. If the form <code>update array</code>
+               is used, then it must evaluate to a single array. This map or array is refered to
+               as the <term>original root</term>.</p></item>
+               <item><p>The second expression, called the <term>selection expression</term>,
+               must select items within the tree of maps and arrays reachable by downwards selection from the
+               original root. Exactly what this means is explained in the formal
+               exposition that follows.</p></item>
+               <item><p>For each selected item, the third expression, called the
+               <term>replacement expression</term> is evaluated with a singleton focus based
+               on that item. The result may be any sequence, and is called the
+               <term>replacement value</term>. The replacement value substitutes for the
+               selected item.</p></item>
+               <item><p>A new tree or map is constructed in which all selected items
+               are replaced by their replacement values, and this new tree or map
+               forms the result of the update expression.</p></item>
+            </ulist>
+            
+            <p>The more formal exposition (and indeed the implementation) needs a more
+            rigorous treatment of how replacement values are substituted into the tree
+            of maps and arrays. This relies on the concepts of pinned maps and arrays, and
+            labeled items, introduced in the previous section. In these rules, for brevity,
+            the notation <code>A¶P</code> refers to the value of a property named <var>P</var>
+               in the label of an item <var>A</var>. The formal rules are:</p>
+            
+            <olist>
+               <item><p>Let <var>R</var> (the <term>original root</term>) be the
+                  result of the first expression. If the form <code>update map</code> is used, 
+                  <var>R</var> must be a single map. If the form <code>update array</code>
+                  is used, then <var>R</var> must be a single array.</p></item>
+               <item><p>Let <var>R'</var> (the <term>pinned root</term>) be the
+                  result of applying the <code>fn:pin</code> function to <var>R</var>.</p></item>
+               <item><p>Evaluate the second expression (the <term>selection expression</term>)
+               with a singleton focus based on <var>R'</var>. Call
+               the result <var>S</var> (the <term>selected items</term>).</p></item>
+               <item><p>Every item in <var>S</var> must be a labeled item <var>J</var>
+                  with the property that <code><var>J</var>¶ancestors()[last()]¶ID = <var>R'</var>¶ID)</code>.
+               That is, it must be an item within the recursive content of <code>R'</code>.</p>
+               <note><p>This effectively constrains the selection expression to use constructs
+               that select items within the content of the original root, for
+               example lookup expressions using the <code>?</code> and <code>??</code>
+                  operators.</p></note></item>
+               <item><p>Within the selected items, eliminate duplicates: specifically, items
+                  having the same values for <code>¶parent¶ID</code>,
+                  <code>¶key</code>, and <code>¶position</code>.</p></item>
+               <item><p>For each remaining item <var>s</var> in the selected items, evaluate the third expression
+               (the <term>replacement expression</term>) with <var>s</var>
+               as its singleton focus. Call the result <var>s'</var> (the replacement value).</p></item>
+               <item><p>Merge updates to multiple items within the same value. That is, if
+                  two items in <var>S</var> have the same values for <code>¶parent¶ID</code>
+                  and <code>¶key</code>, let <var>P</var> be the parent map or array <code>¶parent</code>,
+                  let <var>K</var> be the value of <code>¶key</code>, and let <var>V</var>
+                  (the <term>original value</term>) be the value of <code>¶P¶K</code>.
+                  Construct a value <var>V'</var> equivalent to <var>V</var> but with
+                  each relevant item (identified by its position, <code>s¶position</code>)
+               replaced with the replacement value <var>s'</var>.</p></item>
+               <item><p>Construct a list called the <term>pending update list</term>
+                  containing all the identified changes, in the form of triples: <var>ID</var>
+                  (identifying a map or array), <var>KEY</var> (identifying an entry or
+                  member to be updated), and <var>V'</var> (identifying the new value
+                  for that entry or member).</p></item>
+               <item><p>Group the entries in the pending update list having common values for
+                  <var>ID</var>. For each such group, construct a new map or array <var>P'</var>
+                  that is the same as the original <var>P</var>, but with any entries identified by
+                  a <var>KEY</var> in the pending update list replaced by the corresponding replacement
+                  value <var>V'</var>.</p>
+                  <p>If <var>P</var> itself has a parent (<code>P¶parent</code>),
+                     drop this group of entries from the pending update list, and add a single entry
+                     with <var>ID</var> set to <code>P¶parent¶ID</code>,
+                     <var>KEY</var> set to <code>P¶key</code>, and
+                     <var>V'</var> set to <var>P'</var>.</p></item>
+               <item><p>Repeat until the pending update list contains only one entry, which
+                  will necessarily have <var>V'</var> as the replacement for the original root. Let
+               <var>Z</var> be this map or array.</p></item>
+                  <item><p>Make a copy of <var>Z</var> in which all labels have been removed,
+                  recursively, from the value itself and its content. Return this copy
+                  as the result of the update expression.</p></item>
+                  
+            
+            </olist>
+            
+            <p>TODO: summarize the error conditions.</p>
+            
+            <note>
+               <p>An update expression can take advantage of the fact that the selected items are labeled.
+               For example, the expression <code>update map $M replace ??student 
+                  with map:put(., 'course', label(.)?ancestors()?course-code)</code> updates all
+               the selected <code>?student</code> maps with a new entry <code>course</code> whose
+               value is taken from the <code>course-code</code> entry in 
+                  an ancestor map in the selection path.</p>
+            </note>
+         </div3>
+         
       <!--   <div3 id="id-composite-atomic-values" diff="add" at="A">
             <head>Composite Atomic Values</head>
             <p>Some <termref def="dt-atomic-value">atomic values</termref> (despite the name) can be divided into
