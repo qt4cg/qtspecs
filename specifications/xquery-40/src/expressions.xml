@@ -20391,7 +20391,7 @@ declare function recursive-content($item as item()) as record(key, value)* {
             <ulist>
                <item><p>If the form <code>update map</code> is used, then the value of the
                first expression must evaluate to a single map. If the form <code>update array</code>
-               is used, then it must evaluate to a single array. This map or array is refered to
+               is used, then it must evaluate to a single array. This map or array is referred to
                as the <term>original root</term>.</p></item>
                <item><p>The second expression, called the <term>selection expression</term>,
                must select items within the tree of maps and arrays reachable by downwards selection from the
@@ -20412,65 +20412,387 @@ declare function recursive-content($item as item()) as record(key, value)* {
             of maps and arrays. This relies on the concepts of pinned maps and arrays, and
             labeled items, introduced in the previous section. In these rules, for brevity,
             the notation <code>A¶P</code> refers to the value of a property named <var>P</var>
-               in the label of an item <var>A</var>. The formal rules are:</p>
+               in the label of an item <var>A</var>. The formal rules are given in 
+               <specref ref="id-update-semantics"/></p>
             
-            <olist>
+            <div4 id="id-update-examples">
+               <head>Update examples</head>
+               
+               <p>This section includes some examples illustrating how update expressions can be
+               used, in the context of updating data derived by parsing JSON.</p>
+               
+               <p>The examples use the following JSON document.</p>
+               
+               <eg>{
+    "desc"    : "Distances between several cities, in kilometers.",
+    "updated" : "2014-02-04T18:50:45",
+    "uptodate": true,
+    "author"  : null,
+    "cities"  : {
+        "Brussels": [
+                  {"to": "London",    "distance": 322},
+                  {"to": "Paris",     "distance": 265},
+                  {"to": "Amsterdam", "distance": 173}
+        ],
+        "London": [
+                  {"to": "Brussels",  "distance": 322},
+                  {"to": "Paris",     "distance": 344},
+                  {"to": "Amsterdam", "distance": 358}
+        ],
+        "Paris": [
+                  {"to": "Brussels",  "distance": 265},
+                  {"to": "London",    "distance": 344},
+                  {"to": "Amsterdam", "distance": 431}
+        ],
+        "Amsterdam": [
+                  {"to": "Brussels",  "distance": 173},
+                  {"to": "London",    "distance": 358},
+                  {"to": "Paris",     "distance": 431}
+        ]
+    }
+}</eg>
+               
+               <p>It is assumed that this is parsed and bound to a variable:</p>
+               
+               <eg>let $data := json-doc('input.json')</eg>
+               
+               <example id="id-ex-update-0">
+                  <head>Change the date and time of last update</head>
+                  <p>This can be achieved using a simple call on <code>map:put</code>.
+                  However, a simple update expression also does the job:</p>
+                  <eg>update map $data replace ?updated with string(current-dateTime())</eg>
+               </example>
+               
+               <example id="id-ex-update-1">
+                  <head>Change distances from kilometers to miles</head>
+                  <p>The following expression change all distances in this example
+                  from kilometers to miles:</p>
+                  <eg>update map $data replace ??distance with . * 0.621</eg>
+               </example>
+               
+               <example id="id-ex-update-2">
+                  <head>Correct the distance between two cities</head>
+                  <p>This expression changes the distance from Brussels to London, and
+                  also from London to Brussels, from 322Km to 325Km.</p>
+                  <eg>update map $data 
+   replace (??Brussels?*[?to="London"]?distance, 
+            ??London?*[to="Brussels"]?distance) 
+   with 325</eg>
+               </example>
+               
+               <example id="id-ex-update-3">
+                  <head>Add units of measure to the data</head>
+                  <p>This expression adds the entry <code>units="miles"</code>
+                     to all the distances recorded in the table.</p>
+                  <eg>update map $data 
+   replace ??*[?distance] 
+   with map:put(., "units", "miles")</eg>
+               </example>
+               
+               <example id="id-ex-update-4">
+                  <head>Add cities to the table</head>
+                  <p>This expression adds entries recording the distance from Paris to Frankfurt.</p>
+                  <eg>let $temp := 
+      update map $data 
+      replace ??Paris 
+      with array:append(map{"to":"Frankfurt", "distance":480})
+   return update $temp 
+          replace ??cities 
+          with map:put("Frankfurt", [map{"to":"Paris", "distance":357}])</eg>
+               </example>
+            </div4>
+            
+            
+            <div4 id="id-update-semantics">
+               <head>Update semantics</head>
+               <p>This section defines the semantics of update expressions by
+               means of an equivalent XQuery expression. This is not intended to describe
+               an efficient implementation.</p>
+               
+               <p>The result of the expression <code>update <var>T</var> <var>ROOT-EXPR</var>
+                  replace <var>SELECT-EXPR</var> with <var>NEW-VALUE-EXPR</var></code> is defined
+               to be equivalent to the effect of the XQuery code that follows.</p>
+               
+               <p>For convenience, arrays are treated as maps with integer keys. The terminology
+               of maps (maps, entries, keys, values) is therefore used generically for both
+               maps and arrays.</p>
+               
+               <p>It is useful to define a function that tests whether two labeled items
+               are identical by comparing the ID values in their labels:</p>
+               
+               <eg>let $is-same := function($item1, $item2) {
+   label($item1)?id = label($item2)?id
+}
+               </eg>
+               
+               <p>It is also useful to define a function that gets the ancestors of a labeled item,
+               obtained by examining its label:</p>
+               
+               <eg>let $ancestors := function($item) {
+   (label($item)?ancestors otherwise void#0)()               
+}</eg>
+               
+               <p>And similarly, a function that gets the parent of a labeled item:</p>
+               
+               <eg>let $parent := function($item) {
+   label($item)?parent
+}</eg>
+               
+               <p>We start by evaluating the root expression and checking that the result
+               is of the correct type:</p>
+               <eg>let $root := <var>ROOT_EXPR</var>[. instance of TYPE]
+             otherwise error (xs:QName("err:XPTY0004"))</eg>
+               
+               <p>where <var>TYPE</var> is <code>map(*)</code> for an <code>update map</code>
+               expression, or <code>array(*)</code> for an <code>update array</code> expression.</p>
+               <p>The next step is to pin the root, which conceptually attaches labels to everything
+               in its recursive content, including unique <code>id</code> values:</p>
+               
+               <eg>let $pinned-root := fn:pin($root)</eg>
+               
+               <p>We need to be able to find any item in the subtree given the <code>id</code> value in its label,
+               so we create an index:</p>
+               
+               <eg>let $with-id := map:build($pinned-root??*, fn{label(.)?id})</eg>
+               
+               <p>Now evaluate the selection expression to find all the items that need to be updated:</p>
+               
+               <eg>let $selection := $pinned-root ! SELECT-EXPR</eg>
+               
+               <p>Every item selected for update is required to be in the subtree of the pinned root,
+                  which we can verify as follows:</p>
+               
+               <eg>let $verified-selection := 
+   if (every $s in $selection 
+       satisfies $is-same($ancestors($s)[last()], $pinned-root))
+   then $selection
+   else error(xs:QName("XQDY0150"))</eg>
+               
+              
+               <p>We are now ready to compute the replacement values. We build a list of (<var>item</var>, <var>new-value</var>)
+               pairs. Since the items are all labeled with a unique <code>id</code> property, holding
+               the <code>item</code> in this list is sufficient to identify where it came from:</p>
+               
+               <eg>let $updates as record(item, new-value)* := 
+   $verified-selection ! map{"item":.,
+                             "new-value":<var>NEW-VALUE-EXPR</var>}</eg>
+               
+               <p>Note that the evaluation of <var>NEW-VALUE-EXPR</var> is in the context of the sequence
+               of selected items, so the expression can refer not just to the existing item, but also to 
+                  <code>position()</code> and <code>last()</code>.</p>
+               
+               <p>If the selection of items to be updated includes both a map (or array) and an item
+               in the recursive content of that map (or array), then the update to the descendant item 
+               will have no effect. We can therefore eliminate such items from the updates list:</p>
+               
+               <eg>let $outermost-updates :=
+   $updates[not(some $map1 in $updates?item,
+                     $map2 in $ancestors(.)
+                satisfies $is-same($map1, $map2))]</eg>
+               
+               <p>If there is more than one update to the same item, then it is 
+                  <termref def="dt-implementation-dependent"/> which of them takes effect.
+               (Usually it doesn't matter, because the replacement values will be the same, but
+               there are some cases it might make a difference, for example if the replacement
+               expression depends on the value of <code>position()</code>.)</p>
+               
+               <eg>let $effective-updates := 
+   for $u in $outermost-updates
+   group by label($u)?id
+   return head($u)</eg>
+               
+               <p>This code selects the first of the duplicates, but the implementation is free to
+               select any one of the duplicates.</p>
+               
+               
+               
+               <p>At this point we start an iterative process:</p>
+               
+               <ulist>
+                  <item><p>Multiple updates to different items in the same sequence are combined,
+                  to form a new sequence.</p></item>
+                  <item><p>Multiple updates to different entries in the same map or array are
+                  combined, to form a new map or array.</p></item>
+                  <item><p>From this, new updates are generated to replace the containing maps
+                  and arrays.</p></item>
+                  <item><p>Finally, an update to the root map or array is constructed, and the
+                  new value in this update is used as the final function result.</p></item>
+               </ulist>
+                
+               <p>We will define a function <code>$apply-updates</code> which takes a list of updates
+               and returns a new list of updates. Before doing this, a couple of helper functions
+               are useful.</p>
+               
+ <!--              <p>The following function replaces the item at a given position in a sequence
+               with a new value (which may itself be a sequence):</p>
+               
+               <eg>let $replace := function($sequence, $position, $new-value) {
+   $sequence => remove($position) => insert-before($position, $new-value)
+}</eg>-->
+                  
+               <p>The following function makes replacements of multiple items within a sequence,
+               taking as input a map from integer positions to replacement values:</p>
+                  
+               <eg>let $replace-items := function($sequence as item()*, 
+                               $changes as map(xs:integer, item()*)) 
+                      as item()* {
+   for-each($sequence, function($item, $pos) {
+      if (map:contains($changes, $pos))
+      then $changes?$pos
+      else $item})
+}</eg>
+               
+               <p>The following function makes replacements of multiple entries within a map or array,
+               taking as input a map from key values (index positions in the case of an array) to
+               replacement values:</p>
+               
+               <eg>let $replace-entries := function($container as item(), 
+                                 $changes as map(xs:anyAtomicType, item()*)) 
+                      as item() {                                      
+    typeswitch ($container) {
+       case map(*) 
+          return map:merge(($container, $changes), map{"duplicates": "use-last"})
+       case array(*)
+          return array:for-each($container, function($member, $pos) {
+             if (map:contains($changes, $pos))
+             then $changes?$pos
+             else $member
+          })
+       default return error(xs:QName("err:XPTY0004"))
+   }
+}</eg>
+               
+               <p>We can now define the function <code>$apply-updates</code> as follows:</p>
+               
+               <eg>let $apply-updates := 
+      function($updates as record(item, new-value)*)
+            as record(item, new-value)* {
+   
+   let $entry-updates as record(parent-id, key, new-value)* :=
+      for $u in $updates
+      group by $parent-id := label($parent($u?item))?id,
+               $key := label($u?item)?key
+      let $existing-value := ($with-id?$parent-id)?$key
+      let $changes := map:build($u, fn{label(?item)?position}, fn{?new-value})
+      return map{"parent-id": $parent-id,
+                 "key": $key,
+                 "new-value": $replace-items($existing-value, $changes)}
+                 
+   let $map-replacements as record(id, new-value)* :=
+      for $ku in $key-updates
+      group by $parent-id := $ku?parent-id
+      let $changes := map:build($ku, fn{?key}, fn{?new-value})
+      return map{"id": $parent-id,
+                 "new-value": $replace-entries($with-id($parent-id), $changes)}
+                 
+   return $map-replacements ! map{"item": $with-id(?id),
+                                  "new-value": ?new-value}
+}                                  
+   
+   </eg>
+       
+               
+               
+               <p>Having defined the function <code>$apply-updates</code>, we 
+                  then apply it iteratively until the termination condition
+               is reached:</p>
+               
+               <eg>return do-until(
+   $update-list,
+   $apply-updates
+   fn($update-list){count($update-list) = 1})?new-value
+ )              
+ </eg>
+               
+ 
+            </div4>
+            
+            <!--<olist>
+               <item><p>In these rules, the term <term>container</term> means
+                  a map or an array. Arrays are treated as maps with integer keys. The
+                  term <term>modifying an entry in a container</term> means applying
+                  the <code>map:put</code> function in the case of a map, or <code>array:put</code>
+                  in the case of an array.</p></item>
                <item><p>Let <var>R</var> (the <term>original root</term>) be the
                   result of the first expression. If the form <code>update map</code> is used, 
                   <var>R</var> must be a single map. If the form <code>update array</code>
-                  is used, then <var>R</var> must be a single array.</p></item>
+                  is used, then <var>R</var> must be a single array. Otherwise
+                  a type error is raised: <errorref class="TY" code="0004"/>.</p></item>
                <item><p>Let <var>R'</var> (the <term>pinned root</term>) be the
                   result of applying the <code>fn:pin</code> function to <var>R</var>.</p></item>
                <item><p>Evaluate the second expression (the <term>selection expression</term>)
-               with a singleton focus based on <var>R'</var>. Call
-               the result <var>S</var> (the <term>selected items</term>).</p></item>
+                  with a singleton focus based on <var>R'</var>. Call
+                  the result <var>S</var> (the <term>selected items</term>).</p>
+               </item>
                <item><p>Every item in <var>S</var> must be a labeled item <var>J</var>
-                  with the property that <code><var>J</var>¶ancestors()[last()]¶ID = <var>R'</var>¶ID)</code>.
-               That is, it must be an item within the recursive content of <code>R'</code>.</p>
-               <note><p>This effectively constrains the selection expression to use constructs
-               that select items within the content of the original root, for
-               example lookup expressions using the <code>?</code> and <code>??</code>
-                  operators.</p></note></item>
-               <item><p>Within the selected items, eliminate duplicates: specifically, items
+                     with the property that <code><var>J</var>¶ancestors()[last()]¶ID = <var>R'</var>¶ID)</code>.               
+                  This means it must be an item within the recursive content of <code>R'</code>.
+                     If it is not, a dynamic error is raised: <errorref spec="XQ" class="DY" code="0150"/>.</p>
+                  <note><p>This effectively constrains the selection expression to use constructs
+                  that select items within the content of the original root, for
+                  example lookup expressions using the <code>?</code> and <code>??</code>
+                     operators.</p></note>
+               </item>
+               <item><p>Within the sequence <var>S</var>, eliminate duplicates: specifically, items
                   having the same values for <code>¶parent¶ID</code>,
-                  <code>¶key</code>, and <code>¶position</code>.</p></item>
-               <item><p>For each remaining item <var>s</var> in the selected items, evaluate the third expression
-               (the <term>replacement expression</term>) with <var>s</var>
-               as its singleton focus. Call the result <var>s'</var> (the replacement value).</p></item>
-               <item><p>Merge updates to multiple items within the same value. That is, if
-                  two items in <var>S</var> have the same values for <code>¶parent¶ID</code>
-                  and <code>¶key</code>, let <var>P</var> be the parent map or array <code>¶parent</code>,
-                  let <var>K</var> be the value of <code>¶key</code>, and let <var>V</var>
-                  (the <term>original value</term>) be the value of <code>¶P¶K</code>.
-                  Construct a value <var>V'</var> equivalent to <var>V</var> but with
-                  each relevant item (identified by its position, <code>s¶position</code>)
-               replaced with the replacement value <var>s'</var>.</p></item>
-               <item><p>Construct a list called the <term>pending update list</term>
-                  containing all the identified changes, in the form of triples: <var>ID</var>
-                  (identifying a map or array), <var>KEY</var> (identifying an entry or
-                  member to be updated), and <var>V'</var> (identifying the new value
-                  for that entry or member).</p></item>
-               <item><p>Group the entries in the pending update list having common values for
-                  <var>ID</var>. For each such group, construct a new map or array <var>P'</var>
-                  that is the same as the original <var>P</var>, but with any entries identified by
-                  a <var>KEY</var> in the pending update list replaced by the corresponding replacement
-                  value <var>V'</var>.</p>
-                  <p>If <var>P</var> itself has a parent (<code>P¶parent</code>),
-                     drop this group of entries from the pending update list, and add a single entry
-                     with <var>ID</var> set to <code>P¶parent¶ID</code>,
-                     <var>KEY</var> set to <code>P¶key</code>, and
-                     <var>V'</var> set to <var>P'</var>.</p></item>
-               <item><p>Repeat until the pending update list contains only one entry, which
-                  will necessarily have <var>V'</var> as the replacement for the original root. Let
-               <var>Z</var> be this map or array.</p></item>
-                  <item><p>Make a copy of <var>Z</var> in which all labels have been removed,
-                  recursively, from the value itself and its content. Return this copy
-                  as the result of the update expression.</p></item>
-                  
+                  <code>¶key</code>, and <code>¶position</code>. Call the de-duplicated sequence
+                  <var>S'</var>.</p>
+                  <p>It is implementation-dependent which of the duplicates is eliminated.</p>
+                  <note><p>In most cases it makes no difference which of the duplicates
+                     is eliminated. It can make a difference, however, if the 
+                     replacement expression depends on the position of an item within the
+                     sequence of selected items.</p></note>
+               </item>
+               <item><p>Construct a mutable set <var>T</var>, initially empty, of tuples (<var>ID</var>,
+                  <var>KEY</var>, <var>POS</var>, <var>NEWVAL</var>).</p>
+                  <p>For each item <var>s</var> in <var>S'</var>, add a tuple to <var>T</var>
+                  as follows:</p>
+                  <ulist>
+                     <item><p><var>ID</var>: the value of <code>s¶parent¶ID</code>.</p></item>
+                     <item><p><var>KEY</var>: the value of <code>s¶key</code>.</p></item>
+                     <item><p><var>POS</var>: the value of <code>s¶position</code>.</p></item>
+                     <item><p><var>NEWVAL</var>: the result of evaluating the third
+                        expression (the <term>replacement expression</term>) with
+                        a focus based on <var>s</var> and its position within <var>S'</var>.</p></item>
+                  </ulist>
+               </item>
+               <item><p>For each distinct value of <var>ID</var> in <var>T</var>,
+               let <var>C</var> be the container identified by <var>ID</var>, and let
+                  <var>U</var> be the set of entries in <var>T</var> sharing this <var>ID</var> value.
+                  Construct an updated container <var>C'</var> that is a copy of <var>C</var>, 
+                  modified as follows:</p>
+                  <p>For each distinct value of <var>KEY</var> in <var>U</var>, construct
+                        a value obtained as follows:</p>
+                  <ulist>
+                     <item><p>Take the old value of the entry with this key in <var>C</var>.</p></item>
+                     <item><p>For each item in this value, if there is an entry
+                        with <var>POS</var> equal to the position of this item, 
+                        replace the item by the corresponding <var>NEWVAL</var>.
+                        If there is no such entry, use the existing value <emph>as is</emph>,
+                        but without its label.</p></item>
+                  </ulist>
+             
+                  <p>If <var>C</var> is <var>R'</var> (as identified by matching
+                  <var>ID</var> values) then return <var>C'</var> as the result of the function.</p>
+                  <p>Otherwise continue as follows:</p>
+                  <ulist>
+                  <item><p>Drop the selected entries (those with the current <var>ID</var> value) 
+                     from <var>T</var>.</p></item>
+                  <item><p>Add a new entry to <var>T</var> in which the values of <var>ID</var>,
+                     <var>KEY</var>, and <var>POS</var> are taken from
+                     the properties <var>C¶parent¶ID</var>, <var>C¶key</var>, and <var>C¶position</var>, 
+                     and <var>NEWVAL</var> is <var>C'</var>.</p></item>
+                  </ulist>
+               </item>
+               <item><p>Continue until the process terminates, which happens when the only
+                  entries left in <var>T</var> are for the <term>pinned root</term> <var>R'</var>.</p></item>
+               
+ 
+              
             
             </olist>
             
-            <p>TODO: summarize the error conditions.</p>
+
             
             <note>
                <p>An update expression can take advantage of the fact that the selected items are labeled.
@@ -20479,7 +20801,7 @@ declare function recursive-content($item as item()) as record(key, value)* {
                the selected <code>?student</code> maps with a new entry <code>course</code> whose
                value is taken from the <code>course-code</code> entry in 
                   an ancestor map in the selection path.</p>
-            </note>
+            </note>-->
          </div3>
          
       <!--   <div3 id="id-composite-atomic-values" diff="add" at="A">
