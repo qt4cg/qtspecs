@@ -19783,7 +19783,7 @@ else let $rel = op:simple-compare(head($a), head($b), $C)
      return if ($rel eq 0)
             then op:lexicographic-compare(tail($a), tail($b), $C)
             else $rel</eg></item>
-                  <item><p>Here <code>op:simple-compare($k1, $k2)</code> is defined as follows:</p>
+                  <item><p>Here <code>op:simple-compare($k1, $k2, $C)</code> is defined as follows:</p>
                      <eg>if ($k1 instance of union(xs:string, xs:anyURI, xs:untypedAtomic)
     and $k2 instance of union(xs:string, xs:anyURI, xs:untypedAtomic))
 then compare($k1, $k2, $C)
@@ -30216,14 +30216,13 @@ path with an explicit <code>file:</code> scheme.</p>
       </fos:history>
    </fos:function>
    
-   <fos:function name="ranks" pefix="fn">
+   <fos:function name="ranks" prefix="fn">
        <fos:signatures>
          <fos:proto name="ranks" return-type="array(item())*"> 
-            <fos:arg name="input" type="item()*" usage ="navigation"/>  
-            <fos:arg name="key" type="function(item()) as xs:anyAtomicType*" usage="inspection" default="fn:data#1"/>
-            <fos:arg name="distinct-ranks" type="xs:boolean" usage="navigation" default="true()"/>
-            <fos:arg name="collation-input" type="xs:string?" usage="absorption" default="fn:default-collation()"/>
-            <fos:arg name="collation-keys" type="xs:string?" usage="absorption" default="fn:default-collation()"/>
+            <fos:arg name="input" type="item()*" usage="navigation"/>
+            <fos:arg name="collations" type="xs:string*" usage="absorption" default="fn:default-collation()"/>
+            <fos:arg name="keys" type="(function(item()) as xs:anyAtomicType*)*" usage="inspection" default="fn:data#1"/>
+            <fos:arg name="orders" type="enum('ascending', 'descending')*" usage="absorption" default="'ascending'"/>
          </fos:proto>        
        </fos:signatures> 
       <fos:properties>
@@ -30232,104 +30231,73 @@ path with an explicit <code>file:</code> scheme.</p>
          <fos:property>focus-independent</fos:property>
       </fos:properties>   
       <fos:summary>
-        <p>Sorts the items of a supplied sequence based on the value of a sort key function, 
+        <p>Sorts the items of a supplied sequence based on the value of one or more sort keys, 
         grouping the results so that items with the same key appear together 
         as members of the same array, ordered by increasing key value.
         </p>
       </fos:summary>  
-      <fos:rules>     
-         <p> The items from <code>$input</code> are sorted 
-         by the results of applying the <code>$key</code> function on each of them, 
-         and then for each of the sorted key-values (in increasing sort-order) an array is produced,
-         containing all <code>$input</code> items having that same key-value, that are distinct 
-         if the value of the <code>$distinct-ranks</code> argument is specified as <code>true()</code>.
-         Each such result-array contains its members ordered in the same way as they appear
-         in <code>$input</code>
+      <fos:rules>
+         <p>The effect of the function is equivalent to first sorting the input
+            sequence by applying the <code>fn:sort</code> function with the same
+            arguments, and then partitioning the result into a sequence of arrays
+            so that adjacent items with the same sort key go into the same array.</p>
          
-         More formally, the function is equivalent to the following implementation in XPath (return clause added in comments for completeness):</p>
-         <eg><![CDATA[let $ranks := function(
-                $input as item()*,
-                $key as function(item()) as xs:anyAtomicType*,
-                $distinct-ranks as xs:boolean,
-                $collation-input as xs:string?,
-                $collation-keys as xs:string?
-                ) as array(item())*
- {
-  let $make-distinct := ( (distinct-values#2)[$distinct-ranks], fn($x, $y){$x} )[1],
-      $compare-keys := fn($k1, $k2, $collation-keys) {deep-equal($k1, $k2, $collation-keys)}
-    return
-      for $v in sort(distinct-values($input ! $key(.), $collation-keys),  $collation-keys)
-        return
-           array{$make-distinct($input[$compare-keys($key(.), $v, $collation-keys)],  
-                                $collation-input)}
- }
-(: 
-  return $ranks($input, $key, $distinct-ranks, $collation-input, $collation-keys)
-:) 
-]]></eg>         
+         <p>That is, the result of the function is given by the expression:</p>
+         
+         <eg>sort($input, $collations, $keys, $orders) =>
+   partition(split-when := fn($group, $item) {
+      not(op:same-sort-keys(foot($group), 
+                            $item, 
+                            $collations, 
+                            $keys))})</eg>
+         
+         <p>where <code>op:same-sort-keys($item1, $item2, $collations, $keys)</code> is a function
+            that returns true if and only if the first two arguments have pairwise equal sort
+            key values as defined in the rules of the <code>fn:sort</code> function.</p>
+         
       </fos:rules>
-      <fos:notes>
-                <olist>
-                    <item><p>The arguments <code>$collation-input</code> and <code>$collation-keys</code> will be used in cases
-                           when, respectively, the values of <code>$input</code> and <code>$key($inputValue)</code> are strings.
-                           These collation arguments have default values, thus in most cases it would not be necessary
-                           to specify collations on the function call.                           
-                        </p></item>
-                    <item>
-                        <p>The argument <code>$distinct-ranks</code> has a default of <code>true()</code> and only
-                           needs to be specified if the caller wants ranks to contain any duplicate items.                        
-                        </p>
-                    </item>
-                    <item>
-                        <p>Note that each result is placed in a separate array.
-                           This is necessary because we cannot represent a sequence of results, some or all of which are
-                           a sequence - that is "sequence of sequences" as just a single sequence.
-                        </p>
-                    </item>
-                </olist>
-        </fos:notes>                 
+               
       <fos:errors>
-         <p>If the set of computed keys contains <code>xs:untypedAtomic</code> values that are not 
-            castable to <code>xs:double</code> then 
-            operation will fail with a dynamic error (<xerrorref
-               spec="FO" class="RG" code="0001"/>).
-         </p>
-         <p>If the set of computed keys contains values that are not comparable using 
-            the <code>lt</code> operator then the sort 
-            operation will fail with a type error (<xerrorref
-               spec="XP" class="TY" code="0004"/>).
-         </p>   
+         <p>The errors that may be raised are the same as for <code>fn:sort</code>.</p>
       </fos:errors>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression><eg>ranks((3, 2, 4), fn($n) {$n mod 2})</eg></fos:expression>
+               <fos:expression><eg>ranks(("red", "orange", "yellow", "green", "blue", "indigo", "violet"),
+   (), string-length#1)</eg></fos:expression>
+               <fos:result>["red"], ["blue"], ["green"], ["orange", "yellow", "indigo", "violet"]</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>ranks((3, 2, 4), (), fn($n) {$n mod 2})</eg></fos:expression>
                <fos:result>[2, 4], [3]</fos:result>
             </fos:test>
          </fos:example>       
          <fos:example>
          <fos:test>
-               <fos:expression><eg>ranks((-2, -1, 0, 1, 2, 3) fn($n) {$n * $n})</eg></fos:expression>
+               <fos:expression><eg>ranks((-2, -1, 0, 1, 2, 3), (), fn($n) {$n * $n})</eg></fos:expression>
                <fos:result>[0], [-1, 1], [-2, 2], [3]</fos:result>
             </fos:test>
          </fos:example>      
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[
-let $Group := map{
+let $group := map {
   "Argentina" : (2, 0, 1),
   "Poland" : (1, 1, 1),
   "Mexico" : (1, 1, 1),
   "Saudi Arabia" : (1, 0, 2)
 }
- return
-   reverse(ranks($Group => map:keys(), 
-                  fn($team){3 * $Group($team)[1] + $Group($team)[2]})) ]]></eg>
+return ranks(map:keys($group), 
+             (),
+             fn($team){3 * $group($team)[1] + $group($team)[2]}, 
+             "descending")) ]]></eg>
                </fos:expression>
-               <fos:result>["Argentina"], ["Poland","Mexico"], ["Saudi Arabia"]</fos:result>
+               <fos:result>["Argentina"], ["Poland", "Mexico"], ["Saudi Arabia"]</fos:result>
             </fos:test>
          </fos:example>       
-         <fos:example>
+ <!--        <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[
  $toSwedish := map{
@@ -30340,7 +30308,7 @@ let $Group := map{
    "fine": "Bra"
  }
  return
-   ranks(("good", "difficult", "great", "severe", "fine", "good"), 
+   ranks(("good", "difficult", "great", "severe", "fine", "good"), ()
          fn($word){$toSwedish($word)}, true(), default-collation(), 
                    "http://www.w3.org/2013/collation/UCA?lang=se") ]]></eg>
                </fos:expression>
@@ -30364,41 +30332,35 @@ let $Group := map{
                </fos:expression>
                <fos:result>["good","great","fine","good"], ["difficult","severe"]</fos:result>
             </fos:test>
-         </fos:example> 
+         </fos:example> -->
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[
-let $decompose := fn($s as xs:string)
-{
-  let $chars := string-to-codepoints($s) ! codepoints-to-string#1(.),
-      $freqs := fold-left($chars, map{},  
-                          fn($m as map(*), $c as xs:string) 
-                          {
-                            if(not($m($c))) then $m => map:put($c, 1)
-                              else $m => map:put($c, $m($c) +1)
-                          }
-                         )
-      return 
-        string-join((for $k in sort($freqs => map:keys()),
-                         $kv in $k || $freqs($k)
-                      return $kv),
-                      '')       
+let $decompose := fn($s as xs:string) {
+  let $chars := characters($s)[. ne ' '],
+      $frequencies := map:build($chars, value:=fn{1}, combine:=op('+'))
+                      => map:pairs()
+                      => sort((), fn{?key})
+  return string-join($frequencies ! (?key, ?value), '')      
 }
- return
-   ranks (("apple macintosh", "astronomer ", "angered", "brush", "dictionary", 
-           "dirty room", "editor ", "enraged", "eleven plus two",  
-           "indicatory", "laptop machines", "redo it", "dormitory ", "shrub", 
-           "moon starer", "twelve plus one"), 
-          fn($word){$decompose($word)} ) ]]></eg>               
+return
+   ranks (("apple macintosh", "astronomer", 
+             "angered", "brush", "dictionary", 
+             "dirty room", "editor", 
+             "enraged", "eleven plus two",  
+             "indicatory", "laptop machines", 
+             "redo it", "dormitory", "shrub", 
+             "moon starer", "twelve plus one"),
+          keys := $decompose} ) ]]></eg>               
                </fos:expression>
-               <fos:result>["astronomer ","moon starer"], 
-["apple macintosh","laptop machines"],
-["editor ","redo it"],
-["dirty room","dormitory "],
-["eleven plus two","twelve plus one"],
-["dictionary","indicatory"],
-["angered","enraged"],
-["brush","shrub"]
+               <fos:result>["astronomer", "moon starer"], 
+["apple macintosh", "laptop machines"],
+["editor", "redo it"],
+["dirty room", "dormitory"],
+["eleven plus two", "twelve plus one"],
+["dictionary", "indicatory"],
+["angered", "enraged"],
+["brush", "shrub"]
 </fos:result>
             </fos:test>            
          </fos:example>        
