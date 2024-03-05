@@ -2214,7 +2214,8 @@
          <fos:proto name="format-number" return-type="xs:string">
             <fos:arg name="value" type="xs:numeric?"/>
             <fos:arg name="picture" type="xs:string"/>
-            <fos:arg name="decimal-format-name" type="union(xs:string, xs:QName)?" default="()"/>
+            <fos:arg name="format-name" type="union(xs:string, xs:QName)?" default="()"/>
+            <fos:arg name="format" type="map(*)?" default="()"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="2">
@@ -2228,20 +2229,13 @@
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a string containing a number formatted according to a given picture string,
-            taking account of decimal formats specified in the static context.</p>
+         <p>Returns a string containing a number formatted according to a given picture string
+            and decimal format.</p>
       </fos:summary>
       <fos:rules>
-         <p>The effect of the two-argument form of the function is equivalent to calling the
-            three-argument form with an empty sequence as the value of the third argument.</p>
          <p>The function formats <code>$value</code> as a string using the <termref
-               def="dt-picture-string"
-               >picture string</termref> specified by the
-               <code>$picture</code> argument and the decimal-format named by the
-               <code>$decimal-format-name</code> argument, or the unnamed decimal-format, if there
-            is no <code>$decimal-format-name</code> argument. The syntax of the picture string is
-            described in <specref
-               ref="syntax-of-picture-string"/>.</p>
+               def="dt-picture-string">picture string</termref> specified by the
+               <code>$picture</code> argument and a decimal format.</p>
          <p>The <code>$value</code> argument may be of any numeric data type
             (<code>xs:double</code>, <code>xs:float</code>, <code>xs:decimal</code>, or their
             subtypes including <code>xs:integer</code>). Note that if an <code>xs:decimal</code> is
@@ -2250,29 +2244,36 @@
          <p>If the supplied value of the <code>$value</code> argument is an empty sequence, the
             function behaves as if the supplied value were the <code>xs:double</code> value
                <code>NaN</code>.</p>
-         <p>The value of <code>$decimal-format-name</code>, if present and non-empty,
-               <rfc2119>must</rfc2119> be <phrase
-               diff="add" at="A"
-               >either an <code>xs:QName</code>, 
-                  or</phrase> a string which after removal of leading and trailing
-            whitespace is in the form of an <code>EQName</code> as defined in the XPath 4.0
-            grammar, that is one of the following:</p>
-
-         <ulist>
+         <p>The decimal format is determined as follows:</p>
+         <olist>
             <item>
-               <p>A lexical QName, which is expanded using the statically known namespaces. The
-                  default namespace is not used (no prefix means no namespace).</p>
+               <p>If <code>$format-name</code> is present and non-empty, its value
+                  <rfc2119>must</rfc2119> be <phrase diff="add" at="A">either an
+                  <code>xs:QName</code>, or</phrase> a string which after removal of leading
+                  and trailing whitespace is in the form of an <code>EQName</code>
+                  as defined in the XPath 4.0 grammar, that is one of the following:</p>
+               <ulist>
+                  <item>
+                     <p>A lexical QName, which is expanded using the statically known namespaces.
+                        The default namespace is not used (no prefix means no namespace).</p>
+                  </item>
+                  <item>
+                     <p>A <code>URIQualifiedName</code> using the syntax <code>Q{uri}local</code>,
+                        where the URI can be zero-length to indicate a name in no namespace.</p>
+                  </item>
+               </ulist>
             </item>
             <item>
-               <p>A <code>URIQualifiedName</code> using the syntax <code>Q{uri}local</code>, where
-                  the URI can be zero-length to indicate a name in no namespace.</p>
+               <p>The decimal format that is chosen is the decimal format in the static context
+                  whose name matches <code>$format-name</code> if supplied, or the unnamed decimal
+                  format in the static context otherwise.</p>
             </item>
-         </ulist>
-
-
-         <p>The decimal format that is used is the decimal format in the static context whose name
-            matches <code>$decimal-format-name</code> if supplied, or the unnamed decimal format in
-            the static context otherwise.</p>
+            <item>
+               <p>If <code>$format</code> is present and non-empty, the entries of this map
+               are used to modify the decimal format chosen in the first step. The supported
+               keys and value types are defined in <specref ref="defining-decimal-format"/>.</p>
+            </item>
+         </olist>
 
          <p>The evaluation of the <code>fn:format-number</code> function takes place in two
             phases, an analysis phase described in <specref
@@ -2291,18 +2292,20 @@
 
          <p>The result of the function is the formatted string representation of the supplied
             number.</p>
-
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="DF" code="1280"/>
             <phrase diff="chg" at="A">if 
-            the <code>$decimal-format-name</code> argument is supplied as an <code>xs:string</code>
+            the <code>$format-name</code> argument is supplied as an <code>xs:string</code>
             that is</phrase> neither a valid lexical QName nor a
             valid <code>URIQualifiedName</code>, or if it uses a prefix that is not found in the
             statically known namespaces, or if the static context does not contain a declaration of
-            a decimal-format with a matching expanded QName. If the processor is able to detect the
+            a decimal format with a matching expanded QName. If the processor is able to detect the
             error statically (for example, when the argument is supplied as a string literal), then
             the processor <rfc2119>may</rfc2119> optionally signal this as a static error.</p>
+         <p>A dynamic error is raised <errorref class="DF" code="1290"/> if a value of
+            <code>$format</code> is not valid for the associated property, or if the properties
+            of the decimal format resulting from a supplied map do not have distinct values.</p>
       </fos:errors>
       <fos:notes>
          <p>A string is an ordered sequence of characters, and this specification 
@@ -2342,16 +2345,27 @@
                <fos:expression>format-number(-6, '000')</fos:expression>
                <fos:result>"-006"</fos:result>
             </fos:test>
-            <p>The following example assumes the existence of a decimal format named <code>ch</code> in which
-               the grouping separator is <code>&#x2b9;</code> and the decimal separator is
-                  <code>&#xb7;</code>:</p>
             <fos:test>
-               <fos:expression><eg>format-number(
-  1234.5678,
-  '#&#x2b9;##0&#xb7;00',
-  'ch'
-)</eg></fos:expression>
+               <fos:expression><eg>
+format-number(1234567.8, '0.000,0', format := map {
+   'grouping-separator': '.',
+   'decimal-separator': ','
+ })</eg></fos:expression>
+               <fos:result>"1.234.567,8"</fos:result>
+            </fos:test>
+            <p>The following examples assume the existence of a decimal format named
+               <code>de</code> in which the grouping separator is <code>.</code> and the
+               decimal separator is <code>,</code>:</p>
+            <fos:test>
+               <fos:expression>format-number(1234.5678, '#.##0,00', 'de')</fos:expression>
                <fos:result>"1&#x2b9;234&#xb7;57"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+format-number(12345, '0,###^0', 'de', map {
+  'exponent-separator': '^'
+})</eg></fos:expression>
+               <fos:result>"1,234^4"</fos:result>
             </fos:test>
             <p>The following examples assume that the exponent separator
                in decimal format <code>fortran</code> is <code>E</code>:</p>
