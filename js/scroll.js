@@ -1,3 +1,6 @@
+const DELETED = "rgb(255, 85, 85, 0.3)";
+const ADDED = "rgb(144, 238, 144, 0.3)";
+
 class DXmlView {
   constructor() {
     this.body = document.querySelector("body");
@@ -213,14 +216,14 @@ class DXmlView {
       let displayType= this.displayType(span);
       if (this.new_classes.includes(span.className)) {
         span.style.display = displayType;
-        span.style.background = "#90EE90";
+        span.style.background = ADDED
         //need to add border to images
         span.querySelectorAll("img").forEach(img => {
           img.style.border = "2px solid green";
         });
       } else if (this.old_classes.includes(span.className)) {
         span.style.display = displayType;
-        span.style.background = "#FF5555";
+        span.style.background = DELETED;
         //need to add border to images
         span.querySelectorAll("img").forEach(img => {
           img.style.border = "2px solid red";
@@ -298,7 +301,7 @@ class DXmlView {
         props["margin-top"] = node.style["margin-top"];
         props["padding-top"] = node.style["padding-top"];
       }
-      node.style["border-top"] = "6px dotted #ff5555";
+      node.style["border-top"] = "6px dotted " + DELETED;
       node.style["padding-top"] = "20px";
       node.style["margin-top"] = "20px";
       return;
@@ -322,7 +325,7 @@ class DXmlView {
           props["margin-top"] = node.style["margin-top"];
           props["padding-top"] = node.style["padding-top"];
         }
-        node.style["border-top"] = "6px dotted #ff5555";
+        node.style["border-top"] = "6px dotted " + DELETED;
         node.style["padding-top"] = "20px";
         node.style["margin-top"] = "20px";
         return;
@@ -331,6 +334,69 @@ class DXmlView {
     node = node.parentNode;
     if (node) {
       this.find_header(node);
+    }
+  }
+
+  mark_change(node, className, color, changebarColor) {
+    node.classList.add(className);
+    node.style["background-color"] = color;
+    if (className == "deltaxml-old") {
+      node.style["text-decoration-line"] = "line-through";
+      node.style["text-decoration-color"] = "#555555";
+    }
+
+    for (const child of node.children) {
+      child.classList.remove(className);
+      child.style["background-color"] = "transparent"
+      if (child.nodeName == "DIV" || child.nodeName == "P" || child.nodeName == "LI"
+        ||  child.nodeName == "DT" || child.nodeName == "DD") {
+          child.style["border-right"] = "none";
+          if (className == "deltaxml-old") {
+            node.style["text-decoration"] = "none";
+          }
+        }
+    }
+
+    if (node.nodeName == "DIV" || node.nodeName == "P" || node.nodeName == "LI"
+      || node.nodeName == "DT" || node.nodeName == "DD") {
+        node.style["border-right"] = "6px solid " + changebarColor;
+      }
+  }
+
+  tidy_change_markup(node, depth) {
+    //console.log(`WALK: ${node.nodeName} ${depth}`);
+
+    let status = node.classList.contains("deltaxml-new") ? "new"
+      : (node.classList.contains("deltaxml-old") ? "old" : "undecided")
+
+    if (status == "undecided") {
+      for (const child of node.children) {
+        this.tidy_change_markup(child, depth+1)
+      }
+
+      let markOld = true
+      let markNew = true
+      for (const child of node.children) {
+        markOld = markOld && (child.childNodes.length == 0 || child.classList.contains("deltaxml-old"))
+        markNew = markNew && (child.childNodes.length == 0 || child.classList.contains("deltaxml-new"))
+        //console.log(`  ?? ${node.nodeName}: ${markOld}/${markNew}`)
+      }
+
+      if (markOld && markNew) {
+        status = "undecided";
+      } else if (markOld) {
+        status = "old";
+      } else if (markNew) {
+        status = "new";
+      } else {
+        status = "mixed";
+      }
+    }
+
+    if (status == "new") {
+      this.mark_change(node, "deltaxml-new", ADDED, "green")
+    } else if (status == "old") {
+      this.mark_change(node, "deltaxml-old", DELETED, "red")
     }
   }
 }
@@ -347,6 +413,7 @@ window.scroll_to = function(direction) {
     console.log("Unexpected scroll direction: ", direction);
   }
 };
+
 window.view = function(doc) {
   if (doc === "new") {
     dxmlview.view_new();
@@ -361,8 +428,10 @@ window.view = function(doc) {
     console.log("Unexpected view doc: ", doc);
   }
 };
+
 window.addEventListener('resize', (event) => {
-  console.log("resize");
   dxmlview.find_visible_diffs();
 });
+
 dxmlview.view_both();
+dxmlview.tidy_change_markup(document.querySelector("body"), 0)
