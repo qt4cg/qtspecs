@@ -585,8 +585,11 @@
 	<xsl:template match="fos:history | fos:version"/>
 
 	<xsl:template match="processing-instruction('type')" expand-text="yes">
-		<xsl:variable name="target" select="$fosdoc//fos:type[@id = normalize-space(current())]"
-			as="element(fos:type)"/>
+		<xsl:variable name="target" select="$fosdoc//fos:type[@id = normalize-space(current())]"/>
+		<xsl:if test="count($target) ne 1">
+			<xsl:message expand-text="yes">Failed to locate record type {.}</xsl:message>
+		</xsl:if>
+		<xsl:variable name="verified-target" select="$target" as="element(fos:type)"/>
 		<xsl:variable name="record" select="$target/fos:record" as="element(fos:record)"/>
 		<xsl:apply-templates select="$record"/>
 	</xsl:template>
