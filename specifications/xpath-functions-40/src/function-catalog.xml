@@ -14451,6 +14451,19 @@ return contains-subsequence(
                   <fos:type>xs:boolean</fos:type>
                   <fos:default>false</fos:default>
                </fos:option>
+               <fos:option key="items-equal">
+                  <fos:meaning>A user-supplied function to test whether two items
+                     are considered equal. The function can return <code>true</code>
+                     or <code>false</code> to indicate that two items are or are not
+                     equal, overriding the normal rules that would apply to those items;
+                     or it can return an empty sequence, to indicate that the normal
+                     rules should be followed. If this option is present then the 
+                     <code>ordered</code> option <rfc2119>must</rfc2119> be <code>true</code> and the
+                     <code>unordered-elements</code> option <rfc2119>must</rfc2119> be an empty sequence.
+                  </fos:meaning>
+                  <fos:type>function(item(), item()) as xs:boolean?</fos:type>
+                  <fos:default>fn:void#0</fos:default>
+               </fos:option>
                <fos:option key="namespace-prefixes">
                   <fos:meaning>Determines whether namespace prefixes in <code>xs:QName</code> values (particularly
                      the names of elements and attributes) are significant.
@@ -14472,7 +14485,7 @@ return contains-subsequence(
                   <fos:type>xs:string?</fos:type>
                   <fos:default>()</fos:default>
                </fos:option>              
-               <fos:option key="orderd">
+               <fos:option key="ordered">
                   <fos:meaning>Controls whether the top-level order of the items of the input sequences
                     is considered.
                   </fos:meaning>
@@ -14570,8 +14583,12 @@ declare function equal-strings(
   return compare($n1($n2($string1)), $n1($n2($string2)), $collation) eq 0    
 }]]></eg>
          <p>The rules for deciding whether two items <code>$i1</code> and <code>$i2</code> are deep-equal
-            are as follows. The two items are deep-equal
-            if one or more of the following conditions are true:</p>
+            are as follows.</p>
+         <p>The two items are first compared using the function supplied in the <code>items-equal</code>
+            option. If this returns <code>true</code> then the items are deep-equal. If it returns
+            <code>false</code> then the items are not deep-equal. If it returns an empty sequence
+            (which is always the case if the option is not explicitly specified)
+            then the two items are deep-equal if one or more of the following conditions are true:</p>
          <olist>
             <item>
                <p>All of the following conditions are true:</p>
@@ -14784,8 +14801,11 @@ declare function equal-strings(
                               <item>
                                  <p>The two nodes have the same number of attributes, and for every attribute
                                     <code>$a1</code> in <code>$i1/@*</code> there exists an attribute
-                                    <code>$a2</code> in <code>$i2/@*</code> such that <code>$a1</code> and
-                                    <code>$a2</code> are deep-equal.</p>
+                                    <code>$a2</code> in <code>$i2/@*</code> such that <code>node-name($a1) eq node-name($a2)</code>
+                                    and <code>$a1</code> and <code>$a2</code> are deep-equal.</p>
+                                 <note><p>Attributes, like other items, may be compared using the supplied <code>items-equal</code>
+                                 function. However, this function will not be called to compare two attribute nodes unless
+                                 they have the same name.</p></note>
                               </item>
                               <item>
                                  <p> One of the following conditions holds:</p>
@@ -14961,6 +14981,24 @@ declare function equal-strings(
             it does not return an error. So
             the result of <code>fn:deep-equal(1, current-dateTime())</code> is <code>false</code>.</p>
          
+         <p>The <code>items-equal</code> callback function may be used to override the default rules
+         for comparing individual items. For example, it might return <code>true</code> unconditionally
+         when comparing two <code>@timestamp</code> attributes, if there is no expectation that the
+         two trees will have identical timestamps. Given two nodes <code>$n1</code> and <code>$n2</code>, 
+            it might compare them using the <code>is</code> operator, so that instead of comparing the
+         descendants of the two nodes, the function simply checks whether they are the same node.
+         Given two function items <code>$f1</code> and <code>$f2</code> it might return true unconditionally,
+         knowing that there is no effective way to test if the functions are equivalent. Given
+         two numeric values, it might return <code>true</code> if they are equal to six decimal places.</p>
+         
+         <p>It is good practice for the <code>items-equal</code> callback function to be reflexive,
+         symmetric, and transitive; if it is not, then the <code>fn:deep-equal</code> function itself
+         will lack these qualities. <emph>Reflexive</emph> means that every item (including <code>NaN</code>)
+         should be equal to itself; <emph>symmetric</emph> means that <code>items-equal(A, B)</code>
+         should return the same result as <code>items-equal(B, A)</code>, and <emph>transitive</emph>
+            means that <code>items-equal(A, B)</code> and <code>items-equal(B, C)</code> should
+            imply <code>items-equal(A, C)</code>.</p>
+         
       </fos:notes>
       <fos:examples>
          <fos:variable name="at" id="v-deep-equal-at" as="element()"><![CDATA[<attendees>
@@ -15111,11 +15149,28 @@ declare function equal-strings(
                   <code>span</code> element to be ignored.</fos:postamble>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>deep-equal(
+  (1, 2, 3), 
+  (1.0007, 1.9998, 3.0005),
+  options := { 'items-equal': fn($x, $y) {
+                  if (($x, $y) instance of xs:numeric+) {
+                      abs($x - $y) lt 0.001
+                  }
+                }
+             })</eg></fos:expression>
+               <fos:result>true()</fos:result>
+               <fos:postamble>For numeric values, the callback function tests whether they
+               are approximately equal. For any other items, it returns an empty sequence,
+               so the normal comparison rules apply.</fos:postamble>
+            </fos:test>
+            
+         </fos:example>
       </fos:examples>
       
       <fos:history>
-         <fos:version version="4.0">Changed in 4.0: Options parameter added. Approved in principle on 2023-01-31, subject
-            to further review.</fos:version>
+         <fos:version version="4.0">Changed in 4.0: Options parameter added.</fos:version>
       </fos:history>
    </fos:function>
    
