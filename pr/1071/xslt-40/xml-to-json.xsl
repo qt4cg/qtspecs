@@ -40,7 +40,7 @@
     <!-- Entry point: function to convert a supplied XML node to a JSON string -->
     <xsl:function name="j:xml-to-json" as="xs:string" visibility="public">
         <xsl:param name="input" as="node()"/>
-        <xsl:sequence select="j:xml-to-json($input, map{})"/>
+        <xsl:sequence select="j:xml-to-json($input, map { })"/>
     </xsl:function>
 
     <!-- Entry point: function to convert a supplied XML node to a JSON string, supplying options -->
