@@ -734,16 +734,26 @@
 
     <xsl:choose>
       <xsl:when test="$div">
+        <xsl:variable name="linktext">
+          <xsl:choose>
+            <xsl:when test="$div/self::prod">
+              <xsl:value-of select="$div"/>
+            </xsl:when>
+            <xsl:otherwise>
+              <xsl:text>Section </xsl:text>
+              <xsl:value-of select="$div/head"/>
+            </xsl:otherwise>
+          </xsl:choose>
+        </xsl:variable>
+
         <xsl:choose>
           <xsl:when test="$uri">
             <a href="{$uri}#{$ref}">
-              <xsl:text>Section </xsl:text>
-              <xsl:value-of select="$div/head"/>
+              <xsl:sequence select="$linktext"/>
             </a>
           </xsl:when>
           <xsl:otherwise>
-            <xsl:text>Section </xsl:text>
-            <xsl:value-of select="$div/head"/>
+            <xsl:sequence select="$linktext"/>
           </xsl:otherwise>
         </xsl:choose>
         <sup>
