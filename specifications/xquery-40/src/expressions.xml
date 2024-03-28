@@ -7289,6 +7289,12 @@ name.</p>
             function’s argument and return types during static analysis.
           </p>
                      </item>
+           <item><p>When function coercion is applied to a map or an array, the resulting function is not
+           a map or array, and cannot be used as such. For example, the expression </p>
+              <eg>let $f as function(xs:integer) as xs:boolean := { 0: false(), 1: true() }
+return $f?0</eg>
+           <p>raises a type error, because a lookup expression requires the left hand
+           operand to be a map or array, and <code>$f</code> is neither.</p></item>
                   </ulist>
                </p>
 
@@ -7360,10 +7366,13 @@ return local:filter(("Ethel", "Enid", "Gertrude"), $f)
 
                <note>
                   <p>
-                     Although the semantics of <termref
+                     The semantics of <termref
                         def="dt-function-coercion"
-                     >function coercion</termref> are specified in terms of wrapping the functions,
-        static typing will often be able to reduce the number of places where this is actually necessary.
+                     >function coercion</termref> are specified in terms of wrapping the functions.
+        Static typing may be able to reduce the number of places where this is actually necessary.
+        However, it cannot be assumed that because a supplied function is an instance of the required
+        function type, no function coercion is necessary: the supplied function might not perform
+        all required checks on the types of its arguments.
       </p>
                </note>
 
@@ -7386,11 +7395,14 @@ return filter($days, $m)
       ]]></eg>
 
                <p>
-        The map <code>$m</code> has a function signature of <code>function(xs:anyAtomicType) as item()*</code>. When the <code>fn:filter()</code> function is called, the following occurs to the map:
+        The map <code>$m</code> is an instance of 
+                  <code>function(xs:anyAtomicType?) as item()*</code>. 
+                  When the <code>fn:filter()</code> function is called, the following 
+                  occurs to the map:
 
 <olist>
                      <item>
-                        <p>The map <code>$m</code> is treated as <code>function($f)</code>,  equivalent to <code>map:get($m,?)</code>.</p>
+                        <p>The map <code>$m</code> is treated as a function equivalent to <code>map:get($m, ?)</code>.</p>
                      </item>
                      <item>
                         <p>The <termref def="dt-coercion-rules"
@@ -7398,30 +7410,32 @@ return filter($days, $m)
                            <termref
                               def="dt-function-coercion"
                               >function coercion</termref> 
-                           to <code>$f</code>, wrapping <code>$f</code> in a new function (<code>$p</code>) with the 
-                           signature <code>function(item()) as xs:boolean</code>.</p>
+                           to this function, wrapping it in a new function (<var>M'</var>) with the 
+                           signature <code>function(item(), xs:integer) as xs:boolean</code>.</p>
                      </item>
                      <item>
-                        <p>
-                           <code>$p</code> is matched against the SequenceType <code>function(item()) as xs:boolean</code>, and succeeds.</p>
-                     </item>
-                     <item>
-                        <p>When <code>$p</code> is called by <code>fn:filter()</code>, <termref
+                        <p>When <var>M'</var> is called by <code>fn:filter()</code>, <termref
                               def="dt-coercion-rules"
                               >coercion</termref> 
-                           and SequenceType matching rules are applied to the argument, resulting in an <code>item()</code> value 
+                           and SequenceType matching rules are applied to the argument, 
+                           resulting in an <code>item()</code> value 
                            (<code>$a</code>) or a type error.</p>
                      </item>
                      <item>
                         <p>
-                           <code>$f</code> is called with <code>$a</code>, which returns an <code>xs:boolean</code> or the empty sequence.</p>
+                           The function <code>map:get($m, ?)</code> is called with <code>$a</code>
+                           as the argument; this returns either an <code>xs:boolean</code> or the empty sequence
+                           (call the result <var>R</var>).</p>
                      </item>
                      <item>
                         <p>
-                           <code>$p</code> applies <termref def="dt-coercion-rules"
-                              >coercion rule</termref> and SequenceType matching to the result sequence from <code>$f</code>. When the result is an <code>xs:boolean</code> the SequenceType matching succeeds. When it is an empty sequence (such as when <code>$m</code> does not contain a key for <code>"Tuesday"</code>), SequenceType matching results in a type error  <errorref
+                           The wrapper function <code>$p</code> applies the <termref def="dt-coercion-rules"/>
+                              to <var>R</var>. If <var>R</var> is an <code>xs:boolean</code> the matching succeeds. 
+                              When it is an empty sequence (in particular, <code>$m</code> does not contain a 
+                           key for <code>"Tuesday"</code>), a type error is raised <errorref
                               class="TY" code="0004"
-                              />, since the expected type is <code>xs:boolean</code> and the actual type is an empty sequence.</p>
+                              />, since the expected type is <code>xs:boolean</code> 
+                           and the actual type is an empty sequence.</p>
                      </item>
                   </olist>
                </p>
@@ -7440,7 +7454,9 @@ let $days := ("Monday", "Wednesday", "Friday")
 return filter($days, $m)
       ]]></eg>
 
-               <p>The result of the expression is the sequence <code>("Monday", "Friday")</code>
+               <p>In this case the result of the expression is the sequence <code>("Monday", "Friday")</code>.
+                  But if the input sequence included the string <code>"Tuesday"</code>, the filter operation
+                  would fail with a type error.
                </p>
                
                <note diff="add" at="issue1020">
