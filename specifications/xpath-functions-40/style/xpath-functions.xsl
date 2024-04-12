@@ -443,14 +443,16 @@
   <xsl:variable name="id" select="(@id, ../@id)[1]"/>
   <div class="record">
     <table class="record" border="0">
-      <tr>
-        <td colspan="2">
-          <code id="{$id}" class="return-type-ref">
-            <xsl:value-of select="$id"/>
-          </code>
-          <xsl:text>:</xsl:text>
-        </td>
-      </tr>
+      <xsl:if test="$id ne ''">
+        <tr>
+          <td colspan="2">
+            <code id="{$id}" class="return-type-ref">
+              <xsl:value-of select="$id"/>
+            </code>
+            <xsl:text>:</xsl:text>
+          </td>
+        </tr>
+      </xsl:if>
       <tr>
         <td colspan="2">
           <code>record(</code>

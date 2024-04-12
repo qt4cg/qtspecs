@@ -489,6 +489,16 @@
 	<!-- Handle option parameter specifications -->
 
 	<xsl:template match="fos:options">
+
+	  <example role="record">
+	    <record>
+              <xsl:for-each select="fos:option">
+                <arg name="{@key}" type="{fos:type}"/>
+              </xsl:for-each>
+              <arg name="*"/>
+	    </record>
+	  </example>
+
 		<table style="border-collapse: collapse">
 			<xsl:copy-of select="@diff, @at"/>
 			<thead>
