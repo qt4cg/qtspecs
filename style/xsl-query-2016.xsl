@@ -1953,6 +1953,25 @@
     </div>
   </xsl:template>
   
+  
+  <xsl:template match="changes">
+    <div class="changes">
+      <p class="changesHeading">Changes in 4.0</p>
+      <ol>
+        <xsl:apply-templates select="change"/>
+      </ol>
+    </div>
+  </xsl:template>
+  
+  <xsl:template match="change">
+    <li>
+      <p>
+        <xsl:apply-templates/>
+        <i xsl:expand-text="yes"> [Issue {@issue} PR {@PR} Applied {format-date(@date, '[D] [MNn] [Y]')}]</i>
+      </p>
+    </li>
+  </xsl:template>
+  
  
 
 </xsl:stylesheet>

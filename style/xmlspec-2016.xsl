@@ -2854,6 +2854,9 @@
         </xsl:otherwise>
       </xsl:choose>
     </xsl:attribute>
+    <xsl:if test="child::changes">
+      <span class="tocDelta"> Δ </span>
+    </xsl:if>
   </xsl:template>
 
   <xsl:template name="css">
