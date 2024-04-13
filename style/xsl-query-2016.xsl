@@ -1956,7 +1956,19 @@
   
   <xsl:template match="changes">
     <div class="changes">
-      <p class="changesHeading">Changes in 4.0</p>
+      <p class="changesHeading">
+        <xsl:text>Changes in 4.0</xsl:text>
+        <xsl:variable name="next" select="../(following::*|descendant::*)[child::changes][1]"/>
+        <xsl:if test="$next">
+          <xsl:text>&#xa0;</xsl:text>
+          <a href="#{$next/@id}">⬇</a>
+        </xsl:if>
+        <xsl:variable name="prior" select="../(preceding::*|ancestor::*)[child::changes][last()]"/>
+        <xsl:if test="$prior">
+          <xsl:text>&#xa0;</xsl:text>
+          <a href="#{$prior/@id}">⬆</a>
+        </xsl:if>
+      </p>
       <ol>
         <xsl:apply-templates select="change"/>
       </ol>
@@ -1967,9 +1979,36 @@
     <li>
       <p>
         <xsl:apply-templates/>
-        <i xsl:expand-text="yes"> [Issue {@issue} PR {@PR} Applied {format-date(@date, '[D] [MNn] [Y]')}]</i>
+        <xsl:if test="@*">
+          <i xsl:expand-text="yes">
+            <xsl:text>[&#xa0;</xsl:text>
+            <xsl:if test="@issue">Issue <a href="https://github.com/qt4cg/qtspecs/issues/{@issue}">{@issue}&#xa0;</a> </xsl:if>
+            <xsl:if test="@PR">PR <a href="https://github.com/qt4cg/qtspecs/pull/{@PR}">{@PR}&#xa0;</a> </xsl:if>
+            <xsl:if test="@date">Applied {format-date(@date, '[D] [MNn] [Y]')}</xsl:if>
+            <xsl:text>&#xa0;]</xsl:text>
+        </i>
+        </xsl:if>
       </p>
     </li>
+  </xsl:template>
+  
+  <xsl:template match="processing-instruction('change-log')" expand-text="yes">
+    <ol>
+      <xsl:for-each-group select="//change[@PR]" group-by="@PR">
+        <xsl:sort select="number(@PR)"/>
+        <li>
+          <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/{@PR}">{@PR}&#xa0;</a></p>
+          <xsl:for-each-group select="current-group()" group-adjacent="normalize-space(.)">
+            <p>
+              <xsl:apply-templates/>
+            </p>
+            <xsl:for-each select="current-group()">
+              <p>See <xsl:apply-templates select="ancestor::*[@id][1]" mode="specref"/></p>
+            </xsl:for-each>
+          </xsl:for-each-group>
+        </li>
+      </xsl:for-each-group>
+    </ol>
   </xsl:template>
   
  
