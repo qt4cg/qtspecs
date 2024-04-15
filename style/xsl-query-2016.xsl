@@ -1986,7 +1986,7 @@
             <xsl:if test="@PR">PR <a href="https://github.com/qt4cg/qtspecs/pull/{@PR}">{@PR}&#xa0;</a> </xsl:if>
             <xsl:if test="@date">Applied {format-date(@date, '[D] [MNn] [Y]')}</xsl:if>
             <xsl:text>&#xa0;]</xsl:text>
-        </i>
+          </i>
         </xsl:if>
       </p>
     </li>
@@ -1994,10 +1994,15 @@
   
   <xsl:template match="processing-instruction('change-log')" expand-text="yes">
     <ol>
-      <xsl:for-each-group select="//change[@PR]" group-by="@PR">
+      <xsl:for-each-group select="//change" group-by="(@PR, @issue, generate-id())[1]">
         <xsl:sort select="number(@PR)"/>
+        <xsl:sort select="number(@issue)"/>
         <li>
-          <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/{@PR}">{@PR}&#xa0;</a></p>
+          <xsl:choose>
+            <xsl:when test="@PR">
+              <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/{@PR}">{@PR}&#xa0;</a></p>
+            </xsl:when>
+          </xsl:choose>
           <xsl:for-each-group select="current-group()" group-adjacent="normalize-space(.)">
             <p>
               <xsl:apply-templates/>
