@@ -547,16 +547,27 @@
 							</code>
 						</p>
 					</item>
-					<xsl:if test="fos:default">
-						<item>
-							<p>
-								<term>Default: </term>
-								<code>
-									<xsl:value-of select="fos:default"/>
-								</code>
-							</p>
-						</item>
-					</xsl:if>
+<xsl:if test="fos:default | fos:default-description">
+  <xsl:choose>
+    <xsl:when test="not(fos:default)">
+      <item>
+        <p>
+          <term>Default: </term>
+          <xsl:apply-templates select="fos:default-description/node()"/>
+        </p>
+      </item>
+    </xsl:when>
+    <xsl:otherwise>
+      <item>
+        <p>
+          <term>Default: </term>
+          <xsl:apply-templates select="fos:default"/>
+        </p>
+        <xsl:apply-templates select="fos:default-description"/>
+      </item>
+    </xsl:otherwise>
+  </xsl:choose>
+</xsl:if>
 				</ulist>
 			</td>
 		</tr>
@@ -581,6 +592,18 @@
 		</xsl:for-each>
 
 	</xsl:template>
+
+<xsl:template match="fos:default">
+  <code>
+    <xsl:apply-templates/>
+  </code>
+</xsl:template>
+
+<xsl:template match="fos:default-description">
+  <p>
+    <xsl:apply-templates/>
+  </p>
+</xsl:template>
 
 	<xsl:template match="fos:history | fos:version"/>
 

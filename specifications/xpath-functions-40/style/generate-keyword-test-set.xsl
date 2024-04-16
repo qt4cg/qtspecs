@@ -211,7 +211,7 @@
    
    <xsl:template match="@type[starts-with(., 'function(')]" priority="5">
       <xsl:variable name="arity" select="count(tokenize(., ','))"/>
-      <xsl:message><xsl:copy-of select=".."/>Arity = {$arity}</xsl:message>
+      <!--<xsl:message><xsl:copy-of select=".."/>Arity = {$arity}</xsl:message>-->
       <xsl:choose>
          <xsl:when test="$arity=0">function()</xsl:when>
          <xsl:when test="$arity=1">function($p)</xsl:when>

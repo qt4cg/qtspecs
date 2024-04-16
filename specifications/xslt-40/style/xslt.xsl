@@ -199,9 +199,9 @@
     </xsl:choose>
   </xsl:template>
 
-<xsl:template match="change">
+<!--<xsl:template match="change">
     <xsl:apply-templates/>
-</xsl:template>
+</xsl:template>-->
 
 <xsl:template match="elcode">
    <!--xsl:call-template name="diff"/-->
