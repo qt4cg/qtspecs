@@ -200,7 +200,7 @@
   </xsl:template>
 -->
 
-<xsl:template match="processing-instruction('glossary')">
+<!--<xsl:template match="processing-instruction('glossary')">
   <table class="glossarytab">
     <xsl:for-each select="//termdef[not(ancestor-or-self::*[@diff][1][@diff='del'])]">
       <xsl:sort select="@term"/>
@@ -214,7 +214,7 @@
       </tr>
     </xsl:for-each>
   </table>
-</xsl:template>
+</xsl:template>-->
 
   <!-- changed templates to auto generate an appendix with a list
        of links to open issues. -->
