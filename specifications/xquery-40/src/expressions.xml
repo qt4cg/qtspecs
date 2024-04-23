@@ -909,7 +909,7 @@ items that would result from calling the <code>fn:collection</code> function wit
                      <p><termdef id="dt-variadic" term="variadic">A <termref def="dt-function-definition"/> may
                      be declared to be <term>variadic</term>. In a static call of a variadic function, multiple
                      arguments may be mapped to a single parameter in the function definition. In a variadic
-                     function with <var>M</var> required parameters, the arity range is from <var>M</var>
+                     function with <var>M</var> declared parameters, the arity range is from <var>M-1</var>
                      to positive infinity.</termdef></p>
                      
                      <p>For an overview of variadic functions, see <specref ref="id-variadic-functions-overview"/>.</p>
@@ -919,7 +919,7 @@ items that would result from calling the <code>fn:collection</code> function wit
                      be declared as variadic by using the <code>%variadic</code> annotation; the equivalent
                      in XSLT is to use the attribute <code>xsl:function/@variadic = "yes"</code>.</p></note>
                      
-                     <ednote><edtext>Add xsl:function/@variadic = "yes" to XSLT.</edtext></ednote>
+                   
                      
                      <p>The static context may contain several <termref def="dt-function-definition">function definitions</termref> with the
                         same name, but the <termref def="dt-arity-range">arity ranges</termref> of two such function definitions must not 
@@ -8630,15 +8630,14 @@ At evaluation time, the value of a variable reference is the value to which the 
          <p>Static and dynamic function calls are described in the following sections.</p>
          
          <div3 id="id-static-functions" diff="add" at="A">
+            
             <head>Static Function Calls</head>
+            
             <changes>
-               <change>
-                  In a static function call, arguments can be specified either positionally or by keyword,
-                  or a combination of both.
+               <change PR="1137" issue="161" date="2024-04-23">
+                  Functions may be declared to be variadic.
                </change>
             </changes>
-         
-               
 
                <p>The <termref def="dt-static-context"/> for an expression includes a set 
                   of <termref def="dt-statically-known-function-definitions"/>. Every <termref def="dt-function-definition"/>
@@ -8878,9 +8877,13 @@ At evaluation time, the value of a variable reference is the value to which the 
                            and <var>FD</var> is <termref def="dt-variadic"/> with <var>M</var> declared
                            parameters, then:</p>
                            <olist>
-                              <item><p>If <var>M</var> ≥ <var>N</var>, the arguments are matched as if <var>FD</var>
-                              were not variadic, as described in the previous section;</p></item>
-                              <item><p>Otherwise, the values of the <var>M</var>th and subsequent arguments
+                              <item><p>If <var>N</var> = <var>M-1</var>, then the <var>N</var>
+                              supplied arguments are matched to the first <var>N</var> declared parameters,
+                              and the <var>M</var>th parameter is bound to an empty sequence (which might cause
+                              a type error if the declared type does not allow an empty sequence).</p></item>
+                              <item><p>If <var>N</var> = <var>M</var>, then the <var>N</var>
+                                 supplied arguments are matched to the first <var>N</var> declared parameters.</p></item>
+                              <item><p>If <var>N</var> &gt; <var>M</var>, the values of the <var>M</var>th and subsequent arguments
                               are sequence-concatenated into a single value, which is matched to the <var>M</var>th
                               declared parameter. This means, for example, that if a variadic function <var>F</var>
                               with two declared parameters is called using a static function call of the form 
@@ -9439,7 +9442,7 @@ return $vat(doc('wares.xml')/shop/article)
                   
                   <item><p>If <var>FD</var> is <termref def="dt-variadic"/>, and
                      the function call does have keyword arguments, then a static error
-                     is raised. [TODO: error code].</p></item>
+                     is raised <errorref class="ST" code="0017"/>. </p></item>
                   
                   
                   <item>
@@ -10184,6 +10187,12 @@ return $incrementors[2](4)]]></eg>
          <div3 id="id-variadic-functions-overview">
             <head>Variadic Functions</head>
             
+            <changes>
+               <change PR="1137" issue="161" date="2024-04-23">
+                  Functions may be declared to be variadic.
+               </change>
+            </changes>
+            
             <p>This section summarizes the way <termref def="dt-variadic"/> 
                functions work in &language;. The detailed
             rules are distributed around the relevant sections of the specification, but this section
@@ -10205,9 +10214,10 @@ return $incrementors[2](4)]]></eg>
             
             <p>In many cases a variadic function definition will declare a single parameter,
             which will normally have a required type whose occurrence indicator is <code>+</code>
-            or <code>*</code>. If the occurrence indicator is <code>*</code> then it will
-            often be useful to declare the parameter as optional with a default value of <code>()</code>,
-            so that the argument can be omitted if an empty sequence is to be supplied.</p>
+               or <code>*</code>. The parameter has an implicit default of <code>()</code>,
+               but this is only useful if the occurrence indicator is <code>*</code>
+               or <code>?</code>; in other cases omitting the relevant argument and invoking
+               the default will lead inevitably to a type error. </p>
             
             <p>It is also possible to define other parameters before the final variadic parameter.
             If present these must be required parameters.</p>
@@ -10251,6 +10261,21 @@ return $incrementors[2](4)]]></eg>
             The semantics of partial function application are equivalent to first evaluating
             a named function reference with appropriate arity (in this case <code>fn:concat#3</code>)
             and then performing a dynamic partial application of the resulting function item.</p>
+            
+            <example id="example-variadic-function">
+               <head>A Variadic Function</head>
+               <p>The following function, declared in XQuery syntax, 
+                  computes the product of a sequence of numbers
+                  (it might be useful in calculating compound interest).</p>
+               <eg><![CDATA[declare %variadic function m:product as xs:double (
+       $input as xs:double*) {
+   if (empty($input)) then 1 else head($input) * m:product(tail($input))
+};]]></eg>
+               <p>The function might be called supplying a single sequence-valued argument:</p>
+               <eg>m:product(for $year in 2000 to 2024 return $inflation?$year)</eg>
+               <p>Alternatively it might be called with multiple arguments:</p>
+               <eg>m:product(1.05, 1.04, 1.02, 1.06)</eg>
+            </example>
             
             
             
