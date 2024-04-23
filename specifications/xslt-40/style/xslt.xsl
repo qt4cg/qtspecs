@@ -477,7 +477,7 @@ constructor. These elements are:</p>
     </pre>
   </xsl:template>
 
-<xsl:template match="processing-instruction('glossary')">
+<!--<xsl:template match="processing-instruction('glossary')">
     <dl>
     <xsl:for-each select="//termdef[not(ancestor-or-self::*[@diff][1][@diff='del'])]">
       <xsl:sort select="lower-case(@term)"/>
@@ -495,18 +495,7 @@ constructor. These elements are:</p>
       </dd>
     </xsl:for-each>
     </dl>
-<!--
-  <table width="100%" cellspacing="10">
-      <xsl:for-each select="//termdef[not(ancestor-or-self::*[@diff][1][@diff='del'])]">
-      <xsl:sort select="@term"/>
-      <tr>
-      <td width="20%" valign="top"><a href="#{@id}"><xsl:value-of select="@term"/></a></td>
-      <td valign="top"><p><xsl:apply-templates/></p></td>
-      </tr>
-    </xsl:for-each>
-  </table>
--->
-</xsl:template>
+</xsl:template>-->
   
   
   <xsl:template match="processing-instruction('xslt-defined-functions')">
