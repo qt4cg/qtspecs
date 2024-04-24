@@ -473,13 +473,25 @@
 
   <xsl:template match="processing-instruction('glossary')">
     <dl>
-      <xsl:apply-templates select="//termdef" mode="glossary-list">
+      <xsl:for-each select="//termdef[not(ancestor-or-self::*[@diff][1][@diff='del'])]">
         <xsl:sort select="@term" data-type="text" order="ascending" lang="en"/>
-      </xsl:apply-templates>
+        <dt>
+          <a href="#{@id}"><xsl:value-of select="@term"/></a>
+        </dt>
+        <dd>
+          <p>
+            <xsl:apply-templates/>
+          </p>
+          <xsl:if test="@open='true'">
+            <xsl:variable name="close" select="../following-sibling::p[@role='closetermdef'][1]"/>
+            <xsl:apply-templates select="../following-sibling::*[$close >> .]"/>
+          </xsl:if>
+        </dd>
+      </xsl:for-each>
     </dl>
   </xsl:template>
 
-  <xsl:template match="termdef" mode="glossary-list">
+  <!--<xsl:template match="termdef" mode="glossary-list">
     <xsl:variable name="diff_governor" select="ancestor-or-self::*[@diff][1]"/>
     <xsl:variable name="diff_effect" select="my:diff-markup-effect($diff_governor)"/>
     <xsl:choose>
@@ -518,7 +530,7 @@
       </xsl:when>
 
     </xsl:choose>
-  </xsl:template>
+  </xsl:template>-->
 
   <!-- ====================================================================== -->
   <!-- Automatic lists of impl def/dep features -->

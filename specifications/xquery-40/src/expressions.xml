@@ -9931,12 +9931,13 @@ return $incrementors[2](4)]]></eg>
                   and <termref def="dt-mapping-arrow-operator"/>.
                For example, <code>$s => tokenize() =!> fn { `"{.}"` }()</code> first tokenizes the string <code>$s</code>,
                then wraps each token in double quotation marks.</p>
-               <p>The expression <code>function { EXPR }</code> (or <code>fn { EXPR }</code>) is a syntactic shorthand for the expression
-               <code>function($Z as item()*) as item()* { $Z ! (EXPR) }</code>, where <code>$Z</code> is a variable name that is
-               otherwise unused. Note that the function body (<code>EXPR</code>) is evaluated with a <termref def="dt-fixed-focus"/>: 
-                  the context position and context size will always be 1 (one).</p>
-               <ednote><date>2023-09-14</date><edtext>TODO: The above no longer works. We don't currently have any construct (other than this one) that sets
-               the context value to something other than a singleton.</edtext></ednote>
+               <p>The result of calling the <code>function { EXPR }</code> (or <code>fn { EXPR }</code>), with
+                  a single argument whose value is <var>$Z</var> arguments, is obtained by evaluating <code>EXPR</code>
+                  with a dynamic context in which the context value is <var>$Z</var>, the context position is 1 (one),
+                  and the context size is 1 (one).</p>
+               
+               <p>For example, the expression <code>every(1 to 10, fn{. gt 0})</code> returns <code>true</code>.</p>
+               
             </div4>
             
          
@@ -16233,10 +16234,25 @@ processing with JSON processing.</p>
 
          </div3>
          <div3 id="id-lookup">
-            <head>The Lookup Operators ("?" and "??") for Maps and Arrays</head>
+            <head>Lookup Expressions for Maps and Arrays</head>
+            
+            <changes>
+               <change issue="297" PR="837" date="2023-11-23">
+                  A deep lookup operator <code>??</code> is provided for searching
+                  trees of maps and arrays.
+               </change>
+               <change issue="960 1094" PR="1125" date="2024-04-23">
+                  Lookup expressions can now take a modifier (such as <code>keys</code>,
+                  <code>values</code>, or <code>pairs</code>) enabling them to return
+                  structured results rather than a flattened sequence. In addition
+                  they can be qualified with a type to select only the results that
+                  match that type.
+               </change>
+            </changes>
 
-            <p>&language; provides two lookup operators for maps and arrays. These provide a terse syntax
-  for accessing the entries in a map or the members of an array.</p>
+            <p>&language; provides two lookup operators <code>?</code> and <code>??</code>
+               for maps and arrays. These provide a terse syntax
+               for accessing the entries in a map or the members of an array.</p>
             
             <p diff="add" at="2023-11-15">The operator "?", known as the shallow lookup operator,
                returns values found immediately in the operand map or array. The operator "??",
@@ -16253,27 +16269,164 @@ processing with JSON processing.</p>
                   <head/>
                   <prodrecap id="LookupExpr" ref="LookupExpr"/>
                   <prodrecap id="Lookup" ref="Lookup"/>
-                  <prodrecap ref="KeySpecifier"/>
-                  <prodrecap ref="LookupWildcard"/>
+                  <prodrecap id="Modifier" ref="Modifier"/>
+                  <prodrecap id="KeySpecifier" ref="KeySpecifier"/>
+                  <prodrecap id="LookupWildcard" ref="LookupWildcard"/>
+                  <prodrecap id="TypeQualifier" ref="TypeQualifier"/>
+                  
                </scrap>
                
+               <p>A <code>Lookup</code> has two parts: the <code>KeySpecifier</code>
+               determines which entries (in a map) or members (in an array) are
+               selected, and the <code>Modifier</code> determines how they are
+               delivered in the result. The default modifier is <code>items</code>,
+               which delivers the result as a flattened sequence of items.</p>
                
+               <p>To take a simple example, given <code>$A</code> as an array
+                  <code>[ ("a", "b"), ("c", "d"), ("e", "f") ]</code>, some example Lookup expressions
+                  are:</p>
+               
+               <table width="100%">
+                  <caption>Example Lookup Expressions on an Array</caption>
+                  <thead>
+                     <tr>
+                        <th>Expression</th>
+                        <th>Result</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     <tr>
+                        <td><code>$A?*</code> (or <code>$A?items::*)</code></td>
+                        <td><code>("a", "b", "c", "d", "e", "f")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?pairs::*</code></td>
+                        <td><code>({ "key": 1, "value": ("a", "b") }, { "key": 2, "value": ("c", "d") }, { "key": 3, "value": ("e", "f") })</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?values::*</code></td>
+                        <td><code>([ "a", "b" ], [ "c", "d" ], [ "e", "f" ])</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?keys::*</code></td>
+                        <td><code>(1, 2, 3)</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?2</code> (or <code>$A?items::2)</code></td>
+                        <td><code>("c", "d")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?pairs::2</code></td>
+                        <td><code>({ "key": 2, "value":("c", "d") })</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?values::2</code></td>
+                        <td><code>([ "c", "d" ])</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?keys::2</code></td>
+                        <td><code>(2)</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?(3, 1)</code> (or <code>$A?items::(3, 1))</code></td>
+                        <td><code>("e", "f", "a", "b")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?pairs::(3, 1)</code></td>
+                        <td><code>({ "key": 3, "value": ("e", "f") }, { "key": 1, "value": ("a", "b") })</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?values::(3, 1)</code></td>
+                        <td><code>([ "e", "f" ][ "a", "b" ])</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A?keys::(3, 1)</code></td>
+                        <td><code>(3, 1)</code></td>
+                     </tr>
+                  </tbody>
+               </table>
+               
+               <p>Similarly, given <code>$M</code> as a map
+                  <code>{ "X": ("a", "b"), "Y": ("c", "d"), "Z": ("e", "f") }</code>, 
+                  some example Lookup expressions are as follows. Note that because maps are unordered,
+                  the results are not necessarily in the order shown.</p>
+               
+               <table width="100%">
+                  <caption>Example Lookup Expressions on a Map</caption>
+                  <thead>
+                     <tr>
+                        <th>Expression</th>
+                        <th>Result</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                     <tr>
+                        <td><code>$M?*</code> (or <code>$M?items::*)</code></td>
+                        <td><code>("a", "b", "c", "d", "e", "f")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?pairs::*</code></td>
+                        <td><code>({ "key": "X", "value": ("a", "b") }, { "key": "Y", "value": ("c", "d") }, { "key": "Z", "value": ("e", "f") })</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?values::*</code></td>
+                        <td><code>([ "a", "b" ], [ "c", "d" ], [ "e", "f" ])</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?keys::*</code></td>
+                        <td><code>("X", "Y", "Z")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?Y</code> (or <code>$M?items::Y)</code></td>
+                        <td><code>("c", "d")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?pairs::Y</code></td>
+                        <td><code>({ "key": "Y", "value":("c", "d") })</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?values::Y</code></td>
+                        <td><code>([ "c", "d" ])</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?keys::Y</code></td>
+                        <td><code>("Y")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?("Z", "X")</code> (or <code>$A?items::("Z", "X"))</code></td>
+                        <td><code>("e", "f", "a", "b")</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?pairs::("Z", "X")</code></td>
+                        <td><code>({ "key": "Z", "value": ("e", "f") }, { "key": "X", "value": ("a", "b") })</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?values::("Z", "X")</code></td>
+                        <td><code>([ "e", "f" ][ "a", "b" ])</code></td>
+                     </tr>
+                     <tr>
+                        <td><code>$M?keys::("Z", "X")</code></td>
+                        <td><code>("Z", "X")</code></td>
+                     </tr>
+                  </tbody>
+               </table>
  
                
-               <p>The semantics of a postfix lookup expression <code>E?KS</code> are defined as follows:</p>
+               <p>The semantics of a postfix lookup expression <code>E?pairs::KS</code> are defined as follows.
+               The results with other modifiers can be derived from this result, as explained below.</p>
                
                <olist>
                   <item><p><var>E</var> is evaluated to produce a value <code>$V</code>.</p></item>
                   <item><p>If <code>$V</code> is not a singleton (that is if <code>count($V) ne 1</code>),
                   then the result (by recursive application of these rules) is the value of
-                  <code>for $v in $V return $v?KS</code>.</p></item>
+                  <code>for $v in $V return $v?pairs::KS</code>.</p></item>
                   <item><p>If <code>$V</code> is a singleton array (that is, 
                      if <code>$V instance of array(*)</code>) then:</p>
                   <olist>
                      <item><p>If <code>KS</code> is a <code>ParenthesizedExpr</code>,
                         then it is evaluated to produce a value <code>$K</code>
                         and the result is:</p>
-                        <eg><![CDATA[data($K) ! array:get($V, .)]]></eg>
+                        <eg><![CDATA[data($K) ! { "key": ., "value": array:get($V, .)}]]></eg>
                         <note>
                            <p>The focus for evaluating the key specifier expression is the 
                               same as the focus for the <code>Lookup</code> expression itself.</p>
@@ -16281,7 +16434,7 @@ processing with JSON processing.</p>
                      <item>
                         <p>If the  <nt def="KeySpecifier">KeySpecifier</nt> is an <nt
                            def="IntegerLiteral">IntegerLiteral</nt> with value <code>$i</code>, 
-                        the result is <code>array:get($V, $i)</code></p>
+                        the result is the same as <code>$V?pairs::($i)</code>.</p>
                      </item>
                      
                      <item>
@@ -16292,12 +16445,15 @@ processing with JSON processing.</p>
                      <item>
                         <p diff="chg" at="2023-11-15">If <code>KS</code> is a wildcard
                            (<code>*</code>), 
-                           the result is given by the following expression:</p>
+                           the result is the same as <code>$V?pairs::(1 to array:size($V))</code>:</p>
 
-                        <eg diff="chg" at="2024-03-21"><![CDATA[array:values($V)]]></eg>
                         <note>
                            <p>Note that array items are returned in order.</p>
                         </note>
+                     </item>
+                     <item>
+                        <p>If <code>KS</code> is a <code>TypeSpecifier</code> <code>type(T)</code>,
+                           the result is the same as <code>$V?pairs::*[?value instance of T]</code>.</p>
                      </item>
                   </olist>
                   </item>
@@ -16307,7 +16463,7 @@ processing with JSON processing.</p>
                         <item><p>If <code>KS</code> is a <code>ParenthesizedExpr</code>,
                            then it is evaluated to produce a value <code>$K</code>
                            and the result is:</p>
-                           <eg><![CDATA[data($K) ! map:get($V, .)]]></eg>
+                           <eg><![CDATA[data($K) ! { "key": ., "value": map:get($V, .)]]></eg>
                            <note>
                               <p>The focus for evaluating the key specifier expression is the 
                                  same as the focus for the <code>Lookup</code> expression itself.</p>
@@ -16315,27 +16471,25 @@ processing with JSON processing.</p>
                         </item>
                         <item>
                            <p>If <code>KS</code> is an <code>NCName</code>
-                              <phrase diff="add" at="A"
-                                 >or a <code>StringLiteral</code></phrase>, 
-                              the result is <code>map:get($V, $k)</code>, where <code>$k</code> 
-                              is the value of the <code>NCName</code>
-                              <phrase diff="add" at="A">or <code>StringLiteral</code>.</phrase></p>
+                              or a <code>StringLiteral</code>, with value <code>$S</code>, 
+                              the result is the same as <code>$V?pairs::($S)</code></p>
                         </item>
                         <item>
-                           <p>If <code>KS</code> is an <code>IntegerLiteral</code>, 
-                              the result is <code>map:get($V, $k)</code>, where <code>$k</code> 
-                              is the value of the <code>IntegerLiteral</code>.</p>
+                           <p>If <code>KS</code> is an <code>IntegerLiteral</code>
+                              with value <code>$N</code>, 
+                              the result is the same as <code>$V?pairs::($N)</code>.</p>
                         </item>
                         <item>
-                           <p diff="chg" at="2023-11-15">If the <nt def="KeySpecifier"
-                              >KeySpecifier</nt> is a wildcard (<code>*</code>), 
-                              the result is given by the following expression:</p>
-
-                           <eg diff="chg" at="2023-11-15"><![CDATA[map:values($V)]]></eg>
+                           <p>If <code>KS</code> is a wildcard (<code>*</code>), 
+                              the result is the same as <code>$V?pairs::(map:keys($V))</code>.</p>
                           <note>
-                              <p>The order of entries in <code>map:for-each</code> is implementation-dependent,
-                                 so the order of values in the result sequence is also implementation-dependent.</p>
+                              <p>The order of entries in the result sequence in this case 
+                                 is implementation-dependent.</p>
                            </note>
+                        </item>
+                        <item>
+                           <p>If <code>KS</code> is a <code>TypeSpecifier</code> <code>type(T)</code>,
+                              the result is the same as <code>$V?pairs::*[?value instance of T]</code>.</p>
                         </item>
                      </olist>
                   </item>
@@ -16344,7 +16498,17 @@ processing with JSON processing.</p>
                            code="0004"/>.</p></item>
                </olist>
 
-
+               <p>If the modifier is <code>items</code> (explicitly or by default), the result of
+                  <code>$V?items::KS</code> is the same as the result of 
+                  <code>$V?pairs::KS ! map:get(., "value")</code>.</p>
+               
+               <p>If the modifier is <code>values</code>, the result of
+                  <code>$V?values::KS</code> is the same as the result of 
+                  <code>$V?pairs::KS ! array{ map:get(., "value") }</code>.</p>
+               
+               <p>If the modifier is <code>keys</code>, the result of
+                  <code>$V?keys::KS</code> is the same as the result of 
+                  <code>$V?pairs::KS ! map:get(., "key")</code>.</p>
 
 
                <p>Examples:</p>
@@ -16375,6 +16539,11 @@ processing with JSON processing.</p>
                   </item>
                   <item>
                      <p>
+                        <code>([ 1, [ "a", "b" ], [ 4, 5, [ "c", "d"] ])?type(array(xs:string))</code> evaluates to 
+                        the sequence <code>([ "a", "b" ], [ "c", "d" ])</code>.</p>
+                  </item>
+                  <item>
+                     <p>
                         <code>[ "a", "b" ]?3</code> raises a dynamic error <xerrorref spec="FO40"
                            class="AY" code="0001"/>
                      </p>
@@ -16388,8 +16557,10 @@ processing with JSON processing.</p>
                <scrap>
                   <head/>
                   <prodrecap id="UnaryLookup" ref="UnaryLookup"/>
-                  <prodrecap id="KeySpecifier" ref="KeySpecifier"/>
-                  <prodrecap id="LookupWildcard" ref="LookupWildcard"/>
+                  <prodrecap ref="Modifier"/>
+                  <prodrecap ref="KeySpecifier"/>
+                  <prodrecap ref="LookupWildcard"/>
+                  <prodrecap ref="TypeQualifier"/>
                </scrap>
                
                
@@ -16397,8 +16568,8 @@ processing with JSON processing.</p>
                <p>Unary lookup is most commonly used in predicates (for example, <code>$map[?name = 'Mike']</code>)
                   or with the simple map operator (for example, <code>avg($maps ! (?price - ?discount))</code>).</p>
                
-               <p>The unary lookup expression <code>?KS</code> is defined to be equivalent to the postfix lookup
-                  expression <code>.?KS</code> which has the context value (<code>.</code>) as the implicit first operand.
+               <p>The unary lookup expression <code>?modifier::KS</code> is defined to be equivalent to the postfix lookup
+                  expression <code>.?modifier::KS</code> which has the context value (<code>.</code>) as the implicit first operand.
                   See <specref ref="id-postfix-lookup"/> for the postfix lookup operator.</p>
                
                
@@ -16480,17 +16651,17 @@ processing with JSON processing.</p>
                   <item>
                      <p>
 
-                        <code>[ [1, 2, 3], 4, 5 ]?*[. instance of array(*)]</code> evaluates to <code>([1, 2, 3])</code>
+                        <code>[ [1, 2, 3], 4, 5 ]?type(array(xs:integer))</code> evaluates to <code>([1, 2, 3])</code>
                         </p>
                   </item>
                   <item>
                      <p>
-                        <code>[ [ 1, 2, 3 ], [ 4, 5, 6 ], 7 ]?*[. instance of array(*)]?2</code> evaluates to <code>(2, 5)</code>
+                        <code>[ [ 1, 2, 3 ], [ 4, 5, 6 ], 7 ]?type(array(*))?2</code> evaluates to <code>(2, 5)</code>
                      </p>
                   </item>
                   <item>
                      <p>
-                        <code>[ [ 1, 2, 3 ], 4, 5 ]?*[. instance of xs:integer]</code> 
+                        <code>[ [ 1, 2, 3 ], 4, 5 ]?type(xs:integer)</code> 
                         evaluates to <code>(4, 5)</code>.
                      </p>
                   </item>
@@ -16501,64 +16672,122 @@ processing with JSON processing.</p>
             <div4 id="id-deep-lookup" diff="add" at="2023-11-15">
                <head>Deep Lookup</head>
                
-               <p>The deep lookup operator <code>??</code> has both unary and postfix forms. The unary form <code>??KS</code>
-               (where <var>KS</var> is any <code>KeySpecifier</code>) has the same effect as the binary form <code>.??KS</code>.
+               <p>The deep lookup operator <code>??</code> has both unary and postfix forms. The unary form <code>??modifier::KS</code>
+               (where <var>KS</var> is any <code>KeySpecifier</code>) has the same effect as the binary form <code>.??modifier::KS</code>.
                </p>
                
                <p>The semantics are defined as follows.</p>
                
                <p>First we define the <term>recursive content</term> of an item as follows:</p>
                
-               <eg><![CDATA[declare function immediate-content($item as item()) as map(*)* {
+               <eg><![CDATA[declare function immediate-content($item as item()) as record(key, value)* {
   if ($item instance of map(*)) {
-    map:entries($item)
+    map:pairs($item)
   } else if ($item instance of array(*)) {
     for member $m at $p in $item
-    return map:entry($p, $m)
+    return { "key": $p, "value": $m }
   }
 };    
-declare function recursive-content($item as item()) as map(*)* {
-  immediate-content($item) ! (., map:values(.) =!> recursive-content())
+declare function recursive-content($item as item()) as record(key, value)* {
+  immediate-content($item) ! (., ?items::value =!> recursive-content())
 };]]>
                </eg>
                
                <note><p>Explanation: the immediate content of a map is obtained by splitting it
-               into a sequence of singleton maps, each representing one entry. The immediate
-               content of an array is obtained by constructing a sequence of singleton maps,
-               one for each array member, where the key of the map is the array index and the
-               value is the corresponding member. The recursive content of an item contains
-               the singleton maps in its immediate content, each followed by the recursive
+               into a sequence of key-value pairs, each representing one entry. The immediate
+               content of an array is obtained by constructing a sequence of key-value pairs,
+               one for each array member, where the key is the array index and the
+               value is the corresponding member. Each key-value pair is of type
+               <code>record(key as xs:anyAtomicType, value as item()*)</code>.
+                  The recursive content of an item contains
+               the key-value pairs in its immediate content, each followed by the recursive
                content obtained by expanding any maps or arrays in the immediate content.
                </p></note>
                
+
+               <p>It is then useful to represent the recursive content as a sequence of
+               singleton maps: so each pair <code>{ "key": $K, "value": $V }</code>
+               is converted to the form <code>{ $K: $V }</code>. This can be achieved
+               using the expression <code>recursive-content($V) ! { ?key: ?value }</code>.</p>
                
-               <p>The result of the expression <code>E??KS</code>, where <code>E</code> is any expression
+               <p>In addition we define the function <code>array-or-map</code> as follows:</p>
+               
+               <eg><![CDATA[declare function array-or-map($item as item()) {
+  typeswitch ($item) {
+    case array(*) | map(*) return $item
+    default return error(xs:QName("err:XPTY0004"))
+  }
+}]]></eg>
+
+               
+               <p>The result of the expression <code>E??pairs::KS</code>, where <code>E</code> is any expression
                and <code>KS</code> is any <code>KeySpecifier</code>, is then:</p>
-               <eg>(<var>E</var> treat as (map(*)|array(*))* => recursive-content())?<var>KS</var></eg>
+
+               <eg>((<var>E</var> =!> array-or-map() => recursive-content()) 
+                  ! { ?key: ?value })
+                  ? pairs::<var>KS</var>.</eg>
+
                
                <note>
                   <p>This is best explained by considering examples.</p>
 
-                  <p>Consider the expression <code>let $value := [ { "first": "John", "last": "Smith" }, { "first": "Mary", "last": "Evans" } ]</code>.</p>
-                  <p>The recursive content of this array is the sequence of six singleton maps:</p>
+                  <p>Consider the expression <code>let $V := [ { "first": "John", "last": "Smith" }, { "first": "Mary", "last": "Evans" } ]</code>.</p>
+                  <p>The recursive content of this array is the sequence of six maps:</p>
                   <olist>
-                     <item><p><code>{ 1: { "first": "John", "last": "Smith" } }</code></p></item>
-                     <item><p><code>{ 2: { "first": "Mary", "last": "Evans" } }</code></p></item>
-                     <item><p><code>{ "first": "John" }</code></p></item>
-                     <item><p><code>{ "last": "Smith" }</code></p></item>
-                     <item><p><code>{ "first": "Mary" }</code></p></item>
-                     <item><p><code>{ "last": "Evans" }</code></p></item>
+                     <item><p><code>{ "key": 1, "value": { "first": "John", "last": "Smith" } }</code></p></item>
+                     <item><p><code>{ "key": 2, "value": { "first": "Mary", "last": "Evans" } }</code></p></item>
+                     <item><p><code>{ "key": "first", "value": "John" }</code></p></item>
+                     <item><p><code>{ "key": "last", "value": "Smith" }</code></p></item>
+                     <item><p><code>{ "key": "first", "value": "Mary" }</code></p></item>
+                     <item><p><code>{ "key": "last", "value": "Evans" }</code></p></item>
                   </olist>
-                  <p>The expression <code>$value??*</code> returns the sequence 
-                     <code>{ "first": "John", "last": "Smith" }, { "first": "Mary", "last": "Evans" },
-                     "John", "Smith", "Mary", "Evans"</code>.</p>
-                  <p>The expression <code>$value??first</code> returns the sequence <code>"John", "Mary"</code>.</p>
-                  <p>The expression <code>$value??last</code> returns the sequence <code>"Smith", "Evans"</code>.</p>
-                  <p>The expression <code>$value??1</code> returns the sequence <code>{ "first": "John", "last": "Smith" }</code>.</p>
+                  <p>The expression <code>$V??pairs::*</code> returns this sequence.</p>
+                  <p>With some other <code>KeySpecifier</code> <code>KS</code>, <code>$V??pairs::KS</code> returns
+                     selected items from this sequence that match <code>KS</code>.
+                     Formally this is achieved by converting the key-value pairs to singleton maps,
+                     applying the <code>KeySpecifier</code> to the sequence of singleton maps,
+                     and then converting the result back into a sequence of key-value pairs.</p>
+                  <p>For example, given the expression <code>$V??pairs::first</code>, the selection from
+                     the converted sequence will include the two singleton maps 
+                     <code>{ "first" : "John" }</code> and <code>{ "first" : "Mary" }</code>,
+                  which will be delivered in key-value pair form as 
+                     <code>{ "key": "first", "value": "John" }, { "key": "first", "value": "Mary" }</code>.</p>
+               </note>
+               
+               <p>The effect of using modifiers other than <code>pairs</code> is the same as with
+                  shallow lookup expressions:</p>
+               
+               <ulist>
+                  <item><p>If the modifier is <code>items</code> (explicitly or by default), the result of
+                     <code>$V??items::KS</code> is the same as the result of 
+                     <code>$V??pairs::KS ! map:get(., "value")</code>.</p></item>
+                  
+                  <item><p>If the modifier is <code>values</code>, the result of
+                     <code>$V??values::KS</code> is the same as the result of 
+                     <code>$V??pairs::KS ! array{ map:get(., "value") }</code>.</p></item>
+                  
+                  <item><p>If the modifier is <code>keys</code>, the result of
+                     <code>$V??keys::KS</code> is the same as the result of 
+                     <code>$V??pairs::KS ! map:get(., "key")</code>.</p></item>
+               </ulist>
+               
+               <note>
+                  <p>This means that with the example given earlier:</p>
+                  <ulist>
+                     <item><p>The expression <code>$V ?? first</code> 
+                        returns the sequence <code>"John", "Mary"</code>.</p></item>
+                     <item><p>The expression <code>$V ?? last</code> 
+                        returns the sequence <code>"Smith", "Evans"</code>.</p></item>
+                     <item><p>The expression <code>$V ?? 1</code> 
+                        returns the sequence <code>{ "first": "John", "last": "Smith" }</code>.</p></item>
+                     <item><p>The expression <code>$V ?? type(record(first, last)) ! `{?first} {?last}`</code> 
+                        returns the sequence <code>"John Smith", "Mary Evans"</code>.</p></item>
+
+                  </ulist>
                </note>
                <note>
                   <p>The effect of evaluating all shallow lookups on maps rather than arrays is that no error arises
-                  if an array subscript is out of bounds. In the above example, <code>$value?3</code> would
+                  if an array subscript is out of bounds. In the above example, <code>$value??3</code> would
                   return an empty sequence, it would not raise an error.</p>
                   <p>This also affects the way an <code>xs:untypedAtomic</code> key value is handled. 
                      Given the shallow lookup
@@ -16639,7 +16868,7 @@ declare function recursive-content($item as item()) as map(*)* {
                   two cities can be obtained with the expression:</p> 
                      
 
-                     <eg>$tree ??$from ??*[. instance of record(to, distance)][?to=$to] ?distance</eg>
+                     <eg>$tree ??$from ??type(record(to, distance))[?to=$to] ?distance</eg>
                  
                   <p>The names of all pairs of cities whose distance is represented in the data
                   can be obtained with the expression:</p>
@@ -16811,6 +17040,81 @@ declare function recursive-content($item as item()) as map(*)* {
                   of an array, because numbering starts at 1.</p></item>
                </ulist>
             </div4>
+         </div3>
+         
+         <div3 id="id-filter-maps-and-arrays">
+            <head>Filter Expressions for Maps and Arrays</head>
+            
+            <changes>
+               <change issue="1159" PR="1163" date="2024-04-20">Filter expressions for maps and arrays are introduced.</change>
+            </changes>
+
+               <scrap>
+                  <head/>
+                  <prodrecap id="FilterExprAM" ref="FilterExprAM"/>
+               </scrap>
+            
+            <p>Maps and arrays can be filtered using the construct <code><var>INPUT</var>?[<var>FILTER</var>]</code>.
+            For example, <code>$array?[count(.)=1]</code> filters an array to retain only those members that 
+            are single items.</p>
+            
+            <note><p>The character-pair <code>?[</code> forms a single token; no intervening whitespace
+            or comment is allowed.</p></note>
+            
+            <p>The required type of the left-hand operand <code><var>INPUT</var></code> is
+               <code>(map(*)|array(*))?</code>: that is, it must be either an empty sequence, a single
+            map, or a single array <errorref class="TY" code="0004"/>. If it is an empty sequence, 
+               the result of the expression is an empty sequence.</p>
+            
+            <p>The required type of the <code><var>FILTER</var></code> operand is <code>xs:boolean?</code>:
+            that is, the value must either be a single boolean value, or an empty sequence. An empty sequence
+            is treated as <code>false</code>.</p>
+            
+            <p>If the value of <code><var>INPUT</var></code> is an array, then the 
+               <code><var>FILTER</var></code> expression is evaluated
+            for each member of the array, with that member as the context value, with its position in the
+            array as the context position, and with the size of the array as the context size. The result
+            of the expression is an array containing those members of the input array for which
+               the value of the <code><var>FILTER</var></code> expression is true. The order
+            of retained members is preserved.</p>
+            
+            <p>For example, the following expression:</p>
+            
+            <eg>let $array := [(), (1), (2,3), (4,5,6)] return $array?[count(.) ge 2]</eg>
+            
+            <p>returns:</p>
+            
+            <eg>[(2,3), (4,5,6)]</eg>
+            
+            <note><p>Unlike filter expressions for sequences, there is no special treatment of
+            numeric predicate values. This is because it would be unclear whether such an expression
+            should return the member at the specified position, or a singleton array containing that
+            member. Numeric values for the predicate are disallowed to avoid any possible confusion.</p>
+            
+            <p>Positional filtering can be achieved by explicit use of the <code>position()</code>
+            function, for example <code>$array?[position() mod 2 = 0]</code>. If an effective boolean
+            value is required, it can be achieved by an explicit call on <code>fn:boolean</code>
+               or <code>fn:exists</code>,
+            for example <code>$array[boolean(normalize-space(.))]</code> or <code>$array[exists(self::a)]</code>.</p>
+            </note>
+            
+            <p>If the value of <code><var>INPUT</var></code> is a map, then the 
+               <code><var>FILTER</var></code> expression is evaluated
+               for each entry in the map, with the context value set to an item of type
+               <code>record(key as xs:anyAtomicType, value as item()*)</code>, in which the <code>key</code>
+               and <code>value</code> fields represent the key and value of the map entry. 
+               The context position is the position of the entry in the map (in an arbitrary ordering),
+               and the context size is the number of entries in the map. The result
+               of the expression is a map containing those entries of the input map for which
+               the value of the <code><var>FILTER</var></code> expression is true.</p>
+            
+            <p>For example, the following expression:</p>
+            
+            <eg>let map := { 1: "alpha", 2: "beta", 3: "gamma" } return $map?[?key ge 2]</eg>
+            
+            <p>returns:</p>
+            
+            <eg>{ 2: "beta", 3: "gamma" }</eg>
          </div3>
          
          <div3 id="id-pinned-maps-and-arrays">
