@@ -22195,8 +22195,8 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
       <fos:signatures>
          <fos:proto name="build" return-type="map(*)">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="keys" type="function(item()) as xs:anyAtomicType*" default="fn:identity#1"/>
-            <fos:arg name="value" type="function(item()) as item()*" default="fn:identity#1"/>
+            <fos:arg name="keys" type="function(item(), xs:integer) as xs:anyAtomicType*" default="fn:identity#1"/>
+            <fos:arg name="value" type="function(item(), xs:integer) as item()*" default="fn:identity#1"/>
             <fos:arg name="combine" type="function(item()*, item()*) as item()*" default="fn:op(',')"/>
          </fos:proto>
       </fos:signatures>
@@ -22223,9 +22223,9 @@ else map:put($MAP, $KEY, $ACTION(())</eg>
          </ulist>
          <p>More formally, the function returns the value of the expression:</p>
          <eg>
-fold-left($input, {}, fn($map, $item) {
-  let $v := $value($item)
-  return fold-left($key($item), $map, fn($m, $k) {
+fold-left($input, {}, fn($map, $item, $pos) {
+  let $v := $value($item, $pos)
+  return fold-left($key($item, $pos), $map, fn($m, $k) {
     if (map:contains($m, $k)) then (
       map:put($m, $k, $combine($m($k), $v))
     ) else (
@@ -22302,6 +22302,16 @@ fold-left($input, {}, fn($map, $item) {
                   is the total string-length of the items starting with that character.</fos:postamble>
             </fos:test>
             <fos:test>
+               <fos:expression><eg>map:build(
+  ('Wang', 'Liu', 'Zhao'),
+  keys := fn($name, $pos) { $name },
+  value := fn($name, $pos) { $pos }
+)</eg></fos:expression>
+               <fos:result>{ "Wang": 1, "Liu": 2, "Zhao": 3 }</fos:result>
+               <fos:postamble>Returns an inverted index for the input sequence with the 
+                  string stored as key and the position stored as value.</fos:postamble>
+            </fos:test>
+            <fos:test>
                <fos:expression><eg><![CDATA[
 let $titles := <titles>
   <title>A Beginner’s Guide to <ix>Java</ix></title>
@@ -22322,7 +22332,6 @@ return map:build($titles/title, fn($title) { $title/ix })
   )
 }]]></eg></fos:result>
             </fos:test>
-            
          </fos:example>
          <fos:example>
             <p>The following expression creates a map whose keys are employee <code>@ssn</code> values, and whose
@@ -26774,7 +26783,7 @@ array:for-each-pair(
       <fos:signatures>
          <fos:proto name="build" return-type="array(*)">
             <fos:arg name="input" type="item()*" usage="inspection"/>
-            <fos:arg name="action" type="function(item()) as item()*" usage="inspection" default="fn:identity#1"/>
+            <fos:arg name="action" type="function(item(), xs:integer) as item()*" usage="inspection" default="fn:identity#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -26792,7 +26801,12 @@ array:for-each-pair(
          <p>Informally, <code>array:build#2</code> applies the supplied function to each item 
             in the input sequence, and the resulting sequence becomes one member of the returned array.</p>
          <p>More formally, <code>array:build#2</code> returns the result of the expression:</p>
-         <eg>array:of-members($input ! { 'value': $action(.) })</eg>
+         <eg>
+array:of-members(
+  for $item at $pos in $input
+  return { 'value': $action($item, $pos) }
+)
+         </eg>
       </fos:rules>
       <fos:notes>
          <p>The single-argument function <code>array:build($input)</code> is equivalent to the XPath
@@ -26821,6 +26835,17 @@ array:for-each-pair(
             <fos:test>
                <fos:expression><eg>array:build(1 to 5, fn { array { 1 to . } })</eg></fos:expression>
                <fos:result>[ [ 1 ], [ 1, 2 ], [ 1, 2, 3 ], [ 1, 2, 3, 4 ], [ 1, 2, 3, 4, 5 ] ]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+array:build(
+  (0x41 to 0x48) ! char(.),
+  fn($char, $pos) {
+    if($pos mod 2 = 0) then lower-case($char) else $char
+  }
+)
+               </eg></fos:expression>
+               <fos:result>[ "A", "b", "C", "d", "E", "f", "G", "h" ]</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -27208,19 +27233,37 @@ declare function flatten(
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a sequence with the members of an array.</p>
+         <p>Returns the sequence-concatenation of the members of an array.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function concatenates the members of <code>$array</code> and returns them as
-           a sequence. The values are returned in their original order.
-           Arrays contained within members are returned unchanged.</p>
-         <p>The effect of the function is equivalent to <code>$array?*</code>.</p>
+         <p>The function returns the sequence-concatenation of the members of 
+            <code>$array</code>, retaining order.</p>
+         <p>More formally, it returns the result of <code>array:members($array)?value</code>.</p>
+
       </fos:rules>
+      <fos:notes>
+         <p>Unlike <code>array:flatten</code>, the function does not apply recursively
+         to nested arrays.</p>
+         <p>If <code>$A</code> is a single array item, then <code>array:values($A)</code>
+         returns the same result as <code>$A?*</code>.</p>
+      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>array:values(array { "one", "two", "three" })</fos:expression>
+               <fos:expression>array:values(["one", "two", "three"])</fos:expression>
                <fos:result>("one", "two", "three")</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>array:values(["one", ("two", "three")])</fos:expression>
+               <fos:result>("one", "two", "three")</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>array:values(["one", ("two", "three"), ()])</fos:expression>
+               <fos:result>("one", "two", "three")</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>array:values(["one", ["two", "three"]])</fos:expression>
+               <fos:result>("one", ["two", "three"])</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>array:values([ (), 1, (2 to 4), [ 5 ] ])</fos:expression>
