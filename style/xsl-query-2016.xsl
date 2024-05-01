@@ -1965,6 +1965,44 @@
     </div>
   </xsl:template>
   
+  <xsl:template match="char">
+    <xsl:if test="not(matches(., 'U\+[0-9A-F]{4,6}'))">
+      <xsl:message>Content of char element is invalid: <xsl:value-of select="."/>. Should match 'U\+[0-9A-F]{4,6}'.</xsl:message>
+    </xsl:if>
+    <xsl:variable name="codepoint" select="my:parse-hex(substring(., 3), 0)" as="xs:integer"/>
+    <span class="unicode-codepoint">
+      <xsl:value-of select="."/>
+    </span>
+    
+    <xsl:if test="$codepoint gt 32">
+      <xsl:text> (</xsl:text>
+      <span class="unicode-name">
+        <xsl:value-of select="($char-names(.), 'UNKNOWN CHARACTER')[1]"/>
+      </span>
+      <xsl:text>, </xsl:text>
+      <code><xsl:value-of select="codepoints-to-string($codepoint)"/></code>
+      <xsl:text>) </xsl:text>
+    </xsl:if>
+ 
+  </xsl:template>
+  
+  <xsl:function name="my:parse-hex" as="xs:integer">
+    <xsl:param name="hex"/>
+    <xsl:param name="num"/>
+    <xsl:variable name="MSB" select="translate(substring($hex, 1, 1), 'abcdef', 'ABCDEF')"/>
+    <xsl:variable name="value" select="string-length(substring-before('0123456789ABCDEF', $MSB))"/>
+    <xsl:variable name="result" select="16 * $num + $value"/>
+    <xsl:choose>
+      <xsl:when test="string-length($hex) > 1">
+        <xsl:sequence select="my:parse-hex(substring($hex, 2), $result)"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:sequence select="$result"/>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:function>
+  
+  <xsl:variable name="char-names" as="map(xs:string, xs:string)" select="json-doc('character-names.json')"/>
   
   <xsl:template match="changes">
     <div class="changes">
