@@ -1966,25 +1966,30 @@
   </xsl:template>
   
   <xsl:template match="char">
-    <xsl:if test="not(matches(., 'U\+[0-9A-F]{4,6}'))">
-      <xsl:message>Content of char element is invalid: <xsl:value-of select="."/>. Should match 'U\+[0-9A-F]{4,6}'.</xsl:message>
+    <xsl:if test="not(matches(., '^U\+[0-9A-F]{4,6}$'))">
+      <xsl:message>*** Content of char element is invalid: <xsl:value-of select="."/>. Should match 'U\+[0-9A-F]{4,6}'.</xsl:message>
     </xsl:if>
     <xsl:variable name="codepoint" select="my:parse-hex(substring(., 3), 0)" as="xs:integer"/>
     <span class="unicode-codepoint">
       <xsl:value-of select="."/>
     </span>
     
-    <xsl:if test="$codepoint gt 32">
-      <xsl:text> (</xsl:text>
-      <span class="unicode-name">
-        <xsl:value-of select="($char-names(.), 'UNKNOWN CHARACTER')[1]"/>
-      </span>
+    <xsl:text> (</xsl:text>
+    <span class="unicode-name">
+      <xsl:value-of select="($char-names(.), 'UNKNOWN CHARACTER')[1]"/>
+    </span>
+    <xsl:if test="my:is-printable-character($codepoint)">
       <xsl:text>, </xsl:text>
       <code><xsl:value-of select="codepoints-to-string($codepoint)"/></code>
-      <xsl:text>) </xsl:text>
     </xsl:if>
+    <xsl:text>) </xsl:text>
  
   </xsl:template>
+  
+  <xsl:function name="my:is-printable-character" as="xs:boolean">
+    <xsl:param name="cp" as="xs:integer"/>
+    <xsl:sequence select="not($cp = (0 to 32, 127 to 160, 8232))"/>
+  </xsl:function>
   
   <xsl:function name="my:parse-hex" as="xs:integer">
     <xsl:param name="hex"/>
