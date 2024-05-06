@@ -1988,7 +1988,7 @@
   
   <xsl:function name="my:is-printable-character" as="xs:boolean">
     <xsl:param name="cp" as="xs:integer"/>
-    <xsl:sequence select="not($cp = (0 to 32, 127 to 160, 8232))"/>
+    <xsl:sequence select="not($cp = (0 to 32, 127 to 160, 768 to 879, 8232))"/>
   </xsl:function>
   
   <xsl:function name="my:parse-hex" as="xs:integer">
