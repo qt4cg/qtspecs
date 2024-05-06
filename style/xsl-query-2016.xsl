@@ -1974,15 +1974,17 @@
       <xsl:value-of select="."/>
     </span>
     
-    <xsl:text> (</xsl:text>
-    <span class="unicode-name">
-      <xsl:value-of select="($char-names(.), 'UNKNOWN CHARACTER')[1]"/>
-    </span>
-    <xsl:if test="my:is-printable-character($codepoint)">
-      <xsl:text>, </xsl:text>
-      <code><xsl:value-of select="codepoints-to-string($codepoint)"/></code>
+    <xsl:if test="$char-names(.)">
+      <xsl:text> (</xsl:text>
+      <span class="unicode-name">
+        <xsl:value-of select="$char-names(.)"/>
+      </span>
+      <xsl:if test="my:is-printable-character($codepoint)">
+        <xsl:text>, </xsl:text>
+        <code><xsl:value-of select="codepoints-to-string($codepoint)"/></code>
+      </xsl:if>
+      <xsl:text>) </xsl:text>
     </xsl:if>
-    <xsl:text>) </xsl:text>
  
   </xsl:template>
   
