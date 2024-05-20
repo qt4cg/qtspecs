@@ -308,6 +308,12 @@
     </div>
   </xsl:template>
 
+  <xsl:template match="example[@role='record-description']" priority="10">
+    <div class="record-description">
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+
 <!-- Override proto and arg to print XQuery F/O-style prototypes -->
 
 <xsl:template match="proto">
@@ -442,17 +448,16 @@
 <xsl:template match="record">
   <xsl:variable name="id" select="(@id, ../@id)[1]"/>
   <div class="record">
+    <xsl:if test="$id ne ''">
+      <xsl:attribute name="id" select="$id"/>
+      <div class="title">
+        <code class="return-type-ref">
+          <xsl:value-of select="$id"/>
+        </code>
+        <xsl:text>:</xsl:text>
+      </div>
+    </xsl:if>
     <table class="record" border="0">
-      <xsl:if test="$id ne ''">
-        <tr>
-          <td colspan="2">
-            <code id="{$id}" class="return-type-ref">
-              <xsl:value-of select="$id"/>
-            </code>
-            <xsl:text>:</xsl:text>
-          </td>
-        </tr>
-      </xsl:if>
       <tr>
         <td colspan="2">
           <code>record(</code>
@@ -462,19 +467,22 @@
         <tr class="arg">
           <td>
             <code>
+              <xsl:if test="@occur">
+                <xsl:attribute name="class" select="@occur"/>
+              </xsl:if>
               <xsl:value-of select="@name"/>
               <xsl:if test="@occur = 'opt'">?</xsl:if>
             </code>
           </td>
           <td>
             <xsl:if test="@type">
-              <code class="as">&#160;as&#160;</code>
+              <code class="as">as&#160;</code>
               <code>
                 <xsl:value-of select="@type"/>
               </code>
             </xsl:if>
             <xsl:if test="@type-ref">
-              <code class="as">&#160;as&#160;</code>
+              <code class="as">as&#160;</code>
               <a href="#{@type-ref}">
                 <xsl:value-of select="@type-ref"/>
               </a>
@@ -502,8 +510,10 @@
     </xsl:when>
     <xsl:otherwise>
       <xsl:apply-templates select="@name"/>
-      <code class="as">&#160;as&#160;</code>
-      <xsl:apply-templates select="@type" mode="render-type"/>  
+      <xsl:if test="@type">
+        <code class="as">&#160;as&#160;</code>
+        <xsl:apply-templates select="@type" mode="render-type"/>  
+      </xsl:if>
     </xsl:otherwise>
   </xsl:choose>
 </xsl:template>
