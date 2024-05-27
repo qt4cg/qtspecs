@@ -1,0 +1,79 @@
+<item>
+   <title>Issue #1238 created</title>
+   <pubDate>2024-05-23T06:30:07Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/1238</link>
+   <guid>https://qt4cg.org/@qt4cg/2024/#created-1238</guid>
+   <description>&lt;div&gt;&lt;p&gt;XSLT on-no-match="shallow-copy-all" - revised rules&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;The work on deep lookup with modifiers enables an improved set of rules for processing trees of maps and arrays using a mode with &lt;code&gt;on-no-match="shallow-copy-all"&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Recall that the intent is that if the user writes no template rules at all in such a mode, the effect is to recursively copy the entire structure without change. But it should be as easy as possible for the user to add template rules to override this processing for a selected part of the structure.&lt;/p&gt;
+&lt;p&gt;With this in mind, the proposed built-in rules are as follows:&lt;/p&gt;
+&lt;p&gt;For an array with no additional information available, we split it up into array members in a way that makes it possible to override
+the processing for a specific array member:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="array(*)"&amp;gt;
+  &amp;lt;xsl:array use="?member"&amp;gt;
+     &amp;lt;xsl:apply-templates select="for member $m at $pos in . 
+                  return {"array-member":true(), "index": $pos, "member": $m}"
+                                          mode="#current"/&amp;gt;
+  &amp;lt;/xsl:array&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The field 'array-member' here is a dummy, provided simply to make it easier to match these records at the next level of processing.&lt;/p&gt;
+&lt;p&gt;For the array members, when represented in this way, the items in the array member are processed one-by-one to produce
+a new array member:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="record(array-member as xs:boolean, index as xs:integer, member as item()*)"&amp;gt;
+     &amp;lt;xsl:map:entry key="'member'"&amp;gt;
+        &amp;lt;xsl:apply-templates select="for $item at $pos in ?member
+                                                          return {"array-member-item":true(), 
+                                                                       "index": ?index, 
+                                                                       "member": ?member, 
+                                                                       "item": $item,
+                                                                       "position": $pos }"
+                                            mode="#current"/&amp;gt;
+    &amp;lt;/xsl:map:entry&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The new array members are delivered as singleton maps, in the form expected by the match="array(*)" template given above.&lt;/p&gt;
+&lt;p&gt;For the individual items within each array member, the default is simply to apply-templates to the item:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="record(array-member-item as ..., index as ..., member as ..., item as item(), position as ...)"&amp;gt;
+   &amp;lt;xsl:apply-templates select="?item" mode="#current"/&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Similarly for a map with no additional information, we reconstruct the map by applying templates to its individual entries:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="map(*)"&amp;gt;
+  &amp;lt;xsl:map on-duplicates="op(',')"&amp;gt;
+     &amp;lt;xsl:apply-templates select="for entry ($k, $v) in . 
+                                                        return {"map-entry":true(), "key": $k, "value": $v}"
+                                          mode="#current"/&amp;gt;
+  &amp;lt;/xsl:array&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The built in processing for a map entry represented in this way is to reconstruct the map entry by applying templates to its individual items:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="record(map-entry as xs:boolean, key as xs:anyAtomicType, value as item()*)"&amp;gt;
+     &amp;lt;xsl:map:entry key="$key"&amp;gt;
+        &amp;lt;xsl:apply-templates select="for $item at $pos in ?value
+                                                          return {"map-entry-item":true(), 
+                                                                       "key": ?key, 
+                                                                       "value": ?value, 
+                                                                       "item": $item,
+                                                                       "position": $pos }"
+                                            mode="#current"/&amp;gt;
+    &amp;lt;/xsl:map:entry&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;For the individual items within each map entry, the default is simply to apply-templates to the item:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="record(map-entry-item as ..., key as ..., value as ..., item as item(), position as ...)"&amp;gt;
+   &amp;lt;xsl:apply-templates select="?item" mode="#current"/&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And of course the fallback processing for items not in the above list is to return them unchanged:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="item()"&amp;gt;
+   &amp;lt;xsl:sequence select="."/&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This allows user-written template rules to intervene at any of these levels, and to have access to contextual information about the item they are processing. For example to rename map entries with key "comment" to have key "note" instead, use:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;xsl:template match="record(map-entry, *)[?key = 'comment']"&amp;gt;
+   &amp;lt;xsl:map-entry key="'note'" select="?value"/&amp;gt;
+&amp;lt;/xsl:template&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;There's one more refinement I would like, which is to provide access to the selection path for each map and array entry. I think this can be done by ensuring that within the template, items are labeled so that the function call selection-path(?value) or selection-path(?item) delivers the required result.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
