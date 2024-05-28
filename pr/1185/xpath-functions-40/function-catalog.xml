@@ -18961,7 +18961,7 @@ function-annotations(local:inc#1)</eg></fos:expression>
                <fos:expression><eg>
 let $old := %local:deprecated('0.1', '0.2') fn() {}
 let $ann := function-annotations($old)
-return map:keys($ann) || ': ' || string-join(map:contents($ann), ', ')
+return map:keys($ann) || ': ' || string-join(map:get($ann), ', ')
 </eg></fos:expression>
                <fos:result>local:deprecated: 0.1, 0.2</fos:result>
             </fos:test>
@@ -21521,51 +21521,6 @@ return map:keys-where($birthdays, fn($name, $date) {
       </fos:examples>
    </fos:function>
    
-   <fos:function name="contents" prefix="map">
-      <fos:signatures>
-         <fos:proto name="contents" return-type="item()*">
-            <fos:arg name="map" type="map(*)" usage="inspection"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>nondeterministic-wrt-ordering</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns the sequence-concatenation of the members of a map,
-            in unpredictable order.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function returns the sequence-concatenation of the entries of <code>$map</code>,
-            in <termref def="implementation-dependent">implementation-dependent</termref> order.</p>
-         <p>The function is <term>nondeterministic with respect to ordering</term> (see
-            <specref ref="properties-of-functions"/>). This means that two calls with the same argument
-            are not guaranteed to produce the results in the same order.</p>
-         <p>More formally, it returns the result of <code>map:entries($array)?*</code>.</p>
-      </fos:rules>
-      <fos:notes>
-         <p>If <code>$map</code> is a single map item, then <code>map:contents($map)</code>
-         returns the same result as <code>$map?*</code>.</p>
-      </fos:notes>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>map:contents({ 1: "yes", 2: "no" })</eg></fos:expression>
-               <fos:result allow-permutation="true">("yes", "no")</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>map:contents({
-  1: ("red", "green"),
-  2: ("blue", "yellow"),
-  3: ()
-})</eg></fos:expression>
-               <fos:result allow-permutation="true">("red", "green", "blue", "yellow")</fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-   </fos:function>
-   
    <fos:function name="entries" prefix="map">
       <fos:signatures>
          <fos:proto name="entries" return-type="map(*)*">
@@ -21744,31 +21699,43 @@ return map:keys-where($birthdays, fn($name, $date) {
       <fos:signatures>
          <fos:proto name="get" return-type="item()*">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
-            <fos:arg name="key" type="xs:anyAtomicType"/>
+            <fos:arg name="key" type="xs:anyAtomicType?" default="()"/>
             <fos:arg name="fallback" type="fn(xs:anyAtomicType) as item()*" default="void#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
-         <fos:property>deterministic</fos:property>
+         <fos:property>nondeterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns the value associated with a supplied key in a given map.</p>
+         <p>Returns all values, or the value associated with a supplied key, in a map.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function <code>map:get</code> attempts to find an entry within the <termref
-               def="dt-map"
-               >map</termref> supplied as <code>$map</code> that has 
-            the <termref
-               def="dt-same-key"
-               >same key</termref> as <code>$key</code>. If there is such an entry, it returns the associated value;
-            <phrase diff="chg" at="2022-12-16">if not, it invokes the supplied <code>$fallback</code> function, supplying
-            the requested <code>$key</code> value as the argument, and returns the result of this call.
-               The default <code>$fallback</code> function always returns an empty sequence.</phrase></p>
-
+         <p>Informally, if no <code>$key</code> is supplied, or if it is an empty sequence, the
+            <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref>
+            of all entries of <code>$map</code> is returned, in
+            <termref def="implementation-dependent">implementation-dependent</termref> order.</p>
+         <p>Otherwise, an entry of <code>$map</code> is looked up that has the
+            <termref def="dt-same-key">same key</termref> as <code>$key</code>.
+            If there is such an entry, it returns the associated value;
+            <phrase diff="chg" at="2022-12-16">if not, it invokes the supplied <code>$fallback</code>
+            function, supplying the requested <code>$key</code> value as the argument,
+            and returns the result of this call.
+            The default <code>$fallback</code> function always returns an empty sequence.</phrase></p>
+         <p diff="chg" at="2022-12-16">More formally, the function returns the value of:</p> 
+            <eg>if(empty($key)) then (
+  $map?*
+) else if (map:contains($map, $key)) then (
+  $map?$key
+) else (
+  $fallback($key)
+)</eg>
       </fos:rules>
       <fos:notes>
+         <p>If <code>$map</code> is a single map, <code>map:get($map)</code>
+            returns the same result as <code>$map?*</code>.</p>
+
          <p>A return value of <code>()</code> from <code>map:get</code> could indicate that
             the key is present in the map with an associated value of <code>()</code>, or it could
             indicate that the key is not present in the map. The two cases can be distinguished by
@@ -21800,6 +21767,11 @@ return map:keys-where($birthdays, fn($name, $date) {
          <fos:variable name="week" id="v-map-get-week"
             select="{&#xa;  0: &quot;Sonntag&quot;, 1: &quot;Montag&quot;, 2: &quot;Dienstag&quot;, 3: &quot;Mittwoch&quot;,&#xa;  4: &quot;Donnerstag&quot;, 5: &quot;Freitag&quot;, 6: &quot;Samstag&quot;&#xa;}"/>
          <fos:example>
+            <fos:test use="v-map-get-week">
+               <fos:expression>map:get($week)</fos:expression>
+               <fos:result allow-permutation="true">"Sonntag", "Montag", "Dienstag", "Mittwoch",
+"Donnerstag",  "Freitag", "Samstag"</fos:result>
+            </fos:test>
             <fos:test use="v-map-get-week">
                <fos:expression>map:get($week, 4)</fos:expression>
                <fos:result>"Donnerstag"</fos:result>
@@ -25654,7 +25626,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
       <fos:signatures>
          <fos:proto name="get" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="position" type="xs:integer"/>
+            <fos:arg name="position?" type="xs:integer?" default="()"/>
             <fos:arg name="fallback" type="fn(xs:integer) as item()*" 
                default="fn($i) { fn:error(fn:QName('', 'FOAY0001')) }"/>
          </fos:proto>
@@ -25665,30 +25637,47 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns the value at the specified position in the supplied array
-            (counting from 1).</p>
+         <p>Returns all values, or the value at a supplied position (counting from 1),
+            in an array.</p>
       </fos:summary>
       <fos:rules>
-         <p diff="chg" at="2022-12-16">Informally, the function returns the member at a specified position in the array.
-         If <code>$position</code> is less than one or greater than <code>array:size($array)</code>,
-         then the <code>$fallback</code> function is called, supplying the value of <code>$position</code>
-         as the argument value; and the result of this call is returned.</p>
-         <p diff="chg" at="2022-12-16">The default <code>$fallback</code> function raises a dynamic error. The call on <code>fn:error</code>
-         shown as the default is for illustrative purposes only; apart from the error code (<code>err:FOAY0001</code>)
-            the details of the error (such as the error message) are <termref def="implementation-dependent">implementation-dependent</termref>.</p>
+         <p>Informally, if no <code>$position</code> is supplied, or if it is an empty sequence, the
+            <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref>
+            of all members of <code>$array</code> is returned.</p>
+         <p diff="chg" at="2022-12-16">Otherwise, the function returns the member at the specified
+            position. If <code>$position</code> is less than one or greater than
+            <code>array:size($array)</code>, then the <code>$fallback</code> function is called,
+            supplying the value of <code>$position</code> as the argument value, and the result of
+            this call is returned.</p>
+         <p diff="chg" at="2022-12-16">The default <code>$fallback</code> function raises a dynamic error.
+            The call on <code>fn:error</code> shown as the default is for illustrative purposes only;
+            apart from the error code (<code>err:FOAY0001</code>) the details of the error (such as the
+            error message) are <termref def="implementation-dependent">implementation-dependent</termref>.</p>
          <p diff="chg" at="2022-12-16">More formally, the function returns the value of:</p> 
-            <eg>if ($position = (1 to array:size($array)))
-then array:members($array)[$position]?value 
-else $fallback($position)</eg>
+            <eg>if(empty($position)) then (
+  $array?*
+) else if ($position = (1 to array:size($array))) then (
+  $array?$position
+) else (
+  $fallback($position)
+)</eg>
       </fos:rules>
+      <fos:notes>
+         <p>If <code>$array</code> is a single array, <code>array:get($array)</code>
+            returns the same result as <code>$array?*</code>.</p>
+      </fos:notes>
       <fos:errors>
-         <p><phrase diff="add" at="2022-12-16">In the absence of a <code>$fallback</code> function</phrase>,
-            a dynamic error occurs <errorref class="AY" code="0001"
-               /> if <code>$position</code> is not in the range <code>1 to
-               array:size($array)</code> inclusive.</p>
+         <p><phrase diff="add" at="2022-12-16">If <code>$position</code> is present and if
+            <code>$fallback</code> is absent,</phrase>, a dynamic error occurs
+               <errorref class="AY" code="0001"/> if <code>$position</code> is not in the
+               range <code>1 to array:size($array)</code> inclusive.</p>
       </fos:errors>
       <fos:examples>
          <fos:example>
+            <fos:test>
+               <fos:expression>[ "a", "b", "c" ] => array:get()</fos:expression>
+               <fos:result>("a", "b", "c")</fos:result>
+            </fos:test>
             <fos:test>
                <fos:expression>[ "a", "b", "c" ] => array:get(2)</fos:expression>
                <fos:result>"b"</fos:result>
@@ -27427,7 +27416,7 @@ declare function flatten(
   $input as item()*
 ) as item()* {
   for $item in $input
-  return if ($item instance of array(*)) then flatten(array:contents($item)) else $item
+  return if ($item instance of array(*)) then flatten(array:get($item)) else $item
 };]]></eg>
       </fos:rules>
       <fos:notes>
@@ -27455,57 +27444,7 @@ declare function flatten(
          <fos:version version="4.0">Retained unchanged.</fos:version>
       </fos:history>
    </fos:function>
-   <fos:function name="contents" prefix="array">
-      <fos:signatures>
-         <fos:proto name="contents" return-type="item()*">
-            <fos:arg name="array" type="array(*)"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns the sequence concatenation of the members of an array.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function returns the <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref> of the members of 
-            <code>$array</code>, retaining order.</p>
-         <p>More formally, it returns the result of <code>array:members($array)?value</code>.</p>
-      </fos:rules>
-      <fos:notes>
-         <p>Unlike <code>array:flatten</code>, the function does not apply recursively
-         to nested arrays.</p>
-         <p>If <code>$array</code> is a single array item, then <code>array:contents($array)</code>
-         returns the same result as <code>$array?*</code>.</p>
-      </fos:notes>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression>array:contents(["one", "two", "three"])</fos:expression>
-               <fos:result>("one", "two", "three")</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>array:contents(["one", ("two", "three")])</fos:expression>
-               <fos:result>("one", "two", "three")</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>array:contents(["one", ("two", "three"), ()])</fos:expression>
-               <fos:result>("one", "two", "three")</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>array:contents(["one", ["two", "three"]])</fos:expression>
-               <fos:result>("one", ["two", "three"])</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>array:contents([ (), 1, (2 to 4), [ 5 ] ])</fos:expression>
-               <fos:result>(1, 2, 3, 4, [ 5 ])</fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-   </fos:function>
- 
+
    <fos:function name="load-xquery-module" prefix="fn">
       <fos:signatures>
          <fos:proto name="load-xquery-module" return-type-ref="load-xquery-module-record">
@@ -30892,12 +30831,52 @@ path with an explicit <code>file:</code> scheme.</p>
         is made to determine if a password or standard port are present,
         the <code>authority</code> value is simply added to the string.)</p>
 
-        <p>If the <code>path-segments</code> key exists in the map, then the
-        path is constructed from the parts, with non-URI characters encoded:
-        <code>string-join($parts?path-segments ! encode-for-uri(.), $options?path-separator)</code>,
-        otherwise the value of the <code>path</code> key is used.
-        If the <code>path</code> value is the empty sequence,
-        the empty string is used for the path. The path is added to the URI.</p>
+        <ulist>
+           <item><p>If the <code>path-segments</code> key exists in the map,
+           then the path is constructed from the segments.</p>
+           <p>To construct the path, each
+           segment is encoded, then they are joined together, separated by the path
+           separator, to form the path.
+           The encoding performed replaces any control characters (code points less than 0x20)
+           and exclusively the following characters with their
+           percent-escaped forms: <code> </code> (space) <code>%</code> (percent
+           sign), <code>/</code> (solidus), <code>?</code> (question mark),
+           <code>#</code> (number sign), <code>+</code> (plus sign),
+           <code>[</code> (left square bracket), and <code>]</code> (right
+           square bracket).</p>
+
+           <p>This is a compromise. The <code>fn:parse-uri</code> function removes
+           percent-escaping when it constructs the path segments because that
+           behavior is often most convenient when dealing with
+           common cases involving <code>file:</code> URIs. But the decoding process is not lossless (consider
+           that both “<code>%3D</code>” and “<code>=</code>” will be realized as
+           <code>=</code> in the path segments).</p>
+
+           <p>The escaping described here protects the delimiters used in
+           hierarchical URIs because leaving those unescaped would change the
+           interpretation of the URI.
+           An application with more stringent requirements can construct a <code>path</code>
+           that satisfies the requirements and leave the <code>path-segments</code> key out of the
+           map.</p>
+        </item>
+        <item>
+           <p>Otherwise the value of the <code>path</code> key is used.</p>
+        </item>
+        <item>
+           <p>If neither are present, the empty string is used for the path.</p>
+        </item>
+        </ulist>
+
+        <note>
+           <p>The compromise encoding used for the <code>path-segments</code> does not
+           apply to the query parameters or fragment identifier. Those values are encoded
+           with <code>encode-for-uri</code>. The compromise encoding isn’t appropriate
+           because those fields can contain additional characters that must be encoded.
+           Adopting a <emph>different</emph> compromise encoding for those values
+           seems unnecessary in practice.</p>
+        </note>
+
+        <p>The path is added to the URI.</p>
 
         <p>If the <code>query-parameters</code> key exists in the map, its value
         must be a map. A sequence of strings is constructed from the values in the map.
@@ -30920,7 +30899,7 @@ path with an explicit <code>file:</code> scheme.</p>
         a preceding question mark (<code>?</code>).</p>
 
         <p>If the <code>fragment</code> key exists in the map, then
-        the value of that key is added to the URI with
+        the value of that key is encoded with <code>encode-for-uri</code> and added to the URI with
         a preceding hash mark (<code>#</code>).</p>
 
         <p>The resulting URI is returned.</p>
