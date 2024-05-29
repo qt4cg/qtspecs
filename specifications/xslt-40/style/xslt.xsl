@@ -866,13 +866,7 @@ constructor. These elements are:</p>
   <xsl:apply-templates select="proto"/>
 </xsl:template>
 
-<!-- note: a note about the spec -->
-<!-- rfc 2119 keywords (must, may, should, ...) -->
-  
-<xsl:template match="rfc2119">
-  <!-- now available in xmlspec19.xsl, which uses <strong> rendition -->
-  <span class="verb"><xsl:apply-templates/></span>
-</xsl:template>
+
 
 <xsl:template match="proto">
   <xsl:variable name="prefix">
