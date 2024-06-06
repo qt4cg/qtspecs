@@ -615,7 +615,7 @@
 
   <!-- rfc2119: identifies RFC 2119 keywords -->
   <xsl:template match="rfc2119">
-    <strong><xsl:apply-templates/></strong>
+    <span class="verb"><xsl:value-of select="lower-case(.)"/></span>
   </xsl:template>
 
   <!-- enum: -->
