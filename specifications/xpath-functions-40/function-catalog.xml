@@ -17658,6 +17658,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
       <fos:signatures>
          <fos:proto name="parse-xml" return-type="document-node(element(*))?">
             <fos:arg name="value" type="xs:string?" example="'&lt;a/&gt;'"/>
+            <fos:arg name="options" type="map(*)" default="{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -17671,15 +17672,63 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
       </fos:summary>
       <fos:rules>
          <p>If <code>$value</code> is the empty sequence, the function returns the empty sequence.</p>
-         <p>The precise process used to construct the XDM instance is <termref
+         <p>The <code>$options</code> argument, if present, defines the detailed behavior of the
+         function. The <termref def="option-parameter-conventions"/> apply. The options available
+         are as follows:</p>
+         
+         <fos:options>
+            <fos:option key="base-uri">
+               <fos:meaning>Determines the base URI. This is used both as the base URI 
+                  used by the XML parser to resolve relative entity references within the document, 
+                  and as the base URI of the document node that is returned. It defaults
+                  to the static base URI of the function call.</fos:meaning>
+               <fos:type>xs:anyURI</fos:type>
+               <fos:default>static-base-uri()</fos:default>
+            </fos:option>
+            <fos:option key="dtd-validation">
+               <fos:meaning>Determines whether DTD validation takes place.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+            </fos:option>
+            <fos:option key="strip-space">
+               <fos:meaning>Determines whether whitespace-only text nodes are removed
+                  from the resulting document.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">All whitespace-only text nodes are stripped,
+                  unless either (a) they are within the scope of the attribute <code>xml:space="preserve"</code>,
+                  or (b) XSD validation identifies that the parent element has a simple type or a complex
+                  type with simple content.
+                  </fos:value>
+                  <fos:value value="false">All whitespace-only text nodes are preserved,
+                  unless either (a) DTD validation marks them as ignorable, or (b) XSD validation recognizes
+                  the containing element as having element-only or empty content.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="xsd-validation">
+               <fos:meaning>Determines whether XSD validation takes place.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>"skip"</fos:default>
+               <fos:values>
+                  <fos:value value="strict">Strict XSD validation takes place</fos:value>
+                  <fos:value value="lax">Lax XSD validation takes place</fos:value>
+                  <fos:value value="skip">No XSD validation takes place</fos:value>
+                  <fos:value value="type Q{uri}local">XSD validation takes place against the
+                  schema-defined type, present in the static context, that has the given URI
+                  and local name.</fos:value>
+               </fos:values>
+            </fos:option>
+         </fos:options>
+         
+         
+         <p>Except to the extent defined by these options, the precise process used 
+            to construct the XDM instance is <termref
                def="implementation-defined"
-            >implementation-defined</termref>. In particular, it is implementation-defined whether
-            DTD and/or schema validation is invoked, and it is implementation-defined whether an XML
+            >implementation-defined</termref>. In particular, it is implementation-defined whether an XML
             1.0 or XML 1.1 parser is used.</p>
-         <p>The <term>static base URI</term> property from the static context of the <code>fn:parse-xml</code>
-            function call is used both as the base URI used by the XML parser to resolve relative
-            entity references within the document, and as the base URI of the document node that is
-            returned.</p>
+         
          <p>The document URI of the returned node is <xtermref ref="dt-absent" spec="DM40">absent</xtermref>.</p>
          <p>The function is <emph>not</emph>
             <termref def="dt-deterministic"
@@ -17694,8 +17743,9 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                /> if the content of
                <code>$value</code> is not a well-formed and namespace-well-formed XML document.</p>
          <p>A dynamic error is raised <errorref class="DC" code="0006"
-               /> if DTD-based validation is
-            carried out and the content of <code>$value</code> is not valid against its DTD.</p>
+               /> if validation is
+            carried out and the content of <code>$value</code> is not valid against the relevant DTD
+            or XSD schema.</p>
       </fos:errors>
       <fos:notes>
          <p>Since the XML document is presented to the parser as a string, rather than as a sequence
@@ -17703,7 +17753,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             parser accepts input only in the form of a sequence of octets, then the processor must
             ensure that the string is encoded as octets in a way that is consistent with rules used
             by the XML parser to detect the encoding.</p>
-         <p>The primary use case for this function is to handle input documents that contain nested
+         <p>A common use case for this function is to handle input documents that contain nested
             XML documents embedded within CDATA sections. Since the content of the CDATA section are
             exposed as text, the receiving query or stylesheet may pass this text to the
                <code>fn:parse-xml</code> function to create a tree representation of the nested
@@ -17724,12 +17774,22 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                   <code>alpha</code> element in turn is the parent of a text node whose string value
                is <code>"abcd"</code>.</p>
          </fos:example>
+         <fos:example>
+            <p>The expression <code>fn:parse-xml("&lt;alpha>&lt;beta> &lt;/beta>&lt;/alpha>", {"strip-space":true()})</code> returns a newly
+               created document node, having an <code>alpha</code> element as its only child; the
+                  <code>alpha</code> element in turn is the parent of a <code>beta</code>
+               element whose content is empty, as a result of whitespace stripping.</p>
+         </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Added options parameter.</fos:version>
+      </fos:history>
    </fos:function>
    <fos:function name="parse-xml-fragment" prefix="fn">
       <fos:signatures>
          <fos:proto name="parse-xml-fragment" return-type="document-node()?">
             <fos:arg name="value" type="xs:string?"/>
+            <fos:arg name="options" type="map(*)" default="{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -17757,14 +17817,40 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
          <p>The string is parsed to form a sequence of nodes which become children of the new
             document node, in the same way as the content of any element is converted into a
             sequence of children for the resulting element node.</p>
+         <p>The <code>$options</code> argument, if present, defines the detailed behavior of the
+         function. The <termref def="option-parameter-conventions"/> apply. The options available
+         are as follows:</p>
+         
+         <fos:options>
+            <fos:option key="base-uri">
+               <fos:meaning>Determines the base URI. This is used 
+                  as the base URI of the document node that is returned. It defaults
+                  to the static base URI of the function call.</fos:meaning>
+               <fos:type>xs:anyURI</fos:type>
+               <fos:default>static-base-uri()</fos:default>
+            </fos:option>
+            <fos:option key="strip-space">
+               <fos:meaning>Determines whether whitespace-only text nodes are removed
+                  from the resulting document.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">All whitespace-only text nodes are stripped,
+                  unless they are within the scope of the attribute <code>xml:space="preserve"</code>.
+                  </fos:value>
+                  <fos:value value="false">All whitespace-only text nodes are preserved.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+           
+         </fos:options>
+         <p>DTD validation is <emph>not</emph> invoked.</p>
          <p>Schema validation is <emph>not</emph> invoked, which means that the nodes in the
             returned document will all be untyped.</p>
-         <p>The precise process used to construct the XDM instance is <termref
+         <p>Except as explicitly defined, the precise process used to construct the XDM instance is <termref
                def="implementation-defined"
             >implementation-defined</termref>. In particular, it is implementation-defined whether
             an XML 1.0 or XML 1.1 parser is used.</p>
-         <p>The <term>static base URI</term> from the static context of the <code>fn:parse-xml-fragment</code>
-            function call is used as the base URI of the document node that is returned.</p>
          <p>The document URI of the returned node is <xtermref ref="dt-absent" spec="DM40">absent</xtermref>.</p>
          <p>The function is <emph>not</emph>
             <termref def="dt-deterministic"
@@ -17792,7 +17878,8 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             external entity has slightly different syntax from the <emph>XML declaration</emph> at
             the start of a well-formed document.</p>
          <p>Note that all whitespace outside the <emph>text declaration</emph> is significant,
-            including whitespace that precedes the first element node.</p>
+            including whitespace that precedes the first element node, unless the <code>strip-space</code>
+            option is set.</p>
          <p>One use case for this function is to handle XML fragments stored in databases, which
             frequently allow zero-or-more top level element nodes. Another use case is to parse the
             contents of a <code>CDATA</code> section embedded within another XML document.</p>
@@ -17813,6 +17900,8 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                no children.</p>
             <p>The expression <code>parse-xml-fragment(" ")</code> returns a document node whose
                children comprise a single text node whose string value is a single space.</p>
+            <p>The expression <code>parse-xml-fragment(" ", {"strip-space":true()})</code> 
+               returns a document node having no children.</p>
             <p>The expression <code>parse-xml-fragment('&lt;?xml version="1.0" encoding="utf8"
                   standalone="yes"?>&lt;a/>')</code> results in a dynamic error <errorref
                   class="DC" code="0006"
@@ -17822,6 +17911,9 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                will also be accepted by <code>fn:parse-xml-fragment</code>.)</p>
          </fos:example>
       </fos:examples>
+      <fos:history>
+         <fos:version version="4.0">Added options parameter.</fos:version>
+      </fos:history>
    </fos:function>
    <fos:function name="serialize" prefix="fn">
       <fos:signatures>
