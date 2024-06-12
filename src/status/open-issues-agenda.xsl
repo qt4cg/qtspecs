@@ -64,7 +64,8 @@
     <xsl:for-each select="$issue-list">
       <xsl:variable name="issue" select="."/>
 
-      <xsl:if test="$issue?state='open' and f:has-label($issue, 'XSLT')">
+      <xsl:if test="$issue?state='open' and f:has-label($issue, 'XSLT')
+                    and not(f:has-label($issue, 'XQuery') or f:has-label($issue, 'XPath'))">
         <xsl:sequence select="xs:integer($issue?number)"/>
       </xsl:if>
     </xsl:for-each>
