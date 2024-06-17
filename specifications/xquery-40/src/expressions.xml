@@ -22272,6 +22272,453 @@ return $rectangle =?> area()</eg>
          </note>
 
       </div2>
+      
+      <div2 id="id-update-expressions" role="xquery">
+            <head>Update Expressions</head>
+            
+            <changes>
+               <change issue="77" PR="832" date="2024-05-15">
+                  Update expressions are introduced to allow deep update of maps and arrays.
+               </change>
+            </changes>
+            
+            <scrap>
+               <head/>
+               <prodrecap id="UpdateExpr" ref="UpdateExpr"/>
+               <prodrecap id="UpdateClause" ref="UpdateClause"/>
+               <prodrecap id="ReplaceClause" ref="ReplaceClause"/>
+               <prodrecap id="DeleteClause" ref="DeleteClause"/>
+               <prodrecap id="ExtendClause" ref="ExtendClause"/>
+               <prodrecap id="MultipleUpdateClause" ref="MultipleUpdateClause"/>
+            </scrap>
+            
+            <p>An update expression returns a modified copy of a map or array.</p>
+            
+            <p>For example:</p>
+            
+            <eg>update map $m replace ?entry::age with .+1</eg>
+            
+            <p>returns a modified copy of the map <code>$m</code> in which the 
+               value of <code>?age</code> has been incremented by one.</p>
+            
+            <eg>update array $a replace ?*?entry::age with .+1</eg>
+            
+            <p>returns a modified copy of the array <code>$a</code> in which every 
+               value selected by <code>?*?age</code> has been
+            incremented by one.</p>
+            
+            <eg>update array $a delete ??entry::note</eg>
+            
+            <p>returns a modified copy of the array <code>$a</code> in which every
+            map entry having the key <code>"note"</code> has been removed.</p>
+            
+            <eg>update array $a  
+   extend ??entry::*[exists(?value?date-of-birth)] 
+   with { 'age': years-from-duration(current-date() - ?date-of-birth) }
+</eg>
+            
+            <p>returns a modified copy of the array <code>$a</code> in which every
+               map having an entry with key <code>"date-of-birth"</code> is extended with
+               an additional entry having key <code>"age"</code> and a value computed
+               by comparing the date-of-birth with the current date.</p>
+            
+            <p>The input map or array is unaffected by the change; the result is a new map or array.</p>
+            
+            <p>An update expression containing multiple update clauses is equivalent to sequential
+            evaluation of update expressions each having a single update clause; for example
+            <code>update map $a do { <var>C1</var>, <var>C2</var>, <var>C3</var> }</code> is
+            equivalent to:</p>
+            
+            <eg>let $v1 := update map $a { <var>C1</var> }
+let $v2 := update map $v1 <var>C2</var>
+let $v3 := update map $v2 <var>C3</var>
+return $v3</eg>
+            
+            <note><p>A processor may be able to optimize the execution so all the updates are
+            performed in a single pass. However, the final result must be the same as if each
+            update clause were evaluated separately, in order.</p></note>
+            
+            <p>The following informal explanation gives the main rules that a query author needs to be
+               aware of; it is followed by a more formal definition of the semantics
+               in <specref ref="id-update-semantics"/>.</p>
+            
+            <olist>
+               <item><p>If the form <code>update map</code> is used, then the value of the
+               first expression must evaluate to a single map. If the form <code>update array</code>
+               is used, then it must evaluate to a single array. This map or array is referred to
+               as the <term>original root</term>.</p></item>
+               
+               <!--<item><p>The original root is automatically pinned, which means that all key-value
+               records within its recursive content are augmented with <code>?parent()</code>,
+               <code>?ancestor()</code>, and <code>?root()</code> functions allowing navigation within
+               the tree, as described in <specref ref="id-pinned-maps-and-arrays"/>.</p></item>
+               -->
+               <item>
+                  <p>Each update clause (<code>replace</code>, <code>delete</code>, or <code>extend</code>)
+                     starts with a <term>selection expression</term>. This must select entries
+                     within the recursive content of the original root. Selecting anything else
+                     is a dynamic error. In practice this means that these entries must be selected 
+                     using an expression containing one or more lookup operators 
+                     (<code>?</code> or <code>??</code>), and the last step in the
+                     expression must use the <code>entry</code> modifier.</p>
+                  
+                  <p>The precise constraints governing the selection expression are given in
+                     <specref ref="id-update-semantics"/>.</p>
+               </item>
+               
+               <item><p>With an update clause of the form <code>delete <var>S</var></code>,
+                  the selected entries are removed from their containing map or array.</p>
+               </item>
+               
+               <item><p>An update clause of the form <code>replace <var>S</var> with <var>R</var></code>
+                  is evaluated as follows.</p>
+                  
+                  <p>For each selected entry (a key/value record), the 
+                     <term>replacement expression</term> <var>R</var> is 
+                     evaluated with a singleton focus based
+                     on that entry. The result may be any sequence, and is called the
+                     <term>replacement value</term>. The replacement value substitutes for the
+                     selected value (the key is unchanged).</p>
+
+               </item>
+               <item><p>An update clause of the form <code>extend <var>S</var> with <var>E</var></code>
+                  is evaluated as follows:</p>
+                  <p>If the selected value is a map <var>M</var>, <code>extend S with {K: V}</code>
+                  has the same effect as <code>replace S with map:put(M, K, V)</code>,
+                  except that the existing content of <var>M</var> is first processed
+                  by applying the rules recursively.</p>
+                  <p>If the selected value is an array <var>A</var>, <code>extend S with V</code>
+                  has the same effect as <code>replace S with array:append(., V)</code>,
+                  except that the existing content of <var>A</var> is first processed
+                  by applying the rules recursively.</p>
+                  <p>Otherwise (if the selected value is neither a map nor an array),
+                  a type error is raised.</p>
+                  
+               </item>
+            
+               <item><p>Once a selected entry has been processed as described in the above
+               rules, the changes propagate upwards through the tree, and the final result
+               is a new version of <code>R</code> containing all the updated values.</p></item>
+               
+               
+               
+            </olist>
+            
+            <!--<p>The last step is the most difficult to formalize. If two entries in a map <var>M</var>
+            have been modified, then it is necessary to construct a new map <var>M'</var>
+            that contains both these modifications. To achieve this, the processor must recognize that
+            both entries belong to the same map, which means there is a need for
+            a concept of identity.</p>
+            
+            <p>Arrays and maps, like atomic values but unlike nodes, do not have an intrinsic 
+               concept of identity. Given an array <code>[1, 1, [2,3], [2,3]]</code> it is
+            not meaningful to ask whether the first two members are "the same integer",
+            and neither is it meaningful to ask whether the last two members are 
+            "the same array".</p>-->
+            
+            <p>The above rules are informal and incomplete. The full rules are given in 
+               <specref ref="id-update-semantics"/>.</p>
+            
+            <div3 id="id-update-examples">
+               <head>Update examples</head>
+               
+               <p>This section includes some examples illustrating how update expressions can be
+               used, in the context of updating data derived by parsing JSON.</p>
+               
+               <p>The examples use the following JSON document.</p>
+               
+               <eg>{
+    "desc"    : "Distances between several cities, in kilometers.",
+    "updated" : "2014-02-04T18:50:45",
+    "uptodate": true,
+    "author"  : null,
+    "cities"  : {
+        "Brussels": [
+                  {"to": "London",    "distance": 322},
+                  {"to": "Paris",     "distance": 265},
+                  {"to": "Amsterdam", "distance": 173}
+        ],
+        "London": [
+                  {"to": "Brussels",  "distance": 322},
+                  {"to": "Paris",     "distance": 344},
+                  {"to": "Amsterdam", "distance": 358}
+        ],
+        "Paris": [
+                  {"to": "Brussels",  "distance": 265},
+                  {"to": "London",    "distance": 344},
+                  {"to": "Amsterdam", "distance": 431}
+        ],
+        "Amsterdam": [
+                  {"to": "Brussels",  "distance": 173},
+                  {"to": "London",    "distance": 358},
+                  {"to": "Paris",     "distance": 431}
+        ]
+    }
+}</eg>
+               
+               <p>It is assumed that this is parsed and bound to a variable:</p>
+               
+               <eg>let $data := json-doc('input.json')</eg>
+               
+               <example id="id-ex-update-0">
+                  <head>Change the date and time of last update</head>
+                  <p>This can be achieved using a simple call on <code>map:put</code>.
+                  However, a simple update expression also does the job:</p>
+                  <eg>update map $data replace ?entry::updated with string(current-dateTime())</eg>
+               </example>
+               
+               <example id="id-ex-update-1">
+                  <head>Change distances from kilometers to miles</head>
+                  <p>The following expression change all distances in this example
+                  from kilometers to miles:</p>
+                  <eg>update map $data replace ??entry::distance with . * 0.621</eg>
+               </example>
+               
+               <example id="id-ex-update-2">
+                  <head>Correct the distance between two cities</head>
+                  <p>This expression changes the distance from Brussels to London, and
+                  also from London to Brussels, from 322Km to 325Km.</p>
+                  <eg>update map $data 
+   replace (??Brussels?*[?to="London"]?entry::distance, 
+            ??London?*[?to="Brussels"]?entry::distance) 
+   with 325
+</eg>
+               </example>
+               
+               <example id="id-ex-update-3">
+                  <head>Add units of measure to the data</head>
+                  <p>This expression adds the entry <code>units="miles"</code>
+                     to all the distances recorded in the table.</p>
+                  <eg>update map $data 
+   extend ??entry::type(record(to, distance))
+   with {"units": "miles"}
+</eg>
+               </example>
+               
+               <example id="id-ex-update-4">
+                  <head>Add cities to the table</head>
+                  <p>This expression adds entries recording the distance from Paris to Frankfurt.</p>
+                  <eg>update map $data do {
+   extend ??entry::Paris with { "to":"Frankfurt", "distance":480 },
+   extend ??entry::cities with {"Frankfurt",  [{ "to":"Paris", "distance":480 }]}
+}</eg>
+               </example>
+               
+  
+            </div3>
+            
+           
+            
+            <div3 id="id-update-semantics">
+               <head>Update semantics</head>
+               <p>This section defines the semantics of update expressions.</p>
+               
+               <p>In this section the term <term>tree</term> means a map or array
+               together with its recursive content.</p>
+               
+               <p>This exposition is not intended to describe
+               an efficient implementation. In particular, the algorithm
+               described here will require time proportional to the
+               size of the tree being updated, whereas a practical
+               implementation should be able to execute in time proportional
+               to the number of changes being made.</p>
+               
+               <p>The algorithm described here performs a top-down
+               recursive-descent transformation copying the existing
+               tree to a new tree, rather in the style of an XSLT
+               transformation using template rules. 
+               The algorithm uses operations and data structures
+               that are not available to &language; applications; it is not intended
+               that it should be possible to implement this algorithm in &language; itself.</p>
+               
+               <p>The first pass identifies the entries (in maps and arrays)
+               that are subject to modification. Then a second pass performs the
+               recursive tree-walking transformation, applying special
+               processing when the tree walk encounters entries that
+               were identified for modification in the first pass.</p>
+               
+                             
+               <p>Evaluation of an update expression applied to a root map or array
+               <var>R</var> proceeds as follows.</p>
+  
+               <olist>
+                  <item><p>Split the update expression into a sequence of update
+                     expressions each containing one update clause. The first expression
+                     is applied to <var>R</var>, and subsequent expressions are applied
+                     to the result of the previous expression. The final result is the
+                     result of the last expression.</p>
+                     <p>Then process each of these expressions as described
+                     in the following rules.</p>                 
+                  </item>
+                  
+                  <item><p>If <code>update map</code> is specified, then <var>R</var>
+                     must be a single map. If <code>update array</code> is specified,
+                     then <var>R</var> must be a single array. A type error 
+                     <errorref spec="XP" class="TY" code="0004"/> is raised
+                     if these conditions are not satisfied.</p></item>
+                  
+                  <item><p>Copy <var>R</var> to create a new map or array
+                     <var>R'</var>, which is labeled with a unique identifier.</p></item>
+                    
+                  
+                  <item><p>Evaluate the <term>selection expression</term> of the update clause,
+                     with <var>R'</var> as the <termref def="dt-singleton-focus"/>. 
+                     Every item <var>s</var> in the result must satisfy the following conditions:</p>
+                     
+                     <olist>
+                        <item><p>It must be an instance of <code>record(key as xs:anyAtomicType,
+                        value as item()*, *)</code></p></item>
+                        <item><p>It must have the property that 
+                     <code>selection-path(<var>s</var>)[last()]?container</code> is the root map or array <var>R'</var>,
+                    which can be established by examining the unique identifier created in its label.</p></item>
+                     </olist>
+                     
+                     
+                     <note><p>These conditions will generally be satisfied if the selection expression
+                     comprises a sequence of shallow or deep lookups using the <code>entry</code>
+                        modifier in the final step, for example <code>?address?1?entry::zipcode</code>, 
+                        or <code>??entry::zipcode</code>.
+                        However, the expression
+                     is not constrained to take this form. For example, it
+                     might be a lookup expression qualified by a filter, such as
+                        <code>??entry::price[?value gt 100]</code>.</p></note>
+                     
+                     <p>TODO: define error conditions.</p>
+                     
+                     <p>If two items in the result of the selection expression 
+                        have the same selection path then they are
+                        considered to be duplicates, and all but the 
+                        first of the duplicates is discarded.</p>
+                     
+                     <p>Let <var>S</var> be the result of the selection expression
+                        after eliminating duplicates.</p>
+                     
+                  </item>
+
+                  
+                  <item><p>Construct an <term>update action list</term>. This list 
+                     associates each entry in <var>S</var> (uniquely identified by its selection path)
+                     with an action. The action is one of the following:</p>
+                  
+                     <olist>
+                        <item><p>For a delete clause: delete the entry.</p></item>
+                        <item><p>For a replace clause: replace <var>V</var>,
+                           the <code>value</code> field of the entry,
+                           with a new value <var>V'</var> computed
+                           by evaluating the replacement expression with a 
+                           <termref def="dt-singleton-focus"/> based on <var>V</var>.</p>
+                        </item>
+                        <item><p>For an extend clause: extend the existing value with
+                           a new value <var>V'</var> computed
+                           by evaluating the extension expression with a 
+                           <termref def="dt-singleton-focus"/> based on <var>V</var>. The
+                           actual effect of the action varies between maps and arrays,
+                           as described below.
+                        </p></item>
+                     </olist>
+                  </item>
+                  
+                  <item><p>Process <var>R'</var> using the item transformation rules,
+                  defined below, to produce a new map or array, which is delivered as the
+                  result of the update expression.</p></item>
+                  
+                  <item><p>The item transformation rules depend on the kind of item,
+                     as follows:</p>
+                  
+                     <olist>
+                        <item><p>If the item is an array <var>A</var>, then construct a new
+                           array <var>A'</var>, whose members
+                           are established by processing each member <var>E</var> of the array
+                           as follows:</p>
+                           <olist>
+                              <item>
+                                 <p>If there is an entry in the update action list corresponding
+                                    to <var>E</var>, then:</p>
+                                 <olist>
+                                    <item><p>If the entry is a <code>delete</code> action,
+                                       discard <var>E</var>.</p></item>
+                                    <item><p>If the entry is a <code>replace</code> action
+                                    with replacement value <var>V'</var>, then discard <var>E</var>
+                                    and substitute <var>V'</var>.</p></item>
+                                    <item><p>If the entry is an <code>extend</code> entry with
+                                       extension value <var>V'</var>, then extend <var>E</var>
+                                       with <var>V'</var> to form <var>E'</var> as described
+                                       below; discard <var>E</var> and substitute <var>E'</var>.</p>
+                                    </item>
+                                 </olist>
+  
+                              </item>
+                              <item><p>Otherwise, process <var>E</var>
+                              by applying these item transformation rules
+                              and append the <termref def="dt-sequence-concatenation"/>
+                              of the results as a new member to <var>A'</var>.</p></item>
+                           </olist>
+                        </item>
+                        
+                        <item><p>If the item is a map <var>M</var>, then construct a new
+                           map <var>M'</var>, whose entries
+                           are established by processing each entry <var>E</var> of <var>M</var>
+                           as follows:</p>
+                           <olist>
+                              <item>
+                                 <p>If there is an entry in the update action list corresponding
+                                    to <var>E</var>, then:</p>
+                                 <olist>
+                                    <item><p>If the entry is a <code>delete</code> action,
+                                       discard <var>E</var>.</p></item>
+                                    <item><p>If the entry is a <code>replace</code> action
+                                    with replacement value <var>V'</var>, then replace <var>E</var>
+                                    with a new entry having the same key as <var>E</var> but
+                                       associated value <var>V'</var>.</p></item>
+                                    <item><p>If the entry is an <code>extend</code> entry with
+                                       extension value <var>V'</var>, then extend <var>E</var>
+                                       with <var>V'</var> to form <var>E'</var> as described
+                                       below; discard <var>E</var> and substitute <var>E'</var>.</p>
+                                    </item>
+                                 </olist>
+  
+                              </item>
+                              
+                              <item><p>Otherwise, process <var>E</var>
+                              by applying these item transformation rules
+                              and append the <termref def="dt-sequence-concatenation"/>
+                              of the results as a new entry to <var>M'</var>.</p></item>
+                           </olist>
+                        </item>
+                        
+                        <item>
+                           <p>To extend an item <var>J</var> with an extension value
+                           <var>V'</var>, as required by the above rules:</p>
+                           <olist>
+                              <item><p>If <var>J</var> is an array, then process
+                              this array by applying these item transformation
+                              rules recursively, to form a new array <var>J'</var>,
+                              and then return <code>array:append(<var>J'</var>, <var>V'</var>)</code>.</p></item>
+                              <item><p>If <var>J</var> is a map, then <var>V'</var>
+                              must be a map. Process <var>J</var> by applying
+                              these transformation rules recursively to form a new
+                              map <var>J</var>, and then return <code>map:merge((<var>J'</var>,
+                              <var>V'</var>), {"combine": "use-last"})</code>.</p></item>
+                           </olist>
+                        </item>
+                              
+                     </olist>
+                  </item>
+                  <item>
+                     <p>If the item is neither a map nor an array, return it unchanged.</p>
+                  </item>
+               </olist>
+                  
+               
+               <note><p>The algorithm described here can be optimized by avoiding the traversal
+               of a subtree that contains no entries that have been selected for modification. Such subtrees
+               can be identified by navigating upwards from the entries selected for modification, to 
+               identify all subtrees that contain modified entries; a subtree that is not so identified
+               can be grafted directly to the result tree without physical copying.</p></note>
+            </div3>
+               
+         </div2>
+
 
 
       <div2 id="id-extension-expressions" role="xquery">
