@@ -71,13 +71,12 @@
     </xsl:for-each>
   </xsl:variable>
 
-  <xsl:variable name="propose-40" as="xs:integer*">
+  <xsl:variable name="prg-required" as="xs:integer*">
     <xsl:for-each select="$issue-list">
       <xsl:variable name="issue" select="."/>
 
       <xsl:if test="$issue?state='open'
-                    and f:has-label($issue, 'Propose for V4.0')
-                    and not(f:has-label($issue, 'XSLT'))">
+                    and f:has-label($issue, 'PRG-required')">
         <xsl:sequence select="xs:integer($issue?number)"/>
       </xsl:if>
     </xsl:for-each>
@@ -199,13 +198,13 @@
     <xsl:sequence select="f:issue-list($requires-confirmation)"/>
   </xsl:if>
 
-  <xsl:if test="exists($propose-40)">
-    <xsl:text>*** Proposed for V4.0&#10;</xsl:text>
+  <xsl:if test="exists($prg-required)">
+    <xsl:text>*** Required for V4.0&#10;</xsl:text>
     <xsl:text>:PROPERTIES:&#10;</xsl:text>
-    <xsl:text>:CUSTOM_ID: proposed-40&#10;</xsl:text>
+    <xsl:text>:CUSTOM_ID: required-40&#10;</xsl:text>
     <xsl:text>:END:&#10;&#10;</xsl:text>
-    <xsl:text>The following issues are labled “proposed for V4.0”.&#10;&#10;</xsl:text>
-    <xsl:sequence select="f:issue-list($propose-40)"/>
+    <xsl:text>The following issues are labled “required for V4.0”.&#10;&#10;</xsl:text>
+    <xsl:sequence select="f:issue-list($prg-required)"/>
   </xsl:if>
 </xsl:template>
 
