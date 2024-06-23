@@ -74,7 +74,7 @@
             <xsl:text>)</xsl:text>
             <xsl:text>
             return </xsl:text>
-            <xsl:if test="not(starts-with(@return-type, 'function(') or ../../@name = 'random-number-generator')">
+            <xsl:if test="not(starts-with(@return-type, 'function(') or starts-with(@return-type, 'fn(') or ../../@name = 'random-number-generator')">
                <!-- we can't compare functions using deep-equal, nor any other way; so skip this part of the test -->
                <xsl:text>fn:deep-equal($x, </xsl:text>
                <!--<xsl:if test="../..//property[.='focus-dependent']">
@@ -209,7 +209,7 @@
       <xsl:text>/doc</xsl:text>
    </xsl:template>
    
-   <xsl:template match="@type[starts-with(., 'function(')]" priority="5">
+   <xsl:template match="@type[starts-with(., 'function(') or starts-with(., 'fn(')]" priority="5">
       <xsl:variable name="arity" select="count(tokenize(., ','))"/>
       <!--<xsl:message><xsl:copy-of select=".."/>Arity = {$arity}</xsl:message>-->
       <xsl:choose>
@@ -229,30 +229,7 @@
       </xsl:choose>
    </xsl:template>
    
-   <!--<xsl:template match="@type[matches(., 'function\(item\(\)[*+?]?\).*')]" priority="8">
-      <xsl:text>fn:boolean#1</xsl:text>
-   </xsl:template>
    
-   <xsl:template match="@type[matches(., 'function\([^,]+,[^,]+\).*')]" priority="8">
-      <xsl:text>fn:deep-equal#2</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[starts-with(., 'function(xs:anyAtomicType, item()*)')]" priority="9">
-      <xsl:text>fn:deep-equal#2</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[starts-with(., 'function(xs:anyAtomicType, item()*)')]" priority="9">
-      <xsl:text>fn:deep-equal#2</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[starts-with(., 'function(xs:string, xs:string*)')]" priority="9">
-      <xsl:text>fn:contains#2</xsl:text>
-   </xsl:template>
-   
-   <xsl:template match="@type[starts-with(., 'function(item()*, item()*, xs:integer)')]" priority="9">
-      <xsl:text>function($x,$y,$z){0}</xsl:text>
-   </xsl:template>
-   -->
    
    
    <xsl:template match="@type[starts-with(., 'union(')]" priority="9">
