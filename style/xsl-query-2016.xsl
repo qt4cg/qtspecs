@@ -2039,9 +2039,25 @@
         <xsl:if test="@*">
           <i xsl:expand-text="yes">
             <xsl:text>[&#xa0;</xsl:text>
-            <xsl:if test="@issue">Issue <a href="https://github.com/qt4cg/qtspecs/issues/{@issue}">{@issue}&#xa0;</a> </xsl:if>
-            <xsl:if test="@PR">PR <a href="https://github.com/qt4cg/qtspecs/pull/{@PR}">{@PR}&#xa0;</a> </xsl:if>
-            <xsl:if test="@date">Applied {format-date(@date, '[D] [MNn] [Y]')}</xsl:if>
+            <xsl:variable name="issues" select="tokenize(@issue)"/>
+            <xsl:if test="exists($issues)">
+              <xsl:value-of select="if (count($issues) gt 1) then 'Issues ' else 'Issue '"/>
+              <xsl:for-each select="$issues">
+                <xsl:if test="position() != 1">&#xa0;</xsl:if>
+                <a href="https://github.com/qt4cg/qtspecs/issues/{.}">{.}</a>
+              </xsl:for-each>
+            </xsl:if>
+            <xsl:text>&#xa0;</xsl:text>
+            <xsl:variable name="PRs" select="tokenize(@PR)"/>
+            <xsl:if test="exists($PRs)">
+              <xsl:value-of select="if (count($PRs) gt 1) then 'PRs ' else 'PR '"/>
+              <xsl:for-each select="$PRs">
+                <xsl:if test="position() != 1">&#xa0;</xsl:if>
+                <a href="https://github.com/qt4cg/qtspecs/pull/{.}">{.}</a>
+              </xsl:for-each>
+            </xsl:if>
+            <xsl:text>&#xa0;</xsl:text>
+            <xsl:if test="@date">Processed on {format-date(@date, '[D] [MNn] [Y]')}</xsl:if>
             <xsl:text>&#xa0;]</xsl:text>
           </i>
         </xsl:if>
