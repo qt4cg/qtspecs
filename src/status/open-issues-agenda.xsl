@@ -175,7 +175,7 @@
     </xsl:if>
 
     <xsl:if test="exists($v40)">
-      <xsl:text>The following XSLT issues are labled “proposed for V4.0”.&#10;&#10;</xsl:text>
+      <xsl:text>The following XSLT issues are labeled “proposed for V4.0”.&#10;&#10;</xsl:text>
       <xsl:sequence select="f:issue-list($v40)"/>
     </xsl:if>
   </xsl:if>
@@ -194,7 +194,7 @@
     <xsl:text>:PROPERTIES:&#10;</xsl:text>
     <xsl:text>:CUSTOM_ID: requires-confirmation&#10;</xsl:text>
     <xsl:text>:END:&#10;&#10;</xsl:text>
-    <xsl:text>The following issues are labled “requires confirmation”.&#10;&#10;</xsl:text>
+    <xsl:text>The following issues are labeled “requires confirmation”.&#10;&#10;</xsl:text>
     <xsl:sequence select="f:issue-list($requires-confirmation)"/>
   </xsl:if>
 
@@ -203,7 +203,7 @@
     <xsl:text>:PROPERTIES:&#10;</xsl:text>
     <xsl:text>:CUSTOM_ID: required-40&#10;</xsl:text>
     <xsl:text>:END:&#10;&#10;</xsl:text>
-    <xsl:text>The following issues are labled “required for V4.0”.&#10;&#10;</xsl:text>
+    <xsl:text>The following issues are labeled “required for V4.0”.&#10;&#10;</xsl:text>
     <xsl:sequence select="f:issue-list($prg-required)"/>
   </xsl:if>
 </xsl:template>
