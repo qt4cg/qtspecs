@@ -21768,11 +21768,33 @@ and <code>version="1.0"</code> otherwise.</p>
                containing existing nodes, rather than constructing new nodes. When
                   <elcode>xsl:sequence</elcode> is used to select atomic values or function items, the effect is very similar to the
                   <elcode>xsl:copy-of</elcode> instruction.</p>
-            <p>The items comprising the result sequence are evaluated either using
+            
+            <p>The <code>select</code> attribute and the contained <termref def="dt-sequence-constructor"/>
+               are mutually exclusive; if the instruction
+               has a <code>select</code> attribute, then it <rfc2119>must</rfc2119> have no children
+               other than <elcode>xsl:fallback</elcode> instructions. If there is no
+               <code>select</code> attribute and no contained <termref def="dt-sequence-constructor"/>, 
+               the result is an empty sequence. 
+            </p>
+               
+               
+            
+            <p>The effect of the instruction is as follows:</p>
+            <olist>
+               <item><p>Evaluate the expression in the <code>select</code> attribute if present, 
+                  or the contained <termref def="dt-sequence-constructor"/> otherwise. Call the result <var>T</var>.</p>
+               </item>
+               <item><p>Use the <termref def="dt-coercion-rules"/> to convert <var>T</var> to the sequence
+               type appearing in the <code>as</code> attribute, defaulting to <code>item()*</code>.
+               The converted result is the value returned by the <elcode>xsl:sequence</elcode>
+               instruction.</p></item>
+            </olist>
+            <!--<p>The items comprising the result sequence are evaluated either using
                the <code>select</code> attribute, or using the contained <termref def="dt-sequence-constructor"/>. These are mutually exclusive; if the instruction
                has a <code>select</code> attribute, then it <rfc2119>must</rfc2119> have no children
                other than <elcode>xsl:fallback</elcode> instructions. If there is no
-                  <code>select</code> attribute and no contained <termref def="dt-sequence-constructor"/>, the result is an empty sequence.</p>
+                  <code>select</code> attribute and no contained <termref def="dt-sequence-constructor"/>, 
+               the result is an empty sequence.</p>-->
             <p>
                <error spec="XT" type="static" class="SE" code="3185" diff="chg" at="2023-05-10">
                   <p>For the elements <elcode>xsl:sequence</elcode>, <elcode>xsl:on-empty</elcode>,
@@ -21784,10 +21806,27 @@ and <code>version="1.0"</code> otherwise.</p>
                      and the instruction has children other than <elcode>xsl:fallback</elcode>.</p>
                </error>
             </p>
-            <p>Any contained <elcode>xsl:fallback</elcode> instructions are ignored by an XSLT 2.0
-                  or 3.0 processor, but can be used to define
-               fallback behavior for an XSLT 1.0 processor running in forwards compatibility
-               mode.</p>
+            
+            <note><p>The <elcode>xsl:sequence</elcode> instruction was first introduced in XSLT 2.0, so the <code>xsl:fallback</code>
+               instruction is relevant only to an XSLT 1.0 processor operating in forwards compatibility mode.</p>
+               
+               <p>An XSLT 2.0 or 3.0 processor operating in forwards compatibility mode will ignore the <code>@as</code>
+               attribute.</p>
+            </note>
+            
+            <note><p>The <elcode>xsl:sequence</elcode> instruction is most commonly used as the final instruction
+            in the body of <elcode>xsl:function</elcode>, to compute the result of the function. If the result
+            is a single item, consider writing <code>&lt;xsl:sequence select="..." as="item()"/></code> to
+            make this clear to the reader.</p></note>
+            
+            <note>
+               <p>The main use case for allowing <elcode>xsl:sequence</elcode> to contain a sequence
+                  constructor is to allow the instructions within an <elcode>xsl:fork</elcode>
+                  element to be divided into groups.</p>
+               <p>It can also be used to limit the scope of local variables or of standard
+                  attributes such as <code>[xsl:]default-collation</code>.</p>
+            </note>
+            
             <example>
                <head>Constructing a Sequence of Integers</head>
                <p>The following code:</p>
@@ -21802,22 +21841,14 @@ and <code>version="1.0"</code> otherwise.</p>
             <example>
                <head>Using <code>xsl:for-each</code> to Construct a Sequence</head>
                <p>The following code constructs a sequence containing the value of the
-                     <code>@price</code> attribute for selected elements (which we assume to be
-                  typed as <code>xs:decimal</code>), or a computed price for those elements that
-                  have no <code>@price</code> attribute. It then returns the average price:</p>
-               <eg xml:space="preserve" role="xslt-instruction">&lt;xsl:variable name="prices" as="xs:decimal*"&gt;
-  &lt;xsl:for-each select="//product"&gt;
-    &lt;xsl:choose&gt;
-      &lt;xsl:when test="@price"&gt;
-        &lt;xsl:sequence select="@price"/&gt;
-      &lt;/xsl:when&gt;
-      &lt;xsl:otherwise&gt;
-        &lt;xsl:sequence select="@cost * 1.5"/&gt;
-      &lt;/xsl:otherwise&gt;
-    &lt;/xsl:choose&gt;
-  &lt;/xsl:for-each&gt;
-&lt;/xsl:variable&gt;
-&lt;xsl:value-of select="avg($prices)"/&gt;</eg>
+                     <code>@price</code> attribute for selected elements, 
+                  or a computed price for those elements that
+                  have no <code>@price</code> attribute:</p>
+               <eg xml:space="preserve" role="xslt-instruction"><![CDATA[<xsl:variable name="prices" as="xs:decimal*">
+   <xsl:for-each select="//product">
+      <xsl:sequence select="@price otherwise @cost * 1.5" as="xs:decimal"/>
+   </xsl:for-each>
+</xsl:variable>]]></eg>
                <p>Note that the existing <code>@price</code> attributes could equally have been
                   added to the <code>$prices</code> sequence using <elcode>xsl:copy-of</elcode> or
                      <elcode>xsl:value-of</elcode>. However, <elcode>xsl:copy-of</elcode> would
@@ -21828,19 +21859,13 @@ and <code>version="1.0"</code> otherwise.</p>
                      <code>xs:decimal</code> atomic value to the result sequence, is a more direct
                   way of achieving the same result.</p>
                <p>This example could alternatively be solved at the XPath level:</p>
-               <eg xml:space="preserve" role="xslt-instruction">&lt;xsl:value-of select="avg(//product/(+@price, @cost*1.5)[1])"/&gt;</eg>
+               <eg xml:space="preserve" role="xslt-instruction">&lt;xsl:sequence select="//product/(+@price otherwise @cost*1.5))"/&gt;</eg>
                <p>The apparently redundant <code>+</code> operator is there to atomize the attribute
                   value: the expression on the right hand side of the <code>/</code> operator must
                   not return a  sequence containing both nodes and
                      non-nodes (atomic values or function items).</p>
             </example>
-            <note>
-               <p>The main use case for allowing <elcode>xsl:sequence</elcode> to contain a sequence
-                  constructor is to allow the instructions within an <elcode>xsl:fork</elcode>
-                  element to be divided into groups.</p>
-               <p>It can also be used to limit the scope of local variables or of standard
-                  attributes such as <code>[xsl:]default-collation</code>.</p>
-            </note>
+            
          </div2>
       </div1>
       <div1 id="number">
