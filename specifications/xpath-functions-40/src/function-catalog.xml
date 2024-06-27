@@ -19252,7 +19252,7 @@ return map:keys($ann) || ': ' || string-join(map:values($ann), ', ')
          
       </fos:properties>
       <fos:summary>
-         <p>Applies the function item <code>$action</code> to every item from the sequence <var>$input</var>
+         <p>Applies the function item <code>$action</code> to every item from the sequence <code>$input</code>
             in turn, returning the concatenation of the resulting sequences in order.</p>
       </fos:summary>
       <fos:rules>
@@ -19397,39 +19397,40 @@ return filter(
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following implementation in XQuery:</p>
+         <p>When the supplied <code>$action</code> has an arity of two or less, 
+            the function is equivalent to the following implementation in XQuery:</p>
          <eg><![CDATA[
-declare %private function fold-left-helper(
+declare function fold-left2(
   $input  as item()*,
   $zero   as item()*,
-  $action as fn(item()*, item(), xs:integer) as item()*,
-  $pos    as xs:integer
+  $action as fn(item()*, item()) as item()*
 ) as item()* {
   if (empty($input))
   then $zero
-  else fold-left-helper(
-    tail($input),
-    $action($zero, head($input), $pos + 1),
-    $action,
-    $pos + 1
-  )
-};
-
-declare function fold-left(
+  else fold-left2(tail($input), 
+                 $action($zero, head($input)),
+                 $action)
+}]]></eg>
+         
+      <p>The case where <code>$action</code> has an arity of three can be handled by first building a sequence
+      of (position, item) pairs, and then calling the arity-2 function on this sequence:</p>
+         
+         <eg><![CDATA[
+declare function fold-left3(
   $input  as item()*,
   $zero   as item()*,
   $action as fn(item()*, item(), xs:integer) as item()*
 ) as item()* {
-  fold-left-helper($input, $zero, $action, 1)
-};]]></eg>
+  let $pairs := $input ! {'position': position(), 'item': .}
+  return fold-left2($pairs, $zero, fn($zero, $pair) {
+     $action($zero, $pair?item, $pair?position)
+  }
+}]]></eg>
 
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
-            occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
-            the first argument is either the value of <code>$zero</code> or the result of a previous
-            application of <code>$action</code>, and the second 
-            is any single item from the sequence <code>$input</code>.</p>
+            occurs if the supplied function <code>$action</code> cannot be applied to the supplied arguments.</p>
       </fos:errors>
       <fos:notes>
          <p>This operation is often referred to in the functional programming literature as
@@ -19440,8 +19441,7 @@ declare function fold-left(
             value (such as zero in the case of addition, one in the case of multiplication, or a
             zero-length string in the case of string concatenation) that causes the function to
             return the value of the other argument unchanged.</p>
-         <p>The value of the third argument of <code>$action</code> corresponds to the position
-            of the item in the input sequence. It is initally set to <code>1</code>.</p>
+      
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -19452,7 +19452,8 @@ declare function fold-left(
   fn($a, $b) { $a + $b }
 )</eg></fos:expression>
                <fos:result>15</fos:result>
-               <fos:postamble>This returns the sum of the items in the sequence</fos:postamble>
+               <fos:postamble>This returns the sum of the items in the sequence. The result is computed
+               as <code>((((0+1)+2)+3)+4)+5)</code>.</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -19561,8 +19562,7 @@ return fold-left($input, (),
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-         
+         <fos:property>focus-independent</fos:property>        
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
@@ -19570,37 +19570,41 @@ return fold-left($input, (),
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following implementation in XQuery:</p>
+         <p>When the supplied <code>$action</code> has an arity of two or less, 
+            the function is equivalent to the following implementation in XQuery:</p>
          <eg><![CDATA[
-declare %private function fold-right-helper(
+declare function fold-right2(
   $input  as item()*,
   $zero   as item()*,
-  $action as fn(item(), item()*, xs:integer) as item()*,
-  $pos    as xs:integer
+  $action as fn(item(), item()*) as item()*
 ) as item()* {
   if (empty($input))
   then $zero
   else $action(
     head($input),
-    fold-right-helper(tail($input), $zero, $action, $pos - 1),
-    $pos
+    fold-right2(tail($input), $zero, $action)
   )
-};
-
-declare function fold-right(
+};]]></eg>
+         
+      <p>The case where <code>$action</code> has an arity of three can be handled by first building a sequence
+      of (position, item) pairs, and then calling the arity-2 function on this sequence:</p>
+         
+         <eg><![CDATA[
+declare function fold-right3(
   $input  as item()*,
   $zero   as item()*,
-  $action as fn(item(), item()*, xs:integer) as item()*
+  $action as fn(item()*, item(), xs:integer) as item()*
 ) as item()* {
-  fold-right-helper($input, $zero, $action, count($input))
-};]]></eg>
+  let $pairs := $input ! {'position': position(), 'item': .}
+  return fold-right2($pairs, $zero, fn($zero, $pair) {
+     $action($zero, $pair?item, $pair?position)
+  }
+}]]></eg>
+         
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
-            occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
-            the first argument is any item in the sequence <code>$input</code>, and the second is either
-            the value of <code>$zero</code> or the result of a previous application of
-            <code>$action</code>.</p>
+            occurs if the supplied function <code>$action</code> cannot be applied to the supplied arguments.</p>
 
       </fos:errors>
       <fos:notes>
@@ -19615,9 +19619,6 @@ declare function fold-right(
          <p>In cases where the function performs an associative operation on its two arguments (such
             as addition or multiplication), <code>fn:fold-right</code> produces the same result as
                <code>fn:fold-left</code>.</p>
-         <p>The value of the third argument of <code>$action</code> corresponds to the position
-            of the item in the input sequence. Thus, in contrast to <code>fn:fold-left</code>,
-            it is initally set to the number of items in the input sequence.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -19628,7 +19629,8 @@ declare function fold-right(
   fn($a, $b) { $a + $b }
 )</eg></fos:expression>
                <fos:result>15</fos:result>
-               <fos:postamble>This returns the sum of the items in the sequence</fos:postamble>
+               <fos:postamble>This returns the sum of the items in the sequence. 
+               The result is computed as <code>(0+(1+(2+(3+(4+5)))))</code>.</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -21537,7 +21539,7 @@ return fold-left($MAPS, {},
          of the corresponding values, retaining their order in the input sequence.</p>
          
          <p>The effect of the function is equivalent to the expression:</p>
-         <eg>map:pairs($week) => map:build(fn { ?key }, fn { ?value }, $combine)</eg>
+         <eg>map:build($input, fn { ?key }, fn { ?value }, $combine)</eg>
 
 
       </fos:rules>
@@ -27033,7 +27035,8 @@ return array:filter(
             array.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following expression:</p>
+         <p>The function is equivalent to the following expression, which converts the array to a sequence and then
+            invokes <code>fn:fold-left</code>:</p>
          <eg><![CDATA[
 fold-left(
   array:members($array),
@@ -27119,7 +27122,8 @@ return array:fold-left($input, (),
             array.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following expression:</p>
+         <p>The function is equivalent to the following expression, which converts the array to a sequence and then
+            invokes <code>fn:fold-right</code>:</p>
          <eg><![CDATA[
 fold-right(
   array:members($array),
@@ -31351,7 +31355,7 @@ path with an explicit <code>file:</code> scheme.</p>
          <fos:proto name="scan-left" return-type="array(*)*">
             <fos:arg name="input" type="item()*" usage ="navigation"/>           
             <fos:arg name="zero" type="item()*"/>           
-            <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>   
+            <fos:arg name="action" type="fn(item()*, item(), xs:integer) as item()*" usage="inspection"/>   
          </fos:proto>
        </fos:signatures>
       <fos:properties>
@@ -31360,51 +31364,63 @@ path with an explicit <code>file:</code> scheme.</p>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-        <p>Produces the complete (ordered) sequence of all partial results from every new value 
-        the accumulator is assigned to during the evaluation of fn:fold-left.</p>
+        <p>Produces a sequence containing intermediate results of an evaluation of <code>fn:fold-left</code>.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following implementation in XPath (return clause added in comments for completeness):</p>
+         <p>In the case where the supplied <code>$action</code> has an arity of two or less, 
+            the function is equivalent to the following implementation in XQuery:</p>
+         
          <eg><![CDATA[
-let $scan-left-inner := fn(
-  $input  as item()*, 
-  $zero   as item()*, 
-  $action as fn(item()*, item()) as item()*,
-  $self   as fn(*)
-) as array(*)* {
-  let $result := [$zero]
-  return if (empty($input)) then (
-    $result
-  ) else (
-    $result, $self(tail($input), $action($zero, head($input)), $action, $self)
-  )
-}
-let $scan-left := fn(
-  $input  as item()*, 
-  $zero   as item()*, 
+declare function scan-left2(
+  $input  as item()*,
+  $zero   as item()*,
   $action as fn(item()*, item()) as item()*
-) as array(*)*  {
-  $scan-left-inner($input, $zero, $action, $scan-left-inner)
-}
-(: return $scan-left(1 to 10, 0, op('+'))  :)    
-]]></eg>         
+) as item()* {
+  array{$zero},
+  if (exists($input)) {
+    scan-left2(
+      tail($input),
+      $action($zero, head($input)),
+      $action
+    )
+  }
+};]]></eg>
+         
+               <p>The case where <code>$action</code> has an arity of three can be handled by first building a sequence
+      of (position, item) pairs, and then calling the arity-2 function on this sequence:</p>
+         
+         <eg><![CDATA[
+declare function scan-left3(
+  $input  as item()*,
+  $zero   as item()*,
+  $action as fn(item()*, item(), xs:integer) as item()*
+) as item()* {
+  let $pairs := $input ! {'position': position(), 'item': .}
+  return scan-left2($pairs, $zero, fn($zero, $pair) {
+     $action($zero, $pair?item, $pair?position)
+  }
+}]]></eg>
+         
+         <p>The result is a sequence of arrays representing intermediate results. The first array
+         holds the value of <code>$zero</code>. Subsequent arrays, one per item in <code>$input</code>,
+         represent the result of applying <code>fn:fold-left</code> (with the same values for 
+         <code>$zero</code> and <code>$action</code>) to the subsequence of <code>$input</code>
+         ending at that item.</p>
+
+
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
-            occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
-            the first argument is either the value of <code>$zero</code> or the result of a previous
-            application of <code>$action</code>, and the second 
-            is any single item from the sequence <code>$input</code>.</p>      
+            occurs if the supplied function <code>$action</code> cannot be applied to the supplied arguments.</p>     
       </fos:errors>
         <fos:notes>
-                <olist>
-                    <item>
-                        <p>Note that each intermediate result is placed in a separate singleton array.
-                           This is necessary because we cannot represent a sequence of results, some or all of which are
-                           a sequence - that is "sequence of sequences" as just a single sequence.
-                        </p>
-                    </item>
-                </olist>
+           <p>The number of arrays
+           in the result is the same as the number of items in <code>$input</code> plus one.</p>
+           <p>The fact that the function has the same signature as <code>fn:fold-left</code>
+           means that this function can conveniently be used to study the behavior of
+           a call on <code>fn:fold-left</code> with the same arguments, perhaps for
+           diagnostic purposes. It can also be used to produce the running totals of
+           a computation.</p>
         </fos:notes>                
       <fos:examples>
          <fos:example>
@@ -31415,31 +31431,25 @@ let $scan-left := fn(
          </fos:example>         
          <fos:example>
             <fos:test>
-               <fos:expression><eg>scan-left(1 to 3, 0, op('-'))</eg></fos:expression>
-               <fos:result>[ 0 ], [ -1 ], [ -3 ], [ -6 ]</fos:result>
+               <fos:expression><eg>scan-left(1 to 5, 0, op('-'))</eg></fos:expression>
+               <fos:result>[ 0 ], [ -1 ], [ -3 ], [ -6 ], [ -10 ], [ -15 ]</fos:result>
             </fos:test>
-         </fos:example>      
+         </fos:example>
          <fos:example>
-            <p>Produce the intermediate results of mapping each number in a sequence to its doubled value. 
-            This example shows the necessity to place each intermediate result (sequence) into a singleton array - otherwise
-            the sequence of sequences (intermediate results) would not be possible to express as a single sequence
-            without losing completely the intermediate results.</p>
-            <fos:test>
-               <fos:expression><eg>let $double := fn($x) { 2 * $x }
-return scan-left(1 to 3, (), fn($seq, $it) { $seq , $double($it) })</eg></fos:expression>
-               <fos:result>[ () ], [ 2 ], [ (2, 4) ], [ (2, 4, 6) ] ]</fos:result>
-            </fos:test>
-         </fos:example>  
-         <fos:example>
-            <p> Produce the factorials of all numbers from 0 to 5</p>
             <fos:test>
                <fos:expression><eg>scan-left(1 to 5, 1, op('*'))</eg></fos:expression>
                <fos:result>[ 1 ], [ 1 ], [ 2 ], [ 6 ], [ 24 ], [ 120 ]</fos:result>
             </fos:test>
-         </fos:example>           
+         </fos:example> 
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>scan-left(1 to 3, (), fn($seq, $it) { $seq , fn(.*2) })</eg></fos:expression>
+               <fos:result>[ ], [ 2 ], [ 2, 4 ], [ 2, 4, 6 ]</fos:result>
+            </fos:test>
+         </fos:example>                    
       </fos:examples>          
       <fos:history>
-         <fos:version version="4.0">Proposed for 4.0</fos:version>
+         <fos:version version="4.0">New in 4.0</fos:version>
       </fos:history>
    </fos:function>
 
@@ -31448,7 +31458,7 @@ return scan-left(1 to 3, (), fn($seq, $it) { $seq , $double($it) })</eg></fos:ex
          <fos:proto name="scan-right" return-type="array(*)*">
             <fos:arg name="input" type="item()*" usage ="navigation"/>           
             <fos:arg name="zero" type="item()*"/>           
-            <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>   
+            <fos:arg name="action" type="fn(item(), item()*, xs:integer) as item()*" usage="inspection"/>   
          </fos:proto>
        </fos:signatures>
       <fos:properties>
@@ -31457,51 +31467,60 @@ return scan-left(1 to 3, (), fn($seq, $it) { $seq , $double($it) })</eg></fos:ex
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-        <p>Produces the complete (ordered) sequence of all partial results from every new value 
-        the accumulator is assigned to during the evaluation of fn:fold-right.</p>
+        <p>Produces a sequence containing intermediate results of an evaluation of <code>fn:fold-right</code>.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following implementation in XPath (return clause in comments added for completeness):</p>
+         <p>In the case where the supplied <code>$action</code> has an arity of two or less,
+            the function is equivalent to the following implementation in XQuery:</p>
+         
          <eg><![CDATA[
-let $scan-right-inner := fn(
+declare function scan-right2(
   $input  as item()*,
   $zero   as item()*,
-  $action as fn(item()*, item()) as item()*, $self as fn(*)
+  $action as fn(item(), item()*) as item()*
 ) as array(*)* {
   if (empty($input)) then (
-    [ $zero ]
+    array { $zero }
   ) else (
-    let $rightResult := $self(tail($input), $zero, $action, $self)
-    return ([ $action(head($input), head($rightResult)) ], $rightResult)
+    let $rightResult := scan-right2(tail($input), $zero, $action)
+    return (array { $action(head($input), head($rightResult)?*) }, $rightResult)
   )
-}
-let $scan-right := function(
-  $input as item()*,
-  $zero  as item()*,
-  $f     as fn(item()*, item()) as item()*
-) as array(*)* {
-  $scan-right-inner($input, $zero, $f, $scan-right-inner)
-}        
-(: return $scan-right(1 to 10, 0, op('+')) :)  
-]]></eg>         
+}]]></eg>
+         
+               <p>The case where <code>$action</code> has an arity of three can be handled by first building a sequence
+      of (position, item) pairs, and then calling the arity-2 function on this sequence:</p>
+         
+         <eg><![CDATA[
+declare function scan-right3(
+  $input  as item()*,
+  $zero   as item()*,
+  $action as fn(item()*, item(), xs:integer) as item()*
+) as item()* {
+  let $pairs := $input ! {'position': position(), 'item': .}
+  return scan-right2($pairs, $zero, fn($zero, $pair) {
+     $action($zero, $pair?item, $pair?position)
+  }
+}]]></eg>
+         
+         <p>The result is a sequence of arrays representing intermediate results. The last array
+         holds the value of <code>$zero</code>. Previous arrays, one per item in <code>$input</code>,
+         represent the result of applying <code>fn:fold-right</code> (with the same values for 
+         <code>$zero</code> and <code>$action</code>) to the subsequence of <code>$input</code>
+         starting at that item.</p>
       </fos:rules>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
-            occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
-            the first argument is any item in the sequence <code>$input</code>, and the second is either
-            the value of <code>$zero</code> or the result of a previous application of
-            <code>$action</code>.</p>
+            occurs if the supplied function <code>$action</code> cannot be applied to the supplied arguments.</p>      
       </fos:errors>
         <fos:notes>
-                <olist>
-                    <item>
-                        <p>Note that each intermediate result is placed in a separate singleton array.
-                           This is necessary because we cannot represent a sequence of results, some or all of which are
-                           a sequence - that is "sequence of sequences" as just a single sequence.
-                        </p>
-                    </item>
-                </olist>
-        </fos:notes>                
+           <p>The number of arrays
+           in the result is the same as the number of items in <code>$input</code> plus one.</p>
+           <p>The fact that the function has the same signature as <code>fn:fold-right</code>
+           means that this function can conveniently be used to study the behavior of
+           a call on <code>fn:fold-right</code> with the same arguments, perhaps for
+           diagnostic purposes. It can also be used to produce the running totals of
+           a computation.</p>
+        </fos:notes>               
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -31518,7 +31537,7 @@ let $scan-right := function(
          </fos:example>         
       </fos:examples>      
       <fos:history>
-         <fos:version version="4.0">Proposed for 4.0</fos:version>
+         <fos:version version="4.0">New in 4.0</fos:version>
       </fos:history>
    </fos:function>
     
