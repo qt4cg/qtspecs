@@ -392,11 +392,7 @@
         The rules for tokenization have been largely rewritten, without any intended change to the actual behavior.
       </change>
     </changes>
-    <p diff="del" at="2023-05-22">The terminal symbols assumed by the grammar above are described in this section.</p>
-    <p diff="del" at="2023-05-22">Quoted strings appearing in production rules are terminal symbols.</p>
-    <p diff="del" at="2023-05-22">Other terminal symbols are defined in <specref ref="terminal-symbols"/>.</p>
-    <p diff="del" at="2023-05-22">When tokenizing, the longest possible match that is consistent with the EBNF is used.</p>
-
+    
     
     
     <p diff="add" at="2023-05-22">This section describes how an &language; text is tokenized prior to parsing.</p>
@@ -475,7 +471,8 @@
         have been designed so that there is minimal need for backtracking. For example, if the next terminal
         starts with <code>"0x"</code>, then it can only be either a <nt def="HexIntegerLiteral">HexIntegerLiteral</nt> or an error;
         if it starts with <code>"`"</code> (and not with <code>"```"</code>) then it can only be a
-          <nt def="StringTemplate">StringTemplate</nt> or an error.</p>
+          <nt def="StringTemplate">StringTemplate</nt> or an error. <phrase role="xquery">Direct element constructors
+          in XQuery, however, need special treatment, described below.</phrase></p>
         <p>This convention, together with the rules for whitespace separation of tokens (see <specref ref="id-terminal-delimitation"/>) 
           means that the longest-token rule does not normally result in any need for backtracking. For example, suppose 
           that a <termref def="dt-variable-terminal"/> has been identified as a <nt def="StringTemplate">StringTemplate</nt> by examining
@@ -483,6 +480,47 @@
           an error can be reported without first considering whether there is some shorter token that might be returned instead.</p>
         </note></item>
       </olist>
+      </item>
+      <item role="xquery"><p>Tokenization requires special care when the current character is
+      <char>U+003C</char>:</p>
+        <ulist>
+          <item><p>If the following character is <char>U+003D</char> then the token can be identified
+          unambiguously as the operator <code>&lt;=</code>.</p></item>
+          <item><p>If the following character is <char>U+003C</char> then the token can be identified
+          unambiguously as the operator <code>&lt;&lt;</code>.</p></item>
+          <item><p>If the following character is <char>U+0021</char> then the token can be identified
+          unambiguously as being either a <nt def="DirCommentConstructor">DirCommentConstructor</nt>
+            or <nt def="CDataSection">CDataSection</nt>, depending on the third character.</p></item>
+          <item><p>If the following character is <char>U+003F</char>, then the token is identified
+          as a <nt def="DirPIConstructor">DirPIConstructor</nt> if and only if a match for the
+          relevant production (<code>"&lt;?" PITarget (S DirPIContents)? "?>"</code>) is found. If there
+          is no such match, then the string <code>"&lt;?"</code> is identified as a less-than operator
+            followed by a lookup operator.</p></item>
+          <item><p>If the following character is a <xnt href="http://www.w3.org/TR/REC-xml/#NameStartChar">NameStartChar</xnt>
+          then the token is identified as a <nt def="DirElemConstructor">DirElemConstructor</nt> if and only
+          if a match for the leading part of a <nt def="DirElemConstructor">DirElemConstructor</nt> is
+          found: specifically if a substring starting at the <char>U+003C</char> character matches one of
+          the following regular expressions:</p>
+            <slist>
+              <sitem><code><![CDATA[^<\i\c+\s*>]]></code> (as in <code>&lt;element>...</code>)</sitem>
+              <sitem><code><![CDATA[^<\i\c+\s*/>]]></code>(as in <code>&lt;element/></code>)</sitem>
+              <sitem><code><![CDATA[^<\i\c+\s+\i\c\s*=]]></code>(as in <code>&lt;element att=...</code>)</sitem>
+            </slist>
+            <p>If the content matches one of these regular expressions but further analysis shows that the subsequent
+            content does not satisfy the <nt def="DirElemConstructor">DirElemConstructor</nt> production,
+            then a static error is reported.</p>
+            <p>If the content does not match any of these regular expressions then the token is identified
+              as the less-than operator <code>&lt;</code>.</p>
+          </item>
+          <item><p>If the following character is any other character then the token can be identified
+          unambiguously as the less-than operator <code>&lt;</code>.</p></item>
+        </ulist>
+        <p>This analysis is done without regard to the syntactic context of the <char>U+003C</char> character.
+        However, a tokenizer <rfc2119>may</rfc2119> avoid looking for a <nt def="DirPIConstructor">DirPIConstructor</nt>
+        or <nt def="DirElemConstructor">DirElemConstructor</nt> if it knows that such a constructor cannot appear
+        in the current syntactic context.</p>
+        <note><p>The rules here are described much more precisely than in XQuery 3.1, and the results
+        in edge cases might be incompatible with some XQuery 3.1 processors.</p></note>
       </item>
       <item><p>Tokenization unambiguously identifies the boundaries of the terminals in the input, and this
         can be achieved without backtracking or lookahead. However, tokenization does
