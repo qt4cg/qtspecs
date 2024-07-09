@@ -389,14 +389,12 @@
     
     <changes>
       <change issue="327" PR="519" date="2023-05-30">
-        The rules for tokenization have been largely rewritten, without any intended change to the actual behavior.
+        The rules for tokenization have been largely rewritten. In some cases the revised specification may
+        affect edge cases that were handled in different ways by different 3.1 processors, which could lead
+        to incompatible behavior.
       </change>
     </changes>
-    <p diff="del" at="2023-05-22">The terminal symbols assumed by the grammar above are described in this section.</p>
-    <p diff="del" at="2023-05-22">Quoted strings appearing in production rules are terminal symbols.</p>
-    <p diff="del" at="2023-05-22">Other terminal symbols are defined in <specref ref="terminal-symbols"/>.</p>
-    <p diff="del" at="2023-05-22">When tokenizing, the longest possible match that is consistent with the EBNF is used.</p>
-
+    
     
     
     <p diff="add" at="2023-05-22">This section describes how an &language; text is tokenized prior to parsing.</p>
@@ -475,7 +473,8 @@
         have been designed so that there is minimal need for backtracking. For example, if the next terminal
         starts with <code>"0x"</code>, then it can only be either a <nt def="HexIntegerLiteral">HexIntegerLiteral</nt> or an error;
         if it starts with <code>"`"</code> (and not with <code>"```"</code>) then it can only be a
-          <nt def="StringTemplate">StringTemplate</nt> or an error.</p>
+          <nt def="StringTemplate">StringTemplate</nt> or an error. <phrase role="xquery">Direct element constructors
+          in XQuery, however, need special treatment, described below.</phrase></p>
         <p>This convention, together with the rules for whitespace separation of tokens (see <specref ref="id-terminal-delimitation"/>) 
           means that the longest-token rule does not normally result in any need for backtracking. For example, suppose 
           that a <termref def="dt-variable-terminal"/> has been identified as a <nt def="StringTemplate">StringTemplate</nt> by examining
@@ -483,6 +482,49 @@
           an error can be reported without first considering whether there is some shorter token that might be returned instead.</p>
         </note></item>
       </olist>
+      </item>
+      <item role="xquery"><p>Tokenization requires special care when the current character is
+      <char>U+003C</char>:</p>
+        <ulist>
+          <item><p>If the following character is <char>U+003D</char> then the token can be identified
+          unambiguously as the operator <code>&lt;=</code>.</p></item>
+          <item><p>If the following character is <char>U+003C</char> then the token can be identified
+          unambiguously as the operator <code>&lt;&lt;</code>.</p></item>
+          <item><p>If the following character is <char>U+0021</char> then the token can be identified
+          unambiguously as being a <nt def="DirCommentConstructor">DirCommentConstructor</nt> (a
+            <nt def="CDataSection">CDataSection</nt>, which also starts with <code>&lt;!</code> can appear
+            only within a direct element constructor, not as a free-standing token).</p></item>
+          <item><p>If the following character is <char>U+003F</char>, then the token is identified
+          as a <nt def="DirPIConstructor">DirPIConstructor</nt> if and only if a match for the
+          relevant production (<code>"&lt;?" PITarget (S DirPIContents)? "?>"</code>) is found. If there
+          is no such match, then the string <code>"&lt;?"</code> is identified as a less-than operator
+            followed by a lookup operator.</p></item>
+          <item><p>If the following character is a <xnt href="http://www.w3.org/TR/REC-xml/#NameStartChar">NameStartChar</xnt>
+          then the token is identified as a <nt def="DirElemConstructor">DirElemConstructor</nt> if and only
+          if a match for the leading part of a <nt def="DirElemConstructor">DirElemConstructor</nt> is
+          found: specifically if a substring starting at the <char>U+003C</char> character matches one of
+          the following regular expressions:</p>
+            <slist>
+              <sitem><code><![CDATA[^<\i\c*\s*>]]></code> (as in <code>&lt;element>...</code>)</sitem>
+              <sitem><code><![CDATA[^<\i\c*\s*/>]]></code>(as in <code>&lt;element/></code>)</sitem>
+              <sitem><code><![CDATA[^<\i\c*\s+\i\c*\s*=]]></code>(as in <code>&lt;element att=...</code>)</sitem>
+            </slist>
+            <p>If the content matches one of these regular expressions but further analysis shows that the subsequent
+            content does not satisfy the <nt def="DirElemConstructor">DirElemConstructor</nt> production,
+            then a static error is reported.</p>
+            <p>If the content does not match any of these regular expressions then the token is identified
+              as the less-than operator <code>&lt;</code>.</p>
+          </item>
+          <item><p>If the following character is any other character then the token can be identified
+          unambiguously as the less-than operator <code>&lt;</code>.</p></item>
+        </ulist>
+        <p>This analysis is done without regard to the syntactic context of the <char>U+003C</char> character.
+        However, a tokenizer <rfc2119>may</rfc2119> avoid looking for a <nt def="DirPIConstructor">DirPIConstructor</nt>
+        or <nt def="DirElemConstructor">DirElemConstructor</nt> if it knows that such a constructor cannot appear
+        in the current syntactic context.</p>
+        <note><p>The rules here are described much more precisely than in XQuery 3.1, and the results
+        in edge cases might be incompatible with some XQuery 3.1 processors.</p></note>
+        <note><p>To avoid potential confusion, simply add whitespace after any less-than operator.</p></note>
       </item>
       <item><p>Tokenization unambiguously identifies the boundaries of the terminals in the input, and this
         can be achieved without backtracking or lookahead. However, tokenization does
@@ -502,6 +544,25 @@
       typically involves invoking the parser to process any embedded expressions. Tokenization, as described
       here, is therefore a recursive process. But other implementations are possible.</p></item>
     </ulist>
+    
+    <note><p>Previous versions of this specification included the statement: 
+      <emph>When tokenizing, the longest possible match that is consistent with the EBNF is used.</emph> </p>
+    
+      <p>Different processors are known to have interpreted this in different ways. One interpretation,
+      for example, was that the expression <code>10 div-3</code> should be split into four tokens (<code>10</code>,
+      <code>div</code>, <code>-</code>, <code>3</code>) on the grounds that any other tokenization would give a
+      result that was inconsistent with the EBNF grammar. Other processors report a syntax error on this example.</p>
+      
+      <p>This rule has therefore been rewritten in version 4.0. Tokenization is now entirely insensitive to the
+      grammatical context; <code>div-3</code> is recognized as a single token even though this results in a syntax
+      error. For some implementations this may mean that expressions that were accepted in earlier releases
+      are no longer accepted in 4.0.</p>
+      
+      <p role="xquery">A more subtle example is: <code><![CDATA[(. <?b ) cast as xs:integer?> 0)]]></code>
+      in which <code><![CDATA[<?b ) cast as xs:integer?>]]></code> is recognized as a single token (a direct
+      processing instruction constructor) even though such a token cannot validly appear in this
+      grammatical context.</p>
+    </note>
     
 
     <div3 id="terminal-symbols">
@@ -551,12 +612,12 @@
         <phrase diff="add" at="2023-05-22">As a consequence of the longest token rule (see <specref ref="lexical-structure"/>), </phrase>
         one or more <termref def="symbolseparators">symbol separators</termref>
         are required between two consecutive terminal symbols
-        T and U (where T precedes U) when any of the following is true:
+        <var>T</var> and <var>U</var> (where <var>T</var> precedes <var>U</var>) when any of the following is true:
       </p>
       <ulist>
-        <item><p>T and U are both <termref def="non-delimiting-token">non-delimiting terminal symbols</termref>.</p></item>
-        <item><p>T is a QName or an NCName and U is "." or "-".</p></item>
-        <item><p>T is a numeric literal and U is ".", or vice versa.</p></item>
+        <item><p><var>T</var> and <var>U</var> are both <termref def="non-delimiting-token">non-delimiting terminal symbols</termref>.</p></item>
+        <item><p><var>T</var> is a QName or an NCName and <var>U</var> is <code>"."</code> or <code>"-"</code>.</p></item>
+        <item><p><var>T</var> is a numeric literal and <var>U</var> is <code>"."</code>, or vice versa.</p></item>
       </ulist>
     </div3>
     <div3 id="id-lt-and-gt-characters" diff="add" at="2023-05-02">
@@ -564,9 +625,9 @@
       
       <p>The operator symbols <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, 
         <code>&lt;&lt;</code>, <code>&gt;&gt;</code>, <code>=&gt;</code>, <code>=!&gt;</code>, and <code>-&gt;</code>
-        have alternative representations using the characters <code>"&#xFF1C;"</code> (xFF1C, full-width less-than sign) and
-        <code>"&#xFF1E;"</code> (xFF1E, full-width greater-than sign) in place of <code>"&lt;"</code> (x3C, less-than sign)
-        and <code>"&gt;"</code> (x3E, greater-than sign). The alternative tokens are respectively
+        have alternative representations using the characters <char>U+FF1C</char> and
+        <char>U+FF1E</char> in place of <char>U+003C</char> 
+        and <char>U+003E</char>. The alternative tokens are respectively
         <code>&#xff1c;</code>, <code>&#xff1c;=</code>, <code>&#xff1e;</code>, <code>&#xff1e;=</code>, 
         <code>&#xff1c;&#xff1c;</code>, <code>&#xff1e;&#xff1e;</code>, <code>=&#xff1e;</code>, 
         <code>=!&#xff1e;</code>, and <code>-&#xff1e;</code>.
@@ -576,7 +637,7 @@
       enables these operators to be depicted using characters that do not require escaping as XML entities or character references.</p>
       
       <p role="xquery">This rule does not apply to the <code>&lt;</code> and <code>&gt;</code> symbols used to delimit node constructor
-        expressions, which (because they mimic XML syntax) must use x3C (less-than sign) and x3E (greater-than sign) respectively.</p>
+        expressions, which (because they mimic XML syntax) must use <char>U+003C</char> and <char>U+003E</char> respectively.</p>
     </div3>
     <div3 id="id-eol-handling">
       <head>End-of-Line Handling</head>
@@ -589,7 +650,7 @@
       do not normalize line breaks at the XPath level, because it will already have been done by the host XML parser. 
       Use of character or entity references suppresses normalization of line breaks, so
       the string literal <code>&amp;#x0D;</code> written within an XSLT-hosted XPath expression
-      represents a string containing a single <code>CR</code> character.</p></note>
+      represents a string containing a single <char>U+000D</char> character.</p></note>
 
       <p role="xquery">Prior to parsing, the &language; processor must normalize all line breaks.
         The rules for line breaking follow the rules of <bibref ref="XML"/> or <bibref ref="XML1.1"
@@ -598,38 +659,38 @@
       <div4 id="id-xml10-eol-handling">
         <head>XML 1.0 End-of-Line Handling</head>
         <p>For <bibref ref="XML"/> processing, all of the following must be translated to a single
-          #xA character:</p>
+          <char>U+000A</char>:</p>
         <olist>
           <item>
-            <p>the two-character sequence #xD #xA</p>
+            <p>the two-character sequence <char>U+000D</char>, <char>U+000A</char>;</p>
           </item>
           <item>
-            <p>any #xD character that is not immediately followed by #xA.</p>
+            <p>any <char>U+000D</char> character that is not immediately followed by <char>U+000A</char>.</p>
           </item>
         </olist>
       </div4>
       <div4 id="id-xml11-eol-handling">
         <head>XML 1.1 End-of-Line Handling</head>
         <p>For <bibref ref="XML1.1"/> processing, all of the following must be translated to a
-          single #xA character:</p>
+          single <char>U+000A</char> character:</p>
         <olist>
           <item>
-            <p>the two-character sequence #xD #xA</p>
+            <p>the two-character sequence <char>U+000D</char>, <char>U+000A</char>;</p>
           </item>
           <item>
-            <p>the two-character sequence #xD #x85</p>
+            <p>the two-character sequence <char>U+000D</char>, <char>U+0085</char>;</p>
           </item>
           <item>
-            <p>the single character #x85</p>
+            <p>the single character <char>U+0085</char>;</p>
           </item>
           <item>
-            <p>the single character #x2028</p>
+            <p>the single character <char>U+2028</char>;</p>
           </item>
           <item>
-            <p>any #xD character that is not immediately followed by #xA or #x85.</p>
+            <p>any <char>U+000D</char> character that is not immediately followed by <char>U+000A</char> or <char>U+0085</char>.</p>
           </item>
         </olist>
-        <p role="xquery">The characters #x85 and #x2028 cannot be reliably recognized and translated
+        <p role="xquery">The characters <char>U+0085</char> and <char>U+2028</char> cannot be reliably recognized and translated
           until the <nt def="VersionDecl">VersionDecl</nt> declaration (if present) has been
           read.</p>
       </div4>
