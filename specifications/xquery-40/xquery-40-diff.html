@@ -22,7 +22,7 @@
          
          <h1><a id="title"></a>XQuery 4.0: An XML Query Language </h1>
          
-         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 2&nbsp;July&nbsp;2024</h2>
+         <h2><a id="w3c-doctype"></a>W3C Editor's Draft 9&nbsp;July&nbsp;2024</h2>
          <dl>
             <dt>This version:</dt>
             <dd>
@@ -29639,22 +29639,12 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                   <ol>
                      <li>
                         <p>
-        The rules for tokenization have been largely rewritten, without any intended change to the actual behavior.
+        The rules for tokenization have been largely rewritten. In some cases the revised specification may
+        affect edge cases that were handled in different ways by different 3.1 processors, which could lead
+        to incompatible behavior.
       <i>[&nbsp;Issue <a href="https://github.com/qt4cg/qtspecs/issues/327">327</a>&nbsp;PR <a href="https://github.com/qt4cg/qtspecs/pull/519">519</a>&nbsp;Processed on 30 May 2023&nbsp;]</i></p>
                      </li>
                   </ol>
-               </div>
-               <div class="diff-del">
-                  <p>The terminal symbols assumed by the grammar above are described in this section.</p>
-               </div>
-               <div class="diff-del">
-                  <p>Quoted strings appearing in production rules are terminal symbols.</p>
-               </div>
-               <div class="diff-del">
-                  <p>Other terminal symbols are defined in <a href="#terminal-symbols"><b>A.3.1 Terminal Symbols</b></a>.</p>
-               </div>
-               <div class="diff-del">
-                  <p>When tokenizing, the longest possible match that is consistent with the EBNF is used.</p>
                </div>
                <div class="diff-add">
                   <p>This section describes how an XQuery 4.0 text is tokenized prior to parsing.</p>
@@ -29958,7 +29948,9 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
         have been designed so that there is minimal need for backtracking. For example, if the next terminal
         starts with <code>"0x"</code>, then it can only be either a <a href="#doc-xquery40-HexIntegerLiteral">HexIntegerLiteral</a> or an error;
         if it starts with <code>"`"</code> (and not with <code>"```"</code>) then it can only be a
-          <a href="#doc-xquery40-StringTemplate">StringTemplate</a> or an error.</p>
+          <a href="#doc-xquery40-StringTemplate">StringTemplate</a> or an error. <span class="xquery">Direct element constructors
+          in XQuery, however, need special treatment, described below.</span>
+                           </p>
                                  <p>This convention, together with the rules for whitespace separation of tokens (see <a href="#id-terminal-delimitation"><b>A.3.2 Terminal Delimitation</b></a>) 
           means that the longest-token rule does not normally result in any need for backtracking. For example, suppose 
           that a <a title="variable terminal" class="termref" href="#dt-variable-terminal">variable terminal</a> has been identified as a <a href="#doc-xquery40-StringTemplate">StringTemplate</a> by examining
@@ -29967,6 +29959,68 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                               </div>
                            </li>
                         </ol>
+                     </li>
+                     <li class="xquery">
+                        <p>Tokenization requires special care when the current character is
+      <span class="unicode-codepoint">U+003C</span> (<span class="unicode-name">LESS-THAN SIGN</span>, <code>&lt;</code>) :</p>
+                        <ul>
+                           <li>
+                              <p>If the following character is <span class="unicode-codepoint">U+003D</span> (<span class="unicode-name">EQUALS SIGN</span>, <code>=</code>)  then the token can be identified
+          unambiguously as the operator <code>&lt;=</code>.</p>
+                           </li>
+                           <li>
+                              <p>If the following character is <span class="unicode-codepoint">U+003C</span> (<span class="unicode-name">LESS-THAN SIGN</span>, <code>&lt;</code>)  then the token can be identified
+          unambiguously as the operator <code>&lt;&lt;</code>.</p>
+                           </li>
+                           <li>
+                              <p>If the following character is <span class="unicode-codepoint">U+0021</span> (<span class="unicode-name">EXCLAMATION MARK</span>, <code>!</code>)  then the token can be identified
+          unambiguously as being a <a href="#doc-xquery40-DirCommentConstructor">DirCommentConstructor</a> (a
+            <a href="#doc-xquery40-CDataSection">CDataSection</a>, which also starts with <code>&lt;!</code> can appear
+            only within a direct element constructor, not as a free-standing token).</p>
+                           </li>
+                           <li>
+                              <p>If the following character is <span class="unicode-codepoint">U+003F</span> (<span class="unicode-name">QUESTION MARK</span>, <code>?</code>) , then the token is identified
+          as a <a href="#doc-xquery40-DirPIConstructor">DirPIConstructor</a> if and only if a match for the
+          relevant production (<code>"&lt;?" PITarget (S DirPIContents)? "?&gt;"</code>) is found. If there
+          is no such match, then the string <code>"&lt;?"</code> is identified as a less-than operator
+            followed by a lookup operator.</p>
+                           </li>
+                           <li>
+                              <p>If the following character is a <a href="http://www.w3.org/TR/REC-xml/#NameStartChar">NameStartChar</a>
+          then the token is identified as a <a href="#doc-xquery40-DirElemConstructor">DirElemConstructor</a> if and only
+          if a match for the leading part of a <a href="#doc-xquery40-DirElemConstructor">DirElemConstructor</a> is
+          found: specifically if a substring starting at the <span class="unicode-codepoint">U+003C</span> (<span class="unicode-name">LESS-THAN SIGN</span>, <code>&lt;</code>)  character matches one of
+          the following regular expressions:</p>
+                              <blockquote>
+                                 <p>
+                              <code>^&lt;\i\c*\s*&gt;</code> (as in <code>&lt;element&gt;...</code>)<br>
+                              <code>^&lt;\i\c*\s*/&gt;</code>(as in <code>&lt;element/&gt;</code>)<br>
+                              <code>^&lt;\i\c*\s+\i\c*\s*=</code>(as in <code>&lt;element att=...</code>)</p>
+                              </blockquote>
+                              <p>If the content matches one of these regular expressions but further analysis shows that the subsequent
+            content does not satisfy the <a href="#doc-xquery40-DirElemConstructor">DirElemConstructor</a> production,
+            then a static error is reported.</p>
+                              <p>If the content does not match any of these regular expressions then the token is identified
+              as the less-than operator <code>&lt;</code>.</p>
+                           </li>
+                           <li>
+                              <p>If the following character is any other character then the token can be identified
+          unambiguously as the less-than operator <code>&lt;</code>.</p>
+                           </li>
+                        </ul>
+                        <p>This analysis is done without regard to the syntactic context of the <span class="unicode-codepoint">U+003C</span> (<span class="unicode-name">LESS-THAN SIGN</span>, <code>&lt;</code>)  character.
+        However, a tokenizer <span class="verb">may</span> avoid looking for a <a href="#doc-xquery40-DirPIConstructor">DirPIConstructor</a>
+        or <a href="#doc-xquery40-DirElemConstructor">DirElemConstructor</a> if it knows that such a constructor cannot appear
+        in the current syntactic context.</p>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>The rules here are described much more precisely than in XQuery 3.1, and the results
+        in edge cases might be incompatible with some XQuery 3.1 processors.</p>
+                        </div>
+                        <div class="note">
+                           <p class="prefix"><b>Note:</b></p>
+                           <p>To avoid potential confusion, simply add whitespace after any less-than operator.</p>
+                        </div>
                      </li>
                      <li>
                         <p>Tokenization unambiguously identifies the boundaries of the terminals in the input, and this
@@ -29994,10 +30048,28 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                      </li>
                   </ul>
                </div>
+               <div class="note">
+                  <p class="prefix"><b>Note:</b></p>
+                  <p>Previous versions of this specification included the statement: 
+      <em>When tokenizing, the longest possible match that is consistent with the EBNF is used.</em>
+               </p>
+                  <p>Different processors are known to have interpreted this in different ways. One interpretation,
+      for example, was that the expression <code>10 div-3</code> should be split into four tokens (<code>10</code>,
+      <code>div</code>, <code>-</code>, <code>3</code>) on the grounds that any other tokenization would give a
+      result that was inconsistent with the EBNF grammar. Other processors report a syntax error on this example.</p>
+                  <p>This rule has therefore been rewritten in version 4.0. Tokenization is now entirely insensitive to the
+      grammatical context; <code>div-3</code> is recognized as a single token even though this results in a syntax
+      error. For some implementations this may mean that expressions that were accepted in earlier releases
+      are no longer accepted in 4.0.</p>
+                  <p class="xquery">A more subtle example is: <code>(. &lt;?b ) cast as xs:integer?&gt; 0)</code>
+      in which <code>&lt;?b ) cast as xs:integer?&gt;</code> is recognized as a single token (a direct
+      processing instruction constructor) even though such a token cannot validly appear in this
+      grammatical context.</p>
+               </div>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.3.1 Terminal Symbols</h4>
-                  <a id="d3e45382"></a><table class="scrap">
+                  <a id="d3e45531"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xquery40-IntegerLiteral"></a>[268]&nbsp;&nbsp;&nbsp;</td>
@@ -30279,7 +30351,7 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e45683"></a><table class="scrap">
+                  <a id="d3e45832"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xquery40-Digits"></a>[291]&nbsp;&nbsp;&nbsp;</td>
@@ -30598,17 +30670,20 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                   <span class="diff-add"><span>As a consequence of the longest token rule (see <a href="#lexical-structure"><b>A.3 Lexical structure</b></a>), </span></span>
         one or more <a title="symbol separators" class="termref" href="#symbolseparators">symbol separators</a>
         are required between two consecutive terminal symbols
-        T and U (where T precedes U) when any of the following is true:
+        <var>T</var> and <var>U</var> (where <var>T</var> precedes <var>U</var>) when any of the following is true:
       </p>
                   <ul>
                      <li>
-                        <p>T and U are both <a title="non-delimiting terminal symbol" class="termref" href="#non-delimiting-token">non-delimiting terminal symbols</a>.</p>
+                        <p>
+                        <var>T</var> and <var>U</var> are both <a title="non-delimiting terminal symbol" class="termref" href="#non-delimiting-token">non-delimiting terminal symbols</a>.</p>
                      </li>
                      <li>
-                        <p>T is a QName or an NCName and U is "." or "-".</p>
+                        <p>
+                        <var>T</var> is a QName or an NCName and <var>U</var> is <code>"."</code> or <code>"-"</code>.</p>
                      </li>
                      <li>
-                        <p>T is a numeric literal and U is ".", or vice versa.</p>
+                        <p>
+                        <var>T</var> is a numeric literal and <var>U</var> is <code>"."</code>, or vice versa.</p>
                      </li>
                   </ul>
                </div>
@@ -30618,9 +30693,9 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                      <h4><a id="id-lt-and-gt-characters"></a>A.3.3 Less-Than and Greater-Than Characters</h4>
                      <p>The operator symbols <code>&lt;</code>, <code>&lt;=</code>, <code>&gt;</code>, <code>&gt;=</code>, 
         <code>&lt;&lt;</code>, <code>&gt;&gt;</code>, <code>=&gt;</code>, <code>=!&gt;</code>, and <code>-&gt;</code>
-        have alternative representations using the characters <code>"＜"</code> (xFF1C, full-width less-than sign) and
-        <code>"＞"</code> (xFF1E, full-width greater-than sign) in place of <code>"&lt;"</code> (x3C, less-than sign)
-        and <code>"&gt;"</code> (x3E, greater-than sign). The alternative tokens are respectively
+        have alternative representations using the characters <span class="unicode-codepoint">U+FF1C</span> (<span class="unicode-name">FULL-WIDTH LESS-THAN SIGN</span>, <code>＜</code>)  and
+        <span class="unicode-codepoint">U+FF1E</span> (<span class="unicode-name">FULL-WIDTH GREATER-THAN SIGN</span>, <code>＞</code>)  in place of <span class="unicode-codepoint">U+003C</span> (<span class="unicode-name">LESS-THAN SIGN</span>, <code>&lt;</code>)  
+        and <span class="unicode-codepoint">U+003E</span> (<span class="unicode-name">GREATER-THAN SIGN</span>, <code>&gt;</code>) . The alternative tokens are respectively
         <code>＜</code>, <code>＜=</code>, <code>＞</code>, <code>＞=</code>, 
         <code>＜＜</code>, <code>＞＞</code>, <code>=＞</code>, 
         <code>=!＞</code>, and <code>-＞</code>.
@@ -30628,7 +30703,7 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                      <p>This option is provided to improve the readability of XPath expressions embedded in XML-based host languages such as XSLT; it
       enables these operators to be depicted using characters that do not require escaping as XML entities or character references.</p>
                      <p class="xquery">This rule does not apply to the <code>&lt;</code> and <code>&gt;</code> symbols used to delimit node constructor
-        expressions, which (because they mimic XML syntax) must use x3C (less-than sign) and x3E (greater-than sign) respectively.</p>
+        expressions, which (because they mimic XML syntax) must use <span class="unicode-codepoint">U+003C</span> (<span class="unicode-name">LESS-THAN SIGN</span>, <code>&lt;</code>)  and <span class="unicode-codepoint">U+003E</span> (<span class="unicode-name">GREATER-THAN SIGN</span>, <code>&gt;</code>)  respectively.</p>
                   </div>
                </div>
                <div class="div3">
@@ -30640,13 +30715,13 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                      
                      <h5><a id="id-xml10-eol-handling"></a>A.3.4.1 XML 1.0 End-of-Line Handling</h5>
                      <p>For <a href="#XML">[XML 1.0]</a> processing, all of the following must be translated to a single
-          #xA character:</p>
+          <span class="unicode-codepoint">U+000A</span> (<span class="unicode-name">NEWLINE</span>) :</p>
                      <ol class="enumar">
                         <li>
-                           <p>the two-character sequence #xD #xA</p>
+                           <p>the two-character sequence <span class="unicode-codepoint">U+000D</span> (<span class="unicode-name">CARRIAGE RETURN</span>) , <span class="unicode-codepoint">U+000A</span> (<span class="unicode-name">NEWLINE</span>) ;</p>
                         </li>
                         <li>
-                           <p>any #xD character that is not immediately followed by #xA.</p>
+                           <p>any <span class="unicode-codepoint">U+000D</span> (<span class="unicode-name">CARRIAGE RETURN</span>)  character that is not immediately followed by <span class="unicode-codepoint">U+000A</span> (<span class="unicode-name">NEWLINE</span>) .</p>
                         </li>
                      </ol>
                   </div>
@@ -30654,25 +30729,25 @@ declare option exq:java-class "smath = java.lang.StrictMath";</pre>
                      
                      <h5><a id="id-xml11-eol-handling"></a>A.3.4.2 XML 1.1 End-of-Line Handling</h5>
                      <p>For <a href="#XML1.1">[XML 1.1]</a> processing, all of the following must be translated to a
-          single #xA character:</p>
+          single <span class="unicode-codepoint">U+000A</span> (<span class="unicode-name">NEWLINE</span>)  character:</p>
                      <ol class="enumar">
                         <li>
-                           <p>the two-character sequence #xD #xA</p>
+                           <p>the two-character sequence <span class="unicode-codepoint">U+000D</span> (<span class="unicode-name">CARRIAGE RETURN</span>) , <span class="unicode-codepoint">U+000A</span> (<span class="unicode-name">NEWLINE</span>) ;</p>
                         </li>
                         <li>
-                           <p>the two-character sequence #xD #x85</p>
+                           <p>the two-character sequence <span class="unicode-codepoint">U+000D</span> (<span class="unicode-name">CARRIAGE RETURN</span>) , <span class="unicode-codepoint">U+0085</span> (<span class="unicode-name">NEXT LINE, NEL</span>) ;</p>
                         </li>
                         <li>
-                           <p>the single character #x85</p>
+                           <p>the single character <span class="unicode-codepoint">U+0085</span> (<span class="unicode-name">NEXT LINE, NEL</span>) ;</p>
                         </li>
                         <li>
-                           <p>the single character #x2028</p>
+                           <p>the single character <span class="unicode-codepoint">U+2028</span> (<span class="unicode-name">LINE SEPARATOR</span>) ;</p>
                         </li>
                         <li>
-                           <p>any #xD character that is not immediately followed by #xA or #x85.</p>
+                           <p>any <span class="unicode-codepoint">U+000D</span> (<span class="unicode-name">CARRIAGE RETURN</span>)  character that is not immediately followed by <span class="unicode-codepoint">U+000A</span> (<span class="unicode-name">NEWLINE</span>)  or <span class="unicode-codepoint">U+0085</span> (<span class="unicode-name">NEXT LINE, NEL</span>) .</p>
                         </li>
                      </ol>
-                     <p class="xquery">The characters #x85 and #x2028 cannot be reliably recognized and translated
+                     <p class="xquery">The characters <span class="unicode-codepoint">U+0085</span> (<span class="unicode-name">NEXT LINE, NEL</span>)  and <span class="unicode-codepoint">U+2028</span> (<span class="unicode-name">LINE SEPARATOR</span>)  cannot be reliably recognized and translated
           until the <a href="#doc-xquery40-VersionDecl">VersionDecl</a> declaration (if present) has been
           read.</p>
                   </div>
@@ -37401,7 +37476,9 @@ consecutive items drawn from the <a title="binding sequence" class="termref" hre
                   <li>
                      <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/519">519&nbsp;</a></p>
                      <p>
-        The rules for tokenization have been largely rewritten, without any intended change to the actual behavior.
+        The rules for tokenization have been largely rewritten. In some cases the revised specification may
+        affect edge cases that were handled in different ways by different 3.1 processors, which could lead
+        to incompatible behavior.
       </p>
                      <p>See <a href="#lexical-structure"><b>A.3 Lexical structure</b></a></p>
                   </li>
