@@ -16,6 +16,10 @@ weekcount = math.floor((meetingnow - meetingone) / oneweek)
 specifications = ['XQFO', 'XDM', 'XPath', 'XQuery', 'XQUF', 'XSLT', 'unspecified']
 features = ['feature', 'enhancement', 'other']
 
+# Work back six months
+firstweek = weekcount - 27
+print(firstweek)
+
 def compute_weeks(issue):
     opendate = dateutil.parser.isoparse(issue.get("created_at"))
     if opendate <= meetingone:
@@ -90,7 +94,7 @@ data = []
 index = []
 total = 0
 current = 0
-for week in range(0, len(weeks)):
+for week in range(firstweek, len(weeks)):
     total += weeks[week]['issue']['opened']
     current += weeks[week]['issue']['opened'] - weeks[week]['issue']['closed']
     date = meetingone + (oneweek * week)
@@ -116,7 +120,7 @@ current = {}
 for spec in specifications:
     current[spec] = 0
     
-for week in range(0, len(weeks)):
+for week in range(firstweek, len(weeks)):
     for spec in specifications:
         current[spec] += weeks[week][spec]['opened'] - weeks[week][spec]['closed']
     date = meetingone + (oneweek * week)
@@ -142,7 +146,7 @@ current = {}
 for feature in features:
     current[feature] = 0
     
-for week in range(0, len(weeks)):
+for week in range(firstweek, len(weeks)):
     for feature in features:
         current[feature] += weeks[week][feature]['opened'] - weeks[week][feature]['closed']
     date = meetingone + (oneweek * week)
