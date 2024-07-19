@@ -1,7 +1,9 @@
 <?xml version='1.0'?>
 <xsl:stylesheet version="3.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
 	xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
-	xmlns:xs="http://www.w3.org/2001/XMLSchema" exclude-result-prefixes="fos xs">
+	xmlns:xs="http://www.w3.org/2001/XMLSchema" 
+	exclude-result-prefixes="fos xs"
+	expand-text="yes">
 
 	<xsl:output method="xml" doctype-system="../../../schema/xsl-query.dtd"/>
 
@@ -151,6 +153,15 @@
 					<xsl:apply-templates select="$fspec/fos:rules/node()"/>
 				</def>
 			</gitem>
+			<xsl:if test="$fspec/fos:equivalent">
+				<gitem>
+					<label>Formal Specification</label>
+					<def>
+						<xsl:copy-of select="$fspec/fos:eqivalent/(@diff, @at)"/>
+						<xsl:apply-templates select="$fspec/fos:equivalent"/>
+					</def>
+				</gitem>
+			</xsl:if>
 			<xsl:if test="$fspec/fos:errors">
 				<gitem>
 					<label>Error Conditions</label>
@@ -170,35 +181,35 @@
 				</gitem>
 			</xsl:if>
 
-  <xsl:if test="$fspec/fos:examples">
-    <gitem>
-      <label>Examples</label>
-      <def role="example">
-	<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
-   <xsl:if test="$fspec//fos:variable">
-   	<table role="medium">
-   		<thead><tr><th>Variables</th></tr></thead>
-   		<tbody>
-   			<xsl:apply-templates select="$fspec/fos:examples/fos:variable"/>
-   		</tbody>
-   	</table>
-   </xsl:if>
-	<table role="medium">
-	  <xsl:if test="fos:use-two-column-format($fspec/fos:examples)">
-	    <thead>
-	      <tr>
-		<th>Expression</th>
-		<th>Result</th>
-	      </tr>
-	    </thead>
-	  </xsl:if>
-	  <tbody>
-	    <xsl:apply-templates select="$fspec/fos:examples/node()[not(self::fos:variable)]"/>
-	  </tbody>
-	</table>						
-      </def>
-    </gitem>
-  </xsl:if>
+		  <xsl:if test="$fspec/fos:examples">
+		    <gitem>
+		      <label>Examples</label>
+		      <def role="example">
+					<xsl:copy-of select="$fspec/fos:examples/(@diff, @at)"/>
+				   <xsl:if test="$fspec//fos:variable">
+				   	<table role="medium">
+				   		<thead><tr><th>Variables</th></tr></thead>
+				   		<tbody>
+				   			<xsl:apply-templates select="$fspec/fos:examples/fos:variable"/>
+				   		</tbody>
+				   	</table>
+				   </xsl:if>
+					<table role="medium">
+					  <xsl:if test="fos:use-two-column-format($fspec/fos:examples)">
+					    <thead>
+					      <tr>
+						<th>Expression</th>
+						<th>Result</th>
+					      </tr>
+					    </thead>
+					  </xsl:if>
+					  <tbody>
+					    <xsl:apply-templates select="$fspec/fos:examples/node()[not(self::fos:variable)]"/>
+					  </tbody>
+					</table>						
+				 </def>
+		    </gitem>
+		  </xsl:if>
 			<xsl:if test="$fspec/fos:history">
 				<gitem>
 					<label>History</label>
@@ -304,6 +315,31 @@
 		<arg occur="{if (xs:boolean(@required)) then 'req' else 'opt'}">
 			<xsl:copy-of select="@name, @type, @type-ref, @diff, @at"/>
 		</arg>
+	</xsl:template>
+	
+	<xsl:template match="fos:equivalent[@style=('xpath-expression', 'xquery-expression')]">
+		<xsl:variable name="lang" select="if (@style='xpath-expression') then 'XPath' else 'XQuery'"/>
+		<p><xsl:text>The effect of the function is equivalent to the result of the following {$lang} expression</xsl:text>
+			<xsl:if test="xs:boolean(@covers-error-cases) = false()">
+				<xsl:text>, except in error cases</xsl:text>
+			</xsl:if>
+			<xsl:text>.</xsl:text>
+		</p>
+		<eg>
+			<xsl:value-of select="string(.) => replace('^\s+', '') => replace('\s+$', '')"/>
+		</eg>
+	</xsl:template>
+	
+	<xsl:template match="fos:equivalent[@style='xquery-function']">
+		<p><xsl:text>The function delivers the same result as the following XQuery implementation</xsl:text>
+			<xsl:if test="xs:boolean(@covers-error-cases) = false()">
+				<xsl:text>, except in error cases</xsl:text>
+			</xsl:if>
+			<xsl:text>.</xsl:text>
+		</p>
+		<eg>
+			<xsl:value-of select="string(.) => replace('^\s+', '') => replace('\s+$', '')"/>
+		</eg>
 	</xsl:template>
 
 	<xsl:template match="fos:example">
