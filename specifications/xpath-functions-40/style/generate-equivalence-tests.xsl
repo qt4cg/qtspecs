@@ -22,10 +22,29 @@
    qtspecs build process. Any changes you 
    make to this file will be lost on the next build. Have a nice day. :){$NL}{$NL}</xsl:text>
       
+      <xsl:text>declare namespace dm="http://www.w3.org/qt4/datamodel";{$NL}{$NL}</xsl:text>
       <xsl:text>declare namespace array="http://dummy/array";{$NL}{$NL}</xsl:text>
       <xsl:text>declare namespace array0="http://www.w3.org/2005/xpath-functions/array";{$NL}{$NL}</xsl:text>
+      <xsl:text>declare namespace map="http://dummy/map";{$NL}{$NL}</xsl:text>
+      <xsl:text>declare namespace map0="http://www.w3.org/2005/xpath-functions/map";{$NL}{$NL}</xsl:text>
       
-      <xsl:apply-templates select="//fos:function[@prefix='array']"/>
+      <xsl:text>declare function dm:iterate-array($array as array(*), $action as fn(item()*, xs:integer) as item()*) {{
+      array0:for-each($array, $action)
+}};</xsl:text>
+      
+      <xsl:text>declare function dm:array-append($array as array(*), $member as item()*) {{
+      array0:append($array, $member)
+}};</xsl:text>
+      
+      <xsl:text>declare function dm:iterate-map($map as map(*), $action as fn(xs:anyAtomicType, item()*) as item()*) {{
+      map0:for-each($map, $action)
+}};</xsl:text>
+      
+      <xsl:text>declare function dm:map-put($map as map(*), $key as xs:anyAtomicType, $value as item()*) {{
+      map0:put($map, $key, $value)
+}};</xsl:text>
+      
+      <xsl:apply-templates select="//fos:function[@prefix=('array', 'map')]"/>
       <xsl:text>element result {{</xsl:text>
       <xsl:apply-templates select="//fos:test"/>
       <xsl:text>()}}</xsl:text>
@@ -39,7 +58,7 @@
    
    <xsl:template match="fos:function[not(fos:equivalent)]" name="redirect">
       <xsl:text>{fos:sig(.)} {{ {$NL}{$NL}</xsl:text>
-      <xsl:text>    array0:{@name}( </xsl:text>
+      <xsl:text>    {@prefix}0:{@name}( </xsl:text>
       <xsl:value-of select="fos:signatures/fos:proto[1]/fos:arg ! ('$' || @name)" separator=", "/>
       <xsl:text>){$NL} }};{$NL}</xsl:text>
    </xsl:template>
@@ -70,9 +89,9 @@
       <xsl:text>{$NL}{$NL}</xsl:text>
    </xsl:template>
    
-   <xsl:template match="fos:equivalent[@style=('xquery-expression', 'xpath-expression')]">
+   <xsl:template match="fos:equivalent[@style=('xquery-expression', 'xpath-expression', 'dm-primitive')]">
       <xsl:text>{fos:sig(..)} {{ {$NL}{$NL}</xsl:text>
-      <xsl:value-of select="."/>
+      <xsl:value-of select="replace(., '(\n)', '$1        ')"/>
       <xsl:text>}};{$NL}{$NL}</xsl:text>
    </xsl:template>
    

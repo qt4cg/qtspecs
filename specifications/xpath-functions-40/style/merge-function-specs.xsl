@@ -341,6 +341,23 @@
 			<xsl:value-of select="string(.) => replace('^\s+', '') => replace('\s+$', '')"/>
 		</eg>
 	</xsl:template>
+	
+	<xsl:template match="fos:equivalent[@style='dm-primitive']">
+		<p>The function is defined as follows, making use of primitive constructors and accessors defined
+		in <bibref ref="xpath-datamodel-40"/><xsl:text/>
+			<xsl:if test="xs:boolean(@covers-error-cases) = false()">
+				<xsl:text>, except in error cases</xsl:text>
+			</xsl:if>
+			<xsl:text>.</xsl:text>
+		</p>
+		<eg>
+			<xsl:value-of select="string(.) => replace('^\s+', '') => replace('\s+$', '')"/>
+		</eg>
+	</xsl:template>
+	
+	<xsl:template match="fos:equivalent">
+		<xsl:message terminate="yes">Non-matching fos:equivalent for {../@name}</xsl:message>
+	</xsl:template>
 
 	<xsl:template match="fos:example">
 		<xsl:apply-templates/>
