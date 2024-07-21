@@ -29,20 +29,20 @@
       <xsl:text>declare namespace map0="http://www.w3.org/2005/xpath-functions/map";{$NL}{$NL}</xsl:text>
       
       <xsl:text>declare function dm:iterate-array($array as array(*), $action as fn(item()*, xs:integer) as item()*) {{
-      array0:for-each($array, $action)
-}};</xsl:text>
+      array0:for-each($array, $action) => array0:values()
+}};{$NL}</xsl:text>
       
       <xsl:text>declare function dm:array-append($array as array(*), $member as item()*) {{
       array0:append($array, $member)
-}};</xsl:text>
+}};{$NL}</xsl:text>
       
       <xsl:text>declare function dm:iterate-map($map as map(*), $action as fn(xs:anyAtomicType, item()*) as item()*) {{
       map0:for-each($map, $action)
-}};</xsl:text>
+}};{$NL}</xsl:text>
       
       <xsl:text>declare function dm:map-put($map as map(*), $key as xs:anyAtomicType, $value as item()*) {{
       map0:put($map, $key, $value)
-}};</xsl:text>
+}};{$NL}</xsl:text>
       
       <xsl:apply-templates select="//fos:function[@prefix=('array', 'map')]"/>
       <xsl:text>element result {{</xsl:text>
@@ -79,7 +79,7 @@
             <xsl:variable name="not-last" select="exists(following-sibling::fos:arg)"/>
             <xsl:text>   ${@name} as {@type}{if (@default) then (' := ' || @default) else ()}{','[$not-last]}{$NL}</xsl:text>
          </xsl:for-each>
-         <xsl:text>) </xsl:text>
+         <xsl:text>) as {$fn/fos:signatures[1]/fos:proto[last()]/@return-type}</xsl:text>
       </xsl:value-of>
    </xsl:function>
    

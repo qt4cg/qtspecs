@@ -21480,7 +21480,10 @@ return fold-left($maps, {},
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         map:build($input, fn { ?key }, fn { ?value }, $combine)
+map:build($input, 
+          fn($pair) { map:get($pair, 'key') }, 
+          fn($pair) { map:get($pair, 'value') }, 
+          $combine)
       </fos:equivalent>
       <fos:errors>
          <p>The function can be made to fail with a dynamic error in the event that
@@ -21790,7 +21793,7 @@ return map:keys-where($birthdays, fn($name, $date) {
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         map:for-each($map, fn($k, $v) { map{ $k: $v } })
+         map:for-each($map, map:entry#2)
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -21837,7 +21840,7 @@ return map:keys-where($birthdays, fn($name, $date) {
             are not guaranteed to produce the results in the same order.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         map:for-each($map, fn($k, $v) { map{ "key": $k, "value": $v } })
+         map:for-each($map, map:pair#2)
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -21971,9 +21974,15 @@ return map:keys-where($birthdays, fn($name, $date) {
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-if (map:contains($map, $key))
-then map:filter($map, fn($k, $v){atomic-equal($k, $key)}) => map:values()
-else $fallback($key)         
+let $entry := dm:iterate-map($map, 
+                             fn($k, $v) {
+                                if (atomic-equal($k, $key)) {
+                                   map:entry($k, $v)
+                                }
+                             })
+return if (exists($entry))
+       then map:values($entry)
+       else $fallback($key)   
       </fos:equivalent>
       <fos:notes>
          <p>A return value of <code>()</code> from <code>map:get</code> could indicate that
@@ -22256,7 +22265,7 @@ declare function map:find($input as item()*,
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         { $key : $value }
+         map:put({}, $key, $value)
       </fos:equivalent>
       <fos:notes>
          
@@ -22312,7 +22321,9 @@ map:merge(//book ! map:entry(isbn, .))]]></eg>
             containing <code>$value</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         map { "key": $key, "value": $value }
+{}
+=> map:put("key", $key)
+=> map:put("value", $value)
       </fos:equivalent>
       <fos:notes>
          <p>The function call <code>map:pair(K, V)</code> produces the same result as the
@@ -22434,9 +22445,8 @@ map:filter($map, fn($k, $v){not(some($keys, atomic-equal($k, ?)))})
             supplying the key of the map entry as the first argument, and the associated value as
             the second argument.</p>
       </fos:rules>
-      <fos:equivalent style="xpath-expression">
-for key $k value $v in $map
-return $action($k, $v)
+      <fos:equivalent style="dm-primitive">
+        dm:iterate-map($map, $action)
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -22517,10 +22527,12 @@ return <box>{
             the second argument.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
- $map
- => map:pairs()
- => fn:filter(fn($pair){ $predicate($pair?key, $pair?value) })
- => map:of-pairs()
+map:for-each($map, fn($key, $value) {
+                      if ($predicate($key, $value)) {
+                         map:pair($key, $value)
+                      }
+                   })
+=> map:of-pairs()                   
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -26282,7 +26294,7 @@ $array
       <fos:equivalent style="xpath-expression" covers-error-cases="false" arity="3"><![CDATA[
 $array
 => array:members()
-=> fn:subsequence($start, $length)
+=> subsequence($start, $length)
 => array:of-members()
       ]]></fos:equivalent>     
       <fos:errors>
@@ -26530,7 +26542,7 @@ return $pos[$predicate($m, $pos)]
       <fos:equivalent style="xpath-expression"><![CDATA[
 $array 
 => array:members() 
-=> fn:slice($start, $end, $step) 
+=> slice($start, $end, $step) 
 => array:of-members()
        ]]></fos:equivalent>
       <fos:notes>
@@ -26655,7 +26667,10 @@ $array
          </p>-->
       </fos:rules>
       <fos:equivalent style="xpath-expression" covers-error-cases="false"><![CDATA[
-$array => array:members() => fn:remove($positions) => array:of-members()
+$array 
+=> array:members() 
+=> fn:remove($positions) 
+=> array:of-members()
        ]]></fos:equivalent>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="AY" code="0001"
@@ -26970,7 +26985,7 @@ $array
       <fos:equivalent style="xpath-expression"><![CDATA[
 $array 
 => array:members() 
-=> fn:reverse() 
+=> reverse() 
 => array:of-members()
        ]]></fos:equivalent>
       <fos:examples>
@@ -27014,15 +27029,22 @@ $array
       </fos:properties>
       <fos:summary>
          <p>Returns an array whose size is the same as <code>array:size($array)</code>, in which
-            each member is computed by applying <code>$function</code> to the corresponding member of
+            each member is computed by applying <code>$action</code> to the corresponding member of
             <code>$array</code>.</p>
       </fos:summary>
       <fos:rules>
          <p>Informally, the function returns an array whose members are obtained by applying 
-         the supplied <code>$function</code> to each member of the input array in turn.</p>
+         the supplied <code>$action</code> function to each member of the input array in turn.</p>
+         <p>The <code>$action</code> function is called with two arguments: the first is the
+         array member (which in general is an arbitrary sequence), and the second is the 1-based
+         integer position.</p>
       </fos:rules>
       <fos:equivalent style="dm-primitive">
-         dm:iterate-array($array, $action)
+array:fold-left($array, 
+                [], 
+                fn($zero, $next, $pos) {
+                   array:append($zero, $action($next, $pos))
+                })
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -27082,21 +27104,13 @@ $array
       <fos:rules>
          <p>Informally, the function returns an array containing those members of the input
          array that satisfy the supplied predicate.</p>
-         <!--<p>More formally, the function returns the result of the expression:</p>
-         <eg><![CDATA[
-array:of-members(
-  for member $member at $pos in $array
-  where $predicate($member, $pos)
-  return $member
-)]]></eg>-->
       </fos:rules>
-      <fos:equivalent style="xquery-expression"><![CDATA[
-array:of-members(
-  for member $member at $pos in $array
-  where $predicate($member, $pos)
-  return map{ 'value': $member }
-)
-       ]]></fos:equivalent>
+      <fos:equivalent style="xquery-expression">
+$array
+=> array:members()
+=> filter(fn($item, $pos) { $predicate(map:get($item, 'value'), $pos) })
+=> array:of-members()
+      </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error occurs if the supplied
             function <code>$function</code> returns anything other than a single <code>xs:boolean</code> item
@@ -27411,12 +27425,13 @@ array:for-each-pair(
          <p>Informally, <code>array:build#2</code> applies the supplied function to each item 
             in the input sequence, and the resulting sequence becomes one member of the returned array.</p>
       </fos:rules>
-      <fos:equivalent style="xpath-expression"><![CDATA[
+      <fos:equivalent style="xpath-expression">
 array:of-members(
-  for $item at $pos in $input
-  return map { 'value': $action($item, $pos) }
+   for-each($input, fn($item, $pos) { 
+      map:entry('value', $action($item, $pos))
+   })
 )
-       ]]></fos:equivalent>
+      </fos:equivalent>
       <fos:notes>
          <p>The single-argument function <code>array:build($input)</code> is equivalent to the XPath
          expression <code>array { $input }</code>, but it is useful to have this available as a function.</p>
@@ -27486,10 +27501,9 @@ array:build(
          
          
       </fos:rules>
-      <fos:equivalent style="xpath-expression"><![CDATA[
-for member $member in $array
-return map { 'value': $member }
-       ]]></fos:equivalent>     
+      <fos:equivalent style="xpath-expression">
+            dm:iterate-array($array, map:entry('value', ?) )
+      </fos:equivalent>     
       <fos:notes>
          <p>This function is the inverse of <code>array:of-members</code>.</p>   
       </fos:notes>
@@ -27542,10 +27556,13 @@ return deep-equal(
          <p>The members of the array are delivered as a sequence of arrays. 
             Each returned array encapsulates the value of a single array member.</p>
       </fos:rules>
-      <fos:equivalent style="xpath-expression"><![CDATA[
-for member $member in $array
-return [ $member ]
-       ]]></fos:equivalent> 
+      <fos:equivalent style="xpath-expression">
+array:for-each($array, 
+               fn($member) { 
+                  [] => array:append($member) 
+               }) 
+=> array:values()         
+      </fos:equivalent> 
       <fos:notes>
          <p>The function call <code>array:split($array)</code> produces the same result as the
             expression <code>for member $m in $array return [ $m ]</code>.</p>
@@ -27611,18 +27628,18 @@ return deep-equal(
             it is a map comprising a single entry whose key is the <code>xs:string</code> value
             <code>"value"</code> and whose corresponding value is <code>$S</code>. The content encapsulated
             by a value record <code>$V</code> can be obtained using the expression <code>$V?value</code>.</p>
-         
-         <p>This function is treated as a primitive; all operations that construct arrays are formally defined
-         (directly or indirectly) in terms of <code>array:of-members</code>, and it therefore has no 
-            formal definition of its own.</p>
- 
+        
 
       </fos:rules>
+      
+      <fos:equivalent style="xquery-expression">
+fold-left($input, [], fn($array, $record) { 
+                         array:append($array, map:get($record, 'value'))
+                      })
+      </fos:equivalent>
 
       <fos:notes>
-         <p>This function is the inverse of <code>array:members</code>.</p>
-
-         
+         <p>This function is the inverse of <code>array:members</code>.</p>       
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -27874,9 +27891,9 @@ declare function array:flatten(
          <p>More formally, it returns the result of <code>array:members($array)?value</code>.</p>
 
       </fos:rules>
-      <fos:equivalent style="xpath-expression"><![CDATA[
-array:members($array)?value
-       ]]></fos:equivalent>
+      <fos:equivalent style="xpath-expression">
+         for-each(array:members($array), map:get(?, 'value'))
+      </fos:equivalent>
       <fos:notes>
          <p>Unlike <code>array:flatten</code>, the function does not apply recursively
          to nested arrays.</p>
