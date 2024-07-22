@@ -11,6 +11,12 @@
    
    <!-- Run against the function-catalog.xml source document -->
    
+   <!-- Current status: Function declarations are generated and syntax-checked for equivalent
+      expressions in namespaces (fn, array, map). But not for equivalent xquery functions in namespace
+      fn. Examples in namespaces (array, map) are tested against these function declarations
+      (which also ensures that the equivalent expressions are not infinitely recursive).
+      Examples in namespace fn (and the corresponding functions) are not tested. -->
+   
    <xsl:output method="text"/>
    <xsl:strip-space elements="*"/>
    <xsl:variable name="NL" select="char(10)"/>
@@ -27,6 +33,7 @@
       <xsl:text>declare namespace array0="http://www.w3.org/2005/xpath-functions/array";{$NL}{$NL}</xsl:text>
       <xsl:text>declare namespace map="http://dummy/map";{$NL}{$NL}</xsl:text>
       <xsl:text>declare namespace map0="http://www.w3.org/2005/xpath-functions/map";{$NL}{$NL}</xsl:text>
+      <xsl:text>declare namespace FN="http://dummy/fn";{$NL}{$NL}</xsl:text>
       
       <xsl:text>declare function dm:iterate-array($array as array(*), $action as fn(item()*, xs:integer) as item()*) {{
       array0:for-each($array, $action) => array0:values()
@@ -45,6 +52,7 @@
 }};{$NL}</xsl:text>
       
       <xsl:apply-templates select="//fos:function[@prefix=('array', 'map')]"/>
+      <xsl:apply-templates select="//fos:function[@prefix=('fn')]/fos:equivalent[@style='xpath-expression']"/>
       <xsl:text>element result {{</xsl:text>
       <xsl:apply-templates select="//fos:test"/>
       <xsl:text>()}}</xsl:text>
@@ -74,7 +82,7 @@
    <xsl:function name="fos:sig" as="xs:string">
       <xsl:param name="fn" as="element(fos:function)"/>
       <xsl:value-of>
-         <xsl:text>declare function {$fn/@prefix}:{$fn/@name} ({$NL}</xsl:text>
+         <xsl:text>declare function {replace($fn/@prefix, 'fn', 'FN')}:{$fn/@name} ({$NL}</xsl:text>
          <xsl:for-each select="$fn/fos:signatures[1]/fos:proto[last()]/fos:arg">
             <xsl:variable name="not-last" select="exists(following-sibling::fos:arg)"/>
             <xsl:text>   ${@name} as {@type}{if (@default) then (' := ' || @default) else ()}{','[$not-last]}{$NL}</xsl:text>
@@ -103,7 +111,7 @@
       <xsl:for-each select="tokenize(@use)">
          <xsl:variable name="var" select="$this/ancestor::fos:function/fos:examples/fos:variable[@id=current()]"/>
          <xsl:assert test="exists($var)">Failed to find declaration of variable ${.}</xsl:assert>
-         <xsl:text>let ${$var/@name} as {$var/@as otherwise 'item()*'} := {$var/@select} return{$NL}</xsl:text>
+         <xsl:text>let ${$var/@name} as {$var/@as otherwise 'item()*'} := {$var/@select otherwise string($var)} return{$NL}</xsl:text>
       </xsl:for-each>
       <xsl:text>let $result := {fos:expression}
          return 
@@ -114,6 +122,7 @@
    
    <!-- Tests temporarily excluded because not implemented in Saxon -->
    <xsl:template match="fos:function[@prefix='array'][@name='sort']//fos:test" priority="100"/>
+   <xsl:template match="fos:function[@prefix='fn'][@name='chain']//fos:test" priority="100"/>
    
    
    
