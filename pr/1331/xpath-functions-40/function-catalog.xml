@@ -19339,13 +19339,19 @@ return map:keys($ann) || ': ' || string-join(map:values($ann), ', ')
             in turn, returning the concatenation of the resulting sequences in order.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function returns the value of the expression
-            (provided that ordering mode is <code>ordered</code>):</p>
-         <eg><![CDATA[
-for $item at $pos in $input
-return $action($item, $pos)
-]]></eg>
+         <p>The function calls <code>$action($item, $pos)</code> for each item in <code>$input</code>,
+            where <code>$item</code> is the item in question and <code>$pos</code> is its 1-based
+            ordinal position in <code>$input</code>. The final result is the sequence concatenation
+            of the result of these calls, preserving order
+            (provided that ordering mode is <code>ordered</code>).
+         </p>
       </fos:rules>
+      <fos:equivalent style="xpath-expression">
+fold-left($input, (), 
+          fn($result, $next, $pos) {
+              $result, $action($next, $pos)
+          })         
+      </fos:equivalent>
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -19401,14 +19407,18 @@ return $action($item, $pos)
                <code>$predicate</code> returns <code>true</code>.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function returns the value of the expression:</p>
-         <eg><![CDATA[
-for $item at $pos in $input
-where $predicate($item, $pos)
-return $item
-]]></eg>
+         <p>The function returns a sequence containing those items from <code>$input</code>
+            for which <code>$predicate($item, $pos)</code> returns <code>true</code>, where <code>$item</code>
+            is the item in question, and <code>$pos</code> is its 1-based ordinal position within <code>$input</code>.</p>
 
       </fos:rules>
+      <fos:equivalent style="xpath-expression">
+fold-left($input, (), fn($result, $next, $pos) {
+   if ($predicate($next, $pos))
+   then ($result, $next)
+   else $result
+})                   
+      </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied <code>$predicate</code> function returns anything other than a single
@@ -19433,7 +19443,7 @@ return $item
                <fos:result>(2, 4, 6, 8, 10)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><eg><![CDATA[filter(parse-xml('<doc><a id="2"/><a/>')//a, fn{@id eq "2"})]]></eg></fos:expression>
+               <fos:expression><eg><![CDATA[filter(parse-xml('<doc><a id="2"/><a/></doc>')//a, fn{@id eq "2"})]]></eg></fos:expression>
                <fos:result><![CDATA[<a id="2"/>]]></fos:result>
                <fos:postamble>The function returns <code>()</code> when there is no <code>@id</code> attribute;
                this is treated as false.</fos:postamble>
@@ -19480,33 +19490,45 @@ return filter(
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following implementation in XQuery:</p>
-         <eg><![CDATA[
-declare %private function fold-left-helper(
-  $input  as item()*,
-  $zero   as item()*,
-  $action as fn(item()*, item(), xs:integer) as item()*,
-  $pos    as xs:integer
-) as item()* {
-  if (empty($input))
-  then $zero
-  else fold-left-helper(
-    tail($input),
-    $action($zero, head($input), $pos + 1),
-    $action,
-    $pos + 1
-  )
-};
-
-declare function fold-left(
-  $input  as item()*,
-  $zero   as item()*,
-  $action as fn(item()*, item(), xs:integer) as item()*
-) as item()* {
-  fold-left-helper($input, $zero, $action, 1)
-};]]></eg>
+         <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
+         <p>If <code>$input</code> contains a single item <code>$item1</code>, the function calls 
+            <code>$action($zero, $item1, 1)</code>.</p>
+         <p>If <code>$input</code> contains a second item <code>$item2</code>, the function then calls 
+            <code>$action($zero1, $item2, 2)</code>, where <code>$zero1</code> is the result after
+            processing the first item.</p>
+         <p>This continues in the same way until the end of the <code>$input</code> sequence; the final result is
+         the result of the last call on <code>$action</code>.</p>
 
       </fos:rules>
+      <fos:equivalent style="xquery-function">
+declare %private function fold-left-2 (
+        $input as item()*,
+        $zero as item()*,
+        $action as function(item()*, item()) as item()*) 
+        as item()* {
+  if (empty($input))
+  then $zero
+  else fold-left-2(tail($input), $action($zero, head($input)), $action)
+};
+
+declare function fold-left (
+        $input as item()*,
+        $zero as item()*,
+        $action as function(item()*, item(), xs:integer) as item()*) 
+        as item()* {
+  let $numbered-input := for-each($input, 
+                                  fn($item, $pos) { 
+                                     map{ 'item': $item, 'position': $pos }
+                                  })
+  return fold-left-2($numbered-input, fn($zero, $pair) {
+                                         $action($zero, $pair?item, $pair?position)
+                                      })   
+};
+
+(: Note: a practical implementation can optimize for the case where the
+   supplied $action function has arity 2 :)
+         
+      </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
@@ -19516,15 +19538,16 @@ declare function fold-left(
       </fos:errors>
       <fos:notes>
          <p>This operation is often referred to in the functional programming literature as
-            “folding” or “reducing” a sequence. It takes a function that operates on a pair of
+            “folding” or “reducing” a sequence. It typically takes a function that operates on a pair of
             values, and applies it repeatedly, with an accumulated result as the first argument, and
-            the next item in the sequence as the second argument. The accumulated result is
+            the next item in the sequence as the second argument. Optionally the <code>$action</code>
+            function may take a third argument, which is set to the 1-based position of the current
+            item in the input sequence. The accumulated result is
             initially set to the value of the <code>$zero</code> argument, which is conventionally a
             value (such as zero in the case of addition, one in the case of multiplication, or a
             zero-length string in the case of string concatenation) that causes the function to
             return the value of the other argument unchanged.</p>
-         <p>The value of the third argument of <code>$action</code> corresponds to the position
-            of the item in the input sequence. It is initally set to <code>1</code>.</p>
+         
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -19653,31 +19676,47 @@ return fold-left($input, (),
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function is equivalent to the following implementation in XQuery:</p>
-         <eg><![CDATA[
-declare %private function fold-right-helper(
-  $input  as item()*,
-  $zero   as item()*,
-  $action as fn(item(), item()*, xs:integer) as item()*,
-  $pos    as xs:integer
-) as item()* {
+         <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
+         <p>Let <code>$itemN</code> be the last item in <code>$input</code>, and let <code>$N</code>
+            be its 1-based ordinal position in <code>$input</code> (that is, the size of <code>$input</code>).
+            The function starts by calling <code>$action($itemN, $zero, $N)</code>.</p>
+         <p>If there is a previous item, <code>$itemN-1</code>, at position <code>$N - 1</code>,
+            the function then calls <code>$action($itemN-1, $zeroN, $N - 1)</code>, where <code>$zeroN</code> is the result
+            of the previous call.</p>
+         <p>This continues in the same way until the start of the <code>$input</code> sequence is reached; the final result is
+         the result of the last call on <code>$action</code>.</p>
+         
+      </fos:rules>
+      <fos:equivalent style="xquery-function">
+declare %private function fold-right-2 (
+        $input as item()*,
+        $zero as item()*,
+        $action as function(item(), item()*) as item()*) 
+        as item()* {
   if (empty($input))
   then $zero
-  else $action(
-    head($input),
-    fold-right-helper(tail($input), $zero, $action, $pos - 1),
-    $pos
-  )
+  else $action(head($input), fold-right-2(tail($input), $zero, $action)
 };
 
-declare function fold-right(
-  $input  as item()*,
-  $zero   as item()*,
-  $action as fn(item(), item()*, xs:integer) as item()*
-) as item()* {
-  fold-right-helper($input, $zero, $action, count($input))
-};]]></eg>
-      </fos:rules>
+declare function fold-right (
+        $input as item()*,
+        $zero as item()*,
+        $action as function(item()*, item(), xs:integer) as item()*) 
+        as item()* {
+  let $numbered-input := for-each($input, 
+                                  fn($item, $pos) { 
+                                     map{ 'item': $item, 'position': $pos }
+                                  })
+  return fold-right-2($numbered-input, fn($zero, $pair) {
+                                         $action($pair?item, $zero, $pair?position)
+                                       })   
+};
+
+(: Note: a practical implementation can optimize for the case where the
+   supplied $action function has arity 2 :)
+         
+  
+      </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
