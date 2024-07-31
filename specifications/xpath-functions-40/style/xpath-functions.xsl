@@ -60,11 +60,6 @@
         </select>
         <xsl:text> </xsl:text>
 
-        <xsl:variable name="new-functions"
-                      select="key('id', 'new-functions')//code/string()"/>
-
-        <xsl:variable name="changed-functions"
-                      select="key('id', 'changes-to-existing-functions')//code/string()"/>
 
         <xsl:for-each select="$prefixes">
           <xsl:variable name="prefix" select="."/>
@@ -79,13 +74,10 @@
               <xsl:variable name="fqfn" select="$prefix || ':' || @name"/>
 
               <xsl:variable name="new-function"
-                            select="$fqfn = $new-functions
-                                    or .//ednote[contains(., 'New in 4.0')]"/>
+                            select="exists(.//fos:change[contains(., 'New in 4.0')])"/>
 
               <xsl:variable name="changed-function"
-                            select="$fqfn = $changed-functions
-                                    or .//ednote[contains(., 'Changed in 4.0')]"/>
-
+                            select="exists(.//fos:change) and not($new-function)"/>
               <option value="{$target}">
                 <xsl:if test="empty(key('id', $target, $spec))">
                   <xsl:attribute name="disabled" select="'disabled'"/>
@@ -100,10 +92,10 @@
                                       else $name"/>
 
                 <xsl:if test="$new-function">
-                  <xsl:text> 🆕</xsl:text>
+                  <span class="tocDelta"> ΔΔ </span>
                 </xsl:if>
                 <xsl:if test="$changed-function">
-                  <xsl:text> 🆙</xsl:text>
+                  <span class="tocDelta"> Δ </span>
                 </xsl:if>
               </option>
 
@@ -162,9 +154,9 @@
   </xsl:choose>
 </xsl:function>  
 
-<xsl:template match="change">
+<!--<xsl:template match="change">
   <xsl:apply-templates/>
-</xsl:template> 
+</xsl:template> -->
 
 <xsl:template match="specref">
   <xsl:variable name="target" select="key('ids', @ref)[1]"/>

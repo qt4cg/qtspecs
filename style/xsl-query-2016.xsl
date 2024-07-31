@@ -2038,7 +2038,7 @@
         <xsl:apply-templates/>
         <xsl:if test="@*">
           <i xsl:expand-text="yes">
-            <xsl:text>[&#xa0;</xsl:text>
+            <xsl:text>&#xa0;&#xa0;[</xsl:text>
             <xsl:variable name="issues" select="tokenize(@issue)"/>
             <xsl:if test="exists($issues)">
               <xsl:value-of select="if (count($issues) gt 1) then 'Issues ' else 'Issue '"/>
@@ -2056,9 +2056,8 @@
                 <a href="https://github.com/qt4cg/qtspecs/pull/{.}">{.}</a>
               </xsl:for-each>
             </xsl:if>
-            <xsl:text>&#xa0;</xsl:text>
-            <xsl:if test="@date">Processed on {format-date(@date, '[D] [MNn] [Y]')}</xsl:if>
-            <xsl:text>&#xa0;]</xsl:text>
+            <xsl:if test="@date">&#xa0;{format-date(@date, '[D] [MNn] [Y]')}</xsl:if>
+            <xsl:text>]</xsl:text>
           </i>
         </xsl:if>
       </p>
