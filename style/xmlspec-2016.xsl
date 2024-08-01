@@ -1281,7 +1281,14 @@
           <xsl:with-param name="target" select="key('ids', @def)"/>
         </xsl:call-template>
       </xsl:attribute>
-      <xsl:apply-templates/>
+      <xsl:choose>
+        <xsl:when test="child::node()">
+          <xsl:apply-templates/>
+        </xsl:when>
+        <xsl:otherwise>
+          <xsl:value-of select="tokenize(@def, '-')[last()]"/>
+        </xsl:otherwise>
+      </xsl:choose>     
     </a>
   </xsl:template>
 
