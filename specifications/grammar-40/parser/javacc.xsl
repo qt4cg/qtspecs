@@ -620,7 +620,7 @@
   Revision 1.7  2002/03/13 15:45:05  sboag
   Don changes (XPathXQuery.xml, introduction.xml, fragment.xml):
   I have attempted to update these files with the latest terminology
-   (mainly changing "simple value" to "atomic value" and related changes.)
+   (mainly changing "simple value" to "atomic item" and related changes.)
 
   Grammar changes:
   Moral equal of Philip Wadler's structural changes of 02/05/2002.
