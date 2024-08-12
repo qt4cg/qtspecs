@@ -248,7 +248,7 @@
 			</xsl:when>
 			<xsl:otherwise>
 				<!-- Typically the XSLT spec -->
-				<xtermref spec="FO30" ref="dt-{.}">
+				<xtermref spec="FO40" ref="dt-{.}">
 					<xsl:value-of select="."/>
 				</xtermref>
 			</xsl:otherwise>
