@@ -31389,7 +31389,7 @@ description of <code>fn:resolve-uri</code>.</p>
 <p>This example uses an invalid query separator so raises an error.</p>
 <fos:test>
 <fos:expression><eg>parse-uri("https://example.com:8080/path?s=%22hello world%22;;sort=relevance", { "query-separator": ";;" } )</eg></fos:expression>
-<fos:error-result error-code="FOXX0000"/>
+<fos:error-result error-code="FOUR0002"/>
 </fos:test>
 </fos:example>
 
@@ -31560,9 +31560,28 @@ path with an explicit <code>file:</code> scheme.</p>
         is made to determine if a password or standard port are present,
         the <code>authority</code> value is simply added to the string.)</p>
 
+        <p>The <code>fn:parse-uri</code> function removes
+        percent-escaping when it constructs the
+        <code>path-segments</code>, <code>query-parameters</code>, and
+        <code>fragment</code> properties. That’s often the most
+        convenient behavior but, in order to reconstruct a URI from them,
+        special escaping rules apply. These rules protect delimiters
+        without encoding additional characters unnecessarily.
+        The rules for <code>path-segments</code>,
+        <code>query-parameters</code>, and <code>fragment</code>s are
+        slightly different because the URI encoding conventions are
+        slightly different in each case.</p>
+
+        <p>An application with more stringent requirements can
+        construct a <code>path</code> or <code>query</code> that
+        satisfies the requirements and leave the
+        <code>path-segments</code> and/or
+        <code>query-parameters</code> keys out of the map.</p>
+
         <ulist>
            <item><p>If the <code>path-segments</code> key exists in the map,
            then the path is constructed from the segments.</p>
+
            <p>To construct the path, each
            segment is encoded, then they are joined together, separated by the path
            separator, to form the path.
@@ -31573,20 +31592,6 @@ path with an explicit <code>file:</code> scheme.</p>
            <code>#</code> (number sign), <code>+</code> (plus sign),
            <code>[</code> (left square bracket), and <code>]</code> (right
            square bracket).</p>
-
-           <p>This is a compromise. The <code>fn:parse-uri</code> function removes
-           percent-escaping when it constructs the path segments because that
-           behavior is often most convenient when dealing with
-           common cases involving <code>file:</code> URIs. But the decoding process is not lossless (consider
-           that both “<code>%3D</code>” and “<code>=</code>” will be realized as
-           <code>=</code> in the path segments).</p>
-
-           <p>The escaping described here protects the delimiters used in
-           hierarchical URIs because leaving those unescaped would change the
-           interpretation of the URI.
-           An application with more stringent requirements can construct a <code>path</code>
-           that satisfies the requirements and leave the <code>path-segments</code> key out of the
-           map.</p>
         </item>
         <item>
            <p>Otherwise the value of the <code>path</code> key is used.</p>
@@ -31596,40 +31601,55 @@ path with an explicit <code>file:</code> scheme.</p>
         </item>
         </ulist>
 
-        <note>
-           <p>The compromise encoding used for the <code>path-segments</code> does not
-           apply to the query parameters or fragment identifier. Those values are encoded
-           with <code>encode-for-uri</code>. The compromise encoding isn’t appropriate
-           because those fields can contain additional characters that must be encoded.
-           Adopting a <emph>different</emph> compromise encoding for those values
-           seems unnecessary in practice.</p>
-        </note>
-
         <p>The path is added to the URI.</p>
 
         <p>If the <code>query-parameters</code> key exists in the map, its value
-        must be a map. A sequence of strings is constructed from the values in the map.
+        must be a map. A sequence of strings is constructed from the values in the map.</p>
+
+        <p>To construct the string, each <emph>key</emph> and <emph>value</emph>
+        is encoded.
+        The encoding performed replaces any control characters (code points less than 0x20)
+        and exclusively the following characters with their
+        percent-escaped forms: <code> </code> (space) <code>%</code> (percent
+        sign), <code>#</code> (number sign), <code>+</code> (plus sign),
+        <code>[</code> (left square bracket), <code>]</code> (right
+        square bracket), <code>=</code> (equal sign), <code>&amp;</code> (ampersand),
+        and the <emph>query-separator</emph> character.
+        (this differs from the path encoding in that it includes
+        <code>=</code> (equal sign), <code>&amp;</code> (ampersand), and the
+        <emph>query-separator</emph> and excludes
+        <code>/</code> (solidus) and <code>?</code> (question mark).
         For each <emph>key</emph> and each <emph>value</emph> associated with
         that key in turn:</p>
 
         <ulist>
            <item><p>If the <emph>key</emph> is the empty string, the string constructed
-           is the <emph>value</emph> encoded with <code>encode-for-uri</code>.</p></item>
+           is the encoded <emph>value</emph>.</p></item>
            <item><p>Otherwise, the string constructed is the value of the
            <emph>key</emph>, encoded, followed by an equal sign (<code>=</code>),
            followed by the <emph>value</emph>, encoded.</p></item>
         </ulist>
 
         <p>The query is constructed by joining the resulting
-        strings into a single string, separated by <code>$options?query-separator</code>).
+        strings into a single string, separated by <code nobreak="true">$options?query-separator</code>).
         If the <code>query-parameters</code> key does not exist in the map, but
         the <code>query</code> key does, then the query is the value of the
-        <code>query</code> key. If there is a query, it is added to the URI with
-        a preceding question mark (<code>?</code>).</p>
+        <code>query</code> key.</p>
+        <p>If there is a query, it is added to the URI with
+        a preceding <code>?</code> (question mark).</p>
 
         <p>If the <code>fragment</code> key exists in the map, then
-        the value of that key is encoded with <code>encode-for-uri</code> and added to the URI with
-        a preceding hash mark (<code>#</code>).</p>
+        the value of that key is encoded and added to the URI with a
+        preceding hash mark (<code>#</code>).
+        The encoding performed for the fragment replaces any control characters (code points less than 0x20)
+        and exclusively the following characters with their
+        percent-escaped forms: <code> </code> (space) <code>%</code> (percent
+        sign),
+        <code>#</code> (number sign), <code>+</code> (plus sign),
+        <code>[</code> (left square bracket), and <code>]</code> (right
+        square bracket).
+        (this differs from the path encoding in that it excludes
+        <code>/</code> (solidus) and <code>?</code> (question mark).</p>
 
         <p>The resulting URI is returned.</p>
       </fos:rules>
