@@ -41,7 +41,7 @@ java -jar tools/deltaxml/saxon9pe.jar \
 rm -f /tmp/B.$PID.xml
 
 # Make the diff version
-java -jar tools/deltaxml/command-12.0.1.jar compare xhtml-patch \
+java -jar tools/deltaxml/command-15.0.2.jar compare xhtml-patch \
      /tmp/A.$PID.html /tmp/B.$PID.html /tmp/autodiff.$PID.html
 
 # Patch the diff version and make it HTML5

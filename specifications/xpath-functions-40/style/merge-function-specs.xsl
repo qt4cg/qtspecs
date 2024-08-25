@@ -90,6 +90,7 @@
 		<head>
 			<xsl:value-of select="$lexname"/>
 		</head>
+		<xsl:apply-templates select="$fspec/fos:changes"/>
 		<glist>
 			<gitem>
 				<label>Summary</label>
@@ -210,7 +211,7 @@
 				 </def>
 		    </gitem>
 		  </xsl:if>
-			<xsl:if test="$fspec/fos:history">
+			<!--<xsl:if test="$fspec/fos:history">
 				<gitem>
 					<label>History</label>
 					<def role="example">
@@ -219,7 +220,7 @@
 						</p>
 					</def>
 				</gitem>
-			</xsl:if>
+			</xsl:if>-->
 		</glist>
 	</xsl:template>
 	
@@ -259,6 +260,16 @@
 		<xsl:value-of
 			select="replace(translate(string-join(tokenize(., '\s+'), ', and '), '-', ' '), 'uri', 'URI')"
 		/>.
+	</xsl:template>
+	
+	<xsl:template match="fos:changes">
+		<changes>
+			<xsl:for-each select="fos:change/p">
+				<change>
+					<xsl:copy-of select="../@Q{}*, child::node()" copy-namespaces="no"/>
+				</change>
+			</xsl:for-each>
+		</changes>
 	</xsl:template>
 
 	<xsl:template match="fos:proto">
