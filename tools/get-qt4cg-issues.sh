@@ -18,9 +18,8 @@ fi
 
 rm -f /tmp/issues.$$.page*.json
 while [ "$DONE" = "0" ]; do
-    printf "Reading page $PAGE"
-    FN="/tmp/issues.$$.page$PN.json"
-    printf "Getting page %s..." "$PN"
+    FN="/tmp/issues.$$.page$PAGE.json"
+    echo "Getting page $PAGE ..."
 
     if [ -z GH_TOKEN ]; then
         curl -s -o $FN "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
@@ -31,17 +30,13 @@ while [ "$DONE" = "0" ]; do
              "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
     fi
 
-    echo $FN
-    ls -l $FN
-
     LAST=`cat $FN | jq ".[].number" | tail -1`
-    echo $LAST
     if [ "$LAST" = "1" ]; then
         DONE=1
     fi
 
     PAGE=`expr $PAGE + 1`
-    if [ "$PAGE" -gt 15 ]; then
+    if [ "$PAGE" -gt 25 ]; then
         # something has gone sideways
         DONE=1
     fi
