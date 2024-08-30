@@ -18,7 +18,7 @@ fi
 
 rm -f /tmp/issues.$$.page*.json
 while [ "$DONE" = "0" ]; do
-    printf -v PN "%02d" $PAGE
+    printf "Reading page $PAGE"
     FN="/tmp/issues.$$.page$PN.json"
     printf "Getting page %s..." "$PN"
 
