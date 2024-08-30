@@ -31,6 +31,9 @@ while [ "$DONE" = "0" ]; do
              "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
     fi
 
+    echo $FN
+    ls -l $FN
+
     LAST=`cat $FN | jq ".[].number" | tail -1`
     echo $LAST
     if [ "$LAST" = "1" ]; then
