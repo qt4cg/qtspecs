@@ -38,7 +38,7 @@ while [ "$DONE" = "0" ]; do
     fi
 
     PAGE=`expr $PAGE + 1`
-    if [ "$PAGE" -gt 15 ]; then
+    if [ "$PAGE" -gt 25 ]; then
         # something has gone sideways
         DONE=1
     fi
