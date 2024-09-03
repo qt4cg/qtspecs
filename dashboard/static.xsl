@@ -9,6 +9,53 @@
 
 <xsl:output method="html" html-version="5" encoding="utf-8" indent="no"/>
 
+<xsl:variable name="specifications" as="map(*)">
+  <xsl:map>
+    <xsl:map-entry key="'xpath-functions-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xpath-functions-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'XPath and XQuery Functions and Operators 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
+    <xsl:map-entry key="'xslt-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xslt-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'XSL Transformations (XSLT) Version 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
+    <xsl:map-entry key="'xpath-datamodel-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xpath-datamodel-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'XQuery and XPath Data Model 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
+    <xsl:map-entry key="'xpath-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xquery-40'"/>
+        <xsl:map-entry key="'html'" select="'xpath-40.html'"/>
+        <xsl:map-entry key="'title'" select="'XML Path Language (XPath) 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
+    <xsl:map-entry key="'xquery-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xquery-40'"/>
+        <xsl:map-entry key="'html'" select="'xquery-40.html'"/>
+        <xsl:map-entry key="'title'" select="'XQuery 4.0: An XML Query Language'"/>
+      </xsl:map>
+    </xsl:map-entry>
+    <xsl:map-entry key="'xslt-xquery-serialization-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xslt-xquery-serialization-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'XSLT and XQuery Serialization 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
+  </xsl:map>
+</xsl:variable>
+
 <xsl:variable name="html-list" as="element()*">
   <xsl:for-each select="tokenize(unparsed-text('/tmp/pr-list.txt'), '\s+')[starts-with(., 'pr/')]">
     <xsl:variable name="parts" select="tokenize(., '/')"/>
@@ -18,6 +65,10 @@
 
 <xsl:variable name="issues" as="map(*)*">
   <xsl:sequence select="array:flatten(parse-json(unparsed-text('../pr-status/issues.json')))"/>
+</xsl:variable>
+
+<xsl:variable name="changes" as="map(*)*">
+  <xsl:sequence select="array:flatten(parse-json(unparsed-text('../pr-status/changes.json')))"/>
 </xsl:variable>
 
 <xsl:template name="xsl:initial-template">
@@ -56,16 +107,77 @@
 
                 <div class="pull-request" id="pr-{$issue?number}" x-pull="{$issue?number}">
                   <h4>PR #{$issue?number}: {$issue?title}</h4>
+
                   <details>
                     <summary>Pull request 
                     <a href="https://github.com/qt4cg/qtspecs/pull/{$issue?number}">#{$issue?number}</a>
                     by <a href="https://github.com/{$issue?user?login}">{$issue?user?login}</a>.</summary>
                     <p>{$issue?body}</p>
                   </details>
-                  <h5>Documents</h5>
-                  <xsl:call-template name="show-specs">
-                    <xsl:with-param name="html-list" select="$html-list[@number=$issue?number]"/>
-                  </xsl:call-template>
+
+                  <xsl:variable name="changed" select="map:get($changes, string($issue?number))"/>
+                  <xsl:variable name="changed-files" as="xs:string*">
+                    <xsl:for-each select="array:flatten($changed)">
+                      <xsl:sort select=".?filename"/>
+                      <xsl:sequence select=".?filename"/>
+                    </xsl:for-each>
+                  </xsl:variable>
+
+                  <details>
+                    <summary>Changed files</summary>
+                    <ul class="changed-files">
+                      <xsl:for-each select="$changed-files">
+                        <li>{.}</li>
+                      </xsl:for-each>
+                    </ul>
+                  </details>
+
+                  <ul class="spec-list">
+                    <xsl:for-each select="map:keys($specifications)">
+                      <xsl:sort select="."/>
+                      <xsl:variable name="key" select="."/>
+                      <xsl:variable name="spec" select="map:get($specifications, .)"/>
+
+                      <xsl:variable name="files"
+                                    select="$html-list[@number = $issue?number and @spec = $spec?dir]"/>
+
+                      <xsl:variable name="matches" as="xs:string*">
+                        <xsl:for-each select="distinct-values($files/@spec)">
+                          <xsl:variable name="dir" select="."/>
+                          <xsl:for-each select="$changed-files">
+                            <xsl:if test="contains(., '/'||$dir||'/')">yes</xsl:if>
+                          </xsl:for-each>
+                        </xsl:for-each>
+                      </xsl:variable>
+
+                      <li>
+                        <xsl:if test="count($matches) gt 0">
+                          <xsl:attribute name="class" select="'likely-changed'"/>
+                        </xsl:if>
+                        <a href="https://qt4cg.org/pr/{$issue?number}/{$spec?dir}/{$spec?html}">
+                          <xsl:sequence select="$spec?title"/>
+                        </a>
+
+                        <xsl:variable name="autodiff"
+                                      select="$html-list[@number = $issue?number
+                                                         and @spec = $spec?dir
+                                                         and (@html = 'autodiff.html'
+                                                              or @html = $key || '-autodiff.html')]"/>
+                        <xsl:if test="$autodiff">
+                          <span class="diffs">
+                            <xsl:text> (</xsl:text>
+                            <a href="https://qt4cg.org/pr/{$issue?number}/{$spec?dir}/{$autodiff/@html}">
+                              <xsl:text>DeltaXML diff</xsl:text>
+                            </a>
+                            <xsl:text>)</xsl:text>
+                          </span>
+                        </xsl:if>
+                      </li>
+<!--
+                      <li><ul><xsl:for-each select="$files"><li>{serialize(.)}</li></xsl:for-each></ul></li>
+-->
+                    </xsl:for-each>
+                  </ul>
                 </div>
               </xsl:for-each>
 
