@@ -95,6 +95,15 @@
             provided with a <a href="deltaxml.html">DeltaXML</a> pipeline.
             </p>
 
+            <div class="pr-list">
+              <xsl:text>Open PRs: </xsl:text>
+              <xsl:for-each select="$issues[exists(.?pull_request) and .?state = 'open']">
+                <xsl:sort select=".?number" order="descending"/>
+                <xsl:if test="position() gt 1"><xsl:text> </xsl:text></xsl:if>
+                <div><a href="#pr-{.?number}">#{.?number}</a></div>
+              </xsl:for-each>
+            </div>
+
             <div class="pull-requests">
               <h3>
                 <xsl:text>Pull requests in descending</xsl:text>
