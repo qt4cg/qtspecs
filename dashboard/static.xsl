@@ -85,7 +85,7 @@
       <link rel="apple-touch-icon" sizes="152x152" href="/img/QT4-152.png" type="image/png" />
     </head>
     <body>
-      <h1>QT4 CG Dashboard (Static)</h1>
+      <h1>QT4 CG Dashboard</h1>
       <main>
         <section class="community" x-name="qt4cg">
           <section class="repository" x-name="qtspecs">
