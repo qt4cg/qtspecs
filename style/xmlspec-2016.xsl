@@ -374,64 +374,18 @@
 
   <!-- com: formal production comment -->
   <!-- can appear in prod or rhs -->
-  <xsl:template match="com">
-    <xsl:choose>
-      <xsl:when test="preceding-sibling::*[1][name()='rhs']">
-        <td>
-          <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
-            <xsl:attribute name="class">
-              <xsl:text>diff-</xsl:text>
-              <xsl:value-of select="ancestor-or-self::*/@diff"/>
-            </xsl:attribute>
-          </xsl:if>
-          <i>
-            <xsl:text>/* </xsl:text>
-            <xsl:apply-templates/>
-            <xsl:text> */</xsl:text>
-          </i>
-        </td>
-      </xsl:when>
-      <xsl:otherwise>
-        <tr style="vertical-align:baseline;">
-          <td/><td/><td/><td/>
-          <td>
-            <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
-              <xsl:attribute name="class">
-                <xsl:text>diff-</xsl:text>
-                <xsl:value-of select="ancestor-or-self::*/@diff"/>
-              </xsl:attribute>
-            </xsl:if>
-            <i>
-              <xsl:text>/* </xsl:text>
-              <xsl:apply-templates/>
-              <xsl:text> */</xsl:text>
-            </i>
-          </td>
-        </tr>
-      </xsl:otherwise>
-    </xsl:choose>
+  <xsl:template match="com">   
+    <td style="text-align: right;" class="prodComment">
+        <xsl:text>/* </xsl:text>
+        <xsl:apply-templates/>
+        <xsl:text> */</xsl:text>
+    </td>     
   </xsl:template>
-
-  <!-- this could probably be handled better, but given that rhs can
-       have arbitrary text and com mixed in, I don't feel like
-       spending enough time to figure out how -->
-  <xsl:template match="rhs/com">
-    <i>
-      <xsl:text>/* </xsl:text>
-      <xsl:apply-templates/>
-      <xsl:text> */</xsl:text>
-    </i>
-  </xsl:template>
-
-  <!-- component: -->
-  <!-- IDL stuff isn't handled yet -->
-
-  <!-- constant: -->
-  <!-- IDL stuff isn't handled yet -->
 
   <!-- constraint: a note in a formal production -->
   <!-- refers to a constraint note -->
   <xsl:template match="constraint">
+    <!-- MHK 2024-09-14 - this is not used -->
     <xsl:choose>
       <xsl:when test="preceding-sibling::*[1][name()='rhs']">
         <td>
@@ -1167,8 +1121,8 @@
   <!-- make a table row with the lhs and the corresponding other
        pieces in this crazy mixed-up content model -->
   <xsl:template match="lhs">
-    <tr style="vertical-align:baseline;">
-      <td>
+    
+      <!--<td>
         <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
           <xsl:attribute name="class">
             <xsl:text>diff-</xsl:text>
@@ -1179,21 +1133,24 @@
           <a id="{../@id}"/>
         </xsl:if>
         <xsl:apply-templates select="ancestor::prod" mode="number"/>
-<!--
+<!-\-
   This could be done right here, but XT goes into deep space when the
   node to be numbered isn't the current node and level="any":
           <xsl:number count="prod" level="any" from="spec"
             format="[1]"/>
-  -->
-        <xsl:text>&#xa0;&#xa0;&#xa0;</xsl:text>
-      </td>
+  -\->
+        <!-\-<xsl:text>&#xa0;&#xa0;&#xa0;</xsl:text>-\->
+      </td>-->
       <td>
-        <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
+        <xsl:if test="../@id">
+          <a id="{../@id}"/>
+        </xsl:if>
+        <!--<xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
           <xsl:attribute name="class">
             <xsl:text>diff-</xsl:text>
             <xsl:value-of select="ancestor-or-self::*/@diff"/>
           </xsl:attribute>
-        </xsl:if>
+        </xsl:if>-->
 
         <xsl:choose>
           <!-- Make a link to the production table ... -->
@@ -1226,11 +1183,10 @@
             <xsl:value-of select="ancestor-or-self::*/@diff"/>
           </xsl:attribute>
         </xsl:if>
-        <xsl:text>&#xa0;&#xa0;&#xa0;::=&#xa0;&#xa0;&#xa0;</xsl:text>
+        <xsl:text>::=</xsl:text>
       </td>
-      <xsl:apply-templates
-        select="following-sibling::*[1][name()='rhs']"/>
-    </tr>
+      <!--<xsl:apply-templates
+        select="following-sibling::*[1][name()='rhs']"/>-->
   </xsl:template>
 
   <!-- loc: a Web location -->
@@ -1442,24 +1398,37 @@
        others -->
   <xsl:template match="prod">
     <tbody>
-      <xsl:apply-templates
-        select="lhs |
-                rhs[preceding-sibling::*[1][name()!='lhs']] |
-                com[preceding-sibling::*[1][name()!='rhs']] |
-                constraint[preceding-sibling::*[1][name()!='rhs']] |
-                vc[preceding-sibling::*[1][name()!='rhs']] |
-                wfc[preceding-sibling::*[1][name()!='rhs']]"/>
+      <tr style="vertical-align:baseline;">
+        <xsl:apply-templates select="lhs, rhs"/>
+      </tr>
+      <xsl:for-each select="com|constraint|vc|wfc">
+        <tr>
+          <td/>
+          <td/>
+          <xsl:apply-templates select="."/>
+        </tr>
+      </xsl:for-each>
+<!--        select="lhs |
+                rhs[preceding-sibling::*[1][not(self::lhs)]] |
+                (com|constraint|vc|wfc)[preceding-sibling::*[1][not(self::rhs)]]"/>-->
     </tbody>
   </xsl:template>
 
   <xsl:template match="prodgroup/prod">
-    <xsl:apply-templates
+    <tr style="vertical-align:baseline;">
+      <xsl:apply-templates select="lhs, rhs"/>
+    </tr>
+    <xsl:for-each select="com|constraint|vc|wfc">
+        <tr>
+          <td/>
+          <td/>
+          <xsl:apply-templates select="."/>
+        </tr>
+      </xsl:for-each>
+    <!--<xsl:apply-templates
       select="lhs |
-              rhs[preceding-sibling::*[1][name()!='lhs']] |
-              com[preceding-sibling::*[1][name()!='rhs']] |
-              constraint[preceding-sibling::*[1][name()!='rhs']] |
-              vc[preceding-sibling::*[1][name()!='rhs']] |
-              wfc[preceding-sibling::*[1][name()!='rhs']]"/>
+              rhs[preceding-sibling::*[1][not(self::lhs)]] |
+              (com|constraint|vc|wfc)[preceding-sibling::*[1][not(self::rhs)]]"/>-->
   </xsl:template>
 
   <!-- prodgroup: group of formal productions -->
@@ -1474,21 +1443,21 @@
   <!-- process the prod in another node that will never generate a
        <tbody> or a number, plus links the lhs to the original
        production -->
-  <xsl:template match="prodrecap">
+  <!--<xsl:template match="prodrecap">
     <tbody>
       <xsl:apply-templates select="key('ids', @ref)" mode="ref"/>
     </tbody>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="processing-instruction('specprod')">
+  <!--<xsl:template match="processing-instruction('specprod')">
     <xsl:if test="contains(., 'production-recap')"/>
     <table class="scrap">
-      <!--<caption>Grammar Rules</caption> -->
+      <!-\-<caption>Grammar Rules</caption> -\->
       <tbody>
         <xsl:apply-templates select="//prod" mode="ref"/>
       </tbody>
     </table>
-  </xsl:template>
+  </xsl:template>-->
 
   <!-- proto: function prototype -->
   <!-- type and name of the function, with arguments in parens -->
@@ -1617,23 +1586,17 @@
   </xsl:template>
 
 
-  <xsl:template name="rhs-comment">
+  <!--<xsl:template name="rhs-comment">
      <xsl:choose>
-       <xsl:when test="following-sibling::*[1][name()='com' or
-                                       name()='constraint' or
-                                       name()='vc' or
-                                       name()='wfc']">
+       <xsl:when test="following-sibling::*[1][self::com | self::constraint | self::vc | self::wfc]">
          <xsl:apply-templates
-           select="following-sibling::*[1][name()='com' or
-                                           name()='constraint' or
-                                           name()='vc' or
-                                           name()='wfc']"/>
+           select="following-sibling::*[1][self::com | self::constraint | self::vc | self::wfc]"/>
        </xsl:when>
        <xsl:otherwise>
          <td></td>
        </xsl:otherwise>
      </xsl:choose>
-  </xsl:template>
+  </xsl:template>-->
 
   <!-- returns: -->
   <!-- IDL stuff isn't handled yet -->
@@ -1644,36 +1607,16 @@
   <!-- rhs: right-hand side of a formal production -->
   <!-- make a table cell; if it's not the first after an LHS, make a
        new row, too -->
-  <xsl:template match="rhs">
-    <xsl:choose>
-      <xsl:when test="preceding-sibling::*[1][name()='lhs']">
-        <td>
-          <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
-            <xsl:attribute name="class">
-              <xsl:text>diff-</xsl:text>
-              <xsl:value-of select="ancestor-or-self::*/@diff"/>
-            </xsl:attribute>
-          </xsl:if>
-          <code><xsl:apply-templates/></code>
-        </td>
-        <xsl:call-template name="rhs-comment"/>
-      </xsl:when>
-      <xsl:otherwise>
-        <tr style="vertical-align:baseline;">
-          <td/><td/><td/>
-          <td>
-            <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
-              <xsl:attribute name="class">
-                <xsl:text>diff-</xsl:text>
-                <xsl:value-of select="ancestor-or-self::*/@diff"/>
-              </xsl:attribute>
-            </xsl:if>
-            <code><xsl:apply-templates/></code>
-          </td>
-          <xsl:call-template name="rhs-comment"/>
-        </tr>
-      </xsl:otherwise>
-    </xsl:choose>
+  <xsl:template match="rhs">   
+      <td>
+        <xsl:if test="ancestor-or-self::*/@diff and $show.diff.markup != 0">
+          <xsl:attribute name="class">
+            <xsl:text>diff-</xsl:text>
+            <xsl:value-of select="ancestor-or-self::*/@diff"/>
+          </xsl:attribute>
+        </xsl:if>
+        <code><xsl:apply-templates/></code>
+      </td> 
   </xsl:template>
 
   <!-- role: part played by a member of an organization -->
@@ -2277,6 +2220,7 @@
 
   <!-- vc: validity check reference in a formal production -->
   <xsl:template match="vc">
+    <!-- MHK 2024-09-14 - this is not used -->
     <xsl:choose>
       <xsl:when test="preceding-sibling::*[1][name()='rhs']">
         <td>
@@ -2349,6 +2293,7 @@
 
   <!-- wfc: well-formedness check reference in a formal production -->
   <xsl:template match="wfc">
+    <!-- MHK 2024-09-14 - this is not used -->
     <xsl:choose>
       <xsl:when test="preceding-sibling::*[1][name()='rhs']">
         <td>
@@ -2620,7 +2565,7 @@
     <xsl:number level="any" format="1"/>
   </xsl:template>
 
-  <!-- mode: ref -->
+  <!--<!-\- mode: ref -\->
   <xsl:template match="lhs" mode="ref">
     <tr style="vertical-align:baseline;">
       <td>
@@ -2658,14 +2603,14 @@
             <xsl:value-of select="ancestor-or-self::*/@diff"/>
           </xsl:attribute>
         </xsl:if>
-        <xsl:text>&#xa0;&#xa0;&#xa0;::=&#xa0;&#xa0;&#xa0;</xsl:text>
+        <xsl:text>::=</xsl:text>
       </td>
       <xsl:apply-templates
         select="following-sibling::*[1][name()='rhs']"/>
     </tr>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template mode="ref" match="prod">
+  <!--<xsl:template mode="ref" match="prod">
     <xsl:apply-templates select="lhs" mode="ref"/>
     <xsl:apply-templates
       select="rhs[preceding-sibling::*[1][name()!='lhs']] |
@@ -2673,7 +2618,7 @@
               constraint[preceding-sibling::*[1][name()!='rhs']] |
               vc[preceding-sibling::*[1][name()!='rhs']] |
               wfc[preceding-sibling::*[1][name()!='rhs']]"/>
-  </xsl:template>
+  </xsl:template>-->
 
   <!-- mode: text -->
   <!-- most stuff processes just as text here, but some things should
