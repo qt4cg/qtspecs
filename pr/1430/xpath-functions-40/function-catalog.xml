@@ -5377,7 +5377,11 @@ return normalize-unicode(concat($v1, $v2))</eg>
 					 <item><p><code>BLAKE3</code>: the <code>BLAKE3</code> algorithm defined by <bibref 
 					    ref="BLAKE3"/>.</p></item>
                      <item><p><code>CRC-32</code>: the <code>CRC-32</code> algorithm, defined by <bibref
-                        ref="ieee802-3"/>. </p></item>
+                        ref="ieee802-3"/>. The CRC-32 algorithm delivers a 32 bit unsigned integer,
+                     which this function returns as a 4-octet <code>xs:hexBinary</code> value 
+                        representing this integer in big-endian order (that is, most significant byte first).</p>
+                     <note><p>Some libraries, notably <code>System.IO.Hashing.Crc32</code> in .NET, return
+                     the result in little-endian order.</p></note></item>
 					<item><p><code>SHA-1</code>: the <code>SHA-1</code> algorithm, defined by <bibref
                         ref="fips180-4"/>. </p></item>
                      <item><p><code>SHA-256</code>: the <code>SHA-256</code> algorithm, defined by <bibref
@@ -5484,7 +5488,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="779 1188" PR="937 995 1190" date="2024-01-23"><p>New in 4.0</p></fos:change>
+         <fos:change issue="779 1188 1426" PR="937 995 1190" date="2024-01-23"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
    
@@ -6418,7 +6422,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <p>This is different from the behavior of patterns in <bibref ref="xmlschema-2"
                />, where
             regular expressions are <emph>implicitly</emph> anchored.</p>
-         <p>Regular expression matching is defined on the basis of Unicode code points; it takes no
+         <p>Regular expression matching is defined on the basis of Unicode codepoints; it takes no
             account of collations.</p>
       </fos:notes>
       <fos:examples>
@@ -12879,8 +12883,8 @@ let $newi := $o/tool</eg>
       <fos:signatures>
          <fos:proto name="element-number" return-type="xs:integer">
             <fos:arg name="element" type="element()?" default="."/>
-            <fos:arg name="from" type="(document-node() | element())?" default="()"/>
-            <fos:arg name="count" type="(fn($element as element()) as xs:boolean?)?" default="()"/>
+            <fos:arg name="root" type="(document-node() | element())?" default="()"/>
+            <fos:arg name="predicate" type="(fn(element()) as xs:boolean?)?" default="()"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="0">
@@ -12908,27 +12912,28 @@ let $newi := $o/tool</eg>
       </fos:summary>
       <fos:rules>
          <p>The function returns a non-negative integer reflecting the position of <code>$element</code> within
-         the subtree rooted at <code>$from</code>.</p>
+         the subtree rooted at <code>$root</code>.</p>
          <p>More specifically, it returns the number of elements <var>E</var> that satisfy all three of
          the following conditions:</p>
          <olist>
-            <item><p><var>E</var> is a descendant-or-self of <code>$from</code>.</p></item>
+            <item><p><var>E</var> is a descendant-or-self of <code>$root</code>.</p></item>
             <item><p><var>E</var> is either the same node as <code>$element</code>, or it 
                precedes <code>$element</code> in document order.</p></item>
-            <item><p><var>E</var> satisfies the predicate supplied as <code>$count</code>.</p></item>
+            <item><p><var>E</var> satisfies the predicate supplied as <code>$predicate</code>.</p></item>
          </olist>
          <p>If <code>$element</code> is omitted or empty, it defaults to the context node.</p>
-         <p>If <code>$from</code> is omitted or empty, it defaults to <code>root($element)</code> (that is,
+         <p>If <code>$root</code> is omitted or empty, it defaults to <code>root($element)</code> (that is,
          the document or element node at the root of the subtree containing <code>$element</code>).</p>
-         <p>If <code>$count</code> is omitted or empty, it defaults to a function that returns true
-         if and only if its argument is an element having the same name as <code>$element</code>.</p>
+         <p>If <code>$predicate</code> is omitted or empty, it defaults to a function that returns true
+         if and only if its argument is an element having the same name as <code>$element</code>:
+         that is, <code>fn{node-name(.) eq node-name($element)}</code>.</p>
          
          <p>This means that if all arguments are omitted, the function returns 1 for the first element
          in the containing document that has a given name, 2 for the second such element, and so on.</p>
          
       </fos:rules>
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
-         count($from/descendant-or-self::*[$count(.) and not(. >> $element)])
+         count($root/descendant-or-self::*[$predicate(.) and not(. >> $element)])
       </fos:equivalent>
       <fos:errors>
          <p>The following errors may be raised when <code>$element</code> is omitted:</p>
@@ -12951,7 +12956,7 @@ let $newi := $o/tool</eg>
       </fos:errors>
       <fos:notes>
          <p>This function is intended to be used for generating sequence numbers for sections, paragraphs,
-            figures, or equations within a structured document. It provides similar capability to the 
+            footnotes, figures, or equations when rendering a structured document. It provides similar capability to the 
             XSLT instruction <code>xsl:number</code> with <code>level="any"</code>, but without any 
             formatting of the returned number;
             formatting can be achieved using the <code>format-integer</code> function.</p>
@@ -12959,22 +12964,22 @@ let $newi := $o/tool</eg>
             in non-XSLT environments, and are inconvenient in some XSLT contexts, such as within a match
             pattern.</p>
          <p>By default the function counts elements within the entire containing tree. To restart numbering
-            within a subtree (for example, within a chapter of a larger document), the <code>$from</code>
+            within a subtree (for example, within a chapter of a larger document), the <code>$root</code>
             argument should be set to the root of that subtree.</p>
-         <p>By default the function counts all elements having the same name. The <code>$count</code> predicate
+         <p>By default the function counts all elements having the same name. The <code>$predicate</code> function
             can be used to modify this behavior. For example, if there is a single numbering sequence for
-            <code>diagram</code> and <code>image</code> elements, <code>$count</code> can be set to
+            <code>diagram</code> and <code>image</code> elements, <code>$predicate</code> can be set to
             <code>fn{self::diagram or self::image}</code>.</p>
-         <p>There is no requirement that <code>$element</code> itself must satisfy the <code>$count</code>
-            predicate, though this will usually be the case. If <code>$element</code> does not satisfy
-            the <code>$count</code> predicate, the result of the function may be zero.</p>
-         <p>The <code>$from</code> node, if it satisfies the <code>$count</code> predicate, will itself
+         <p>There is no requirement that <code>$element</code> itself must satisfy the <code>$predicate</code>
+            function, though this will usually be the case. If <code>$element</code> does not satisfy
+            <code>$predicate</code>, the result of the function may be zero.</p>
+         <p>The <code>$root</code> node, if it satisfies <code>$predicate</code>, will itself
             be counted. For example if <code>$element</code> is a <code>section</code> element and
-            <code>$from</code> is a containing <code>section</code>, the result for the first contained
+            <code>$root</code> is a containing <code>section</code>, the result for the first contained
             <code>section</code> element will be 2.</p>
-         <p>The <code>$count</code> predicate can be used to restrict the elements that are counted according
+         <p>The <code>$predicate</code> function can be used to restrict the elements that are counted according
             to their position in the tree. For example, if <code>diagram</code> elements occurring within a 
-            <code>table</code> are to be excluded, this can be achieved using by setting <code>$count</code>
+            <code>table</code> are to be excluded, this can be achieved using by setting <code>$predicate</code>
             to the function <code>fn{self::diagram and not(ancestor::table)}</code>; or if the only elements to
             be counted are those that are immediate siblings of the element being numbered, this can be achieved with
             the function <code>fn{self::diagram and .. is $element/..}</code>.</p>
@@ -13011,29 +13016,48 @@ let $newi := $o/tool</eg>
 let $n := $e//p[.='Fourth'] 
 return element-number($n)</eg></fos:expression>
                <fos:result><eg>4</eg></fos:result>
+               <fos:postamble>Returns the number of the paragraph within the containing document.</fos:postamble>
             </fos:test>
             <fos:test use="v-element-number-e">
                <fos:expression><eg>
 let $n := $e//p[.='Fourth'] 
 return element-number($n, $n/..)</eg></fos:expression>
                <fos:result><eg>2</eg></fos:result>
+               <fos:postamble>Returns the number of the paragraph within the containing section.</fos:postamble>
             </fos:test>
             <fos:test use="v-element-number-e">
                <fos:expression><eg>
 let $n := $e//appendix 
-return element-number($n)</eg></fos:expression>
-               <fos:result><eg>1</eg></fos:result>
+return element-number($n) => format-integer('A')</eg></fos:expression>
+               <fos:result><eg>"A"</eg></fos:result>
+               <fos:postamble>Determines a number identifying the appendix within the containing document,
+               and formats it using the numbering sequence <code>"A"</code>, <code>"B"</code>, <code>"C"</code>, ...</fos:postamble>
             </fos:test>
             <fos:test use="v-element-number-e">
                <fos:expression><eg>
 let $n := $e//appendix 
-return element-number($n, count:=fn{self::section or self::appendix})</eg></fos:expression>
+return element-number(
+          $n, 
+          predicate:=fn{self::(section|appendix) and parent::doc}
+       )</eg></fos:expression>
                <fos:result><eg>2</eg></fos:result>
+               <fos:postamble>Determines a number identifying the appendix, using a single consecutive
+               numbering sequence for sections and appendices that have a <code>doc</code> element as their parent.</fos:postamble>
+            </fos:test>
+            <fos:test use="v-element-number-e">
+               <fos:expression><eg>
+let $s := //section[head='OnePointOne']
+return string-join(
+         $s/ancestor-or-self::section ! element-number(),
+         '.')</eg></fos:expression>
+               <fos:result><eg>"1.1"</eg></fos:result>
+               <fos:postamble>Determines a hierarchic section number reflecting the position of a selected
+                  <code>section</code> element within a recursive hierarchy.</fos:postamble>
             </fos:test>
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="1427" PR="1430" date="2024-09-09"><p>New in 4.0</p></fos:change>
+         <fos:change issue="1427" PR="1430" date="2024-09-24"><p>New in 4.0</p></fos:change>
       </fos:changes>
 
    </fos:function>
@@ -19636,7 +19660,7 @@ return function-arity($initial)</eg></fos:expression>
 
    <fos:function name="function-annotations" prefix="fn">
       <fos:signatures>
-         <fos:proto name="function-annotations" return-type="map(xs:QName, xs:anyAtomicType*)">
+         <fos:proto name="function-annotations" return-type="record(key as xs:QName, value as xs:anyAtomicType*)*">
             <fos:arg name="function" type="fn(*)"/>
          </fos:proto>
       </fos:signatures>
@@ -19646,24 +19670,61 @@ return function-arity($initial)</eg></fos:expression>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns the annotations of the function identified by a function item.</p>
+         <p>Returns the annotations of the function item.</p>
       </fos:summary>
       <fos:rules>
          <p>The <code>fn:function-annotations</code> function returns the annotations of
-            the function identified by <code>$function</code> as a map.
-            For each annotation, a map entry is returned: The key is the name of the annotation.
-            The value is a sequence comprising the annotation values, or an empty sequence
-            if the annotation has no values.
+            <code>$function</code> as a sequence of (key, value) pairs.
+            Note that several annotations on a function can share the same name. The order
+            of the annotations is retained.</p>
+         <p>The result is a sequence of maps, each being an instance of
+            <code>record(key as xs:QName, value as xs:anyAtomicType*)</code>. 
             If a function (for example, a built-in function) has no annotations,
-            an empty map is returned.</p>
+            the result of the function is an empty sequence.</p>
+         <p>For each annotation, a map is returned, with two entries. One
+            entry has the key <code>"key"</code> as an <code>xs:string</code>, with the associated
+            value being the name of the annotation as an <code>xs:QName</code>.
+            The other has the key <code>"value"</code> as an <code>xs:string</code>, with the
+            associated value being the value of the annotation as a sequence of atomic items.
+            If the annotation has no values, the associated value is an empty sequence.</p>
       </fos:rules>
+      <fos:notes>
+         <p>The type of the result is the same as the type of the first argument
+            to the <code>map:of-pairs</code> function. This means that in the common case where the annotation names are all unique, 
+            the result of the function can readily be converted into a map by calling 
+            <code>map:of-pairs</code>.</p>
+      </fos:notes>
       <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>function-annotations(true#0)</eg></fos:expression>
+               <fos:result><eg>()</eg></fos:result>
+            </fos:test>
+         </fos:example>
          <fos:example>
             <fos:test>
                <fos:expression><eg>
 declare %private function local:inc($c) { $c + 1 };
 function-annotations(local:inc#1)</eg></fos:expression>
-               <fos:result>{ Q{http://www.w3.org/2012/xquery}private: () }</fos:result>
+               <fos:result><eg>
+{ "key": xs:QName("http://www.w3.org/2012/xquery", "private"),
+  "value": () 
+}</eg></fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>
+declare %private %variadic 
+        function local:sum($c as xs:integer*) { sum($c) };
+function-annotations(local:sum#3)</eg></fos:expression>
+               <fos:result><eg>
+{ "key": xs:QName("http://www.w3.org/2012/xquery", "private"),
+  "value": () 
+},
+{ "key": xs:QName("http://www.w3.org/2012/xquery", "variadic"),
+  "value": () 
+}</eg></fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -19671,18 +19732,25 @@ function-annotations(local:inc#1)</eg></fos:expression>
                <fos:expression><eg>
 let $old := %local:deprecated('0.1', '0.2') fn() {}
 let $ann := function-annotations($old)
-return map:keys($ann) || ': ' || string-join(map:values($ann), ', ')
+return map:of-pairs($ann)
 </eg></fos:expression>
-               <fos:result>local:deprecated: 0.1, 0.2</fos:result>
+               <fos:result><eg>
+{ xs:QName("http://www.w3.org/2005/xquery-local-functions", "deprecated"):
+    ("0.1", "0.2") 
+}
+</eg></fos:result>
             </fos:test>
          </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression>function-annotations(true#0)</fos:expression>
-               <fos:result>{}</fos:result>
-            </fos:test>
-         </fos:example>
+         
       </fos:examples>
+      <fos:changes>
+         <fos:change issue="36" PR="710" date="2023-09-17">
+            <p>Changes the function to return a sequence of key-value pairs rather than a map.</p>
+         </fos:change>
+         <fos:change issue="1391" PR="1393" date="2024-08-19">
+            <p>Changes the function to return a sequence of key-value pairs rather than a map.</p>
+         </fos:change>
+      </fos:changes>
    </fos:function>
 
    <fos:function name="for-each" prefix="fn">
@@ -30785,16 +30853,6 @@ fold-left($input, false(), fn($result, $item, $pos) {
          <p>The following options are available:</p>
 
          <fos:options>
-            <fos:option key="path-separator">
-               <fos:meaning>Identifies the path separator</fos:meaning>
-               <fos:type>xs:string</fos:type>
-               <fos:default>/</fos:default>
-            </fos:option>
-            <fos:option key="query-separator">
-               <fos:meaning>Identifies the query separator</fos:meaning>
-               <fos:type>xs:string</fos:type>
-               <fos:default>&amp;</fos:default>
-            </fos:option>
             <fos:option key="allow-deprecated-features">
                <fos:meaning>Indicates that deprecated URI
                features should be returned</fos:meaning>
@@ -30870,6 +30928,10 @@ fold-left($input, false(), fn($result, $item, $pos) {
             </item>
          </ulist>
 
+         <p>If the <emph>scheme</emph> is not empty and the <emph>fragment</emph> is empty,
+         <emph>absolute</emph> is true. Otherwise, <emph>absolute</emph> is the empty
+         sequence. (But see the discussion of hierarchical URIs, below.)</p>
+
          <p>If <emph>scheme</emph> is the empty sequence or <code>file</code>:</p>
          <ulist>
             <item>
@@ -30912,6 +30974,9 @@ fold-left($input, false(), fn($result, $item, $pos) {
          <code>false</code> otherwise.</p>
             </item>
          </ulist>
+
+         <p>If the URI is not <emph>hierarchical</emph>, <emph>absolute</emph>
+         is the empty sequence.</p>
 
          <p>Identify the remaining components according to the scheme and whether
          or not the URI is hierarchical.</p>
@@ -31051,12 +31116,9 @@ fold-left($input, false(), fn($result, $item, $pos) {
          is the whole <emph>string</emph>. If the <emph>scheme</emph> is 
          the empty sequence, <emph>filepath</emph> is also the whole <emph>string</emph>.</p>
 
-         <p>The <emph>path separator</emph> is the value of the
-         <code>path-separator</code> option. A
-         <emph>path-segments</emph> sequence is constructed by
-         tokenizing the <emph>string</emph> on the <emph>path
-         separator</emph> and applying <emph>uri decoding</emph> on each
-         token.</p>
+         <p>A <emph>path-segments</emph> sequence is constructed by tokenizing
+         the <emph>string</emph> on <code>/</code> (solidus) and applying
+         <emph>uri decoding</emph> on each token.</p>
 
          <note>
          <p>The <emph>path</emph> and <emph>path-segments</emph> properties both contain
@@ -31075,27 +31137,27 @@ fold-left($input, false(), fn($result, $item, $pos) {
          reconstructing the path with the syntactic ones.</p>
 
          <p>A consequence of constructing the <emph>path-segments</emph> this
-         way is that an empty string appears before the first
-         <emph>path-separator</emph>, if the path begins with a
-         <emph>path-separator</emph>, after the last
-         <emph>path-separator</emph>, if the path ends with a
-         <emph>path-separator</emph>, and between consecutive
-         <emph>path-separator</emph>. (If the path consists of a single <emph>path-separator</emph>,
-         that <emph>path-separator</emph> counts as <emph>both</emph> the first and last <emph>path-separator</emph>,
-         producing a segment list containing two empty strings.)</p> <p>The
+         way is that an empty string appears before the first <code>/</code>,
+         if the path begins with a
+         <code>/</code>, after the last
+         <code>/</code>, if the path ends with a
+         <code>/</code>, and between consecutive
+         <code>/</code> characters. (If the path consists of a single <code>/</code>,
+         that <code>/</code> counts as <emph>both</emph> the first and last <code>/</code>,
+         producing a segment list containing two empty strings.)</p>
+
+         <p>The
          empty strings may seem unnecessary at first glance, but they assure
          that the path can be reconstructed by joining the segments together
          again without having to handle the presence or absence of a leading or
-         trailing <emph>path-separator</emph> as special cases.</p></note>
+         trailing <code>/</code> as special cases.</p></note>
 
          <p>Applying <emph>uri decoding</emph> is equivalent to
          calling <code>fn:decode-from-uri</code> on the string.</p>
 
-         <p>The <emph>query separator</emph> is the value of the
-         <code>query-separator</code> option, and is used to construct
-         a <emph>query-parameters</emph> value as follows.
+         <p>The <emph>query-parameters</emph> value is constructed as follows.
          Start with an empty map. Tokenize the <emph>query</emph> on
-         the <emph>query separator</emph>. For each token, identify
+         the <code>&amp;</code> (ampersand). For each token, identify
          the <emph>key</emph> and the <emph>value</emph>. If the token
          contains an equal sign (<code>=</code>), the <emph>key</emph>
          is the string that precedes the first equal sign, uri
@@ -31113,25 +31175,8 @@ fold-left($input, false(), fn($result, $item, $pos) {
          forward slashes in the path <rfc2119>may</rfc2119> be
          replaced with backslashes.</p>
 
-         <p>The following map is returned:</p>
-
-         <eg>{
-  "uri": $value,
-  "scheme": <emph>scheme</emph>,
-  "hierarchical": <emph>hierarchical</emph>,
-  "authority": <emph>authority</emph>,
-  "userinfo": <emph>userinfo</emph>,
-  "host": <emph>host</emph>,
-  "port": <emph>port</emph>,
-  "path": <emph>path</emph>,
-  "query": <emph>query</emph>,
-  "fragment": <emph>fragment</emph>,
-  "path-segments": <emph>path-segments</emph>,
-  "query-parameters": <emph>query-parameters</emph>,
-  "filepath": <emph>filepath</emph>
-}</eg>
-
-         <p>The map should be populated with only those keys that have a non-empty value (keys
+         <p>A <loc href="#uri-structure-record">uri-structure-record</loc> is returned.
+         The record should be populated with only those keys that have a non-empty value (keys
          whose value is the empty sequence <rfc2119>should</rfc2119>
          be omitted).</p>
 
@@ -31187,6 +31232,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "authority": "www.ietf.org",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "www.ietf.org",
   "path": "/rfc/rfc2396.txt",
   "path-segments": ("", "rfc", "rfc2396.txt"),
@@ -31206,6 +31252,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
   "path-segments": ("", "path", "to", "file"),
   "host": "example.com",
   "hierarchical": true(),
+  "absolute": true(),
   "uri": "https://example.com/path/to/file"
 }</eg></fos:result>
 </fos:test>
@@ -31217,6 +31264,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "authority": "example.com:8080",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "example.com",
   "path": "/path",
   "path-segments": ("", "path"),
@@ -31238,6 +31286,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "authority": "user@example.com",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "example.com",
   "path": "/path/to/file",
   "path-segments": ("", "path", "to", "file"),
@@ -31254,6 +31303,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "authority": "ftp.is.co.za",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "ftp.is.co.za",
   "path": "/rfc/rfc1808.txt",
   "path-segments": ("", "rfc", "rfc1808.txt"),
@@ -31269,6 +31319,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "filepath": "/uncname/path/to/file",
   "hierarchical": true(),
+  "absolute": true(),
   "path": "/uncname/path/to/file",
   "path-segments": ("", "uncname", "path", "to", "file"),
   "scheme": "file",
@@ -31283,6 +31334,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
+  "absolute": true(),
   "path": "/c:/path/to/file",
   "path-segments": ("", "c:", "path", "to", "file"),
   "scheme": "file",
@@ -31297,6 +31349,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "filepath": "C:/Program Files/test.jar",
   "hierarchical": true(),
+  "absolute": true(),
   "path": "/C:/Program%20Files/test.jar",
   "path-segments": ("", "C:", "Program Files", "test.jar"),
   "scheme": "file",
@@ -31311,6 +31364,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
+  "absolute": true(),
   "path": "/c:/path/to/file",
   "path-segments": ("", "c:", "path", "to", "file"),
   "scheme": "file",
@@ -31325,6 +31379,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
+  "absolute": true(),
   "path": "/c:/path/to/file",
   "path-segments": ("", "c:", "path", "to", "file"),
   "scheme": "file",
@@ -31389,6 +31444,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "authority": "[2001:db8::7]",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "[2001:db8::7]",
   "path": "/c=GB",
   "path-segments": ("", "c=GB"),
@@ -31447,6 +31503,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:result><eg>map {
   "authority": "192.0.2.16:80",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "192.0.2.16",
   "path": "/",
   "path-segments": ("", ""),
@@ -31520,42 +31577,13 @@ description of <code>fn:resolve-uri</code>.</p>
 <fos:result><eg>map {
   "authority": "www.example.org",
   "hierarchical": true(),
+  "absolute": true(),
   "host": "www.example.org",
   "path": "/Dürst",
   "path-segments": ("", "Dürst"),
   "scheme": "http",
   "uri": "http://www.example.org/Dürst"
 }</eg></fos:result>
-</fos:test>
-</fos:example>
-
-<fos:example>
-<p>This example demonstrates a non-standard query separator.</p>
-<fos:test>
-<fos:expression><eg>parse-uri("https://example.com:8080/path?s=%22hello world%22;sort=relevance", { "query-separator": ";" })</eg></fos:expression>
-<fos:result><eg>map {
-  "authority": "example.com:8080",
-  "hierarchical": true(),
-  "host": "example.com",
-  "path": "/path",
-  "path-segments": ("", "path"),
-  "port": "8080",
-  "query": "s=%22hello world%22;sort=relevance",
-  "query-parameters":map {
-    "s": """hello world""",
-    "sort": "relevance"
-  },
-  "scheme": "https",
-  "uri": "https://example.com:8080/path?s=%22hello world%22;sort=relevance"
-}</eg></fos:result>
-</fos:test>
-</fos:example>
-
-<fos:example>
-<p>This example uses an invalid query separator so raises an error.</p>
-<fos:test>
-<fos:expression><eg>parse-uri("https://example.com:8080/path?s=%22hello world%22;;sort=relevance", { "query-separator": ";;" } )</eg></fos:expression>
-<fos:error-result error-code="FOXX0000"/>
 </fos:test>
 </fos:example>
 
@@ -31583,6 +31611,7 @@ path with an explicit <code>file:</code> scheme.</p>
 <fos:result><eg>map {
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
+  "absolute": true(),
   "path": "/c:/path/to/file",
   "path-segments": ("", "c:", "path", "to", "file"),
   "scheme": "file",
@@ -31636,16 +31665,6 @@ path with an explicit <code>file:</code> scheme.</p>
         <p>The following options are available:</p>
 
         <fos:options>
-           <fos:option key="path-separator">
-              <fos:meaning>Identifies the path separator</fos:meaning>
-              <fos:type>xs:string</fos:type>
-              <fos:default>/</fos:default>
-           </fos:option>
-           <fos:option key="query-separator">
-              <fos:meaning>Identifies the query separator</fos:meaning>
-              <fos:type>xs:string</fos:type>
-              <fos:default>&amp;</fos:default>
-           </fos:option>
            <fos:option key="allow-deprecated-features">
               <fos:meaning>Indicates that deprecated URI
               features should be returned</fos:meaning>
@@ -31726,33 +31745,56 @@ path with an explicit <code>file:</code> scheme.</p>
         is made to determine if a password or standard port are present,
         the <code>authority</code> value is simply added to the string.)</p>
 
+        <p>The <code>fn:parse-uri</code> function removes
+        percent-escaping when it constructs the
+        <code>path-segments</code>, <code>query-parameters</code>, and
+        <code>fragment</code> properties. That’s often the most
+        convenient behavior but, in order to reconstruct a URI from them,
+        special escaping rules apply. These rules protect delimiters
+        without encoding additional characters unnecessarily.
+        The rules for <code>path-segments</code>,
+        <code>query-parameters</code>, and <code>fragment</code> are
+        slightly different because the URI encoding conventions are
+        slightly different in each case.</p>
+
+        <p>An application with more stringent requirements can
+        construct a <code>path</code> or <code>query</code> that
+        satisfies the requirements and leave the
+        <code>path-segments</code> and/or
+        <code>query-parameters</code> keys out of the map.</p>
+
         <ulist>
-           <item><p>If the <code>path-segments</code> key exists in the map,
-           then the path is constructed from the segments.</p>
-           <p>To construct the path, each
-           segment is encoded, then they are joined together, separated by the path
-           separator, to form the path.
-           The encoding performed replaces any control characters (code points less than 0x20)
+           <item><p>If the <code>path-segments</code> key exists in
+           the map, then the path is constructed from the segments. To
+           construct the path, the possibly encoded segments are
+           concatentated together, separated by
+           <code>/</code> (solidus) characters.</p>
+
+           <p>The rules for encoding the path segments are different
+           for hierarchical and non-hierarchical URIs. If the URI is
+           non-hierarchical, no
+           encoding is performed on the segments. Otherwise,
+           each segment is encoded by replacing any control characters (codepoints less than 0x20)
            and exclusively the following characters with their
            percent-escaped forms: <code> </code> (space) <code>%</code> (percent
            sign), <code>/</code> (solidus), <code>?</code> (question mark),
            <code>#</code> (number sign), <code>+</code> (plus sign),
            <code>[</code> (left square bracket), and <code>]</code> (right
-           square bracket).</p>
+           square bracket). That is “<code>[#0-#20%/\?\#\+\[\]]</code>”.</p>
 
-           <p>This is a compromise. The <code>fn:parse-uri</code> function removes
-           percent-escaping when it constructs the path segments because that
-           behavior is often most convenient when dealing with
-           common cases involving <code>file:</code> URIs. But the decoding process is not lossless (consider
-           that both “<code>%3D</code>” and “<code>=</code>” will be realized as
-           <code>=</code> in the path segments).</p>
-
-           <p>The escaping described here protects the delimiters used in
-           hierarchical URIs because leaving those unescaped would change the
-           interpretation of the URI.
-           An application with more stringent requirements can construct a <code>path</code>
-           that satisfies the requirements and leave the <code>path-segments</code> key out of the
-           map.</p>
+           <note>
+              <p>Encoding is performed unless the URI is known to be non-hierarchical;
+              in other words, encoding is the default. This heuristic improves the
+              reliability of using <code>fn:build-uri()</code> on the output of
+              <code>fn:parse-uri()</code>. (For example,
+              <code>fn:parse-uri('a+b/c') => fn:build-uri()</code> will return 
+              <code>a+b/c</code>.)</p>
+              <p>It’s necessary to avoid encoding non-hierarchical schemes because there is more
+              variation in them (for example, the <code>tel:</code> scheme
+              uses a “<code>+</code>” that must not be encoded). Users working with
+              non-hierarchical schemes may need to address the encoding issue directly
+              bearing in mind the encoding requirements of the particular schemes in use.</p>
+           </note>
         </item>
         <item>
            <p>Otherwise the value of the <code>path</code> key is used.</p>
@@ -31762,40 +31804,54 @@ path with an explicit <code>file:</code> scheme.</p>
         </item>
         </ulist>
 
-        <note>
-           <p>The compromise encoding used for the <code>path-segments</code> does not
-           apply to the query parameters or fragment identifier. Those values are encoded
-           with <code>encode-for-uri</code>. The compromise encoding isn’t appropriate
-           because those fields can contain additional characters that must be encoded.
-           Adopting a <emph>different</emph> compromise encoding for those values
-           seems unnecessary in practice.</p>
-        </note>
-
         <p>The path is added to the URI.</p>
 
         <p>If the <code>query-parameters</code> key exists in the map, its value
-        must be a map. A sequence of strings is constructed from the values in the map.
+        must be a map. A sequence of strings is constructed from the values in the map.</p>
+
+        <p>To construct the string, each <emph>key</emph> and <emph>value</emph>
+        is encoded.
+        The encoding performed replaces any control characters (codepoints less than 0x20)
+        and exclusively the following characters with their
+        percent-escaped forms: <code> </code> (space) <code>%</code> (percent
+        sign), <code>=</code> (equals sign), <code>&amp;</code> (ampersand),
+        <code>#</code> (number sign), <code>+</code> (plus sign),
+        <code>[</code> (left square bracket), and <code>]</code> (right
+        square bracket). That is “<code>[#0-#20%=&amp;\#\+\[\]]</code>”.
+        (This differs from the path encoding in that it excludes <code>/</code>
+        and <code>?</code> but includes <code>=</code> and <code>&amp;</code>.)
         For each <emph>key</emph> and each <emph>value</emph> associated with
         that key in turn:</p>
 
         <ulist>
            <item><p>If the <emph>key</emph> is the empty string, the string constructed
-           is the <emph>value</emph> encoded with <code>encode-for-uri</code>.</p></item>
+           is the encoded <emph>value</emph>.</p></item>
            <item><p>Otherwise, the string constructed is the value of the
            <emph>key</emph>, encoded, followed by an equal sign (<code>=</code>),
            followed by the <emph>value</emph>, encoded.</p></item>
         </ulist>
 
         <p>The query is constructed by joining the resulting
-        strings into a single string, separated by <code>$options?query-separator</code>).
+        strings into a single string, separated by <code>&amp;</code> (ampersand) characters.
         If the <code>query-parameters</code> key does not exist in the map, but
         the <code>query</code> key does, then the query is the value of the
-        <code>query</code> key. If there is a query, it is added to the URI with
-        a preceding question mark (<code>?</code>).</p>
+        <code>query</code> key.</p>
+        <p>If there is a query, it is added to the URI with
+        a preceding <code>?</code> (question mark).</p>
 
         <p>If the <code>fragment</code> key exists in the map, then
-        the value of that key is encoded with <code>encode-for-uri</code> and added to the URI with
-        a preceding hash mark (<code>#</code>).</p>
+        the value of that key is encoded and added to the URI with a
+        preceding hash mark (<code>#</code>).
+
+        The encoding performed replaces any control characters (codepoints less than 0x20)
+        and exclusively the following characters with their
+        percent-escaped forms: <code> </code> (space) <code>%</code> (percent
+        sign),
+        <code>#</code> (number sign), <code>+</code> (plus sign),
+        <code>[</code> (left square bracket), and <code>]</code> (right
+        square bracket). That is “<code>[#0-#20%\#\+\[\]]</code>”.
+        (This differs from the path encoding in that it excludes <code>/</code>
+        and <code>?</code>.)</p>
 
         <p>The resulting URI is returned.</p>
       </fos:rules>
@@ -31803,7 +31859,7 @@ path with an explicit <code>file:</code> scheme.</p>
       <fos:examples role="wide">
          <fos:example>
             <fos:test>
-               <fos:expression><eg>build-uri({
+               <fos:expression><eg>build-uri(map {
   "scheme": "https",
   "host": "qt4cg.org",
   "port": (),
@@ -31824,7 +31880,7 @@ path with an explicit <code>file:</code> scheme.</p>
          in meeting 042.</fos:version>
       </fos:history>-->
       <fos:changes>
-         <fos:change date="2022-10-17" issue="72 389 390"><p>New in 4.0</p></fos:change>
+         <fos:change date="2022-10-17" issue="72 389 390" PR="1423 1413"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
    
