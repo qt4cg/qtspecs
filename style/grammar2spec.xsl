@@ -536,6 +536,7 @@
     <xsl:param name="orig"/>
 
     <xsl:for-each select="key('visible_nonterminal_defns', '')">
+      <xsl:sort select="@name" lang="en"/>
       <xsl:call-template name="make-prod">
         <xsl:with-param name="orig" select="$orig"/>
         <xsl:with-param name="result_id_docprod_part" select="'prod-'"/>
