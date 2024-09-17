@@ -2045,7 +2045,7 @@ local:depth(doc("partlist.xml"))
        other function declaration having the same name in the same static context.</p></item>
        <item><p>The order of field declarations is significant, because it determines the order of
        arguments in a call to the constructor function.</p></item>
-       <item><p>The fields must have distinct names. (TODO: error code)</p></item>
+       <item><p>The fields must have distinct names. <errorref class="ST" code="0021"/></p></item>
        <item><p>In order to work as both a record type and a function declaration, the names of the
        fields must be simple NCNames in no namespace; the names must not be written as string literals
          <errorref class="ST" code="0003"/>.</p>
@@ -2091,7 +2091,7 @@ local:depth(doc("partlist.xml"))
         (directly or indirectly) is optional or emptiable. Specifically, it must either be an optional field, or its type
         declaration must be such that it can hold an empty sequence or a value of a different type. 
         A recursive record type that is not instantiable is considered to be <termref def="dt-implausible"/>, 
-        which means that a processor may treat it as an error but is not obliged to do so.</p>
+        which means that a processor may treat it as an error but is not obliged to do so <errorref class="ST" code="0023"/>.</p>
         
     </div3>
     <div3 id="named-records-as-functions">
@@ -2099,24 +2099,24 @@ local:depth(doc("partlist.xml"))
    
        <p>The construct:</p>
         
-        <eg>declare record cx:complex(r as xs:double, i as xs:double := 0)</eg>
+        <eg>declare record cx:complex(r as xs:double, i as xs:double := 0);</eg>
       
       <p>implicitly defines the function:</p>
        
        <eg>declare function cx:complex($r as xs:double, $i as xs:double := 0) 
                   as cx:complex {
-     map:of-pairs((
-        map:pair("r", $r),
-        map:pair("i", $i)
+     map:merge((
+        {"r": $r},
+        {"i": $i}
      ))
- }
+ };
        </eg>
       
       <p>So the call <code>cx:complex(3, 2)</code> produces the value <code>{"r":3e0, "i":2e0}</code>,
       while the call <code>cx:complex(3)</code> produces the value <code>{"r":3e0, "i":0e0}</code></p>
       
       <p>If a field is declared as optional, by including a question mark after the name, and if it has no initializer,
-      then the initializer <code>:= ()</code> is added implicitly. If the declared type of the field does
+      then the initializer <code>:= ()</code> is added implicitly. If the declared type of an optional field does
         not permit an empty sequence, then the declared type of the function parameter is adjusted by changing the
         occurrence indicator (from absent to <code>?</code> or from <code>+</code> to <code>*</code>) in order
       to make the empty sequence an acceptable value.</p>
@@ -2125,22 +2125,23 @@ local:depth(doc("partlist.xml"))
         map will be absent when the value supplied (implicitly or explicitly) to the function argument is an empty sequence. 
         This is achieved by modifying the function body. Given the declaration:</p>
       
-      <eg>declare record cx:complex(r as xs:double, i? as xs:double)</eg>
+      <eg>declare record cx:complex(r as xs:double, i? as xs:double);</eg>
       
       <p>the equivalent function declaration is:</p>
        
        <eg>declare function cx:complex($r as xs:double, $i as xs:double? := ()) 
                   as cx:complex {
-     map:of-pairs((
-        map:pair("r", $r),
-        if (exists($i)) {map:pair("i", $i)}
+     map:merge((
+        {"r": $r},
+        if (exists($i)) { {"i": $i} }
      ))
  };
        </eg>
       
       
       <p>If any field is either declared optional, or has an explicit initializer, 
-        then all subsequent fields must also either be declared optional, or have an explicit initializer.</p>
+        then all subsequent fields must also either be declared optional, or have an explicit initializer
+        <errorref class="ST" code="0148"/>.</p>
       
       <p>If the record type is declared as extensible (by the presence of a final <code>,*</code>), then
       an additional paremeter is added to the function declaration. The name of the parameter is <code>options</code>
@@ -2156,15 +2157,16 @@ local:depth(doc("partlist.xml"))
                           $last as xs:string, 
                           $options as map(*) := {}) 
                  as p:person {
-     map:of-pairs((
-        map:pair("first", $first),
-        map:pair("last", $last),
-        map:pairs($options)
-     ), combine := fn($a, $b){$a}) 
+     map:merge((
+        {"first": $first},
+        {"last": $last},
+        $options
+     ), 
+     {"duplicates": "use-first"} 
  };
       </eg>
       
-      <p>The effect of the <code>combine</code> option here is that when two values are supplied for the same field,
+      <p>The effect of the <code>duplicates</code> option here is that when two values are supplied for the same field,
       one as a direct argument in the function call and the other in the <code>options</code> map, the value supplied
       as a direct argument is used in preference.</p>
       
@@ -2202,21 +2204,21 @@ local:depth(doc("partlist.xml"))
        
        <item><p>The return type of the function is the name of the record declaration, with no occurrence
        indicator.</p></item>
-       <item><p>The body of the function is a call of the function <code>map:pairs</code> with two arguments:</p>
+       <item><p>The body of the function is a call of the function <code>map:merge</code> with two arguments:</p>
          <ulist>
            <item><p>The first argument is a parenthesized expression containing a 
              comma-separated sequence of subexpressions, containing one
            subexpression for each field, in order, and optionally a further subexpression for the
            <code>options</code> parameter if present.</p></item>
-           <item><p>By default, the relevant subexpression is the function call <code>map:pair("N", $N)</code>
+           <item><p>By default, the relevant subexpression is the map constructor <code>{"N": $N}</code>
            where <var>N</var> is the field name.</p></item>
            <item><p>If the field is optional and is declared without an explicit initializer, then the
-           relevant subexpression takes the form <code>if (exists($N)) { map:pair("N", $N) }</code>
+           relevant subexpression takes the form <code>if (exists($N)) { {"N": $N} }</code>
            where <var>N</var> is the field name.</p></item>
-           <item><p>The optional final subexpression, if present, takes the form <code>map:pairs($options)</code>,
+           <item><p>The optional final subexpression, if present, takes the form <code>$options</code>,
            where <code>$options</code> is the name allocated to the final parameter.</p></item>
-           <item><p>The second argument in the call of the function <code>map:pairs</code>
-           is the function item <code>fn($a, $b){ $a }</code>. This can be omitted if the record is not
+           <item><p>The second argument in the call of the function <code>map:merge</code>
+           is the map <code>{ "duplicates": "use-first" }</code>. This can be omitted if the record is not
            extensible, because in this case duplicate field names cannot arise.</p></item>
          </ulist>
        </item>  
@@ -2266,7 +2268,7 @@ local:depth(doc("partlist.xml"))
        <p>The following expression constructs a rectangle and calculates its area:</p>
        
        <eg>let $box := geom:rectangle(3, 2)
- return $box =?> area()</eg>
+return $box =?> area()</eg>
      
      <note><p>There is nothing to stop a user constructing an instance of <code>geom:rectangle</code>
      in which the <code>area</code> field holds some different function; while the syntax imitates
