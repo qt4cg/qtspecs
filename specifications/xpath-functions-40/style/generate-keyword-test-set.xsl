@@ -13,6 +13,8 @@
    <xsl:output method="xml" indent="yes"/>
    <xsl:strip-space elements="*"/>
    
+   <xsl:key name="type-ref" match="type" use="@id"/>
+   
    <xsl:template match="/">
      <xsl:comment> ************************************************** </xsl:comment>
      <xsl:text>&#10;</xsl:text>
@@ -72,14 +74,38 @@
             <xsl:text>instance of function(</xsl:text>
             <xsl:for-each select="arg">
               <xsl:if test="position() != 1">, </xsl:if>
-              <xsl:text>{@type}</xsl:text>
+              <xsl:apply-templates select="(@type, @type-ref)[1]"/>
             </xsl:for-each>
-            <xsl:text>) as {(@return-type, 'item()*')[1]}</xsl:text>
+            <xsl:text>) as </xsl:text>
+            <xsl:apply-templates select="(@return-type, @return-type-ref)[1]"/>
          </test>
          <result>
             <assert-true/>
          </result>
       </test-case>
+   </xsl:template>
+   
+   <xsl:template match="@type | @return-type">
+      <xsl:text>{.}</xsl:text>
+   </xsl:template>
+   
+   <xsl:template match="@type-ref | @return-type-ref">
+      <xsl:variable name="type" select="key('type-ref', .)"/>
+      <xsl:apply-templates select="$type/*"/>
+   </xsl:template>
+   
+   <xsl:template match="type/record">
+      <xsl:text>record(</xsl:text>
+      <xsl:for-each select="field">
+         <xsl:if test="position() ne 1">, </xsl:if>
+         <xsl:apply-templates select="."/>
+      </xsl:for-each>
+      <xsl:if test="xs:boolean(@extensible)">, *</xsl:if>
+      <xsl:text>)</xsl:text>
+   </xsl:template>
+   
+   <xsl:template match="field">
+      <xsl:text>{@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}</xsl:text>
    </xsl:template>
    
  
