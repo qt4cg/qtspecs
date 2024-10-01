@@ -16,15 +16,17 @@
 
 	<xsl:param name="function-catalog" select="'function-catalog.xml'"/>
 	<xsl:variable name="fosdoc" select="document($function-catalog, /)"/>
+	
+	<xsl:key name="record-type" match="fos:record-type" use="@id"/>
 
 	<xsl:variable name="isFO" select="contains(/spec/header/title, 'Functions and Operators')"
 		as="xs:boolean"/>
 
-        <xsl:key name="id" match="*" use="@id"/>
-        <xsl:variable name="new-functions"
-                      select="key('id', 'new-functions')//code/string()"/>
-        <xsl:variable name="changed-functions"
-                      select="key('id', 'changes-to-existing-functions')//code/string()"/>
+   <xsl:key name="id" match="*" use="@id"/>
+   <xsl:variable name="new-functions"
+                select="key('id', 'new-functions')//code/string()"/>
+   <xsl:variable name="changed-functions"
+                select="key('id', 'changes-to-existing-functions')//code/string()"/>
 
 	<xsl:template match="/">
 		<xsl:for-each select="1 to 20">
@@ -115,6 +117,15 @@
 				<def>
 					<xsl:copy-of select="$fspec/fos:signatures/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>
+					<xsl:for-each select="distinct-values($fspec/fos:signatures//(@type-ref|@return-type-ref))">
+						<xsl:call-template name="show-record-type">
+							<xsl:with-param name="name" select="."/>
+							<xsl:with-param name="definition" select="key('record-type', ., $fosdoc)"/>
+							<xsl:with-param name="is-first" 
+								select="empty($fspec/preceding-sibling::fos:function[
+								                fos:signatures//(@type-ref|@return-type-ref) = current()])"/>
+						</xsl:call-template>
+					</xsl:for-each>
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:record"/>
 				</def>
 			</gitem>
@@ -254,6 +265,22 @@
 			</xsl:otherwise>
 		</xsl:choose>
 
+	</xsl:template>
+	
+	<xsl:template name="show-record-type">
+		<xsl:param name="name" as="xs:string"/>
+		<xsl:param name="definition" as="element(fos:record-type)"/>
+		<xsl:param name="is-first" as="xs:boolean"/>
+		<eg>
+			<xsl:if test="$is-first">
+				<xsl:attribute name="id" select="$name"/>
+			</xsl:if>
+			<xsl:text>record {$name} (&#xa;</xsl:text>
+			<xsl:for-each select="$definition/fos:field">
+				<xsl:text>   {@name} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>
+			</xsl:for-each>
+			<xsl:text>)&#xa;</xsl:text>
+		</eg>
 	</xsl:template>
 
 	<xsl:template match="@dependency"> It depends on 
@@ -549,12 +576,58 @@
 
 	<!-- remove dummy termdefs used in XSLT to ensure no dangling references -->
 	<xsl:template match="p[termdef[@role = 'placemarker']]"/>
+	
+	<xsl:template match="processing-instruction(record-description)">
+		<xsl:variable name="target" select="key('record-type', string(.), $fosdoc)"/>
+		<xsl:if test="count($target) ne 1">
+			<xsl:message expand-text="yes">Failed to locate record type {.}</xsl:message>
+		</xsl:if>
+		<xsl:if test="empty($target/@id)">
+			<xsl:message expand-text="yes">Record type {.} has no name</xsl:message>
+		</xsl:if>
+		<xsl:variable name="record" select="$target" as="element(fos:record-type)"/>
+		<!--<example role="record" id="{$record/@id}-narrative">
+	    <record>
+              <xsl:for-each select="$record/fos:field">
+                <arg name="{@name}" type="{@type}">
+                  <xsl:attribute name="occur"
+                                 select="if (xs:boolean(@required)) then 'req' else 'opt'"/>
+                </arg>
+              </xsl:for-each>
+              <xsl:if test="$record/@extensible != false()">
+                <arg name="*"/>
+              </xsl:if>
+	    </record>
+	  </example>-->
+	  <table class="fos-options">
+		  <thead>
+		    <tr>
+		      <th>Name</th>
+		      <!--<xsl:if test="fos:option/fos:applies-to">
+			<th>Applies to</th>
+		      </xsl:if>-->
+		      <xsl:if test="exists($record//fos:values)">
+			      <th>Value</th>
+		      </xsl:if>
+		      <th>
+			      <xsl:text>Meaning</xsl:text>
+		      </th>
+		    </tr>
+		  </thead>
+		  <tbody>
+		    <xsl:apply-templates select="$record/fos:field" mode="narrative"/>
+		  </tbody>
+		</table>
+
+	</xsl:template>
+	
+	
 
 	<!-- Handle option parameter specifications -->
 
-	<xsl:template match="fos:options|fos:record-description">
+	<xsl:template match="fos:options">
 
-	  <example role="{if (self::fos:options) then 'record' else 'record-description'}">
+	  <example role="record">
 	    <record>
               <xsl:copy-of select="@id"/>
               <xsl:for-each select="fos:option">
@@ -589,18 +662,18 @@
     </tr>
   </thead>
   <tbody>
-    <xsl:apply-templates select="fos:option"/>
+    <xsl:apply-templates select="fos:option" mode="narrative"/>
   </tbody>
 </table>
 </xsl:template>
 
-<xsl:template match="fos:option">
+<xsl:template match="fos:option|fos:field" mode="narrative">
 <tr>
   <xsl:copy-of select="@diff, @at"/>
   <td rowspan="{1 + count(fos:values/fos:value)}">
     <p>
       <code>
-	<xsl:value-of select="@key"/>
+	     <xsl:value-of select="@key|@name"/>
       </code>
     </p>
   </td>
@@ -616,14 +689,14 @@
       <xsl:attribute name="colspan">2</xsl:attribute>
     </xsl:if>
     <xsl:apply-templates select="fos:meaning/node()"/>
-    <xsl:if test="fos:type|fos:default|fos:default-description">
+    <xsl:if test="fos:type|fos:default|fos:default-description|@type">
       <ulist>
-        <xsl:if test="fos:type">
+        <xsl:if test="fos:type or @type">
           <item>
 	    <p>
 	      <term>Type: </term>
 	      <code>
-	        <xsl:value-of select="fos:type"/>
+	        <xsl:value-of select="fos:type|@type"/>
 	      </code>
 	    </p>
           </item>
@@ -696,7 +769,7 @@
 
 <xsl:template match="fos:history | fos:version"/>
 
-	<xsl:template match="processing-instruction('type')" expand-text="yes">
+	<!--<xsl:template match="processing-instruction('type')" expand-text="yes">
 		<xsl:variable name="target" select="$fosdoc//fos:type[@id = normalize-space(current())]"/>
 		<xsl:if test="count($target) ne 1">
 			<xsl:message expand-text="yes">Failed to locate record type {.}</xsl:message>
@@ -704,6 +777,6 @@
 		<xsl:variable name="verified-target" select="$target" as="element(fos:type)"/>
 		<xsl:variable name="record" select="$target/fos:record" as="element(fos:record)"/>
 		<xsl:apply-templates select="$record"/>
-	</xsl:template>
+	</xsl:template>-->
 
 </xsl:stylesheet>
