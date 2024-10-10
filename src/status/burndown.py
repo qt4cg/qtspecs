@@ -13,7 +13,7 @@ meetingone = datetime(2022, 9, 6, 16, 0, 0, tzinfo=tzutc())
 meetingnow = datetime.now().astimezone()
 oneweek = timedelta(days=7)
 weekcount = math.floor((meetingnow - meetingone) / oneweek)
-specifications = ['XQFO', 'XDM', 'XPath', 'XQuery', 'XQUF', 'XSLT', 'unspecified']
+specifications = ['XQFO', 'XDM', 'XPath', 'XQuery', 'XQUF', 'XSLT', 'Serialization', 'Editorial', 'unspecified']
 features = ['feature', 'enhancement', 'other']
 
 # Work back six months
@@ -80,6 +80,14 @@ with open("qtspecs-issues.json", "r", encoding="utf-8") as file:
 
             featureLabel = feature_label(labels)
             specLabel = specification_label(labels)
+
+            if ("Discussion" in labels
+                or "Abandoned" in labels
+                or "Build" in labels):
+                continue
+
+            if specLabel == "unspecified":
+                print(f"{issue['number']}: {labels}")
             
             weeks[issue['week_open']]['issue']['opened'] += 1
             weeks[issue['week_open']][featureLabel]['opened'] += 1
