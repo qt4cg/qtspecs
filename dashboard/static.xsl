@@ -211,6 +211,7 @@
           </section>
         </section>
       </main>
+      <script src="js/link-patch.js"></script>
     </body>
   </html>
 </xsl:template>
