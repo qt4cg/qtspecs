@@ -1723,6 +1723,7 @@
       </title>
       <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
       <xsl:call-template name="css"/>
+      <xsl:call-template name="additional-head"/>
     </head>
   </xsl:template>
   
