@@ -277,7 +277,7 @@
 			</xsl:if>
 			<xsl:text>record {$name} (&#xa;</xsl:text>
 			<xsl:for-each select="$definition/fos:field">
-				<xsl:text>   {@name} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>
+				<xsl:text>   {@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>
 			</xsl:for-each>
 			<xsl:text>)&#xa;</xsl:text>
 		</eg>
