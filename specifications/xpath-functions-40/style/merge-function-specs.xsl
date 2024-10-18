@@ -259,7 +259,7 @@
 			</xsl:when>
 			<xsl:otherwise>
 				<!-- Typically the XSLT spec -->
-				<xtermref spec="FO30" ref="dt-{.}">
+				<xtermref spec="FO40" ref="dt-{.}">
 					<xsl:value-of select="."/>
 				</xtermref>
 			</xsl:otherwise>
@@ -277,7 +277,7 @@
 			</xsl:if>
 			<xsl:text>record {$name} (&#xa;</xsl:text>
 			<xsl:for-each select="$definition/fos:field">
-				<xsl:text>   {@name} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>
+				<xsl:text>   {@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>
 			</xsl:for-each>
 			<xsl:text>)&#xa;</xsl:text>
 		</eg>

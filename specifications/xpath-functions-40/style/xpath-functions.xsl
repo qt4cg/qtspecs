@@ -30,113 +30,39 @@
 
 <xsl:key name="id" match="*" use="@id"/>
 
-  <xsl:template name="finder"
-                xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
-                exclude-result-prefixes="fos">
-    <xsl:variable name="spec" select="./root()"/>
+<xsl:template name="finder"
+              xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
+              exclude-result-prefixes="fos">
+  <xsl:variable name="spec" select="./root()"/>
 
-    <xsl:variable name="catalog" select="doc('../src/function-catalog.xml')"/>
-    <xsl:variable name="prefixes" select="('fn', 'array', 'map', 'math', 'op')"/>
-    <xsl:variable name="body" select="."/>
-    <div id="function-finder">
-      <div class="ffheader">FUNCTION FINDER</div>
-      <xsl:variable name="prefix-action" as="xs:string">
-        <xsl:value-of>
-            <xsl:for-each select="$prefixes">
-              <xsl:text>document.getElementById('select-</xsl:text>
-              <xsl:value-of select='.'/>
-              <xsl:text>').style.display = 'none';</xsl:text>
-            </xsl:for-each>
-            <xsl:text>document.getElementById('select-' + this.value).style.display = 'inline';</xsl:text> 
-        </xsl:value-of>
-      </xsl:variable>
-      <div style="height: 30px">
-        <select onchange="{$prefix-action}">
-          <option value="fn">fn</option>
-          <option value="array">array</option>
-          <option value="map">map</option>
-          <option value="math">math</option>
-          <option value="op">op</option>
-        </select>
-        <xsl:text> </xsl:text>
-
-
-        <xsl:for-each select="$prefixes">
-          <xsl:variable name="prefix" select="."/>
-          <select id="select-{$prefix}" 
-            style="display: {if ($prefix='fn') then 'inline' else 'none'}" 
-                  onchange="location.hash = this.value">
-            <option value="">      — Select a function —</option>
-            <xsl:for-each select="$catalog//fos:function[(@prefix, 'fn')[1] = $prefix]">
-              <xsl:sort select="@name" lang="en"/>
-              <xsl:variable name="target" select="local:target-id(concat($prefix, ':', @name))"/>
-
-              <xsl:variable name="fqfn" select="$prefix || ':' || @name"/>
-
-              <xsl:variable name="new-function"
-                            select="exists(.//fos:change[contains(., 'New in 4.0')])"/>
-
-              <xsl:variable name="changed-function"
-                            select="exists(.//fos:change) and not($new-function)"/>
-              <option value="{$target}">
-                <xsl:if test="empty(key('id', $target, $spec))">
-                  <xsl:attribute name="disabled" select="'disabled'"/>
-                </xsl:if>
-                <xsl:variable name="name" select="string(@name)"/>
-                <xsl:variable name="l" select="string-length($name)"/>
-
-                <xsl:value-of select="if ($l gt 31)
-                                      then substring($name, 1, 14)
-                                           || '…'
-                                           || substring($name, $l - 15)
-                                      else $name"/>
-
-                <xsl:if test="$new-function">
-                  <span class="tocDelta"> ΔΔ </span>
-                </xsl:if>
-                <xsl:if test="$changed-function">
-                  <span class="tocDelta"> Δ </span>
-                </xsl:if>
-              </option>
-
-              <xsl:if test="empty(key('id', $target, $spec))">
-                <xsl:message select="'Function '
-                                     || $prefix || ':' || @name
-                                     || ' in catalog but not spec'"/>
-              </xsl:if>
-            </xsl:for-each>
-          </select>  
+  <xsl:variable name="catalog" select="doc('../src/function-catalog.xml')"/>
+  <xsl:variable name="prefixes" select="('fn', 'array', 'map', 'math', 'op')"/>
+  <xsl:variable name="body" select="."/>
+  <div id="function-finder">
+    <div class="ffheader">FUNCTION FINDER</div>
+    <div>
+      <span>Function search: <input id="select-fn" list="fn-list" type="text"/>
+      <xsl:text> </xsl:text>
+      <button id="help-select-fn-button">?</button>
+      </span>
+      <p id="help-select-fn" style="display:none;">Type a function name, or press down arrow for a list.</p>
+      <datalist id="fn-list">
+        <!-- put the fn: functions first -->
+        <xsl:for-each select="$catalog//fos:function[@prefix = 'fn']">
+          <xsl:sort select="upper-case(@prefix||':'||@name)"/>
+          <option value="{@prefix}:{@name}&#8291;"/>
         </xsl:for-each>
-      </div>
-    </div>   
-  </xsl:template>
+        <xsl:for-each select="$catalog//fos:function[@prefix != 'fn']">
+          <xsl:sort select="upper-case(@prefix||':'||@name)"/>
+          <option value="{@prefix}:{@name}&#8291;"/>
+        </xsl:for-each>
+      </datalist>
+    </div>
+  </div>   
+</xsl:template>
 
-<xsl:template match="body">
-  <!--<div>
-        <xsl:text>&#10;</xsl:text>
-        <h2>
-          <xsl:call-template name="anchor">
-            <xsl:with-param name="conditional" select="0"/>
-            <xsl:with-param name="default.id" select="'quickcontents'"/>
-          </xsl:call-template>
-          <xsl:text>Quick Contents</xsl:text>
-        </h2>
-    
-      
-        <xsl:variable name="names" select="distinct-values(//proto[not(@role='example')]/concat(@prefix, ':', @name))"/>
-        <xsl:for-each-group select="$names" group-by="lower-case(substring(substring-after(.,':'),1,1))">
-          <xsl:sort select="current-grouping-key()"/>
-          <p>
-            <xsl:for-each select="current-group()">
-              <xsl:sort select="substring-after(.,':')" lang="en"/>
-              <a href="#{local:target-id(.)}"><xsl:value-of select="replace(.,'^fn:', '')"/></a>
-              <xsl:text>&#xa0; </xsl:text>
-            </xsl:for-each>
-          </p>
-        </xsl:for-each-group>
-
-  </div>-->
-  <xsl:apply-imports/>
+<xsl:template name="additional-head">
+  <script src="js/fo-datalist.js"></script>
 </xsl:template>
 
 <!-- Determine the HTML anchor name for the specification of a function -->
