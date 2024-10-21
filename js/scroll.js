@@ -1,5 +1,5 @@
 const DELETED = "rgb(255, 85, 85, 0.3)";
-const ADDED = "rgb(144, 238, 144, 0.3)";
+const ADDED = "rgb(144, 238, 238, 0.3)";
 
 class DXmlView {
   constructor() {
