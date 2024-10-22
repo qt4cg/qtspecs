@@ -16,6 +16,62 @@
       <fos:variable id="v-item2" name="item2" select="$po/line-item[2]"/>
       <fos:variable id="v-item3" name="item3" select="$po/line-item[3]"/>
    </fos:global-variables>
+   
+   <fos:record-type id="uri-structure-record" extensible="true">
+      <fos:field name="uri" type="xs:string?" required="false">
+         <fos:meaning>
+            <p>The original URI. This element is returned by <code>fn:parse-uri</code>,
+            but ignored by <code>fn:build-uri</code>.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="scheme" type="xs:string?" required="false">
+         <fos:meaning>
+            <p>The URI scheme (e.g., “https” or “file”).</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="absolute" type="xs:boolean?" required="false">
+         <fos:meaning>
+            <p>The URI is an absolute URI.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="hierarchical" type="xs:boolean?" required="false">
+         <fos:meaning>
+            <p>Whether the URI is hierarchical or not.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="authority" type="xs:string?" required="false">
+         <fos:meaning>
+            <p>The authority portion of the URI (e.g., “example.com:8080”).</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="userinfo" type="xs:string?" required="false">
+         <fos:meaning><p>Any userinfo that was passed as part of the authority.</p></fos:meaning>
+      </fos:field>
+      <fos:field name="host" type="xs:string?" required="false">
+         <fos:meaning><p>The host passed as part of the authority (e.g., “example.com”). </p></fos:meaning>
+      </fos:field>
+      <fos:field name="port" type="xs:integer?" required="false">
+         <fos:meaning><p>The port passed as part of the authority (e.g., “8080”).</p></fos:meaning>
+      </fos:field>
+      <fos:field name="path" type="xs:string?" required="false">
+         <fos:meaning><p>The path portion of the URI.</p></fos:meaning>
+      </fos:field>
+      <fos:field name="query" type="xs:string?" required="false">
+         <fos:meaning><p>Any query string.</p></fos:meaning>
+      </fos:field>
+      <fos:field name="fragment" type="xs:string?" required="false">
+         <fos:meaning><p>Any fragment identifier.</p></fos:meaning>
+      </fos:field>
+      <fos:field name="path-segments" type="xs:string*" required="false">
+         <fos:meaning><p>Parsed and unescaped path segments.</p></fos:meaning>
+      </fos:field>
+      <fos:field name="query-parameters" type="map(xs:string, xs:string*)?" required="false">
+         <fos:meaning><p>Parsed and unescaped query key-value pairs.</p></fos:meaning>
+      </fos:field>
+      <fos:field name="filepath" type="xs:string?" required="false">
+         <fos:meaning><p>The path of the URI, treated as a filepath.</p></fos:meaning>
+      </fos:field>
+   </fos:record-type>
 
    <fos:record-type id="schema-type-record" extensible="true">
       <fos:field name="name" type="xs:QName?" required="false">
@@ -44,8 +100,9 @@
             if the type is non atomic, or if it is the simple type <code>xs:anyAtomicType</code>.</p>
          </fos:meaning>
       </fos:field>
-      <fos:field name="variety" required="true" type='enum("atomic", "list", "union", "empty", "simple",
-         "element-only", "mixed")'>
+      <fos:field name="variety" 
+                 required="true" 
+                 type='enum("atomic", "list", "union", "empty", "simple", "element-only", "mixed")'>
          <fos:meaning>
             <p>For a simple type, one of <code>"atomic"</code>, <code>"list"</code>, or <code>"union"</code>, corresponding to the
                {variety} of the simple type in the XSD component model. For a complex type, one of
@@ -80,14 +137,33 @@
       <fos:field name="constructor" type="function(xs:anyAtomicType) as xs:anyAtomicType" required="false">
          <fos:meaning>
             <p>For a simple type, a function item that can be used to construct instances of this type. In the case of a named
-             type, the result is the same function as returned by <code>fn:function-lookup</code> applied
-            to the type name (with arity one). For details see <specref ref="constructor-functions-for-xsd-types"/>
+             type that is present in the dynamic context, the result is the same function as returned by 
+               <code>fn:function-lookup</code> applied to the type name (with arity one). For details see <specref ref="constructor-functions-for-xsd-types"/>
                and <specref ref="constructor-functions-for-user-defined-types"/>. 
-               However, constructor functions are also available for
-            anonymous types. The field is absent for complex types and for the abstract types <code>xs:anyAtomicType</code> and
+               Constructor function items are also available for
+               anonymous types, and for types that might not be present in the dynamic context. 
+               The field is absent for complex types and for the abstract types <code>xs:anyAtomicType</code> and
                <code>xs:NOTATION</code>. It is also absent for all namespace-sensitive types, that is, types
                derived from <code>xs:QName</code> or <code>xs:NOTATION</code>.
             </p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="validate" type="function((document-node()|element())) as (document-node()|element())" required="true">
+         <fos:meaning>
+            <p>A function item that can be called to validate a supplied document or element node against this type.
+            The effect is equivalent to the XQuery expression <code>validate type T {$node}</code> where <var>T</var>
+            is this type, and <code>$node</code> is the node supplied as the argument to the function. 
+               (See <xspecref spec="XQ40" ref="id-validate"/>.) If validation succeeds,
+            the validated node is returned; if it fails (for any reason, including the fact that the processor does
+            not support schema validation) then an error is raised, as with the equivalent XQuery expression.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="valid" type="function((document-node()|element())) as xs:boolean" required="true">
+         <fos:meaning>
+            <p>A function item that can be called to validate a supplied document or element node against this type,
+            returning <code>true</code> if validation succeeds, or <code>false</code> if it fails. The function
+            call <code>$type?valid($node)</code> is equivalent to the XQuery expression:</p>
+            <eg>try { exists( $type?validate($node) ) } catch * { false() }</eg>
          </fos:meaning>
       </fos:field>
    </fos:record-type>
@@ -269,7 +345,7 @@
    </fos:record-type>
    
 
-   <fos:record-type id="load-xquery-module-record" extensible="false">
+   <!--<fos:record-type id="load-xquery-module-record" extensible="false">
       <fos:field name="variables" type="map(xs:QName, item()*)" required="true">
          <fos:meaning>
                   <p>This map (<var>V</var> ) contains one entry for each public
@@ -295,7 +371,7 @@
          </fos:meaning>         
       </fos:field>
    </fos:record-type>
-   
+   -->
    
 
    <fos:record-type id="random-number-generator-record" extensible="true">
@@ -514,7 +590,7 @@ $node ! (
          <fos:example>
             <fos:test use="v-node-kind-e" spec="XQuery">
                <fos:expression>node-kind($e//*[@id = 'alpha'])</fos:expression>
-               <fos:result>"element</fos:result>
+               <fos:result>"element"</fos:result>
             </fos:test>
             <fos:test use="v-node-kind-e" spec="XQuery">
                <fos:expression>node-kind($e//@id[. = 'gamma'])</fos:expression>
@@ -522,7 +598,7 @@ $node ! (
             </fos:test>
             <fos:test use="v-node-kind-e" spec="XQuery">
                <fos:expression>node-kind($e//node()[.='3.14159'])</fos:expression>
-               <fos:result>"processing-instruction</fos:result>
+               <fos:result>"processing-instruction"</fos:result>
             </fos:test>
             <fos:test use="v-node-kind-e" spec="XQuery">
                <fos:expression>node-kind($e//no-such-node</fos:expression>
@@ -22055,9 +22131,9 @@ declare function transitive-closure (
       </fos:changes>
    </fos:function>
    
-   <fos:function name="atomic-type" prefix="fn">
+   <fos:function name="atomic-type-annotation" prefix="fn">
       <fos:signatures>
-         <fos:proto name="atomic-type" return-type="atomic-type-record">
+         <fos:proto name="atomic-type-annotation" return-type-ref="schema-type-record">
             <fos:arg name="value" type="xs:anyAtomicType"/>
          </fos:proto>
       </fos:signatures>
@@ -22068,29 +22144,35 @@ declare function transitive-closure (
          
       </fos:properties>
       <fos:summary>
-         <p>Returns a record containing information about the type of an atomic value.</p>
+         <p>Returns a record containing information about the type annotation of an atomic value.</p>
       </fos:summary>
       <fos:rules>        
-         <p>Given an atomic value, the function returns an <code>atomic-type-record</code>
-         containing information about the atomic type represented by its type annotation.</p>
+         <p>Given an atomic value, the function returns a <loc href="#schema-type-record">schema-type-record</loc>
+         containing information about the atomic type represented by its <xtermref spec="DM40" ref="dt-type-annotation"/>.</p>
       </fos:rules>
-      <fos:examples>
+      <fos:notes>
+         <p>The result will always have <code>?is-simple = true()</code> and <code>?variety = "atomic"</code>. In a non-schema-aware
+         environment the type will always be a built-in atomic type in the <code>xs</code> namespace: see
+         <specref ref="atomic-type-hierarchy"/>.</p>
+      </fos:notes>
+      <fos:examples role="wide">
          <fos:example>
             <fos:test>
-               <fos:expression>atomic-type(23)?name</fos:expression>
+               <fos:expression><eg>atomic-type-annotation(23)?name</eg></fos:expression>
                <fos:result>xs:QName('xs:integer')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>let $x := 23, $y := 93.7 return atomic-type($x)?matches($y)</fos:expression>
-               <fos:result>false</fos:result>
+               <fos:expression><eg>let $x := 23, $y := 93.7 
+return atomic-type-annotation($x)?matches($y)</eg></fos:expression>
+               <fos:result>false()</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>atomic-type(23)?relationship(atomic-type(93.7))</fos:expression>
-               <fos:result>"subtype"</fos:result>
+               <fos:expression><eg>atomic-type-annotation(xs:numeric('23.2'))?name</eg></fos:expression>
+               <fos:result>xs:QName('xs:double')</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -22099,9 +22181,64 @@ declare function transitive-closure (
       </fos:changes>
    </fos:function>
    
+   <fos:function name="node-type-annotation" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="node-type-annotation" return-type-ref="schema-type-record">
+            <fos:arg name="node" type="(element() | attribute())"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+         
+      </fos:properties>
+      <fos:summary>
+         <p>Returns a record containing information about the type annotation of an element or attribute node.</p>
+      </fos:summary>
+      <fos:rules>        
+         <p>Given an element or attribute node, the function returns a <loc href="#schema-type-record">schema-type-record</loc>
+         containing information about the schema type represented by its <xtermref spec="DM40" ref="dt-type-annotation"/>.</p>
+         
+      </fos:rules>
+      <fos:notes>
+         <p>For an element that has not been schema-validated, the type annotation is always <code>xs:untyped</code>.</p>
+         <p>For an attribute that has not been schema-validated, the type annotation is always <code>xs:untypedAtomic</code>.</p>
+         <p>The type annotation of an attribute node is always a simple type; the type annotation of an element node may
+         be simple or complex.</p>
+      </fos:notes>
+      <fos:examples role="wide">
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $e := parse-xml("<e/>")/*
+return node-type-annotation($e)]]></eg></fos:expression>
+               <fos:result>xs:QName('xs:untyped')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $a := parse-xml("<e a='3'/>")//@a
+return node-type-annotation($a)]]></eg></fos:expression>
+               <fos:result>xs:QName('xs:untypedAtomic')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $x := json-to-xml('[23, 24]', {'validate':true()})
+return node-type-annotation($x/*)]]></eg></fos:expression>
+               <fos:result>xs:QName('fn:arrayType')</fos:result>
+            </fos:test>
+         </fos:example>
+         
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="148"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
    <fos:function name="schema-type" prefix="fn">
       <fos:signatures>
-         <fos:proto name="schema-type" return-type="schema-type-record?">
+         <fos:proto name="schema-type" return-type-ref="schema-type-record" return-type-ref-occurs="?">
             <fos:arg name="name" type="xs:QName"/>
          </fos:proto>
       </fos:signatures>
@@ -22115,11 +22252,12 @@ declare function transitive-closure (
          <p>Returns a record containing information about a named schema type in the static context.</p>
       </fos:summary>
       <fos:rules>        
-         <p>If the static context includes a schema type whose name matches <code>$name</code>, 
-            the function returns a <code>schema-type-record</code>
+         <p>If the static context (specifically, the <xtermref spec="XP40" ref="dt-is-types">in-scope schema types</xtermref>) 
+            includes a schema type whose name matches <code>$name</code>, 
+            the function returns a <loc href="#schema-type-record">schema-type-record</loc>
          containing information about that schema type. If not, it returns an empty sequence.</p>
       </fos:rules>
-      <fos:examples>
+      <fos:examples role="wide">
          <fos:example>
             <fos:test>
                <fos:expression>schema-type(xs:QName('xs:integer'))?name</fos:expression>
@@ -22141,7 +22279,19 @@ declare function transitive-closure (
          <fos:example>
             <fos:test>
                <fos:expression>schema-type(xs:QName('xs:integer'))?matches(23)</fos:expression>
-               <fos:result>true</fos:result>
+               <fos:result>true()</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:numeric'))?variety</fos:expression>
+               <fos:result>"union"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:numeric'))?members()?name</fos:expression>
+               <fos:result>xs:QName('xs:double'), xs:QName('xs:float'), xs:QName('xs:decimal')</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
