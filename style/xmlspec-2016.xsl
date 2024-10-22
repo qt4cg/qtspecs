@@ -47,6 +47,7 @@
 
 <xsl:output method="html" version="5.0" encoding="UTF-8" indent="yes" />
 
+<xsl:variable name="fo31" select="doc('../build/etc/FO31.xml')"/>
 
 <!--
   <xsl:output method="html"
@@ -2797,19 +2798,26 @@
   </xsl:template>
 
   <xsl:template name="toc-entry-class">
-    <xsl:attribute name="class">
+    <xsl:variable name="isnew"
+                  select="if ((self::div2 or self::div3 or self::div4 or self::div5)
+                              and starts-with(@id, 'func-'))
+                          then not(exists(key('ids', @id, $fo31)))
+                          else false()"/>
+
+    <xsl:variable name="classes" as="xs:string*">
+      <xsl:sequence select="'content'"/>
+      <xsl:sequence select="@role/string()"/>
       <xsl:choose>
-        <xsl:when test="@role">
-          <xsl:sequence select="'content ' || @role"/>
+        <xsl:when test="$isnew">
+          <xsl:sequence select="'toc-new'"/>
         </xsl:when>
-        <xsl:otherwise>
-          <xsl:sequence select="'content'"/>
-        </xsl:otherwise>
+        <xsl:when test="child::changes">
+          <xsl:sequence select="'toc-chg'"/>
+        </xsl:when>
       </xsl:choose>
-    </xsl:attribute>
-    <xsl:if test="child::changes">
-      <span class="tocDelta"> Δ </span>
-    </xsl:if>
+    </xsl:variable>
+
+    <xsl:attribute name="class" select="string-join($classes, ' ')"/>
   </xsl:template>
 
   <xsl:template name="css">
