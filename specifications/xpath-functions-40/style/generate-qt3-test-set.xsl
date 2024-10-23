@@ -105,7 +105,13 @@
             <xsl:choose>
               <xsl:when test="fos:result/@normalize-space eq true()">
                <xsl:variable name="stripped">
-                 <xsl:apply-templates select="parse-xml(fos:result)" mode="strip-space"/>
+                 <xsl:try>
+                   <xsl:apply-templates select="parse-xml(fos:result)" mode="strip-space"/>
+                   <xsl:catch>
+                     <xsl:message expand-text="1">** Failure in parse-xml on fos:result of {$fos-function/@name}-{$n}</xsl:message>
+                     <substitute-for-unparseable-result-xml/>
+                   </xsl:catch>
+                 </xsl:try>
                </xsl:variable>
                 <assert-xml ignore-prefixes="{(fos:result/@ignore-prefixes, false())[1]}">{serialize($stripped)}</assert-xml>
               </xsl:when>
