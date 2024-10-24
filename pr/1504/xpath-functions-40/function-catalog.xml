@@ -2843,11 +2843,15 @@ compare($N * $arg2, 0) eq compare($arg1, 0).</eg>
                <fos:result>"14%"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><eg>
-format-number(12345, '0,###^0', {
-  'percent': '%:pc'
-})</eg></fos:expression>
+               <fos:expression>format-number(0.14, '01%', {'percent': '%:pc')</fos:expression>
                <fos:result>"14pc"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+format-number(12345, '0.0###^0', { 
+   'exponent-separator': '^:×10^' 
+})</eg></fos:expression>
+               <fos:result>"1.2345×10^4"</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>format-number(-6, '000')</fos:expression>
@@ -2949,12 +2953,14 @@ format-number(12345, '0,###^0', {
       </fos:rules>
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
 let $alphabet := characters("0123456789abcdefghijklmnopqrstuvwxyz")
-let $preprocessed-value := translate($value, "_ &#x9;&#xa;&#xd;", "")
-let $digits := translate($preprocessed-value, "+-", "")
+let $preprocessed := translate($value, 
+                               codepoints-to-string((9, 10, 13, 32, 95)), 
+                               "")
+let $digits := translate($preprocessed, "+-", "")
 let $abs := sum(
   for $char at $p in reverse(characters(lower-case($digits)))
   return (index-of($alphabet, $char) - 1) * xs:integer(math:pow($radix, $p - 1)))
-return if (starts-with($preprocessed-value, "-")) then -$abs else +$abs                 
+return if (starts-with($preprocessed, "-")) then -$abs else +$abs                 
       </fos:equivalent>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="RG" code="0011"/>
@@ -4602,7 +4608,7 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
                <fos:expression><eg>compare(
   'Strasse',
   'Straße',
-  collation(map{'lang':'de', 'strength':'primary'})
+  collation({'lang':'de', 'strength':'primary'})
 )</eg></fos:expression>
                <fos:result>0</fos:result>
                <fos:postamble>The specified collation equates <quote>ss</quote> and the German
@@ -4851,7 +4857,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:signatures>
          <fos:proto name="string-join" return-type="xs:string">
             <fos:arg name="values" type="xs:anyAtomicType*"/>
-            <fos:arg name="separator" type="xs:string*" default='()'/>
+            <fos:arg name="separator" type="xs:string?" default='""'/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -4860,12 +4866,15 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a string created by concatenating the items in a sequence,
-            with an optional separator between adjacent items.</p>
+         <p>Returns a string created by concatenating the items in a sequence, with a defined
+            separator between adjacent items.</p>
       </fos:summary>
       <fos:rules>
-         <p>The coercion rules ensure that the supplied <code>$values</code> argument is first
-            converted to a sequence of atomic items by applying atomization.</p>
+         <p>If the second argument is omitted or an empty sequence, the effect is the same as
+            calling the two-argument version with <code>$separator</code> set to a zero-length
+            string.</p>
+         <p>The coercion rules ensure that the supplied <code>$values</code> argument is first converted to
+            a sequence of atomic items by applying atomization.</p>
          <p>The function then returns an <code>xs:string</code> created by casting each item 
             in the atomized sequence to an <code>xs:string</code>, and then concatenating the
             result strings in order, using the string values of <code>$separator</code> as a
@@ -4886,8 +4895,8 @@ return normalize-unicode(concat($v1, $v2))</eg>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>string-join(('Now', 'is', 'the', 'time'), ('?', '!'))</fos:expression>
-               <fos:result>"Now?!is?!the?!time"</fos:result>
+               <fos:expression>string-join(('Now', 'is', 'the', 'time', '...'), ' ')</fos:expression>
+               <fos:result>"Now is the time ..."</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -7060,11 +7069,6 @@ Tak, tak, tak! - da kommen sie.
             </fos:test>
          </fos:example>
       </fos:examples>
-      <fos:changes>
-         <fos:change issue="895" PR="901" date="2023-12-16">
-            <p>The second argument can now be an empty sequence.</p>
-         </fos:change>
-      </fos:changes>
    </fos:function>
    <fos:function name="analyze-string" prefix="fn">
       <fos:signatures>
@@ -9784,7 +9788,7 @@ return ($value - unix-dateTime()) div seconds(0.001)</eg>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression><eg>year-from-dateTime(
+               <fos:expression><eg>hours-from-dateTime(
   xs:time("12:30:00")
 )</eg></fos:expression>
                <fos:result>12</fos:result>
@@ -14433,11 +14437,11 @@ filter($input, fn($item, $pos) { $pos gt 1 })
       </fos:changes>
    </fos:function>
    
-   <fos:function name="join" prefix="fn">
+   <fos:function name="sequence-join" prefix="fn">
       <fos:signatures>
-         <fos:proto name="join" return-type="item()*">
+         <fos:proto name="sequence-join" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="separator" type="item()*" default="()" usage="navigation"/>
+            <fos:arg name="separator" type="item()*" usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -14462,29 +14466,25 @@ for-each($input, fn($item, $pos) {
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>join(1 to 5, "|")</fos:expression>
+               <fos:expression>sequence-join(1 to 5, "|")</fos:expression>
                <fos:result>(1, "|", 2, "|" , 3, "|", 4, "|", 5)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>join((), "|")</fos:expression>
+               <fos:expression>sequence-join((), "|")</fos:expression>
                <fos:result>()</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>join("A", "|")</fos:expression>
+               <fos:expression>sequence-join("A", "|")</fos:expression>
                <fos:result>"A"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>join(1 to 5, ())</fos:expression>
-               <fos:result>(1, 2, 3, 4, 5)</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>join(1 to 3, ("⅓", "⅔"))</fos:expression>
+               <fos:expression>sequence-join(1 to 3, ("⅓", "⅔"))</fos:expression>
                <fos:result>(1, "⅓", "⅔", 2, "⅓", "⅔", 3)</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <p>Insert an empty <code>hr</code> element between adjacent paragraphs:</p>
-            <eg><![CDATA[join(./para, <hr/>)]]></eg>
+            <eg><![CDATA[sequence-join(./para, <hr/>)]]></eg>
          </fos:example>
       </fos:examples>
       <fos:changes>
@@ -17997,7 +17997,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             <term>static base URI</term> property from the static context.</p>
          <p>The <code>$options</code> argument, for backwards compatibility reasons, may be supplied
          either as a map, or as a string. Supplying a value <code>$S</code> that is not a map
-            is equivalent to supplying the map <code>map{"encoding":$S}</code>.
+            is equivalent to supplying the map <code>{"encoding":$S}</code>.
             After that substitution, the <termref def="option-parameter-conventions"/> apply.</p>
          
          <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
@@ -18212,7 +18212,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             newline boundaries.</p>
          <p>The <code>$options</code> argument, for backwards compatibility reasons, may be supplied
          either as a map, or as a string. Supplying a value <code>$S</code> that is not a map
-            is equivalent to supplying the map <code>map{"encoding":$S}</code>.
+            is equivalent to supplying the map <code>{"encoding":$S}</code>.
             After that substitution, the <termref def="option-parameter-conventions"/> apply.</p>
          
          <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
@@ -19372,7 +19372,7 @@ serialize(
       <fos:signatures>
          <fos:proto name="parse-html" return-type="document-node(element(*:html))?">
             <fos:arg name="html" type="(xs:string | xs:hexBinary | xs:base64Binary)?"/>
-            <fos:arg name="options" type="map(*)"
+            <fos:arg name="options" type="map(*)?"
                      default="{
                                  &quot;method&quot;: &quot;html&quot;,
                                  &quot;html-version&quot;: 5
@@ -20157,7 +20157,7 @@ return function-arity($initial)</eg></fos:expression>
 declare %private function local:inc($c) { $c + 1 };
 function-annotations(local:inc#1)</eg></fos:expression>
                <fos:result><eg>
-{ "key": xs:QName("http://www.w3.org/2012/xquery", "private"),
+{ "key": QName("http://www.w3.org/2012/xquery", "private"),
   "value": () 
 }</eg></fos:result>
             </fos:test>
@@ -20169,10 +20169,10 @@ declare %private %variadic
         function local:sum($c as xs:integer*) { sum($c) };
 function-annotations(local:sum#3)</eg></fos:expression>
                <fos:result><eg>
-{ "key": xs:QName("http://www.w3.org/2012/xquery", "private"),
+{ "key": QName("http://www.w3.org/2012/xquery", "private"),
   "value": () 
 },
-{ "key": xs:QName("http://www.w3.org/2012/xquery", "variadic"),
+{ "key": QName("http://www.w3.org/2012/xquery", "variadic"),
   "value": () 
 }</eg></fos:result>
             </fos:test>
@@ -20185,7 +20185,7 @@ let $ann := function-annotations($old)
 return map:of-pairs($ann)
 </eg></fos:expression>
                <fos:result><eg>
-{ xs:QName("http://www.w3.org/2005/xquery-local-functions", "deprecated"):
+{ QName("http://www.w3.org/2005/xquery-local-functions", "deprecated"):
     ("0.1", "0.2") 
 }
 </eg></fos:result>
@@ -20405,7 +20405,7 @@ declare function fold-left (
         as item()* {
   let $numbered-input := for-each($input, 
                                   fn($item, $pos) { 
-                                     map{ 'item': $item, 'position': $pos }
+                                     { 'item': $item, 'position': $pos }
                                   })
   return fold-left-2($numbered-input, fn($zero, $pair) {
                                          $action($zero, $pair?item, $pair?position)
@@ -20597,7 +20597,7 @@ declare function fold-right (
         as item()* {
   let $numbered-input := for-each($input, 
                                   fn($item, $pos) { 
-                                     map{ 'item': $item, 'position': $pos }
+                                     { 'item': $item, 'position': $pos }
                                   })
   return fold-right-2($numbered-input, fn($zero, $pair) {
                                          $action($pair?item, $zero, $pair?position)
@@ -21532,7 +21532,7 @@ else +1</eg>
          </fos:example>
          <fos:example>
             <p>To sort a set of strings <code>$in</code> using Swedish collation:</p>
-            <eg>let $SWEDISH := collation(map{'lang':'se'})
+            <eg>let $SWEDISH := collation({'lang':'se'})
 return sort($in, $SWEDISH)</eg>
          </fos:example>
          <fos:example>
@@ -21547,7 +21547,7 @@ return sort($in, $SWEDISH)</eg>
             </p>
             <eg>sort(
   $employees, 
-  collation(map{'lang':'se'}),
+  collation({'lang':'se'}),
   (fn { name/last }, fn { xs:decimal(salary) }), 
   ("ascending", "descending")
 )</eg>
@@ -22416,7 +22416,7 @@ return fold-left($maps, {},
                      type="record(key as xs:anyAtomicType, value as item()*)*" 
                      usage="inspection"
                      example="{ 'key':'n','value':false() }, { 'key':'y','value':true() }"/>
-            <fos:arg name="combine" type="fn(item()*, item()*) as item()*" usage="inspection" default="fn:op(',')"/>
+            <fos:arg name="combine" type="(fn(item()*, item()*) as item()*)?" usage="inspection" default="fn:op(',')"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -22930,7 +22930,7 @@ return map:keys-where($birthdays, fn($name, $date) {
          <fos:proto name="get" return-type="item()*">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
             <fos:arg name="key" type="xs:anyAtomicType"/>
-            <fos:arg name="fallback" type="fn(xs:anyAtomicType) as item()*" default="void#1"/>
+            <fos:arg name="fallback" type="(fn(xs:anyAtomicType) as item()*)?" default="void#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -23096,7 +23096,7 @@ declare function map:find($input as item()*,
             return 
                for key $k value $v in $m
                return (
-                  if (atomic-equal($k, $key)) { map {'value': $v} },
+                  if (atomic-equal($k, $key)) { {'value': $v} },
                   map:find($v, $key)
                )
          default
@@ -23661,9 +23661,9 @@ else map:put($map, $key, $action(()))
       <fos:signatures>
          <fos:proto name="build" return-type="map(*)">
             <fos:arg name="input" type="item()*"/>
-            <fos:arg name="keys" type="fn(item(), xs:integer) as xs:anyAtomicType*" default="fn:identity#1"/>
-            <fos:arg name="value" type="fn(item(), xs:integer) as item()*" default="fn:identity#1"/>
-            <fos:arg name="combine" type="fn(item()*, item()*) as item()*" default="fn:op(',')"/>
+            <fos:arg name="keys" type="(fn(item(), xs:integer) as xs:anyAtomicType*)?" default="fn:identity#1"/>
+            <fos:arg name="value" type="(fn(item(), xs:integer) as item()*)?" default="fn:identity#1"/>
+            <fos:arg name="combine" type="(fn(item()*, item()*) as item()*)?" default="fn:op(',')"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -24012,18 +24012,18 @@ return map:build($titles/title, fn($title) { $title/ix })
                <fos:result>"http://www.w3.org/2013/collation/UCA"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>collation(map{'lang':'de'})</fos:expression>
+               <fos:expression>collation({'lang':'de'})</fos:expression>
                <fos:result>"http://www.w3.org/2013/collation/UCA?lang=de"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>collation(map{'lang':'de', 'strength':'primary'})</fos:expression>
+               <fos:expression>collation({'lang':'de', 'strength':'primary'})</fos:expression>
                <fos:result>"http://www.w3.org/2013/collation/UCA?lang=de;strength=primary"</fos:result>
                <fos:postamble>The order of query parameters may vary.</fos:postamble>
             </fos:test>
             
          </fos:example>
          <fos:example>
-            <p>The expression <code>collation(map{'lang':default-language()})</code>
+            <p>The expression <code>collation({'lang':default-language()})</code>
                returns a collation suitable for the default language in the
                dynamic context.</p>
          </fos:example>
@@ -24199,7 +24199,7 @@ return map:build($titles/title, fn($title) { $title/ix })
       </fos:notes>
       <fos:examples>
          <fos:variable name="C" id="v-collation-key-C"
-            select="collation(map{'strength':'primary'})"/>
+            select="collation({'strength':'primary'})"/>
          <fos:example>
             <fos:test use="v-collation-key-C">
                <fos:expression><eg>map:merge(
@@ -25715,7 +25715,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             </fos:test>
             <fos:test>
                <fos:expression><eg>csv-to-xml("")</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <rows/>
 </csv>
@@ -25723,7 +25723,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             </fos:test>
             <fos:test>
                <fos:expression><eg>csv-to-xml(char('\n'))</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <rows>
     <row/>
@@ -25736,7 +25736,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <p>An empty CSV with header extraction:</p>
             <fos:test>
                <fos:expression><eg>csv-to-xml("", { "header": true() })</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns/>
   <rows/>
@@ -25748,7 +25748,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <p>An empty CSV with explicit column names:</p>
             <fos:test>
                <fos:expression><eg>csv-to-xml("", { "header": ("name", "", "city") })</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
     <column>name</column>
@@ -25764,7 +25764,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <p>With defaults for delimiters and quotes, recognizing headers:</p>
             <fos:test use="escaped-crlf-3 csv-string-2">
                <fos:expression><eg>csv-to-xml($csv-string, { "header": true() })</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
     <column>name</column>
@@ -25784,30 +25784,6 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
 ]]></eg></fos:result>
             </fos:test>
          </fos:example>
-         <!--<fos:example>
-            <p>With defaults for delimiters and quotes, recognizing headers:</p>
-            <fos:test use="escaped-crlf-3 csv-string-2">
-               <fos:expression><eg>csv-to-xml($csv-string, { "header": true() })</eg></fos:expression>
-               <fos:result><eg><![CDATA[
-<csv xmlns="http://www.w3.org/2005/xpath-functions">
-  <columns>
-    <column>name</column>
-    <column>city</column>
-  </columns>
-  <rows>
-    <row>
-      <field column="name">Bob</field>
-      <field column="city">Berlin</field>
-    </row>
-    <row>
-      <field column="name">Alice</field>
-      <field column="city">Aachen</field>
-    </row>
-  </rows>
-</csv>
-]]></eg></fos:result>
-            </fos:test>
-         </fos:example>-->
          <fos:variable name="csv-uneven-cols" id="uneven-cols-csv-string-2">concat(
   `date,name,city,amount,currency,original amount,note{ $crlf }`,
   `2023-07-19,Bob,Berlin,10.00,USD,13.99{ $crlf }`,
@@ -25821,7 +25797,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
   $csv-uneven-cols, 
   { "header": true(), "select-columns": (2, 1, 4) }
 )</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
     <column>name</column>
@@ -25856,7 +25832,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
   $csv-uneven-cols, 
   { "header": true() }
 )</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
     <column>date</column>
@@ -25904,7 +25880,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
   $csv-uneven-cols, 
   { "header": true(), "trim-rows": true() }
 )</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
     <column>date</column>
@@ -25955,7 +25931,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
   $csv-uneven-cols, 
   { "header": true(), "select-columns": 1 to 6 }
 )</eg></fos:expression>
-               <fos:result><eg><![CDATA[
+               <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
     <column>date</column>
@@ -26862,7 +26838,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          <fos:proto name="get" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
             <fos:arg name="position" type="xs:integer"/>
-            <fos:arg name="fallback" type="fn(xs:integer) as item()*" 
+            <fos:arg name="fallback" type="(fn(xs:integer) as item()*)?" 
                default="fn($i) { fn:error(fn:QName('', 'FOAY0001')) }"/>
          </fos:proto>
       </fos:signatures>
@@ -28290,7 +28266,7 @@ array:for-each-pair(
       <fos:signatures>
          <fos:proto name="build" return-type="array(*)">
             <fos:arg name="input" type="item()*" usage="inspection"/>
-            <fos:arg name="action" type="fn(item(), xs:integer) as item()*" usage="inspection" default="fn:identity#1"/>
+            <fos:arg name="action" type="(fn(item(), xs:integer) as item()*)?" usage="inspection" default="fn:identity#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -28668,7 +28644,7 @@ $array
          <fos:example>
             <p>To sort an array of strings <code>$in</code> using Swedish collation:</p>
             <eg>
-let $SWEDISH := collation(map{'lang':'se'})
+let $SWEDISH := collation({'lang':'se'})
 return array:sort($in, $SWEDISH)
             </eg>
          </fos:example>
@@ -30256,7 +30232,7 @@ return every($dl/*, fn($elem, $pos) {
          <fos:proto name="highest" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="collation" type="xs:string?" usage="absorption" default="fn:default-collation()"/>
-            <fos:arg name="key" type="fn(item()) as xs:anyAtomicType*" usage="inspection" default="fn:data#1"/>
+            <fos:arg name="key" type="(fn(item()) as xs:anyAtomicType*)?" usage="inspection" default="fn:data#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -30613,7 +30589,7 @@ return $it
          <fos:proto name="lowest" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="collation" type="xs:string?" usage="absorption" default="fn:default-collation()"/>
-            <fos:arg name="key" type="fn(item()) as xs:anyAtomicType*" usage="inspection" default="fn:data#1"/>
+            <fos:arg name="key" type="(fn(item()) as xs:anyAtomicType*)?" usage="inspection" default="fn:data#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -31430,7 +31406,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 
 <fos:test>
 <fos:expression><eg>parse-uri("http://qt4cg.org/specifications/xpath-functions-40/Overview.html#parse-uri")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "qt4cg.org",
   "fragment": "parse-uri",
   "hierarchical": true(),
@@ -31446,7 +31422,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("http://www.ietf.org/rfc/rfc2396.txt")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "www.ietf.org",
   "hierarchical": true(),
   "absolute": true(),
@@ -31462,7 +31438,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("https://example.com/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "example.com",
   "path": "/path/to/file",
   "scheme": "https",
@@ -31478,7 +31454,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri(`https://example.com:8080/path?s=%22hello world%22&amp;sort=relevance`)</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "example.com:8080",
   "hierarchical": true(),
   "absolute": true(),
@@ -31487,7 +31463,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
   "path-segments": ("", "path"),
   "port": "8080",
   "query": "s=%22hello world%22&amp;sort=relevance",
-  "query-parameters": map {
+  "query-parameters": {
     "s": """hello world""",
     "sort": "relevance"
   },
@@ -31500,7 +31476,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("https://user@example.com/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "user@example.com",
   "hierarchical": true(),
   "absolute": true(),
@@ -31517,7 +31493,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("ftp://ftp.is.co.za/rfc/rfc1808.txt")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "ftp.is.co.za",
   "hierarchical": true(),
   "absolute": true(),
@@ -31533,7 +31509,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("file:////uncname/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "/uncname/path/to/file",
   "hierarchical": true(),
   "absolute": true(),
@@ -31548,7 +31524,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("file:///c:/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
   "absolute": true(),
@@ -31563,7 +31539,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("file:/C:/Program%20Files/test.jar")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "C:/Program Files/test.jar",
   "hierarchical": true(),
   "absolute": true(),
@@ -31578,7 +31554,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("file:\\c:\path\to\file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
   "absolute": true(),
@@ -31593,7 +31569,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("file:\c:\path\to\file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
   "absolute": true(),
@@ -31608,7 +31584,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("c:\path\to\file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
   "path": "/c:/path/to/file",
@@ -31622,7 +31598,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "/path/to/file",
   "hierarchical": true(),
   "path": "/path/to/file",
@@ -31635,7 +31611,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("#testing")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "fragment": "testing",
   "uri": "#testing"
 }</eg></fos:result>
@@ -31645,9 +31621,9 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("?q=1")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "query": "q=1",
-  "query-parameters":map {
+  "query-parameters":{
     "q": "1"
   },
   "uri": "?q=1"
@@ -31658,7 +31634,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("ldap://[2001:db8::7]/c=GB?objectClass?one")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "[2001:db8::7]",
   "hierarchical": true(),
   "absolute": true(),
@@ -31666,7 +31642,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
   "path": "/c=GB",
   "path-segments": ("", "c=GB"),
   "query": "objectClass?one",
-  "query-parameters":map {
+  "query-parameters":{
     "": "objectClass?one"
   },
   "scheme": "ldap",
@@ -31678,7 +31654,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("mailto:John.Doe@example.com")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "John.Doe@example.com",
   "path-segments": "John.Doe@example.com",
@@ -31691,7 +31667,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("news:comp.infosystems.www.servers.unix")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "comp.infosystems.www.servers.unix",
   "path-segments": "comp.infosystems.www.servers.unix",
@@ -31704,7 +31680,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("tel:+1-816-555-1212")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "+1-816-555-1212",
   "path-segments": " 1-816-555-1212",
@@ -31717,7 +31693,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("telnet://192.0.2.16:80/")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "192.0.2.16:80",
   "hierarchical": true(),
   "absolute": true(),
@@ -31734,7 +31710,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("urn:oasis:names:specification:docbook:dtd:xml:4.1.2")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "oasis:names:specification:docbook:dtd:xml:4.1.2",
   "path-segments": "oasis:names:specification:docbook:dtd:xml:4.1.2",
@@ -31747,7 +31723,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("tag:textalign.net,2015:ns")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "textalign.net,2015:ns",
   "path-segments": "textalign.net,2015:ns",
@@ -31760,7 +31736,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 <fos:example>
 <fos:test>
 <fos:expression><eg>parse-uri("tag:jan@example.com,1999-01-31:my-uri")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "jan@example.com,1999-01-31:my-uri",
   "path-segments": "jan@example.com,1999-01-31:my-uri",
@@ -31775,7 +31751,7 @@ fold-left($input, false(), fn($result, $item, $pos) {
 specifically aware of the <code>jar:</code> scheme.</p>
 <fos:test>
 <fos:expression><eg>parse-uri("jar:file:/C:/Program%20Files/test.jar!/foo/bar")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "hierarchical": false(),
   "path": "file:/C:/Program%20Files/test.jar!/foo/bar",
   "path-segments": ("file:", "C:", "Program Files", "test.jar!", "foo", "bar"),
@@ -31791,7 +31767,7 @@ lexical IRIs as “unreserved characters”. The rationale for this is given in 
 description of <code>fn:resolve-uri</code>.</p>
 <fos:test>
 <fos:expression><eg>parse-uri("http://www.example.org/Dürst")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "authority": "www.example.org",
   "hierarchical": true(),
   "absolute": true(),
@@ -31809,7 +31785,7 @@ description of <code>fn:resolve-uri</code>.</p>
 path.</p>
 <fos:test>
 <fos:expression><eg>parse-uri("c|/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
   "path": "/c:/path/to/file",
@@ -31825,7 +31801,7 @@ path.</p>
 path with an explicit <code>file:</code> scheme.</p>
 <fos:test>
 <fos:expression><eg>parse-uri("file://c|/path/to/file")</eg></fos:expression>
-<fos:result><eg>map {
+<fos:result><eg>{
   "filepath": "c:/path/to/file",
   "hierarchical": true(),
   "absolute": true(),
@@ -32076,7 +32052,7 @@ path with an explicit <code>file:</code> scheme.</p>
       <fos:examples role="wide">
          <fos:example>
             <fos:test>
-               <fos:expression><eg>build-uri(map {
+               <fos:expression><eg>build-uri({
   "scheme": "https",
   "host": "qt4cg.org",
   "port": (),
