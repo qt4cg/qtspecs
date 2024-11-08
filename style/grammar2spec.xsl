@@ -1098,11 +1098,11 @@
     <xsl:text>?</xsl:text>
   </xsl:template>
 
-  <xsl:template match="g:zeroOrMore">
+  <xsl:template match="g:zeroOrMore" expand-text="yes">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:param name="docprod_part"/>
 
-    <xsl:if test="@subtract-reg-expr">
+    <xsl:if test="@subtract-reg-expr or @separator">
       <xsl:text>(</xsl:text>
     </xsl:if>
 
@@ -1110,20 +1110,26 @@
       <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
     </xsl:call-template>
-    <xsl:text>*</xsl:text>
-
-    <xsl:if test="@subtract-reg-expr">
-      <xsl:text> - </xsl:text>
-      <xsl:value-of select="@subtract-reg-expr"/>
-      <xsl:text>)</xsl:text>
-    </xsl:if>
+    
+    <xsl:choose>
+      <xsl:when test="@separator"> ** "{@separator}")</xsl:when>
+      <xsl:otherwise>
+        <xsl:text>*</xsl:text>
+    
+        <xsl:if test="@subtract-reg-expr">
+          <xsl:text> - </xsl:text>
+          <xsl:value-of select="@subtract-reg-expr"/>
+          <xsl:text>)</xsl:text>
+        </xsl:if>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
 
-  <xsl:template match="g:oneOrMore">
+  <xsl:template match="g:oneOrMore" expand-text="yes">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:param name="docprod_part"/>
 
-    <xsl:if test="@subtract-reg-expr">
+    <xsl:if test="@subtract-reg-expr or @separator">
       <xsl:text>(</xsl:text>
     </xsl:if>
 
@@ -1131,13 +1137,19 @@
       <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
     </xsl:call-template>
-    <xsl:text>+</xsl:text>
-
-    <xsl:if test="@subtract-reg-expr">
-      <xsl:text> - </xsl:text>
-      <xsl:value-of select="@subtract-reg-expr"/>
-      <xsl:text>)</xsl:text>
-    </xsl:if>
+    
+    <xsl:choose>
+      <xsl:when test="@separator"> ++ "{@separator}")</xsl:when>
+      <xsl:otherwise>
+        <xsl:text>+</xsl:text>
+    
+        <xsl:if test="@subtract-reg-expr">
+          <xsl:text> - </xsl:text>
+          <xsl:value-of select="@subtract-reg-expr"/>
+          <xsl:text>)</xsl:text>
+        </xsl:if>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
 
   <!-- -->
