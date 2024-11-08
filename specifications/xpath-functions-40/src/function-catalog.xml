@@ -16,7 +16,7 @@
       <fos:variable id="v-item2" name="item2" select="$po/line-item[2]"/>
       <fos:variable id="v-item3" name="item3" select="$po/line-item[3]"/>
    </fos:global-variables>
-
+   
    <fos:record-type id="uri-structure-record" extensible="true">
       <fos:field name="uri" type="xs:string?" required="false">
          <fos:meaning>
@@ -72,6 +72,133 @@
          <fos:meaning><p>The path of the URI, treated as a filepath.</p></fos:meaning>
       </fos:field>
    </fos:record-type>
+
+   <fos:record-type id="schema-type-record" extensible="true">
+      <fos:field name="name" type="xs:QName?" required="true">
+         <fos:meaning>
+            <p>The name of the type. Empty in the case of an anonymous type. Corresponds to
+            {name} and {target namespace} in the XSD component model for simple and complex type
+            components.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="is-simple" type="xs:boolean" required="true">
+         <fos:meaning>
+            <p>True for a simple type, false for a complex type.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="base-type" type="fn() as schema-type-record?" required="true">
+         <fos:meaning>
+            <p>Function item returning the base type (the type from which this type is derived by restriction 
+               or extension). The function is always present, and returns an empty sequence
+               in the case of the type <code>xs:anyType</code>. Corresponds to the {base type definition} property
+            in the XSD component model.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="primitive-type" type="fn() as schema-type-record" required="false">
+         <fos:meaning>
+            <p>For an atomic type, a function item returning the primitive type from which this 
+               type is ultimately derived. Corresponds to {primitive type definition} in the XSD 
+               component model for simple types. Absent if the type is non atomic, or if it is 
+               the simple type <code>xs:anyAtomicType</code>. If this is a primitive type, the
+               function item is idempotent.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="variety" 
+                 required="true" 
+                 type='enum("atomic", "list", "union", "empty", "simple", "element-only", "mixed")'>
+         <fos:meaning>
+            <p>For a simple type, one of <code>"atomic"</code>, <code>"list"</code>, or <code>"union"</code>, corresponding to the
+               {variety} of the simple type in the XSD component model. For a complex type, one of
+            <code>"empty"</code>, <code>"simple"</code>, <code>"element-only"</code>, or <code>"mixed"</code>, 
+               corresponding to the {content type}.{variety} of the complex type in the XSD component model.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="members" required="false" type="fn() as schema-type-record*">
+         <fos:meaning>
+            <p>For a simple type with variety <code>"union"</code>, a function that returns a sequence of
+               records representing the member types of the union, in order, corresponding to the
+               {member type definitions} property in the XSD component model. 
+               For a simple type with variety <code>"list"</code>,
+            a function that returns a record representing the item type of the list type, corresponding to
+            the {item type definition} property in the XSD component model. In all other cases, absent.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="simple-content-type" required="false" type="fn() as schema-type-record">
+         <fos:meaning>
+            <p>For a complex type with variety <code>"simple"</code> (that is, a complex type with simple content), 
+               a function that returns a record representing the relevant simple type, corresponding to 
+               the {content type}{simple type definition} property in the XSD complex type component. 
+               In all other cases, absent.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="matches" type="fn(xs:anyAtomicType) as xs:boolean" required="false">
+         <fos:meaning>
+            <p>For an atomic type, a function item that can be called to establish whether the supplied atomic item
+               is an instance of this atomic type. In all other cases, absent.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="constructor" type="fn(xs:anyAtomicType) as xs:anyAtomicType" required="false">
+         <fos:meaning>
+            <p>For a simple type, a function item that can be used to construct instances of this type. In the case of a named
+             type that is present in the dynamic context, the result is the same function as returned by 
+               <code>fn:function-lookup</code> applied to the type name (with arity one). For details see <specref ref="constructor-functions-for-xsd-types"/>
+               and <specref ref="constructor-functions-for-user-defined-types"/>. 
+               Constructor function items are also available for
+               anonymous types, and for types that might not be present in the dynamic context. 
+               The field is absent for complex types and for the abstract types <code>xs:anyAtomicType</code> and
+               <code>xs:NOTATION</code>. It is also absent for all namespace-sensitive types, that is, types
+               derived from <code>xs:QName</code> or <code>xs:NOTATION</code>.
+            </p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="validate" type="fn((document-node()|element())) as (document-node()|element())" required="true">
+         <fos:meaning>
+            <p>A function item that can be called to validate a supplied document or element node against this type.
+            The effect is equivalent to the XQuery expression <code>validate type T {$node}</code> where <var>T</var>
+            is this type, and <code>$node</code> is the node supplied as the argument to the function. 
+               (See <xspecref spec="XQ40" ref="id-validate"/>.) If validation succeeds,
+            the validated node is returned; if it fails (for any reason, including the fact that the processor does
+            not support schema validation) then an error is raised, as with the equivalent XQuery expression.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="valid" type="fn((document-node()|element())) as xs:boolean" required="true">
+         <fos:meaning>
+            <p>A function item that can be called to validate a supplied document or element node against this type,
+            returning <code>true</code> if validation succeeds, or <code>false</code> if it fails. The function
+            call <code>$type?valid($node)</code> is equivalent to the XQuery expression:</p>
+            <eg>try { exists( $type?validate($node) ) } catch * { false() }</eg>
+         </fos:meaning>
+      </fos:field>
+   </fos:record-type>
+   
+   <fos:record-type id="load-xquery-module-record" extensible="false">
+      <fos:field name="variables" type="map(xs:QName, item()*)" required="true">
+         <fos:meaning>
+                  <p>This map (<var>V</var> ) contains one entry for each public
+                  global variable declared in the library module. The key of the
+                  entry is the name of the variable, as an <code>xs:QName</code>
+                  value; the associated value is the value of the variable.</p>
+         </fos:meaning>        
+      </fos:field>
+      <fos:field name="functions" type="map(xs:QName, map(xs:integer, function(*)))" required="true">
+         <fos:meaning>
+            <p>This map (<var>F</var> ) contains one entry for each distinct QName
+            <var>Q</var> that represents the name of a public and non-external
+            function declared in the library module. The key of the entry is
+            <var>Q</var>, as an <code>xs:QName</code> value; the associated value
+            is a map <var>A</var>. This map (<var>A</var>) contains one entry for
+            each arity <var>N</var> within the arity range of any of the function
+            declarations with the given name; its key is <var>N</var>, as an
+            <code>xs:integer</code> value, and its associated value is a function
+            item obtained as if by evaluating a named function reference
+            <code>Q#N</code>, using the static and dynamic context of the call on
+            <code>fn:load-xquery-module</code>. The function item can be invoked
+            using the rules for dynamic function invocation.</p>
+         </fos:meaning>         
+      </fos:field>
+   </fos:record-type>
+   
+   
 
    
    
@@ -221,7 +348,7 @@
    </fos:record-type>
    
 
-   <fos:record-type id="load-xquery-module-record" extensible="false">
+   <!--<fos:record-type id="load-xquery-module-record" extensible="false">
       <fos:field name="variables" type="map(xs:QName, item()*)" required="true">
          <fos:meaning>
                   <p>This map (<var>V</var> ) contains one entry for each public
@@ -247,7 +374,7 @@
          </fos:meaning>         
       </fos:field>
    </fos:record-type>
-   
+   -->
    
 
    <fos:record-type id="random-number-generator-record" extensible="true">
@@ -403,6 +530,90 @@
          </fos:example>
       </fos:examples>
    </fos:function>
+   
+   <fos:function name="node-kind" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="node-kind" return-type="enum('document', 'element', 'attribute', 'text', 'comment', processing-instruction', 'namespace')?">
+            <fos:arg name="node" type="node()?" default="." usage="inspection"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties arity="0">
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-dependent</fos:property>
+         <fos:property>focus-dependent</fos:property>
+      </fos:properties>
+      <fos:properties arity="1">
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns the kind of node, for example <code>"element"</code> or <code>"attribute"</code>.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If the argument is omitted, it defaults to the context value (<code>.</code>).</p>
+         <p>If <code>$node</code> is the empty sequence, the empty sequence is returned.</p>
+         <p>Otherwise, the function returns the kind of the supplied node.</p>
+      </fos:rules>
+      <fos:equivalent style="xpath-expression" covers-error-cases="false">
+$node ! (
+  if (self::document-node()) then "document"
+  else if (self::element()) then "element"
+  else if (self::attribute()) then "attribute"
+  else if (self::text()) then "text"
+  else if (self::comment()) then "comment"
+  else if (self::processing-instruction()) then "processing-instruction"
+  else "namespace")
+      </fos:equivalent>
+      <fos:errors>
+         <p>The following errors may be raised when <code>$node</code> is omitted:</p>
+         <ulist>
+            <item>
+               <p>If the context value is <xtermref ref="dt-absent" spec="DM40"
+                     >absent</xtermref>,
+                  type error <xerrorref spec="XP"
+                     class="DY" code="0002" type="type"/>.</p>
+            </item>
+            <item>
+               <p>If the context value is not a single node, type error <xerrorref spec="XP" class="TY"
+                     code="0004" type="type"/>.</p>
+            </item>
+         </ulist>
+
+      </fos:errors>
+ 
+      <fos:examples>
+         <fos:variable name="e" id="v-node-kind-e"><![CDATA[<doc>
+  <p id="alpha" xml:id="beta">One</p>
+  <p id="gamma" xmlns="http://example.com/ns">Two</p>
+  <ex:p id="delta" xmlns:ex="http://example.com/ns">Three</ex:p>
+  <?pi 3.14159?>
+</doc>]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-node-kind-e" spec="XQuery">
+               <fos:expression>node-kind($e//*[@id = 'alpha'])</fos:expression>
+               <fos:result>"element"</fos:result>
+            </fos:test>
+            <fos:test use="v-node-kind-e" spec="XQuery">
+               <fos:expression>node-kind($e//@id[. = 'gamma'])</fos:expression>
+               <fos:result>"attribute"</fos:result>
+            </fos:test>
+            <fos:test use="v-node-kind-e" spec="XQuery">
+               <fos:expression>node-kind($e//node()[.='3.14159'])</fos:expression>
+               <fos:result>"processing-instruction"</fos:result>
+            </fos:test>
+            <fos:test use="v-node-kind-e" spec="XQuery">
+               <fos:expression>node-kind($e//no-such-node)</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="148" PR="1523" date="2024-10-22"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
    <fos:function name="nilled" prefix="fn">
       <fos:signatures>
          <fos:proto name="nilled" return-type="xs:boolean?">
@@ -4923,11 +5134,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
          </fos:example>
 
          <fos:variable name="doc" id="v-string-join-doc"
-            >&lt;doc&gt;
-  &lt;chap&gt;
-    &lt;section xml:id="xyz"/&gt;
-  &lt;/chap&gt;
-&lt;/doc&gt;</fos:variable>
+            >&lt;doc&gt;&lt;chap&gt;&lt;section xml:id="xyz"/&gt;&lt;/chap&gt;&lt;/doc&gt;</fos:variable>
          <fos:example>
             <fos:test use="v-string-join-doc" spec="XQuery">
                <fos:expression><eg>$doc//@xml:id
@@ -10698,6 +10905,83 @@ return ($value - unix-dateTime()) div seconds(0.001)</eg>
          </fos:example>
       </fos:examples>
    </fos:function>
+   <fos:function name="civil-timezone" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="civil-timezone" return-type="xs:dayTimeDuration">
+            <fos:arg name="dateTime" type="xs:dateTime"/>
+            <fos:arg name="place" type="xs:string" default="()"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties arity="1">
+         <fos:property>deterministic</fos:property>
+         <fos:property dependency="default-place">context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:properties arity="2">
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns the timezone offset from UTC that is in conventional use at a given place and time.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>This function uses a database of civil timezones (including daylight savings time) to return
+         the timezone offset for a given date/time and place. For example, the timezone offset for New York
+         on 31 December 2024 would be <code>-PT5H</code>.</p>
+         <p>If the <code>$place</code> argument is omitted or empty then the <xtermref spec="XP40" ref="dt-default-place"/>
+         from the dynamic context is used.</p>
+         <p>If the supplied <code>$dateTime</code> has no timezone then the implicit timezone from the dynamic
+         context is used. This is unrelated to the timezone applicable to the requested <code>$place</code>.</p>
+         <p>The intended use of the <code>$place</code> argument is to identify
+ the place where an event
+represented by the <code>$dateTime</code> argument took place or will take place.
+                  The value must be an IANA timezone name as defined in the IANA timezone database <bibref ref="olson"/>.
+   Examples are <code>"America/New_York"</code> and <code>"Europe/Rome"</code>.</p>
+
+<p>The result of the function is the civil timezone offset applicable to the given date/time
+   and place, as determined by the IANA timezone database or an alternative authoritative source.</p>
+      </fos:rules>
+      <fos:errors>
+         <p> A dynamic error is raised <errorref class="DT" code="0004"
+               /> if no timezone information is available for the given date/time and place.
+         This includes the case where the given place is not present in the timezone database,
+         and also the case where the information available for that place does not cover a sufficient range
+         of dates.</p>
+      </fos:errors>
+      <fos:examples>
+         <fos:example>
+            <fos:test implicit-timezone="-PT5H">
+               <fos:expression><eg>civil-timezone(
+  xs:dateTime('2024-12-31T23:59:59'), 'America/New_York')
+</eg></fos:expression>
+               <fos:result>xs:dayTimeDuration('-PT5H')</fos:result>
+            </fos:test>
+            <fos:test implicit-timezone="-PT5H">
+               <fos:expression><eg>civil-timezone(
+  xs:dateTime('2024-06-30T23:59:59'), 'America/New_York')
+</eg></fos:expression>
+               <fos:result>xs:dayTimeDuration('-PT4H')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>The expression:</p>
+            <eg>adjust-dateTime-to-timezone(
+  current-dateTime(),
+  civil-timezone(current-dateTime(), 'America/New_York')
+)</eg>
+            <p>returns the current civil date and time in New York.</p>
+         </fos:example>
+         <fos:example>
+            <p>If the default place is a location in the same timezone as (say) Paris, then the expression</p>
+            <eg>civil-timezone(xs:dateTime('2024-07-01T09:00:00'))</eg>
+            <p>returns PT2H.</p>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="1539" PR="1545" date="2024-11-05"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
    <fos:function name="subtract-dateTimes" prefix="op">
       <fos:signatures>
          <fos:proto name="subtract-dateTimes" return-type="xs:dayTimeDuration">
@@ -13720,6 +14004,79 @@ return empty($break)
          </fos:example>
       </fos:examples>
    </fos:function>
+   
+   <fos:function name="siblings" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="siblings" return-type="node()*">
+            <fos:arg name="node" type="node()?" default="." usage="navigation"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties arity="0">
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-dependent</fos:property>
+         <fos:property>focus-dependent</fos:property>
+      </fos:properties>
+      <fos:properties arity="1">
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns the siblings of the supplied node.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If the <code>$node</code> argument is omitted, it defaults to the context value (<code>.</code>).</p>
+         <p>If the value of <code>$node</code> is an empty sequence, or if it is an attribute or namespace node,
+         or if <code>$node</code> has no parent, the function returns an empty sequence.</p>
+         <p>The function returns the siblings of <code>$node</code>, that is, the sequence of nodes having the
+         same parent as <code>$node</code>, in document order. The result includes <code>$node</code> itself.</p>
+         
+      </fos:rules>
+      <fos:equivalent style="xpath-expression">
+         if ($node[self::(attribute()|namespace-node())])
+         then ()
+         else $node / parent::node() / child::node()
+      </fos:equivalent>
+      <fos:errors>
+         <p>The following errors may be raised when <code>$node</code> is omitted:</p>
+         <ulist>
+            <item>
+               <p>If the context value is <xtermref ref="dt-absent" spec="DM40"
+                     >absent</xtermref>,
+                  type error <xerrorref spec="XP"
+                     class="DY" code="0002" type="type"/></p>
+            </item>
+            <item>
+               <p>If the context value is not a single node, type error <xerrorref spec="XP" class="TY"
+                     code="0004" type="type"/>.</p>
+            </item>
+         </ulist>
+
+      </fos:errors>
+      
+      <fos:examples>
+         <fos:variable name="e" id="v-siblings-e"><![CDATA[<doc x="1"><a>A</a>text<?pi 3.14159?></doc>]]></fos:variable>
+         <fos:example>
+            <fos:test use="v-siblings-e" spec="XQuery">
+               <fos:expression>siblings($e//a) ! string()</fos:expression>
+               <fos:result>"A", "text", "3.14159"</fos:result>
+            </fos:test>
+            <fos:test use="v-siblings-e" spec="XQuery">
+               <fos:expression>siblings($e//processing-instruction('pi') ! string()</fos:expression>
+               <fos:result>"A", "text", "3.14159"</fos:result>
+            </fos:test>
+            <fos:test use="v-siblings-e" spec="XQuery">
+               <fos:expression>siblings($e//@x)</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change><p>New in 4.0</p></fos:change>
+      </fos:changes>
+
+   </fos:function>
+   
    <fos:function name="exists" prefix="fn">
       <fos:signatures>
          <fos:proto name="exists" return-type="xs:boolean">
@@ -14442,9 +14799,9 @@ filter($input, fn($item, $pos) { $pos gt 1 })
       </fos:changes>
    </fos:function>
    
-   <fos:function name="intersperse" prefix="fn">
+   <fos:function name="sequence-join" prefix="fn">
       <fos:signatures>
-         <fos:proto name="intersperse" return-type="item()*">
+         <fos:proto name="sequence-join" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="separator" type="item()*" usage="navigation"/>
          </fos:proto>
@@ -14458,47 +14815,42 @@ filter($input, fn($item, $pos) { $pos gt 1 })
          <p>Inserts a separator between adjacent items in a sequence.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function returns the value of <code>head($input), tail($input) ! ($separator, .)</code>.</p>
+         <p>The function inserts a separator between adjacent items in a sequence.
+            The input is returned unchanged if <code>$separator</code> is the empty sequence
+            or if <code>$input</code> contains less than two items.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 for-each($input, fn($item, $pos) {
-   if ($pos eq 1)
-   then $item
-   else ($separator, $item)
+  if ($pos gt 1) { $separator },
+  $item
 })
       </fos:equivalent>
-      <fos:notes>
-         <p>If <code>$input</code> contains less than two items then it is returned unchanged.</p>
-         <p>If <code>$separator</code> is the empty sequence then <code>$input</code> is returned unchanged.</p>
-         <p>For example, in XQuery, <code>fn:intersperse(para, &lt;hr/>)</code> would insert
-         an empty <code>hr</code> element between adjacent paragraphs.</p>
-      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>intersperse(1 to 5, "|")</fos:expression>
+               <fos:expression>sequence-join(1 to 5, "|")</fos:expression>
                <fos:result>(1, "|", 2, "|" , 3, "|", 4, "|", 5)</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>intersperse((), "|")</fos:expression>
+               <fos:expression>sequence-join((), "|")</fos:expression>
                <fos:result>()</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>intersperse("A", "|")</fos:expression>
+               <fos:expression>sequence-join("A", "|")</fos:expression>
                <fos:result>"A"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>intersperse(1 to 5, ())</fos:expression>
-               <fos:result>(1, 2, 3, 4, 5)</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>intersperse(1 to 3, ("⅓", "⅔"))</fos:expression>
+               <fos:expression>sequence-join(1 to 3, ("⅓", "⅔"))</fos:expression>
                <fos:result>(1, "⅓", "⅔", 2, "⅓", "⅔", 3)</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <p>Insert an empty <code>hr</code> element between adjacent paragraphs:</p>
+            <eg><![CDATA[sequence-join(./para, <hr/>)]]></eg>
+         </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="2" date="2022-09-27"><p>New in 4.0</p></fos:change>
+         <fos:change issue="2 868" date="2022-09-27"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
    
@@ -19130,6 +19482,18 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                </tr>
                <tr>
                   <td>
+                     <code>json-lines</code>
+                  </td>
+                  <td>
+                     <code>xs:boolean?</code>
+                  </td>
+                  <td><code>true()</code> means <code>"yes"</code>, <code>false()</code> means <code>"no"</code></td>
+                  <td>
+                     <code>no</code>
+                  </td>
+               </tr>
+               <tr>
+                  <td>
                      <code>json-node-output-method</code>
                   </td>
                   <td>
@@ -21920,6 +22284,188 @@ declare function transitive-closure (
       </fos:changes>
    </fos:function>
    
+   <fos:function name="atomic-type-annotation" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="atomic-type-annotation" return-type-ref="schema-type-record">
+            <fos:arg name="value" type="xs:anyAtomicType"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>        
+      </fos:properties>
+      <fos:summary>
+         <p>Returns a record containing information about the type annotation of an atomic value.</p>
+      </fos:summary>
+      <fos:rules>        
+         <p>Given an atomic value, the function returns a <loc href="#schema-type-record">schema-type-record</loc>
+         containing information about the atomic type represented by its <xtermref spec="DM40" ref="dt-type-annotation"/>.</p>
+      </fos:rules>
+      <fos:notes>
+         <p>The result will always have <code>?is-simple = true()</code> and <code>?variety = "atomic"</code>. In a non-schema-aware
+         environment the type will always be a built-in atomic type in the <code>xs</code> namespace: see
+         <specref ref="atomic-type-hierarchy"/>. Where a schema is in use, however, the result may be an atomic type defined
+         in the schema, which may be an anonymous type.</p>
+         
+         <p>This function should not be used as a substitute for an <code>instance of</code> test. The precise type annotation
+         of the result of an expression is not always predictable, because processors are free to deliver a more specific type
+         than is mandated by the specification. For example, if <code>$n</code> is of type <code>xs:positiveInteger</code>,
+         then the result of <code>abs($n)</code> is guaranteed to be an instance of <code>xs:integer</code>, but an 
+         implementation might reasonably return the supplied value unchanged: that is, a value whose actual type 
+         annotation is <code>xs:positiveInteger</code>. Similarly the type annotation of the value returned by
+         <code>position()</code> might have a type annotation of <code>xs:long</code> rather than <code>xs:integer</code>.</p>
+         
+         <p>Implementations <rfc2119>should</rfc2119>, however, refrain from exposing types that are purely internal.
+         For example, an implementation might have an optimized internal representation for strings consisting entirely
+         of ASCII characters, or for single-character strings; if this is the case then the type annotation returned by this function
+         should be a user-visible supertype such as <code>xs:string</code>.</p>
+      </fos:notes>
+      <fos:examples role="wide">
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>atomic-type-annotation(23)?name</eg></fos:expression>
+               <fos:result>xs:QName('xs:integer')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>let $x := 23, $y := 93.7 
+return atomic-type-annotation($x)?matches($y)</eg></fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>atomic-type-annotation(xs:numeric('23.2'))?name</eg></fos:expression>
+               <fos:result>xs:QName('xs:double')</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="148" PR="1523" date="2024-10-22"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
+   <fos:function name="node-type-annotation" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="node-type-annotation" return-type-ref="schema-type-record">
+            <fos:arg name="node" type="(element() | attribute())"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+         
+      </fos:properties>
+      <fos:summary>
+         <p>Returns a record containing information about the type annotation of an element or attribute node.</p>
+      </fos:summary>
+      <fos:rules>        
+         <p>Given an element or attribute node, the function returns a <loc href="#schema-type-record">schema-type-record</loc>
+         containing information about the schema type represented by its <xtermref spec="DM40" ref="dt-type-annotation"/>.</p>
+         
+      </fos:rules>
+      <fos:notes>
+         <p>For an element that has not been schema-validated, the type annotation is always <code>xs:untyped</code>.</p>
+         <p>For an attribute that has not been schema-validated, the type annotation is always <code>xs:untypedAtomic</code>.</p>
+         <p>The type annotation of an attribute node is always a simple type; the type annotation of an element node may
+         be simple or complex.</p>
+      </fos:notes>
+      <fos:examples role="wide">
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $e := parse-xml("<e/>")/*
+return node-type-annotation($e)]]></eg></fos:expression>
+               <fos:result>xs:QName('xs:untyped')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $a := parse-xml("<e a='3'/>")//@a
+return node-type-annotation($a)]]></eg></fos:expression>
+               <fos:result>xs:QName('xs:untypedAtomic')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $x := json-to-xml('[23, 24]', {'validate':true()})
+return node-type-annotation($x/*)]]></eg></fos:expression>
+               <fos:result>xs:QName('fn:arrayType')</fos:result>
+            </fos:test>
+         </fos:example>
+         
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="148" PR="1523" date="2024-10-22"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
+   <fos:function name="schema-type" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="schema-type" return-type-ref="schema-type-record" return-type-ref-occurs="?">
+            <fos:arg name="name" type="xs:QName"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+         
+      </fos:properties>
+      <fos:summary>
+         <p>Returns a record containing information about a named schema type in the static context.</p>
+      </fos:summary>
+      <fos:rules>        
+         <p>If the static context (specifically, the <xtermref spec="XP40" ref="dt-is-types">in-scope schema types</xtermref>) 
+            includes a schema type whose name matches <code>$name</code>, 
+            the function returns a <loc href="#schema-type-record">schema-type-record</loc>
+         containing information about that schema type. If not, it returns an empty sequence.</p>
+      </fos:rules>
+      <fos:examples role="wide">
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:integer'))?name</fos:expression>
+               <fos:result>xs:QName('xs:integer')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:long'))?primitive-type?name</fos:expression>
+               <fos:result>xs:QName('xs:decimal')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:positiveInteger'))?base-type?name</fos:expression>
+               <fos:result>xs:QName('xs:integer')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:integer'))?matches(23)</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:numeric'))?variety</fos:expression>
+               <fos:result>"union"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>schema-type(xs:QName('xs:numeric'))?members()?name</fos:expression>
+               <fos:result>xs:QName('xs:double'), xs:QName('xs:float'), xs:QName('xs:decimal')</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="148" PR="1523" date="2024-10-22"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
    <fos:function name="atomic-equal" prefix="fn" diff="chg" at="2023-01-25">
       <fos:signatures>
          <fos:proto name="atomic-equal" return-type="xs:boolean">
@@ -23030,6 +23576,9 @@ return if (exists($entry))
             </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change><p>A third argument is added, allowing user control of how absent keys should be handled.</p></fos:change>
+      </fos:changes>
    </fos:function>
 
    <fos:function name="find" prefix="map">
@@ -27080,6 +27629,7 @@ $array
       <fos:signatures>
          <fos:proto name="join" return-type="array(*)">
             <fos:arg name="arrays" type="array(*)*" usage="inspection"/>
+            <fos:arg name="separator" type="array(*)?" default="()" usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -27088,16 +27638,22 @@ $array
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Concatenates the contents of several arrays into a single array.</p>
+         <p>Concatenates the contents of several arrays into a single array, with an optional
+            separator between adjacent members.</p>
       </fos:summary>
       <fos:rules>
-         <p>Informally, the function concatenates the members of several arrays into a single array.</p>
-         <!--<p diff="chg" at="A">More formally, the function returns the result of 
-            <code>array:of-members($arrays ! array:members(.))</code>.</p>-->
+         <p>Informally, the function concatenates the members of several arrays into a single array.
+            If a separator is supplied, its members are inserted before the members of the second 
+            and the following arrays.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression"><![CDATA[
-            array:of-members($arrays ! array:members(.))
-       ]]></fos:equivalent>
+array:of-members(
+  for-each($arrays, fn($array, $pos) {
+    if ($pos gt 1 and exists($separator)) { array:members($separator) },
+    array:members($array)
+  })
+)
+      ]]></fos:equivalent>
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -27109,19 +27665,44 @@ $array
                <fos:result>[ 1, 2, 3 ]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:join(([ "a", "b" ], [ "c", "d" ]))</fos:expression>
-               <fos:result>[ "a", "b", "c", "d" ]</fos:result>
+               <fos:expression>array:join(([ "a", "b" ], [ "c" ]))</fos:expression>
+               <fos:result>[ "a", "b", "c" ]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:join(([ "a", "b" ], [ "c", "d" ], []))</fos:expression>
-               <fos:result>[ "a", "b", "c", "d" ]</fos:result>
+               <fos:expression>array:join(([ "a", "b" ], [ "c" ], []))</fos:expression>
+               <fos:result>[ "a", "b", "c" ]</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>array:join(([ "a", "b" ], [ [ "c", "d" ] ]))</fos:expression>
-               <fos:result>[ "a", "b", [ "c", "d" ] ]</fos:result>
+               <fos:expression>array:join(([ "a", "b" ], [ [ "c" ] ]))</fos:expression>
+               <fos:result>[ "a", "b", [ "c" ] ]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:join(
+  characters('abc') ! array { . },
+  [ "/" ]
+)</eg></fos:expression>
+               <fos:result>[ "a", "/", "b", "/", "c" ]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array { 1 to 3 }
+=> array:split()
+=> array:join([ () ])</eg></fos:expression>
+               <fos:result>[ 1, (), 2, (), 3 ]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>array:join(
+  ([ () ], [ 1, (2, 3) ]),
+  [ "a", ("b", "c") ]
+)</eg></fos:expression>
+               <fos:result>[(), "a", ("b", "c"), 1, (2, 3)]</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change issue="868" date="2024-10-29">
+           <p>Optional <code>$separator</code> added.</p>
+         </fos:change>
+      </fos:changes>
    </fos:function>
 
    <fos:function name="subarray" prefix="array">
