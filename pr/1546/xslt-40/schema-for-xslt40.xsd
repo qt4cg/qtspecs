@@ -77,6 +77,12 @@
            which is beyond the scope of XSD.
         </li>
         <li>
+           The XSLT specification allows <code>xsl:note</code> elements to appear
+           anywhere, with arbitrary content. This schema does not: for example, it does
+           not allow <code>xsl:note</code> as a child of an element such as <code>xsl:text</code>
+           or <code>xsl:strip-space</code>.
+        </li>
+        <li>
            The schema imports the schema for XSD 1.0 schema documents. In
            stylesheets that contain an inline XSD 1.1 schema, this import should be
            replaced with one for the schema for XSD 1.1 schema documents.
@@ -458,7 +464,7 @@ of problems processing the schema using various tools
             <xs:element ref="xsl:with-param"/>
           </xs:choice>
           <xs:attribute name="select" type="xsl:expression" default="child::node()"/>
-          <xs:attribute name="separator" type="xsl:expression"/>
+          <xs:attribute name="separator" type="xsl:avt"/>
           <xs:attribute name="mode" type="xsl:mode"/>
           <xs:attribute name="_select" type="xs:string"/>
           <xs:attribute name="_separator" type="xs:string"/>
@@ -480,17 +486,13 @@ of problems processing the schema using various tools
     </xs:complexType>
   </xs:element>
   
-  <xs:element name="array" substitutionGroup="xsl:instruction">
-    <xs:complexType>
-      <xs:complexContent mixed="true">
-        <xs:extension base="xsl:sequence-constructor-or-select">
-          <xs:attribute name="use" type="xsl:expression"/>
-          <xs:attribute name="_use" type="xs:string"/>
-        </xs:extension>
-      </xs:complexContent>
-    </xs:complexType>
-  </xs:element>
+  <xs:element name="array"
+              substitutionGroup="xsl:instruction"
+              type="xsl:sequence-constructor-or-select"/>
   
+  <xs:element name="array-member"
+              substitutionGroup="xsl:instruction"
+              type="xsl:sequence-constructor-or-select"/>
   
   <xs:element name="assert" substitutionGroup="xsl:instruction">
     <xs:complexType>
@@ -848,7 +850,7 @@ of problems processing the schema using various tools
                       maxOccurs="unbounded"/>
           </xs:sequence>
           <xs:attribute name="select" type="xsl:expression"/>
-          <xs:attribute name="separator" type="xsl:expression"/>
+          <xs:attribute name="separator" type="xsl:avt"/>
           <xs:attribute name="_select" type="xs:string"/>
           <xs:attribute name="_separator" type="xs:string"/>
           <xs:assert test="every $e in subsequence(xsl:sort, 2) 
@@ -911,7 +913,7 @@ of problems processing the schema using various tools
           <xs:assert test="count(((@group-by|@_group-by)[1], 
                                   (@group-adjacent|@_group-adjacent)[1], 
                                   (@group-starting-with|@_group-starting-with)[1], 
-                                  (@group-ending-with|@_group-ending-with)[1]),
+                                  (@group-ending-with|@_group-ending-with)[1],
                                   (@split-when|@_split-when)[1])) = 1">
             <xs:annotation>
               <xs:documentation>
@@ -1159,7 +1161,7 @@ of problems processing the schema using various tools
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="matching-substring" type="xsl:sequence-constructor"/>
+  <xs:element name="matching-substring" type="xsl:sequence-constructor-or-select"/>
 
   <xs:element name="merge" substitutionGroup="xsl:instruction">
     <xs:complexType>
@@ -1349,7 +1351,7 @@ of problems processing the schema using various tools
     </xs:complexType>
   </xs:element>
 
-  <xs:element name="non-matching-substring" type="xsl:sequence-constructor"/>
+  <xs:element name="non-matching-substring" type="xsl:sequence-constructor-or-select"/>
   
   <xs:element name="note" type="xs:anyType"/>
 
@@ -1634,6 +1636,7 @@ of problems processing the schema using various tools
       <xs:complexContent mixed="true">
         <xs:extension base="xsl:sequence-constructor">
           <xs:attribute name="format" type="xsl:avt"/>
+          <xs:attribute name="select" type="xsl:expression"/>
           <xs:attribute name="href" type="xsl:avt"/>
           <xs:attribute name="type" type="xsl:EQName"/>
           <xs:attribute name="validation" type="xsl:validation-type"/>
@@ -1663,6 +1666,7 @@ of problems processing the schema using various tools
           <xs:attribute name="use-character-maps" type="xsl:EQNames"/>
           <xs:attribute name="output-version" type="xsl:avt"/>
           <xs:attribute name="_format" type="xs:string"/>
+          <xs:attribute name="_select" type="xs:string"/>
           <xs:attribute name="_href" type="xs:string"/>
           <xs:attribute name="_type" type="xs:string"/>
           <xs:attribute name="_validation" type="xs:string"/>
@@ -1701,8 +1705,16 @@ of problems processing the schema using various tools
   </xs:element>
   
   <xs:element name="sequence"
-              substitutionGroup="xsl:instruction"
-              type="xsl:sequence-constructor-or-select"/>
+              substitutionGroup="xsl:instruction">
+    <xs:complexType>
+      <xs:complexContent mixed="true">
+        <xs:extension base="xsl:sequence-constructor-or-select">
+          <xs:attribute name="as" type="xsl:sequence-type"/>
+          <xs:attribute name="_as" type="xs:string"/>
+        </xs:extension>
+      </xs:complexContent>
+    </xs:complexType>
+  </xs:element>
 
   <xs:element name="sort">
     <xs:complexType>
@@ -1774,6 +1786,7 @@ of problems processing the schema using various tools
           <xs:sequence>
             <xs:element ref="xsl:when" maxOccurs="unbounded"/>
             <xs:element ref="xsl:otherwise" minOccurs="0"/>
+            <xs:element ref="xsl:fallback" minOccurs="0" maxOccurs="unbounded"/>
           </xs:sequence>
           <xs:attribute name="select" type="xsl:expression"/>
           <xs:attribute name="_select" type="xsl:avt"/>
@@ -2332,27 +2345,22 @@ of problems processing the schema using various tools
     </xs:annotation>
     <xs:list>
       <xs:simpleType>
-        <xs:union>
-          <!-- Option 1: #default -->
-          <xs:simpleType>
-            <xs:restriction base="xs:string">
-              <xs:enumeration value="#default"/>
-            </xs:restriction>
-          </xs:simpleType>
-          <!-- Option 2: NCName -->
-          <xs:simpleType ref="xs:NCName"/>
-          <!-- Option 3: prefix=namespace -->
-          <xs:simpleType>
-            <xs:restriction base="xs:string">
-              <xs:pattern value="([\i-[:]][\c-[:]]*:)=.+"/>
-            </xs:restriction>
-          </xs:simpleType>
-          <!-- Option 4: anyURI -->
-          <xs:simpleType ref="xs:anyURI"/>
-        </xs:union>
+        <xs:union memberTypes="xsl:fixed-namespaces-type-default xs:NCName xsl:fixed-namespaces-type-prefix-binding xs:anyURI"/>
       </xs:simpleType>
     </xs:list>
  
+  </xs:simpleType>
+  
+  <xs:simpleType name="fixed-namespaces-type-default">
+    <xs:restriction base="xs:string">
+       <xs:enumeration value="#default"/>
+    </xs:restriction>
+  </xs:simpleType>
+  
+  <xs:simpleType name="fixed-namespaces-type-prefix-binding">
+    <xs:restriction base="xs:string">
+       <xs:pattern value="([\i-[:]][\c-[:]]*:)=.+"/>
+    </xs:restriction>
   </xs:simpleType>
 
   <xs:simpleType name="item-type">
@@ -2540,6 +2548,7 @@ of problems processing the schema using various tools
     <xs:restriction base="xs:token">
       <xs:enumeration value="deep-copy"/>
       <xs:enumeration value="shallow-copy"/>
+      <xs:enumeration value="shallow-copy-all"/>
       <xs:enumeration value="deep-skip"/>
       <xs:enumeration value="shallow-skip"/>
       <xs:enumeration value="text-only-copy"/>
@@ -2647,19 +2656,22 @@ of problems processing the schema using various tools
            or a prefixed QName, or a name written using the extended QName notation
            <code>Q{uri}local</code>
         </p>
-        <p>
-           Although <code>xs:QName</code> would define the correct validation on these
-           attributes, a schema processor would expand unprefixed QNames
-           incorrectly when constructing the PSVI, because (as defined in XML
-           Schema errata) an unprefixed <code>xs:QName</code> is assumed to be in the default
-           namespace, which is not the correct assumption for XSLT. The datatype is
-           therefore defined as a union of NCName and QName, so that an unprefixed
-           name will be validated as an NCName and will therefore not be treated as
-           having the semantics of an unprefixed xs:QName.
-        </p>
+        <p>In XSLT 4.0, where a QName is used in the <code>name</code> attribute
+        of (say) <code>xsl:template</code> or <code>xsl:call-template</code>, the prefix
+        does not have to be bound in an XML namespace declaration; rather it can be bound
+        in a <code>fixed-namespaces</code> attribute on the <code>xsl:stylesheet</code>
+        element. Therefore, the built-in <code>xs:QName</code> type cannot be used.
+        This schema does not attempt to verify that namespace prefixes have been
+        properly declared.</p>
+        
       </xs:documentation>
     </xs:annotation>
-    <xs:union memberTypes="xs:NCName xs:QName">
+    <xs:union memberTypes="xs:NCName">
+      <xs:simpleType>
+        <xs:restriction base="xs:token">
+          <xs:pattern value="[\i-[:]][\c-[:]]*:[\i-[:]][\c-[:]]*"/>
+        </xs:restriction>
+      </xs:simpleType>
       <xs:simpleType>
         <xs:restriction base="xs:token">
           <xs:pattern value="Q\{[^{}]*\}[\i-[:]][\c-[:]]*"/>
