@@ -25476,25 +25476,26 @@ return json-to-xml($json, $options)]]></eg>
                <fos:values>
                   <fos:value value="lexical">Names are output as lexical QNames, in the same form as they
                      would appear if serialized using the XML output method. The result may
-                  contain a namespace prefix: note that the output will not contain any information
-                  enabling such prefixes to be resolved to a namespace URI.</fos:value>
+                  contain a namespace prefix, but the output will not contain any information
+                  enabling such a prefix to be resolved to a namespace URI.</fos:value>
                   <fos:value value="local">Namespace URIs in element and attribute names are discarded; only the local
-                     names are output. If this leads to duplicate keys in a context where the names
-                     must be unique, then the setting is ignored and <code>"eqname"</code> is used instead.</fos:value>
+                     names are output.</fos:value>
                   <fos:value value="eqname">Names in a namespace are output in the form <code>"Q{uri}local"</code>.
                   Names in no namespace are output using the local name alone.</fos:value>
-                  <fos:value value="default">Element names in the default namespace of the top-level element node
-                     (the node supplied in the <code>$elements</code> argument), and attribute names
-                     in no namespace, are output using the local name alone. 
-                     All other names are output in the format <code>"Q{uri}local"</code>, or <code>Q{}local</code>
-                  in the case of a no-namespace element name where this is not the default.</fos:value>
+                  <fos:value value="default">An element name is output as a local name alone if either (a) it is
+                     a top-level element and is in no namespace, or (b) it is in the same namespace as its
+                     parent element. An attribute name is output as a local name alone if it is in no namespace.
+                     All other names are output in the format <code>"Q{uri}local"</code> if in a namespace, 
+                     or <code>"Q{}local"</code> if in no namespace. "Top-level" here means that the element
+                     is one that appears explicitly in the sequence of elements passed in the first argument,
+                     as distinct from a descendant element.</fos:value>
                </fos:values>
             </fos:option>
             <fos:option key="layouts">
                <fos:meaning>A mapping from element names to layout names, used to override the default
                formatting rules for a particular element name.</fos:meaning>
                <fos:type>map(xs:QName, enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
-                  "record", "sequence", "mixed", "xml", "html", "xhtml"))</fos:type>
+                  "record", "sequence", "mixed", "xml"))</fos:type>
                <fos:default>map{}</fos:default>
             </fos:option>
          </fos:options>
@@ -25504,7 +25505,7 @@ return json-to-xml($json, $options)]]></eg>
          
          
          <p>The principles for conversion from elements to maps are described
-            in specref ref="xml-to-json-mappings"/>.</p>
+            in <specref ref="element-layouts"/>.</p>
          
         
          <p>In general, an element node maps to a key-value pair in which the key represents the element name, and the
@@ -25516,117 +25517,53 @@ return json-to-xml($json, $options)]]></eg>
          <p>The representation of other kinds of node depends on the layout chosen for its parent element.</p>
          
          
-            <!--<item>
-               <p><emph>Maps</emph></p>
-               <p>An XDM map is output as a JSON object with one property for each entry in the map.</p>
-               <p>The property name is derived from the key value by converting the value to a string
-               and applying escaping rules. If the property name thus generated is the same as a previously output
-               property name, then it is made unique by appending <code>"[N]"</code> where <var>N</var> is the smallest
-               positive integer, starting at 2, that makes the resulting value unique.</p>
-               <p>The property value is derived by applying the <code>fn:items-to-json</code> function to the value in the map entry.</p>
-               
-               <note><p>Conflicts between property names can arise because the XDM model allows keys of different types,
-                  for example the <code>xs:date</code> value <code>2020-12-31</code> and the string value 
-                  <code>"2020-12-31"</code> can co-exist. The map <code>{ xs:duration('PTD'): 20, "P1D": 30 }</code>
-                  is converted to the JSON string <code>{ "P1D": 20, "P1D(1)": 30 }</code> or 
-                  <code>{ "P1D": 30, "P1D(1)": 20 }</code>, depending on the (unpredictable) order in which the
-               entries in the map are processed.</p></note>
-               <note><p>Because the order of entries in a map is unpredictable, the order in which the
-               properties are listed in the JSON output is also unpredictable.</p></note>
-               </item>
-            <item>
-               <p><emph>Arrays</emph></p>
-               <p>An XDM array is output as a JSON array. Each member of the XDM array generates one entry in the
-                  JSON array, in order, obtained by applying the <code>fn:items-to-json</code> function to the XDM array member.</p>              
-            </item>
-            <item>
-
-               <p><emph>Functions</emph></p>
-               <p>An XDM function, other than a map or array, is output as a JSON object with the following properties:</p>
-               <ulist>
-                  <item><p><code>#function</code>, set to the name of the function
-                     in the format <code>Q{uri}local</code>
-                  if it has a name, or the empty string otherwise.</p></item>
-                  <item><p><code>#arity</code>, set to the arity of the function as a JSON number.</p></item>
-                  <item><p><code>#arguments</code> whose value is an array
-                  of strings, which identify the names and types of the function arguments,
-                  in the format <code>$Q{uri}local as SequenceType</code>: for example 
-                     <code>[ "$x as double", "$y as string" ]</code>. Namespace prefixes must not be used:
-                     unprefixed element names and variable names are taken to be in no namespace, and unprefixed
-                     type names are taken to be in the namespace <code>http://www.w3.org/2001/XMLSchema</code>.
-                  </p></item>
-                  <item><p><code>#result</code> whose value is a string 
-                     identifying the type of the function result, using the same conventions as for <code>#arguments</code>.</p></item>
-                  <item><p>Optionally at implementer discretion, <code>#implementation</code> whose value is a string</p></item> 
-               </ulist>
-
-               <p><emph>Function items</emph></p>
-               <p>An XDM function item, other than a map or array, is output as a JSON object comprising a single key-value pair.
-               The key is the string <code>"#function"</code>. The corresponding value is a JSON object. If the function has a name,
-               this object must contain a property giving the name in the format <code>"#name": "Q{uri}local"</code>. In all
-                  cases the object must contain a property giving the arity as a number, for example <code>"#arity": 3</code>.
-               Other properties <rfc2119>may</rfc2119> be included at the discretion of the implementation; their names 
-               <rfc2119>must</rfc2119> start with an underscore.</p>
-              
-
-               
-            </item>
-         </ulist>-->
-         <p>Strings are escaped as follows:</p>
-         <olist>
-            <item>
-               <p>Any occurrence of backslash is replaced by <code>\\</code></p>
-            </item>
-            
-            <item>
-               <p>Any occurrence of quotation mark, backspace, form-feed, newline, carriage return, or tab is 
-                  replaced by <code>\"</code>, <code>\b</code>, <code>\f</code>, <code>\n</code>, <code>\r</code>, or <code>\t</code> respectively; </p>
-            </item>
-            
-            <item>
-               <p>Any solidus (<code>"/"</code>) is 
-                  replaced by <code>\/</code> if the <code>escape-solidus</code> option is set to
-                  true (its default value) but is output as <code>"/"</code> if the option is set
-                  to false; </p>
-            </item>
-            
-            <item>
-               <p>Any other codepoint in the range 1-31 or 127-159 is replaced by an escape in 
-                  the form <code>\uHHHH</code> where <code>HHHH</code> is the upper-case hexadecimal representation of the codepoint value.</p>
-            </item>
-         </olist>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
             value (typically because it has been validated against an element-only content model): <errorref
                class="TY" code="0012"/>.</p>
       </fos:errors>
-      <fos:notes>
+      <!--<fos:notes>
          <p>The namespace URI and local name of all elements and attributes is available in the JSON output.
             Prefixes are not retained, and namespaces that are declared but not used are not retained.</p>
-         <p>The distinction between sequences and arrays is lost.</p>
-         <p>The distinction between different atomic types is lost, except for the boolean/number/string
-         distinction present in JSON.</p>
-      </fos:notes>
+         
+      </fos:notes>-->
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>items-to-json(())</fos:expression>
-               <fos:result>'null'</fos:result>
+               <fos:expression>elements-to-maps(())</fos:expression>
+               <fos:result>()</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>items-to-json(12)</fos:expression>
-               <fos:result>'12'</fos:result>
+               <fos:expression><![CDATA[elements-to-maps(parse-xml("<foo>bar</foo>")/*)]]></fos:expression>
+               <fos:result>{ "foo": "bar" }</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>items-to-json((12, "December"))</fos:expression>
-               <fos:result>'[12,"December"]'</fos:result>
+               <fos:expression><eg><![CDATA[elements-to-maps(parse-xml("
+    <list>
+      <item value='1'/>
+      <item value='2'/>
+    </foo>
+  ")/*)]]></eg></fos:expression>
+               <fos:result><eg>{ "list": [ 
+    { "@value": "1" },
+    { "@value": "2" }
+  ] }</eg></fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>items-to-json(true())</fos:expression>
-               <fos:result>'true'</fos:result>
+               <fos:expression><eg><![CDATA[elements-to-maps(parse-xml("
+    <name>
+      <first>Jane</first>
+      <last>Smith</last>
+    </foo>
+  ")/*)]]></eg></fos:expression>
+               <fos:result><eg>{ "name": { 
+    "first": "Jane",
+    "last": "Smith" 
+  } 
+}</eg></fos:result>
             </fos:test>
-            <fos:test>
+            <!--<fos:test>
 
                <fos:expression>items-to-json(map{"a":1,"b":number('NaN'),"c":(1,2,3)})</fos:expression>
 
@@ -25649,7 +25586,7 @@ return json-to-xml($json, $options)]]></eg>
                <fos:expression><eg><![CDATA[items-to-json(<a>A <i>nice</i> one!</a>, 
               map{'layouts':map{QName('', 'a'): 'xml'}, 'escape-solidus':false()})]]></eg></fos:expression>
                <fos:result>'{"a":"<a>A <i>nice</i> one!</a>"}'</fos:result>
-            </fos:test>
+            </fos:test>-->
          </fos:example>
       </fos:examples>
       <fos:history>
