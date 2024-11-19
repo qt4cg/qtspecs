@@ -12077,7 +12077,505 @@ else map:put($map, $key, $action(()))</eg></def></gitem><gitem><label>Examples</
   1: ("red", "green"),
   2: ("blue", "yellow"),
   3: ()
-})</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">("red", "green", "blue", "yellow")</eg><p>(or some permutation thereof)</p><p><emph>(The result is in <termref def="implementation-dependent">implementation-dependent</termref> order.)</emph></p></td></tr></tbody></table></def></gitem></glist></div3></div2><div2 id="map-operations"><head>Other Operations on Maps </head><p>Because a map is a function item, functions that apply to functions also apply
+})</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">("red", "green", "blue", "yellow")</eg><p>(or some permutation thereof)</p><p><emph>(The result is in <termref def="implementation-dependent">implementation-dependent</termref> order.)</emph></p></td></tr></tbody></table></def></gitem></glist></div3></div2><div2 id="xml-to-json-mappings"><head>Converting Elements to Maps</head><changes><change issue="528">
+                  A new function <code nobreak="false">fn:elements-to-maps</code> is provided for converting XDM trees
+                  to maps suitable for serialization as JSON. Unlike the <code nobreak="false">fn:xml-to-json</code> function
+                  retained from 3.1, this can handle arbitrary XML as input.
+               </change></changes><p>The <code nobreak="false">fn:elements-to-maps</code> function converts XML element nodes to maps, in a form
+               suitable for serialization as JSON. This section describes the mappings used by this function.</p><p>This mapping is designed with three objectives:</p><ulist><item><p>It should be possible to represent any XML element as a map suitable for JSON serialization.</p></item><item><p>The resulting JSON should be intuitive and easy to use.</p></item><item><p>The JSON should be consistent and stable: small changes in the input should not result
+               in large changes in the output.</p></item></ulist><p>Achieving all three objectives requires design compromises. It also requires sacrificing some other
+            desiderata. In consequence:</p><ulist><item><p>The conversion is not lossless.</p></item><item><p>The conversion is not streamable.</p></item><item><p>The results are not necessarily compatible with those produced by other popular libraries.</p></item></ulist><p>The requirement for consistency and stability is particularly challenging. An element such as 
+            <code nobreak="false">&lt;name&gt;John&lt;/name&gt;</code> maps naturally to the map <code nobreak="false">{ "name": "John" }</code>;
+               but adding an attribute (so it becomes <code nobreak="false">&lt;name role="first"&gt;John&lt;/name&gt;</code>)
+            then requires an incompatible change in the JSON representation. The format could be made extensible
+            by converting <code nobreak="false">&lt;name&gt;John&lt;/name&gt;</code> to <code nobreak="false">{ "name": {"#content":"John"} }</code>
+               and <code nobreak="false">&lt;name role="first"&gt;John&lt;/name&gt;</code> to 
+               <code nobreak="false">{ "name": { "@role":"first", "#content":"John" } }</code>,
+               but this imposes unwanted complexity on the simplest cases. The solution adopted is twofold: firstly,
+               to make use of schema information where it is available, and secondly, to provide user
+               control over the mappings that are chosen.</p><div3 id="element-layouts"><head>Element Layouts</head><p>The key challenge in mapping XML to JSON is in deciding how element content is to be represented. To 
+                  illustrate the variety of mappings that are possible, the following table
+               lists some examples of typical XML elements and their JSON equivalents:</p><table role="data"><thead><tr><th rowspan="1" colspan="1">XML element</th><th rowspan="1" colspan="1">JSON equivalent</th></tr></thead><tbody><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;hr/&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">"hr": ""</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;date-of-birth&gt;2023-05-18&lt;/date-of-birth&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">"date-of-birth": "2023-05-18"</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;box width="5" height="10"/&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">"box": { "@width": "5", "@height": "10" }</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;label id="t41"&gt;Warning!&lt;/label&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">"label": { "@id": "t41", "#content": "Warning!" }</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;box&gt;
+    &lt;width&gt;5&lt;/width&gt;
+    &lt;height&gt;10&lt;/height&gt;
+&lt;/box&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">"box": {
+    "width": 5, 
+    "height": 10
+}</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;polygon&gt;
+    &lt;point x="0" y="0"/&gt;
+    &lt;point x="1" y="0"/&gt;
+    &lt;point x="1" y="1"/&gt;
+    &lt;point x="0" y="1"/&gt;
+&lt;/polygon&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">"polygon": [
+    { "x": 0, "y": 0 }, 
+    { "x": 1, "y": 0 }, 
+    { "x": 1, "y": 1 }, 
+    { "x": 0, "y": 1 }
+]    </eg></td></tr></tbody></table><p>This specification defines a
+               number of named mappings, called <term>layouts</term>, and allows the layout for a particular
+               element to be selected in four different ways:</p><ulist><item><p>The layout to be used for a specific element name can be explicitly selected in the options
+                  to the <code nobreak="false">fn:elements-to-maps</code> function.</p></item><item><p>In the absence of an explicit selection, if the data has been schema-validated, the layout is 
+                     inferred from the content model for the element type as defined in the schema.</p></item><item><p>When the data is untyped and no specific layout has been selected, 
+                     a default layout is chosen based on the properties of the individual element instance.</p></item><item><p>If the <code nobreak="false">uniform</code> option is set to <code nobreak="false">true</code>, then the same layout
+                     will be used for all elements with a given name. This means that all elements need to be
+                     examined before any element is converted. The layout chosen is the first one (in the order of
+                     presentation in the following sections) whose match predicate matches every element with
+                     the relevant name.</p></item></ulist><p>The advantage of using schema information is that it gives a consistent representation for all
+               elements of a particular type, even if they vary in content: for example if an element type allows optional
+               attributes, the JSON representation will be consistent between those elements that have attributes and those
+               without. In the absence of a schema, consistency can be achieved either by using the <code nobreak="false">uniform</code>
+               option, or by selecting a layout explicitly in the <code nobreak="false">layouts</code> option.</p><p>The different layouts available are defined in the following sections. For each layout
+               there is a table showing:</p><ulist><item><p><term>Layout name</term>: the name to be used to select this layout in
+                  the <code nobreak="false">$options</code> parameter of the <code nobreak="false">fn:elements-to-maps</code> function.</p></item><item><p><term>Usage</term>: the situations for which this layout is designed.</p></item><item><p><term>XML example</term>: an example of a typical XML element for which this layout is appropriate.</p></item><item><p><term>JSON equivalent</term>: the JSON representation of this example. The JSON
+                  equivalent is always shown as a singleton map, which is how it will appear when the layout is used
+                  for the top-level elements supplied in the <code nobreak="false">$elements</code> argument; when used to convert
+                     a descendant element, the corresponding key-value pair may appear as part of a larger map, depending
+                     on the layout chosen for its parent element..</p><note><p>The <code nobreak="false">fn:elements-to-maps</code> function produces maps as its result, but it is convenient
+                  to illustrate the form of the map by showing the effect of serializing the map as JSON.</p></note></item><item><p><term>XSD conditions</term>: the properties of the XSD type definition that cause this
+                  layout to be selected. The first layout (in the order they appear in this specification) 
+                  that meets these conditions will be chosen. Note that two elements with the same name may
+                  have different XSD type definitions.</p></item><item><p><term>Match predicate</term>: an XPath 4.0 expression, to be evaluated with an element node
+                     as the context item, whose effective boolean value indicates whether this layout is suited
+                     to a particular element node. The first layout whose match predicate evaluates
+                     to <code nobreak="false">true</code> will be chosen.</p></item><item><p><term>Mapping rules</term>: The rules for mapping the XML element to an XDM map
+                  representation.</p></item><item><p><term>Mapping for nilled elements</term>: special rules that apply to an
+                  element having the attribute <code nobreak="false">xsi:nil="true"</code>. These rules only apply if the
+                  element has been schema-validated.</p></item><item><p><term>Notes</term>: General observations, especially concerning what information is retained
+                  by this mapping and what information is lost.</p></item></ulist><p>Note that it is possible to use any layout for any element. Use of an inappropriate layout
+               may result in information being discarded; but in some cases, discarding information may be the 
+               desired outcome. In a few cases use of an inappropriate layout may lead to a dynamic error.</p><note><p>Acknowledgements for this categorization: see <bibref ref="Goessner"/>. Although
+               Goessner's categories have been used, the actual mappings vary from his proposal.</p></note><div4 id="empty-layout"><head>Layout: Empty Content</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">empty</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that have no content and no attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;hr/&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "hr": "" }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with {variety} <code nobreak="false">empty</code>, 
+                              or a simple type with
+                              {variety} <code nobreak="false">list</code> and <code nobreak="false">maxLength="0"</code>, or a type 
+                              derived from <code nobreak="false">xs:string</code>
+                              with an <code nobreak="false">enumeration</code> or <code nobreak="false">length</code> or <code nobreak="false">maxLength</code>
+                              facet that restricts it to be zero-length; and the type does not allow 
+                              any attributes.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">empty( * | text() | @* )</code></p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The content is represented by the zero-length <code nobreak="false">xs:string</code>
+                              value <code nobreak="false">""</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>The content is represented by the QName 
+                              <code nobreak="false">fn:QName("http://www.w3.org/2005/xpath-functions", "null")</code>, 
+                              which the JSON serialization method serializes as
+                              <code nobreak="false">null</code>. For example the result of converting the element
+                              <code nobreak="false">&lt;hr xsi:nil="true"/&gt;</code> becomes 
+                              <code nobreak="false">{ "hr": xs:QName("fn:null") }</code>
+                              is serialized as <code nobreak="false">{ "hr": null }</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>If any child nodes or attributes are present, they are discarded. (This can happen
+                           when this layout is explicitly selected for elements that are not actually empty.)</p></td></tr></tbody></table></div4><div4 id="empty-plus-layout"><head>Layout: Empty Content with Attributes</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">empty-plus</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that have no content but may have attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;hr class="ccc" id="zzz"/&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "hr": { "@class": "ccc", "@id": "zzz" } }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with {variety} <code nobreak="false">empty</code>, or a simple type with
+                              {variety} <code nobreak="false">list</code> and <code nobreak="false">maxLength="0"</code>, 
+                              or a type derived from <code nobreak="false">xs:string</code>
+                              with an <code nobreak="false">enumeration</code> or <code nobreak="false">length</code> or <code nobreak="false">maxLength</code>
+                              facet that restricts it to be zero-length; 
+                              and the type allows attributes to appear.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">exists(@*) and empty(*|text())</code></p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The content is represented by a map containing one entry for each
+                              attribute in the XML element; if there are no attributes, the content
+                              is represented as an empty map. 
+                              The rules for attribute names are
+                           defined in <specref ref="element-and-attribute-names"/>, and the
+                              rules for attribute content in <specref ref="element-and-attribute-content"/>.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>An additional key-value pair <code nobreak="false">"#content": xs:QName("fn:null")</code> is added, which
+                              serializes in JSON as <code nobreak="false">"#content": null</code>. For example
+                              <code nobreak="false">&lt;hr id="x" xsi:nil="true"/&gt;</code> becomes 
+                              <code nobreak="false">{ "hr": { "@id": "x", "#content": xs:QName("fn:null") } }</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>If any child nodes are present in the element, they are discarded.
+                              (This can happen
+                              when this layout is explicitly selected for elements that are not actually empty.)</p></td></tr></tbody></table></div4><div4 id="simple-layout"><head>Layout: Simple Content</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">simple</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that have simple content and no attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;date&gt;2023-05-30&lt;/date&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "date": "2023-05-30" }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a simple type.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">empty( * | @* )</code></p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The element is atomized and the resulting atomized value is handled
+                              as described in <specref ref="element-and-attribute-content"/>.</p>
+                              
+                              <note><p>If the element is untyped, the atomized value will always 
+                                    appear in the result as an instance of <code nobreak="false">xs:untypedAtomic</code>.</p></note>
+                          </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>The content is represented by the value <code nobreak="false">xs:QName("fn:null")</code>, 
+                              which is serialized as the JSON value <code nobreak="false">null</code>. For example.
+                              <code nobreak="false">&lt;name xsi:nil="true"/&gt;</code> becomes <code nobreak="false">{ "name": xs:QName("fn:null") }</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>If any attributes are present, they are discarded. If the element has a type
+                           annotation that is a complex type with element-only content, atomization will fail and
+                           a dynamic error occurs. In the case of mixed content, if child elements are present, 
+                           atomization means that they will not appear explicitly in the result.</p>
+                           <p>Comments and processing instructions in the content are discarded. Whitespace is
+                           retained.</p></td></tr></tbody></table></div4><div4 id="simple-plus-layout"><head>Layout: Simple Content with Attributes</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">simple-plus</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that have simple content and (optionally) attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;price currency="USD"&gt;23.50&lt;/date&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "price": { "@currency": "USD", "#content": 23.50 } }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with simple content.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">empty(*)</code></p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The content is represented by a map containing one entry for each
+                              attribute in the XML element, plus an entry with key <code nobreak="false">"#content"</code>
+                              representing the result of atomizing the element. The atomized value is handled
+                              as described in <specref ref="element-and-attribute-content"/>.</p>
+                              <p>The rules for attribute names are
+                           defined in <specref ref="element-and-attribute-names"/>, and the
+                              rules for attribute content in <specref ref="element-and-attribute-content"/>.</p>
+                              <note><p>If the element is untyped, the value of each attribute, and of <code nobreak="false">"#content"</code>,
+                                    will always be an instance of <code nobreak="false">xs:untypedAtomic</code>.</p><p>If the element has been schema-validated, the types of the items in the atomized
+                                    value are retained.</p></note>
+                           </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>The <code nobreak="false">"#content"</code> property is represented by the value <code nobreak="false">xs:QName("fn:null")</code>, 
+                              which is serialized in JSON as <code nobreak="false">null</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>In the case of mixed content, if child elements are present, 
+                              atomization means that they will not appear in the result.</p>
+                              <p>Comments and processing instructions in the content are discarded. Whitespace is
+                                 retained.</p></td></tr></tbody></table></div4><div4 id="list-layout"><head>Layout: Simple List</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">list</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that act as wrappers for a list of child elements,
+                              all having the same element name. Any attributes on either the wrapper element or
+                              the wrapped elements will be discarded.
+                              The name of the child elements is not retained in the output.</p></td></tr><tr><th rowspan="1" colspan="1">XML example (1)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;dates&gt;
+  &lt;date&gt;2023-03-20&lt;/date&gt;
+  &lt;date&gt;2023-04-12&lt;/date&gt;
+  &lt;date&gt;2023-05-30&lt;/date&gt;
+&lt;/dates&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent (1)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "dates": [ "2023-03-20", "2023-04-12", "2023-05-30" ] }</eg></td></tr><tr><th rowspan="1" colspan="1">XML example (2)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;dates&gt;
+  &lt;date&gt;&lt;year&gt;2023&lt;/year&gt;&lt;month&gt;03&lt;/month&gt;&lt;day&gt;20&lt;/day&gt;&lt;/date&gt;
+  &lt;date&gt;&lt;year&gt;2023&lt;/year&gt;&lt;month&gt;04&lt;/month&gt;&lt;day&gt;12&lt;/day&gt;&lt;/date&gt;
+  &lt;date&gt;&lt;year&gt;2023&lt;/year&gt;&lt;month&gt;05&lt;/month&gt;&lt;day&gt;30&lt;/day&gt;&lt;/date&gt;
+&lt;/dates&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent (2)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "dates": [ 
+    { "year": "2023", "month": "03", "day": "20" },
+    { "year": "2023", "month": "04", "day": "12" },
+    { "year": "2023", "month": "05", "day": "30" }
+  ] }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with element-only content, containing a single
+                              element particle, whose <code nobreak="false">maxOccurs</code> value is greater than one (including
+                              <code nobreak="false">maxOccurs="unbounded"</code>); attributes are not allowed either on 
+                              the outer element or on the inner elements.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">count(*) gt 1 and all-equal(*!node-name()) and 
+                              empty(text()[normalize-space()]) and empty(@*) and empty(*/@*)</code></p>
+                           <p>That is, there are at least two child elements; all child elements have the same name; 
+                           there are no text node children other than whitespace-only text nodes; and there
+                           are no attributes either on the outer element or on the inner elements.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>If the element has element children with names that are not all equal, or
+                              if it has non-whitespace text node children, then it is output
+                              as if the <code nobreak="false">mixed</code> layout were chosen. This is fallback behavior for use
+                              when this layout is chosen inappropriately.</p>
+                              <p>In other cases, the content is represented by an array,
+                                 whose members correspond one-to-one with the children of the element.
+                                 Each child element is converted to a map as if it were a top-level element:
+                                 the resulting map contains a single key-value pair. The key part is discarded,
+                                 and the value part is used as a member in the resulting array.</p> 
+                             
+                              <p>If there are no children then the content is represented by an empty array.</p>
+                              
+                              </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>The array is replaced by the value <code nobreak="false">xs:QName("fn:null")</code>, 
+                              which serializes to the JSON value 
+                              <code nobreak="false">null</code> (for example <code nobreak="false">{ "dates": xs:QName("fn:null") }</code>).</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>Comments and processing instructions in the content are discarded.</p></td></tr></tbody></table></div4><div4 id="list-plus-layout"><head>Layout: List with Attributes</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">list-plus</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that act as wrappers for a list of child elements,
+                              all having the same element name. The wrapper element may have attributes,
+                              and the name of the child elements is retained in the JSON output.</p></td></tr><tr><th rowspan="1" colspan="1">XML example (1)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;dates id="x"&gt;
+  &lt;date&gt;2023-03-20&lt;/date&gt;
+  &lt;date&gt;2023-04-12&lt;/date&gt;
+  &lt;date&gt;2023-05-30&lt;/date&gt;
+&lt;/dates&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent (1)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">"dates": { "@id": "x", "date": ["2023-03-20", "2023-04-12", "2023-05-30"]}</eg></td></tr><tr><th rowspan="1" colspan="1">XML example (2)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;dates id="x"&gt;
+  &lt;date&gt;&lt;year&gt;2023&lt;/year&gt;&lt;month&gt;03&lt;/month&gt;&lt;day&gt;20&lt;/day&gt;&lt;/date&gt;
+  &lt;date&gt;&lt;year&gt;2023&lt;/year&gt;&lt;month&gt;04&lt;/month&gt;&lt;day&gt;12&lt;/day&gt;&lt;/date&gt;
+  &lt;date&gt;&lt;year&gt;2023&lt;/year&gt;&lt;month&gt;05&lt;/month&gt;&lt;day&gt;30&lt;/day&gt;&lt;/date&gt;
+&lt;/dates&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent (2)</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "dates": {
+   "@id": "x", 
+   "date": [ 
+    { "year": "2023", "month": "03", "day": "20" },
+    { "year": "2023", "month": "04", "day": "12" },
+    { "year": "2023", "month": "05", "day": "30" }
+  ] } }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with element-only content, containing a single
+                              element particle, whose <code nobreak="false">maxOccurs</code> value is greater than one (including
+                              <code nobreak="false">maxOccurs="unbounded"</code>).</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">count(*) gt 1 and all-equal(*!node-name()) and empty(text()[normalize-space()])]</code></p>
+                              <p>That is, there are at least two child elements; all child elements have the same name; and
+                                 there are no text node children other than whitespace-only text nodes.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>If the element has element children with names that are not all equal, or
+                              if it has non-whitespace text node children, then it is output
+                              as if <code nobreak="false">mixed</code> layout were chosen. This is fallback behavior for use
+                              when this layout is chosen inappropriately.</p>
+                              <p>In other cases,
+                                 the content is represented by a map containing one entry for each
+                                 attribute in the XML element, plus a property named after the 
+                                 child elements (the <term>content property</term>), whose value is an array 
+                                 containing the results of formatting the content in the same way as the 
+                                 <code nobreak="false">list</code> layout.</p> 
+                              
+                              <p>If there are no children and the element is untyped (which can occur when 
+                                 this layout is chosen explicitly via the options to <code nobreak="false">fn:elements-to-maps</code>)
+                                 then the content property is omitted (since the child element name is unknown).
+                                 But if the element is typed, then the content property is included and set to
+                                 an empty array.</p>
+                              
+                           </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>The array is replaced by the atomic item <code nobreak="false">xs:QName("fn:null")</code>, 
+                              which serializes to the JSON value <code nobreak="false">null</code>. 
+                              For example
+                              <code nobreak="false">{"dates": { "@id": "x", "date": xs:QName("fn:null") } }</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>Comments and processing instructions in the content are discarded.</p></td></tr></tbody></table></div4><div4 id="record-layout"><head>Layout: Record</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">record</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended primarily for XML elements that contain multiple child elements, with different
+                              names, where the order of the child elements is not significant. Also used for elements
+                              whose content is a single element node child.
+                              The element may or may not have attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;employee id="x"&gt;
+  &lt;date-of-birth&gt;1984-03-20&lt;/date&gt;
+  &lt;location&gt;Germany&lt;/location&gt;
+  &lt;position&gt;Janitor&lt;/position&gt;
+&lt;/employee&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "employee": { "@id": "x", "date-of-birth": "1984-03-20", "location": "Germany", "position": "Janitor" } }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with element-only content, and either:</p>
+                              <olist><item><p>The content model contains
+                                 a single term, whose compositor is <term>all</term> 
+                                    (that is, the element is validated against a complex type 
+                                    defined using <code nobreak="false">xs:all</code>); or</p></item><item><p>The content model allows at most one child element (it may allow a choice
+                                 of child elements but must not allow multiple children).</p></item></olist>
+                           </td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">exists(*) and all-different(*!node-name()) and empty(text()[normalize-space()])]</code></p>
+                              <p>That is, there is at least one child element; all child elements have different names; and
+                                 there are no text node children other than whitespace-only text nodes.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>If the element has non-whitespace text node children, then it is output
+                              as if <term>mixed</term> layout were chosen. This is fallback behavior for use
+                              when this layout is chosen inappropriately.</p>
+                              <p>In other cases,
+                                 the content is represented by a map containing one entry for each
+                                 attribute in the XML element, plus one entry for each
+                                 child element, whose value is formatted according to the rules for that element.</p>
+                              
+                              <p>If two or more child elements have the same name, or names that are represented by
+                              the same string (taking into account the chosen <code nobreak="false">name-format</code> option),
+                              then they are combined into a single entry containing all the corresponding values
+                              as members of an array. For example, if there are two children 
+                              <code nobreak="false">&lt;author&gt;Mills&lt;/author&gt;</code> and <code nobreak="false">&lt;author&gt;Boon&lt;/author&gt;</code>,
+                              they are combined into a single entry <code nobreak="false">"author": ["Mills", "Boon"]</code>.</p>
+                             
+                              <p>Because the child elements are converted to a map, their order is
+                                 not retained.</p>
+                              
+                              </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>Alongside any attributes, the value includes the additional entry
+                              <code nobreak="false">"#content": xs:QName("fn:null")</code>, which will be serialized 
+                              in JSON as <code nobreak="false">"#content": null</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>Although this layout is intended primarily for elements whose children are unordered
+                              and uniquely named, it is also viable to use it in cases where elements can repeat, so
+                              long as order relative to other elements is not significant. Indeed, 
+                              with XSD 1.1, a complex type defined using
+                              <code nobreak="false">xs:all</code> can allow elements to appear more than once, and this will cause
+                              this layout to be selected.</p>
+                              <p>Comments and processing instructions in the content are discarded.</p></td></tr></tbody></table></div4><div4 id="sequence-layout"><head>Layout: Sequence</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">sequence</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that contain a sequence of element node children,
+                              whose order is significant. 
+                              The element may or may not have attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;section id="x"&gt;
+   &lt;head&gt;Introduction&lt;/head&gt;
+   &lt;p&gt;Lorem ipsum.&lt;/p&gt;
+   &lt;p&gt;Dolor sit amet.&lt;/p&gt;
+&lt;/section&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "section": [
+      { "@id": "x" },                        
+      { "head": "Introduction" },
+      { "p": "Lorem ipsum" },
+      { "p": "Dolor sit amet" }
+   ] }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type with element-only content that does not meet
+                              the criteria for the <code nobreak="false">list</code> or <code nobreak="false">record</code> layout.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">empty(text()[normalize-space()])</code></p>
+                           <p>That is, the element has no text node children other than whitespace nodes.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The mapping rules are identical to the rules for the <code nobreak="false">mixed</code> layout (see 
+                              <specref ref="mixed-layout"/>) except that whitespace-only text nodes
+                              are discarded.</p>
+                           </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>A nilled element is indicated by a property value of <code nobreak="false">xs:QName("fn:null")</code> in place
+                              of the array. 
+                              For example, <code nobreak="false">"section": xs:QName("fn:null")</code>.
+                           In JSON this is serialized as <code nobreak="false">null</code>.</p></td></tr><tr><th rowspan="1" colspan="1">Notes</th><td rowspan="1" colspan="1"><p>Because whitespace text nodes are stripped, this layout should not normally be used
+                              with mixed content.</p></td></tr></tbody></table></div4><div4 id="mixed-layout"><head>Layout: Mixed</head><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">mixed</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>Intended for XML elements that contain mixed content. 
+                              The element may or may not have attributes.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;para id="x"&gt;This is a &lt;i&gt;fine&lt;/i&gt; mess!&lt;/para&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "para": [
+     { "@id": "x" },
+     "This is a ",
+     { "i": "fine" },
+     "mess!"
+   ] }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>The element has a complex type that does not satisfy the criteria for any other
+                              layout to be used.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p><code nobreak="false">exists(*)</code></p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The content is represented by an XDM array containing one entry for each
+                                 attribute in the XML element, and one entry for each child node, 
+                              in order. </p>
+                              <p>Each attribute node is represented within this array by a single-entry
+                              map: the rules for attribute names are
+                           defined in <specref ref="element-and-attribute-names"/>, and the
+                              rules for attribute content in <specref ref="element-and-attribute-content"/>.</p>
+                              <p>Child nodes are represented within the array as follows:</p>
+                              <ulist><item><p>A text node child is represented as an atomic item of type 
+                                    <code nobreak="false">xs:untypedAtomic</code>.</p></item><item><p>An element node child is represented as a map containing a single
+                                 entry, with the key representing the element name and the value representing the
+                                 element's content, formatted according to the chosen layout for that element.</p></item><item><p>A comment node is represented as a map containing a single
+                                 entry whose key is the string <code nobreak="false">"#comment"</code>, and whose corresponding
+                                 value is an atomic item of type <code nobreak="false">xs:string</code> containing the text of the comment.</p></item><item><p>A processing instruction node is represented as a map containing 
+                                    a single entry whose key is the string <code nobreak="false">"#processing-instruction"</code> 
+                                    and whose value is a map with two entries: the first has the key <code nobreak="false">"#target"</code>
+                                    with the value being the name of the processing instruction as an atomic item
+                                    of type <code nobreak="false">xs:NCName</code>; the second has the key <code nobreak="false">"#data"</code> with
+                                    the value being an atomic item of type <code nobreak="false">xs:string</code> containing the 
+                                    string value of the processing instruction node.</p></item></ulist>
+                              
+                              <p>Whitespace text nodes are retained.</p>
+                               
+                            
+                           </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>A nilled element is indicated by a property value of <code nobreak="false">xs:QName("fn:null")</code> in place
+                              of the array. 
+                              For example, <code nobreak="false">"para": xs:QName("fn:null")</code>.
+                           In JSON this is serialized as <code nobreak="false">null</code>.</p></td></tr></tbody></table></div4><div4 id="xml-layout"><head>Layout: Serialized XML</head><p>Serialized layout allows an element node to be represented as lexical XML, contained within a map.</p><table role="data"><tbody><tr><th rowspan="1" colspan="1">Layout name</th><td rowspan="1" colspan="1"><p><code nobreak="false">xml</code></p></td></tr><tr><th rowspan="1" colspan="1">Usage</th><td rowspan="1" colspan="1"><p>This layout is useful when the input contains a mix of
+                              structured data and marked-up textual content. It allows the
+                              textual content to be output as serialized XML.</p></td></tr><tr><th rowspan="1" colspan="1">XML example</th><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;p&gt;That was &lt;i&gt;awesome&lt;/i&gt;&lt;/p&gt;</eg></td></tr><tr><th rowspan="1" colspan="1">JSON equivalent</th><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "p": "&lt;p&gt;That was &lt;i&gt;awesome&lt;/i&gt;&lt;/p&gt;" }</eg></td></tr><tr><th rowspan="1" colspan="1">XSD conditions</th><td rowspan="1" colspan="1"><p>Not applicable. Serialized XML layout will only be used if 
+                           explicitly selected in the options parameter.</p></td></tr><tr><th rowspan="1" colspan="1">Match predicate</th><td rowspan="1" colspan="1"><p>Not applicable. Serialized XML layout will only be used if
+                              explicitly selected in the options parameter.</p></td></tr><tr><th rowspan="1" colspan="1">Mapping rules</th><td rowspan="1" colspan="1"><p>The element node is serialized as if by the <code nobreak="false">fn:serialize</code>
+                              function, and the resulting content is output as an atomic item of type 
+                              <code nobreak="false">xs:string</code>.</p>
+                              <p>The serialization parameter <code nobreak="false">method</code> is set to
+                              <code nobreak="false">"xml"</code>.</p>
+                              <p>The serialization parameter <code nobreak="false">indent</code> is set to <code nobreak="false">false</code>.</p>
+                              <p>The serialization parameter <code nobreak="false">omit-xml-declaration</code> is set
+                                 to true.</p>
+                              <p>Other serialization parameters take their default values.</p>
+                              <note><p>The outermost element name will typically be repeated, for example
+                              <code nobreak="false">"p": "&lt;p&gt;Lorem ipsum&lt;/p&gt;"</code>.</p></note>
+                           </td></tr><tr><th rowspan="1" colspan="1">Mapping for nilled elements</th><td rowspan="1" colspan="1"><p>A nilled element is indicated by a property value of <code nobreak="false">xs:QName("fn:null")</code>
+                              For example, <code nobreak="false">"p": xs:QName("fn:null")</code>.
+                           In JSON this is serialized as <code nobreak="false">null</code>.</p></td></tr></tbody></table></div4></div3><div3 id="element-and-attribute-names"><head>Element and Attribute Names</head><p>The <code nobreak="false">name-format</code> option gives control over how element and attribute names are formatted.
+                  There are four options:</p><ulist><item><p>The default option (which may be explicitly requested by specifying <code nobreak="false">"name-format": "default"</code>)
+                  retains the namespace URI for any element that is either (a) the top-level element of a tree being
+                  converted, or (b) has a name that is in a different namespace from its parent element. In such cases
+                  the format <code nobreak="false">"Q{uri}local"</code> is used. For other elements, the name is output using the
+                  local part of the element name alone. For attributes, the form <code nobreak="false">"Q{uri}local"</code> is used
+                  for an attribute in a namespace, and the local name alone is used for a no-namespace name.
+                  Namespace prefixes are not retained.</p></item><item><p>The option <code nobreak="false">eqname</code> uses the format <code nobreak="false">"Q{uri}local"</code> for all
+                  element and attribute names that are in a namespace, or the local name alone for all names 
+                  that are not in a namespace.</p></item><item><p>The option <code nobreak="false">local</code> discards all namespace information: all elements and attributes
+                  are output using the local name alone.</p></item><item><p>The option <code nobreak="false">lexical</code> outputs element and attribute names in the form 
+                     obtained by calling the function <code nobreak="false">fn:name</code>. If the name has a prefix,
+                  the prefix is retained in the output. However, the output contains no information that enables the
+                  prefix to be associated with a namespace URI, so this format is suitable only when prefixes 
+                  in the input documents are used predictably.</p></item></ulist><p>Attribute names in the output are typically prefixed with the character <code nobreak="false">"@"</code>.
+                  The option <code nobreak="false">attribute-marker</code> allows this to be changed to a different
+                  prefix or none.</p><p>Whichever format of names is chosen, if the rules for the selected layout would result in an output
+               map having two entries with the same key, the conflict is resolved by combining these
+               entries into an array. For example if <code nobreak="false">name-format</code> is set to <code nobreak="false">local</code>
+               then the element <code nobreak="false">&lt;data x:val="3" y:val="4"/&gt;</code> becomes either
+               <code nobreak="false">{ "data": { "@val": ["3", "4"] } }</code> or (because attribute order is unpredictable)
+               <code nobreak="false">{ "data": { "@val": ["4", "3"] } }</code>.</p><p>Regardless of the chosen <code nobreak="false">name-format</code>, and regardless of the above rules:</p><ulist><item><p>Attributes in the <code nobreak="false">xsi</code> namespace (<code nobreak="false">http://www.w3.org/2001/XMLSchema-instance</code>)
+                     are discarded.</p><note><p>This is because these attributes can appear even when the schema does not allow the element
+                     to have attributes, which means that a layout might be chosen that does not accommodate attributes.</p></note></item><item><p>Attributes in the <code nobreak="false">xml</code> namespace (<code nobreak="false">http://www.w3.org/XML/1998/namespace</code>)
+                  are output using a lexical QName, with the prefix <code nobreak="false">xml</code>.</p></item></ulist></div3><div3 id="element-and-attribute-content"><head>Element and Attribute Content</head><p>If an input node is untyped, the atomized content of elements, attributes,
+               and text nodes is always of type <code nobreak="false">xs:untypedAtomic</code>, and it is represented
+               as such in the corresponding map entries in the result.</p><p>Where the content is schema-validated, however:</p><olist><item><p>Let <var>AV</var> be the typed value of the node (that is, the result
+                  of atomization).</p></item><item><p>If, however, an element is annotated with a type that does not allow atomization
+                  (specifically, a complex type with element-only content) then let <var>AV</var> be the string value
+                  of the element, as an atomic item of type <code nobreak="false">xs:untypedAtomic</code>.</p></item><item><p>If an attribute is annotated as having a simple type of {variety} <code nobreak="false">list</code>,
+                     or if an element using layout <code nobreak="false">simple</code> or <code nobreak="false">simple-plus</code>
+                     is annotated as having either a simple type of {variety} <code nobreak="false">list</code>
+                     or a complex type with simple content of {variety} <code nobreak="false">list</code>
+                  then the atomized value <var>AV</var> is represented in the result as the array
+                     represented by the XPath expression <code nobreak="false">array{<var>AV</var>}</code>. This applies whether or not the
+                  atomized value actually contains multiple atomic items. The individual atomic items in the array retain their type,
+                  for example items of type <code nobreak="false">xs:date</code> remain items of type <code nobreak="false">xs:date</code>
+                  in the result.</p></item><item><p>In all other cases <var>AV</var> will be a single atomic item, and this value
+                     is used <emph>as is</emph>, retaining its type.</p></item></olist><note><p>Atomic items in the result of the <code nobreak="false">fn:elements-to-maps</code> function
+                  may be of any atomic type. The type information is lost if the result is 
+                  subsequently serialized as JSON.</p></note></div3><div3 id="items-to-json-examples"><head>Examples</head><p>The following examples show the effect of transforming some simple XML documents with default options,
+               and then serializing the result as JSON with <code nobreak="false">indent</code> is set to <code nobreak="false">true</code>. 
+                  The actual indentation is implementation dependent.</p><table class="data"><thead><tr><th rowspan="1" colspan="1">XDM element</th><th rowspan="1" colspan="1">JSON equivalent</th></tr></thead><tbody><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;a x='1' b='2'/&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "a":{
+    "@x": "1",
+    "@b": "2"
+  } }</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;a&gt;&lt;x&gt;1&lt;/x&gt;&lt;y&gt;2&lt;/y&gt;&lt;/a&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "a":{
+    "x": "1",
+    "y": "2"
+  } }</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;polygon&gt; 
+   &lt;point x='0' y='0'/&gt; 
+   &lt;point x='0' y='1'/&gt; 
+   &lt;point x='1' y='1'/&gt; 
+   &lt;point x='1' y='0'/&gt;
+&lt;/polygon&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "polygon":[
+       {"@x": "0", "@y": "0"},
+       {"@x": "0", "@y": "1"},
+       {"@x": "1", "@y": "1"},
+       {"@x": "1", "@y": "0"}
+  ] ] }</eg></td></tr><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;cities&gt;
+   &lt;city id="LDN"&gt;
+      &lt;name&gt;London&lt;/name&gt;
+      &lt;size&gt;18.2&lt;/size&gt;
+   &lt;/city&gt;
+   &lt;city id="PRS"&gt;
+      &lt;name&gt;Paris&lt;/name&gt;
+      &lt;size&gt;19.1&lt;/size&gt;
+   &lt;/city&gt;
+   &lt;city id="BLN"&gt;
+      &lt;name&gt;Berlin&lt;/name&gt;
+      &lt;size&gt;14.6&lt;/size&gt;
+   &lt;/city&gt;
+&lt;/cities&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">{ "cities":[
+    {
+      "@id": "LDN",
+      "name": "London",
+      "size": "18.2"
+    },
+    {
+      "@id": "PRS",
+      "name": "Paris",
+      "size": "19.1"
+    },
+    {
+      "@id": "BLN",
+      "name": "Berlin",
+      "size": "14.6"
+    }
+  ] }</eg></td></tr></tbody></table><p>The following more complex example demonstrates a case where the default conversion is
+               inadequate (for example, it wrongly assumes that for the third production, the order of child
+               elements is immaterial). A better result, shown below, can be achieved by
+               using a schema-aware conversion.</p><table class="data"><thead><tr><th rowspan="1" colspan="1">XDM element</th><th rowspan="1" colspan="1">JSON equivalent</th></tr></thead><tbody><tr><td rowspan="1" colspan="1"><eg xml:space="preserve">&lt;g:grammar language="xquery"
+     xmlns:g="http://www.w3.org/XPath/grammar"&gt;
+   &lt;g:production name="FunctionBody"&gt;
+      &lt;g:ref name="EnclosedExpr"/&gt;
+      &lt;g:ref name="Block"/&gt;
+   &lt;/g:production&gt;
+   
+   &lt;g:production name="EnclosedExpr"&gt;
+      &lt;g:ref name="Lbrace"/&gt;
+      &lt;g:ref name="Expr"/&gt;
+      &lt;g:optional&gt;
+         &lt;g:ref name="Expr"/&gt;
+      &lt;/g:optional&gt;
+      &lt;g:ref name="Rbrace"/&gt;
+   &lt;/g:production&gt;
+   
+   &lt;g:production name="SimpleReturnClause"&gt;
+      &lt;g:string&gt;return&lt;/g:string&gt;
+      &lt;g:ref name="ExprSingle"/&gt;
+   &lt;/g:production&gt;
+&lt;/g:grammar&gt;</eg></td><td rowspan="1" colspan="1"><eg xml:space="preserve">[{ "Q{http://www.w3.org/XPath/grammar}grammar":[
+    { "@language":"xquery" },
+    { "production":[
+        { "@name":"FunctionBody" },
+        { "ref":{"@name": "EnclosedExpr"} },
+        { "ref":{"@name": "Block"} }
+      ] },
+    { "production":[
+        { "@name":"EnclosedExpr" },
+        { "ref":{"@name": "Lbrace"} },
+        { "ref":{"@name": "Expr"} },
+        { "optional":[
+            { "ref":{"@name": "Expr"} }
+          ] },
+        { "ref":{"@name": "Rbrace"} }
+      ] },
+    { "production":[
+        { "@name":"SimpleReturnClause" },
+        { "string":"return" },
+        { "ref":{"@name": "ExprSingle"} }
+      ] }
+  ] }]</eg></td></tr></tbody></table><note><p>In the above example, the schema used to validate the source document was simplified to eliminate
+               options that do not actually arise in this input instance (such as the <code nobreak="false">g:string</code>
+               element having attributes). This is a legitimate technique that may be useful when trying to obtain 
+               the simplest possible JSON representation.</p><p>Further improvements to the usability of the JSON output could be achieved by doing some
+               simple transformation of the XML prior to conversion. For example, the <code nobreak="false">name</code>
+               attribute of various productions could be converted to a child element, and 
+                  <code nobreak="false">&lt;ref name="x"/&gt;</code> could be transformed to <code nobreak="false">&lt;ref&gt;x&lt;/ref&gt;</code>.</p></note></div3><div3 id="func-elements-to-maps"><head>fn:elements-to-maps</head><glist><gitem><label>Summary</label><def><p>Converts a sequence of element nodes into maps that are suitable for
+            JSON serialization.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="elements-to-maps" return-type="map(*)*" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="elements" type="element()*"/><arg name="options" type="map(*)" default="map{}"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>This function returns a sequence of maps corresponding one to one with
+            the element nodes supplied in <code nobreak="false">$elements</code>. Each map is in a form
+            that is suitable for JSON serialization, thus providing a mechanism for conversion
+            of arbitrary XML to JSON.</p><p>The entries that may appear in the <code nobreak="false">$options</code> map are as follows.
+         The <termref def="option-parameter-conventions">option parameter conventions</termref> apply.</p><example role="record"><record returnEmptyOk="no" returnSeq="no" prefix="fn" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no" isOp="no"><arg name="uniform" type="xs:boolean" occur="opt"/><arg name="attribute-marker" type="xs:string" occur="opt"/><arg name="name-format" type="xs:string" occur="opt"/><arg name="layouts" type="map(xs:QName, enum(&#34;empty&#34;, &#34;empty-plus&#34;, &#34;simple&#34;, &#34;simple-plus&#34;, &#34;list&#34;, &#34;list-plus&#34;, &#xA;                  &#34;record&#34;, &#34;sequence&#34;, &#34;mixed&#34;, &#34;xml&#34;))" occur="opt"/></record></example><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Key</th><th rowspan="1" colspan="1">Value</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="3" colspan="1"><p><code nobreak="false">uniform</code></p></td><td class="fos-thick" colspan="2" rowspan="1">Indicates that all elements with the same name, at any level in any of the
+                  input trees should use the same conversion rules (known as a layout). 
+                  Setting this option requires the processor to analyze the entire input
+               before deciding what layout to use for each element; but by ensuring consistency across elements, it may
+               make the resulting maps easier to process.<ulist><item><p><term>Type: </term><code nobreak="false">xs:boolean</code></p></item><item><p><term>Default: </term><code nobreak="false">false</code></p></item></ulist></td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">false</code></td><td rowspan="1" colspan="1">
+                     The layout for each element node is decided independently, based on its individual content.
+                  </td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">true</code></td><td rowspan="1" colspan="1">
+                     In the absence of schema type information, and in the absence of an explicit entry in the <code nobreak="false">layouts</code>
+                     property, the layout chosen for a given element node must be the same as that for all other
+                     elements of the same name.
+                  </td></tr><tr><td rowspan="1" colspan="1"><p><code nobreak="false">attribute-marker</code></p></td><td class="fos-thin" colspan="2" rowspan="1">A string that is prefixed to any key value in the output that represents
+               an XDM attribute node in the input. The string may be empty. If, after applying the requested
+               prefix (or no prefix) there is a conflict between the names of attributes and child elements,
+               then the requested prefix (or lack thereof) is ignored and the default prefix <code nobreak="false">"@"</code>
+               is used.<ulist><item><p><term>Type: </term><code nobreak="false">xs:string</code></p></item><item><p><term>Default: </term><code nobreak="false">"@"</code></p></item></ulist></td></tr><tr><td rowspan="5" colspan="1"><p><code nobreak="false">name-format</code></p></td><td class="fos-thick" colspan="2" rowspan="1">Indicates how the names of element and attribute nodes are handled.<ulist><item><p><term>Type: </term><code nobreak="false">xs:string</code></p></item><item><p><term>Default: </term><code nobreak="false">"default"</code></p></item></ulist></td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">lexical</code></td><td rowspan="1" colspan="1">Names are output in the form produced by the <code nobreak="false">fn:name</code> function.</td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">local</code></td><td rowspan="1" colspan="1">Names are output in the form produced by the <code nobreak="false">fn:local-name</code> function.</td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">eqname</code></td><td rowspan="1" colspan="1">Names in a namespace are output in the form <code nobreak="false">"Q{uri}local"</code>.
+                  Names in no namespace are output using the local name alone.</td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">default</code></td><td rowspan="1" colspan="1">An element name is output as a local name alone if either (a) it is
+                     a top-level element and is in no namespace, or (b) it is in the same namespace as its
+                     parent element. An attribute name is output as a local name alone if it is in no namespace.
+                     All other names are output in the format <code nobreak="false">"Q{uri}local"</code> if in a namespace, 
+                     or <code nobreak="false">"Q{}local"</code> if in no namespace. "Top-level" here means that the element
+                     is one that appears explicitly in the sequence of elements passed in the <code nobreak="false">$elements</code> argument,
+                     as distinct from a descendant of such an element.</td></tr><tr><td rowspan="1" colspan="1"><p><code nobreak="false">layouts</code></p></td><td class="fos-thin" colspan="2" rowspan="1">A mapping from element names to layout names, used to override the default
+               formatting rules for a particular element name.<ulist><item><p><term>Type: </term><code nobreak="false">map(xs:QName, enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
+                  "record", "sequence", "mixed", "xml"))</code></p></item><item><p><term>Default: </term><code nobreak="false">map{}</code></p></item></ulist></td></tr></tbody></table><p>The principles for conversion from elements to maps are described
+            in <specref ref="element-layouts"/>.</p><p>In general, an element node maps to a key-value pair in which the key represents the element name, and the
+         corresponding value represents the attributes and children of the element. In the case of a top-level element
+         (a node directly supplied in <code nobreak="false">$nodes</code>), the result will be a singleton map containing this key-value
+         pair as its only entry. In the case of a descendant element, the key-value pair for a child element will be added 
+         to the content representing its parent element, in a way that depends on the parent element's layout.</p><p>The representation of other kinds of node depends on the layout chosen for its parent element.</p></def></gitem><gitem><label>Error Conditions</label><def><p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
+            value (typically because it has been validated against an element-only content model): <errorref class="TY" code="0012"/>.</p></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Expression</th><th rowspan="1" colspan="1">Result</th></tr></thead><tbody><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">elements-to-maps(())</code></eg></td><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">()</eg></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">elements-to-maps(parse-xml("&lt;foo&gt;bar&lt;/foo&gt;")/*)</code></eg></td><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "foo": "bar" }</eg></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">elements-to-maps(parse-xml("
+    &lt;list&gt;
+      &lt;item value='1'/&gt;
+      &lt;item value='2'/&gt;
+    &lt;/foo&gt;
+  ")/*)</eg></td><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "list": [ 
+    { "@value": "1" },
+    { "@value": "2" }
+  ] }</eg></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">elements-to-maps(parse-xml("
+    &lt;name&gt;
+      &lt;first&gt;Jane&lt;/first&gt;
+      &lt;last&gt;Smith&lt;/last&gt;
+    &lt;/foo&gt;
+  ")/*)</eg></td><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "name": { 
+    "first": "Jane",
+    "last": "Smith" 
+  } 
+}</eg></td></tr></tbody></table></def></gitem></glist></div3></div2><div2 id="map-operations"><head>Other Operations on Maps </head><p>Because a map is a function item, functions that apply to functions also apply
                to maps. A map is an anonymous function, so <code nobreak="false">fn:function-name</code> returns the empty
                sequence; <code nobreak="false">fn:function-arity</code> always returns <code nobreak="false">1</code>.</p><p>Maps may be compared using the <code nobreak="false">fn:deep-equal</code> function.</p><p>There is no function or operator to atomize a map or convert it to a string (other than <code nobreak="false">fn:serialize</code>,
                which can be used to serialize some maps as JSON texts).</p></div2></div1><div1 id="arrays"><head>Arrays</head><p>Arrays were introduced as a new datatype in XDM 3.1. This section describes functions that
@@ -12660,8 +13158,8 @@ return node-type-annotation($x/*)</eg></td></tr><tr><th valign="top" rowspan="1"
                  <xtermref ref="dt-is-types" spec="XP40">in-scope schema types</xtermref>
                  or because they appear as
                  <xtermref spec="XP40" ref="dt-named-item-type">named item types</xtermref>.
-              </p><p>These constructor functions always take a single argument.</p></item><item><p>Record tests defined as 
-                 <xtermref spec="XP40" ref="dt-named-item-type">named item types</xtermref>.</p><p>These take one argument for each named field of the record test.
+              </p><p>These constructor functions always take a single argument.</p></item><item><p>Record types defined as 
+                 <xtermref spec="XP40" ref="dt-named-item-type">named item types</xtermref>.</p><p>These take one argument for each named field of the record type.
               Constructor functions for record types are defined in 
                  <specref ref="id-constructors-for-record-tests"/>.
               </p></item></ulist><p>
@@ -12806,11 +13304,11 @@ There is no constructor function for <code nobreak="false">xs:NOTATION</code>. C
                   that is not in a namespace, it is possible to use an
                   <code nobreak="false">EQName</code> (for example <code nobreak="false">Q{}hatsize(17)</code>). Alternatives are
                     to use a cast expression (<code nobreak="false">17 cast as hatsize</code>) or (if the host language allows it) 
-                  to undeclare the default function namespace. </p></note></div2><div2 diff="add" at="issue617" id="id-constructors-for-record-tests"><head>Constructor functions for named record tests</head><changes><change issue="617" PR="953" date="2024-02-20">
+                  to undeclare the default function namespace. </p></note></div2><div2 diff="add" at="issue617" id="id-constructors-for-record-tests"><head>Constructor functions for named record types</head><changes><change issue="617" PR="953" date="2024-02-20">
                     Constructor functions for named record types have been introduced.
-                 </change></changes><p>For every named item type in the static context (See <xspecref spec="XP31" ref="static_context"/>) whose expansion is a record test, there is a
-                 constructor function whose name is the same as the name of the 
-                 type, and whose parameters correspond to the fields defined in the record test.</p><p>For example, if there is a named item type with the XQuery definition:</p><eg xml:space="preserve">declare item type my:location as record(
+                 </change></changes><p>Both XQuery 4.0 and XSLT 4.0 provide syntax to declare named record types;
+                 such a declaration implicitly adds a constructor function for values of that
+                 type to the (See <xspecref spec="XP31" ref="static_context"/>).</p><p>For example, if there is a named item type with the XQuery definition:</p><eg xml:space="preserve">declare record my:location (
   latitude  as xs:double,
   longitude as xs:double
 )</eg><p>then there will be a function definition equivalent to:</p><eg xml:space="preserve">declare function my:location (
@@ -12819,7 +13317,7 @@ There is no constructor function for <code nobreak="false">xs:NOTATION</code>. C
 ) as my:location {
   { 'latitude': $latitude, 'longitude': $longitude }
 }</eg><p>Equivalently using XSLT syntax, if there is a named item type with the
-              XSLT definition:</p><eg xml:space="preserve">&lt;xsl:item-type name="my:location"
+              XSLT definition:</p><eg xml:space="preserve">&lt;xsl:record name="my:location"
   as="record(latitude as xs:double, longitude as xs:double)"/&gt;</eg><p>then there will be a function definition equivalent to:</p><eg xml:space="preserve">&lt;xsl:function name="my:location" as="my:location"&gt;
   &lt;xsl:param name="latitude" as="xs:double"/&gt;
   &lt;xsl:param name="longitude" as="xs:double"/&gt;
@@ -12828,52 +13326,8 @@ There is no constructor function for <code nobreak="false">xs:NOTATION</code>. C
     &lt;xsl:map-entry key="'longitude'" select="$longitude"/&gt;
   &lt;/xsl:map&gt;
 &lt;/xsl:function&gt;</eg><p>The rules defining the relationship of the function definition to the
-              record test are as follows:</p><olist><item><p>The name of the function is the same as the name of the
-                 named item type. A static error occurs if this clashes with the name and arity
-                 of other function definitions in the static context.</p></item><item><p>For every named field in the record test, in order,
-                 there is is one parameter defined as follows:</p><olist><item><p>If the name of the field is an <code nobreak="false">NCName</code>, then
-                    the name of the parameter is the name of the field.</p></item><item><p>Otherwise, the name of the parameter is <code nobreak="false">argNZ</code>,
-                    where <code nobreak="false">arg</code> is the literal string <code nobreak="false">"arg"</code>,
-                    <code nobreak="false">N</code> is the ordinal position of the field, counting from 1 (one),
-                    and <code nobreak="false">Z</code> is an implementation-defined suffix, added only when
-                    needed to make the parameter name unique.</p></item><item><p>The declared type of the parameter is the same as the declared
-                    type of the field, but if the field is declared optional, then the
-                    occurrence indicator is adjusted to <code nobreak="false">?</code> or <code nobreak="false">*</code>
-                    if needed to make the empty sequence a valid value for the parameter.</p></item><item><p>If the field is optional and if all subsequent fields are optional,
-                    then the parameter is declared as optional with a default value of <code nobreak="false">()</code>
-                    (the empty sequence). In all other cases the parameter is declared as required.</p></item></olist></item><item><p>It is immaterial whether the record test is extensible; the constructor
-                 function cannot be used to create entries in the resulting map other than entries
-                 corresponding to named fields.</p></item><item><p>The return type of the constructor function is the record test (with
-                 no occurrence indicator).</p></item><item><p>The body of the function constructs a map having one entry for
-                 each mandatory field in the record test, and one entry for each optional field
-                 in the record test for which an actual value other than the empty sequence
-                 is supplied in the arguments of the function call. The key of the entry
-                 is the field name as an instance of <code nobreak="false">xs:string</code>, and the corresponding
-                 value is the value supplied in the arguments to the constructor function call,
-                 after applying the coercion rules.</p></item></olist><example id="record-constructor-with-optional-fields"><head>Record constructor with optional fields</head><p>Consider the record test (in XQuery syntax):</p><eg xml:space="preserve">declare item type p:person as record(
-  "1st-title"? as xs:string,
-  "2nd-title"? as xs:string,
-  first        as xs:string,
-  middle?      as xs:string,
-  last         as xs:string,
-  suffix?      as xs:string,
-  *)</eg><p>This will result in an implicit function declaration equivalent to:</p><eg xml:space="preserve">declare function p:person (
-  $arg1   as xs:string?,
-  $arg2   as xs:string?,
-  $first  as xs:string,
-  $middle as xs:string?,
-  $last   as xs:string,
-  $suffix as xs:string? := ()
-) as p:person {
-  map:merge((
-    { "1st-title", $arg1 }[exists($arg1)],
-    { "2nd-title", $arg2 }[exists($arg2)],
-    { "first", $first },
-    { "middle", $middle }[exists($middle)],
-    { "last", $last },
-    { "suffix", $suffix }[exists($suffix)]
-  ))
-};</eg></example></div2></div1><div1 id="casting"><head>Casting</head><p> Constructor functions and cast expressions accept an expression and return a value
+              record type are given for XQuery 4.0 in <xspecref spec="XQ40" ref="named-records-as-functions"/>.</p><ednote><edtext>TODO: Add cross-reference to XSLT here. 
+                 Anticipates resolution of issue #1485. </edtext></ednote></div2></div1><div1 id="casting"><head>Casting</head><p> Constructor functions and cast expressions accept an expression and return a value
                 of a given type. They both convert a source value <var>SV</var>, of a source type,
                 <var>ST</var> to a target value <var>TV</var>, of the given target type
                 <var>TT</var>.</p><p>Constructor functions and cast expressions have identical semantics 
@@ -13792,7 +14246,9 @@ ISBN 0 521 77752 6.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="C
                <loc href="http://expath.org/" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">http://expath.org/</loc>.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="exquery" key="EXQuery" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">EXQuery: Collaboratively Defining Open Standards for Portable XQuery Extensions.
                   <loc href="http://exquery.org/" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">http://exquery.org/</loc>.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="exslt" key="EXSLT" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">EXSLT: A Community Initiative to Provide Extensions to XSLT.
                   <loc href="https://exslt.github.io" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">https://exslt.github.io</loc>.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="functx" key="FunctX" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">FunctX Functions. 
-                  <loc href="http://www.functx.com/" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">http://www.functx.com/</loc>.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="HTML40" key="HTML 4.0" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">HTML 4.01 Recommendation, 24 December
+                  <loc href="http://www.functx.com/" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">http://www.functx.com/</loc>.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="Goessner" key="Goessner" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">Stefan Goessner. Converting Between XML and JSON.
+               <loc href="https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">https://www.xml.com/pub/a/2006/05/31/converting-between-xml-and-json.html</loc>.
+               31 May 2006.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="HTML40" key="HTML 4.0" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">HTML 4.01 Recommendation, 24 December
 1999. Available at:
 <loc href="http://www.w3.org/TR/REC-html40/" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">http://www.w3.org/TR/REC-html40/</loc>.
                </bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="ICU" key="ICU" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">ICU - International Components for Unicode. Available at <loc href="http://site.icu-project.org" xlink:type="simple" xlink:show="replace" xlink:actuate="onRequest">http://site.icu-project.org</loc>.
