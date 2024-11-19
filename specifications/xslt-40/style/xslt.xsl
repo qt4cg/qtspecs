@@ -55,6 +55,55 @@
 
 <xsl:param name="additional.css" select="'xslt-40.css'"/>
 
+<xsl:template name="finder"
+              xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
+              exclude-result-prefixes="fos">
+  <xsl:variable name="spec" select="./root()"/>
+
+  <xsl:variable name="catalog" select="doc('../src/function-catalog.xml')"/>
+  <xsl:variable name="prefixes" select="('fn', 'array', 'map')"/>
+  <xsl:variable name="body" select="."/>
+
+  <div id="function-finder">
+    <div class="ffheader">INSTRUCTION &amp; FUNCTION FINDER</div>
+    <div>
+      <span>Search: <input id="select-fn" list="fn-list" type="text"/>
+      <xsl:text> </xsl:text>
+      <button id="help-select-fn-button">?</button>
+      </span>
+      <p id="help-select-fn" style="display:none;">Type a name, or press down arrow for a list.</p>
+      <datalist id="fn-list">
+        <xsl:for-each select="//e:element-syntax[*]">
+          <xsl:sort select="@name"/>
+
+          <!-- xsl:when and xsl:otherwise are repeated, don't do that. -->
+          <xsl:variable name="name" select="string(@name)"/>
+          <xsl:variable name="pcount" select="count(preceding::e:element-syntax[* and @name = $name])"/>
+
+          <xsl:choose>
+            <xsl:when test="$pcount gt 0">
+              <xsl:message select="'Cannot reach occurrence #' || $pcount+1 || ' of ' || $name"/>
+            </xsl:when>
+            <xsl:otherwise>
+              <option><xsl:sequence select="'xsl:' || @name || '&#8291;'"/></option>
+            </xsl:otherwise>
+          </xsl:choose>
+        </xsl:for-each>
+
+        <!-- put the fn: functions last -->
+        <xsl:for-each select="$catalog//fos:function">
+          <xsl:sort select="@name"/>
+          <option value="fn:{@name}&#8291;"/>
+        </xsl:for-each>
+      </datalist>
+    </div>
+  </div>   
+</xsl:template>
+
+<xsl:template name="additional-head">
+  <script src="js/xsl-datalist.js"></script>
+</xsl:template>
+
 <xsl:template match="edtext">
   <xsl:apply-templates/>
 </xsl:template>
