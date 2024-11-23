@@ -1,8 +1,8 @@
 <?xml version='1.0'?>
 <xsl:stylesheet version="3.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
   xmlns:fn="http://www.w3.org/2005/xpath-functions"
-  xmlns:x="http://www.w3.org/1999/XSL/TransformAlias" xmlns:s="http://saxon.sf.net/alias"
-  xmlns:saxon="http://saxon.sf.net/" xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
+   xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace"
+   xmlns:xs="http://www.w3.org/2001/XMLSchema"
   xmlns="http://www.w3.org/2010/09/qt-fots-catalog" exclude-result-prefixes="#all"
   expand-text="true">
 
@@ -17,10 +17,8 @@
   -t -xsl:style/generate-qt3-test-set.xsl -s:src/function-catalog.xml -val -o:/Users/mike/GitHub/qt4cg/qt4tests/app/fo-spec-examples.xml
 -->
 
-  <xsl:namespace-alias result-prefix="xsl" stylesheet-prefix="x"/>
-  <xsl:namespace-alias result-prefix="saxon" stylesheet-prefix="s"/>
-
   <xsl:output method="xml" indent="yes" saxon:double-space="test-case"
+    xmlns:saxon="http://saxon.sf.net/"
     cdata-section-elements="assert-xml"/>
   
   <xsl:param name="qt4tests-dir" static="yes" select="'../../../build/qt4tests/'"/>
@@ -50,6 +48,7 @@
           <namespace prefix="map" uri="http://www.w3.org/2005/xpath-functions/map"/>
           <namespace prefix="array" uri="http://www.w3.org/2005/xpath-functions/array"/>
           <decimal-format name="ch" decimal-separator="&#xb7;" grouping-separator="&#x2b9;"/>
+          <decimal-format name="de" decimal-separator="," grouping-separator="."/>
           <decimal-format name="fortran" exponent-separator="E"/>
         </environment>
 
@@ -90,6 +89,10 @@
       <xsl:if test="@spec = 'XQuery'">
         <dependency type="spec" value="XQ40+"/>
       </xsl:if>
+      <xsl:if test="xs:boolean(@schema-aware)">
+        <dependency type="feature" value="schemaImport"/>
+        <dependency type="feature" value="schemaValidation"/>
+      </xsl:if>
       <test>
         <xsl:for-each select="id(@use)">
           {"let $" || @name || " := " || @select}
@@ -101,14 +104,20 @@
       </test>
       <result>
         <xsl:choose>
-          <xsl:when test="fos:result[contains(., '&lt;')] and not(contains(fos:expression, 'serialize'))">
+          <xsl:when test="exists(fos:test-assertion)">
+            <xsl:copy-of select="fos:test-assertion/*:result/*"/>           
+          </xsl:when>
+          <xsl:when test="fos:result[matches(., '^\s*&lt;')] and not(contains(fos:expression, 'serialize'))">
+            <!-- Drop leading whitespace to keep the XML parser happy -->
+            <xsl:variable name="trimmed" select="replace(fos:result, '^\s+&lt;', '&lt;')"/>
             <xsl:choose>
               <xsl:when test="fos:result/@normalize-space eq true()">
                <xsl:variable name="stripped">
                  <xsl:try>
-                   <xsl:apply-templates select="parse-xml(fos:result)" mode="strip-space"/>
+                   <xsl:apply-templates select="parse-xml($trimmed)" mode="strip-space"/>
                    <xsl:catch>
                      <xsl:message expand-text="1">** Failure in parse-xml on fos:result of {$fos-function/@name}-{$n}</xsl:message>
+                     <xsl:message>:::{$trimmed}:::</xsl:message>
                      <substitute-for-unparseable-result-xml/>
                    </xsl:catch>
                  </xsl:try>
@@ -116,7 +125,7 @@
                 <assert-xml ignore-prefixes="{(fos:result/@ignore-prefixes, false())[1]}">{serialize($stripped)}</assert-xml>
               </xsl:when>
               <xsl:otherwise>
-                <assert-xml ignore-prefixes="{(fos:result/@ignore-prefixes, false())[1]}">{fos:result}</assert-xml>
+                <assert-xml ignore-prefixes="{(fos:result/@ignore-prefixes, false())[1]}">{$trimmed}</assert-xml>
               </xsl:otherwise>
             </xsl:choose>           
           </xsl:when>
