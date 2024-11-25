@@ -7523,12 +7523,13 @@ return <table>
       <div1 id="maps">
          <head>Maps</head>
          
+         
          <p>Maps were introduced as a new datatype in XDM 3.1. This section describes functions that
          operate on maps.</p>
          
-         <p>A map is an additional kind of item.</p>
+         <p>A map is a kind of item.</p>
          
-         <p><termdef id="dt-map" term="map">A <term>map</term> consists of a set of entries, also known
+         <p><termdef id="dt-map" term="map">A <term>map</term> consists of a sequence of entries, also known
             as key-value pairs. Each entry comprises a key 
             which is an arbitrary atomic item, and an arbitrary sequence called the associated value.</termdef></p>
          
@@ -7555,6 +7556,73 @@ return <table>
             <code>$books-by-isbn("0470192747")</code> returns the <code>book</code> element with the given ISBN.
             The fact that a map is a function item allows it to be passed as an argument to higher-order functions 
             that expect a function item as one of their arguments.</p>
+         
+         <div2 id="map-ordering">
+            <head>Ordering of Maps</head>
+            
+            <changes>
+               <change issue="564" date="2024-11-25">Ordered maps are introduced.</change>
+            </changes>
+            
+            <p>A map has a property called its <xtermref spec="DM40" ref="dt-map-ordering">ordering</xtermref>,
+            which takes one of the values <code>random</code>, <code>sorted</code>, or <code>fifo</code>.</p>
+            
+            <ulist>
+               <item><p><term>Random</term> is the default ordering, and was the only value available in
+               earlier versions of this specification. With random ordering, the order of entries in the
+               map is <termref def="implementation-dependent"/>: with many implementations, it is likely
+               to be entirely unpredictable, based on some internal hashing function applied to the keys.</p></item>
+               
+               <item><p><term>Sorted</term> ordering maintains and delivers the entries in a map in ascending
+               order of the keys. This imposes a constraint that the keys must be <termref def="dt-strictly-comparable"/>.</p>
+                  <p><termdef id="dt-strictly-comparable" term="strictly comparable">A set of keys
+                  is <term>strictly comparable</term> if for every pair of keys <var>K1</var>
+                  and <var>K2</var>, (a) the function <code>fn:compare(<var>K1</var>, <var>K2</var>, $CC)</code>,
+                  where <code>$CC</code> is the Unicode Codepoint Collation, can be evaluated without raising a type error,
+                  and (b) if either <var>K1</var> or <var>K2</var> has a timezone component, then both have
+                  a timezone component.</termdef></p>
+                  <note><p>This disallows types such as <code>xs:QName</code> for which no ordering is defined,
+                  and also disallows mixing of types such as <code>xs:string</code> and <code>xs:integer</code>
+                  in the same map. The ordering chosen in context-independent, which means that strings
+                  are always compared using the Unicode codepoint collation, and date/time values must either
+                  all have a timezone, or all have no timezone.</p></note>
+               </item>
+               
+               <item><p><term>Fifo</term> (first-in, first-out) ordering maintains and delivers the
+               entries in a map in the order they were added: new entries are added at the end. The detailed
+               rules are determined by the <code>map:put</code> function.</p></item>
+            </ulist>
+            
+            <p>A sorted map may be constructed using the <code>map:sort</code> function. Adding or removing
+            entries to a sorted map will maintain the sort order. In some cases it is convenient to 
+            construct an empty map with the property <code>ordering=sorted</code> using the
+            expression <code>map:sort({})</code>, and then build the map by adding entries incrementally.
+            Alternatively, a sorted map may be constructed by calling any of the functions
+            <code>map:build</code>, <code>map:merge</code>, or <code>map:of-pairs</code> with
+            the option <code>ordering=sorted</code>.</p>
+            
+            <p>A map with ordering <code>fifo</code> may be constructed by calling any of the functions
+            <code>map:build</code>, <code>map:merge</code>, or <code>map:of-pairs</code> with
+            the option <code>ordering=fifo</code>. These functions may be used to construct an empty
+            map with this ordering property, to which entries can then be added incrementally; or they
+            may be used to construct a map in which the order of entries reflect the order of items
+            in the sequence supplied as input.</p>
+            
+            <p>Maps with ordering <code>fifo</code> are also constructed by certain operations such
+            as <code>parse-json</code> and <code>xml-to-json</code>.</p>
+            
+            <p><termdef id="dt-entry-order" term="entry order">The order of entries in a map
+            (which is dependent on its <xtermref spec="DM40" ref="dt-map-ordering">ordering</xtermref>
+            property) is referred to as <term>entry order</term>.</termdef></p>
+            <p>The <termref def="dt-entry-order"/> of the entries in a map is 
+               respected by functions such as <code>map:entries</code>,
+               <code>map:keys</code>, <code>map:values</code>, <code>map:pairs</code>, <code>map:for-each</code>, and 
+            <code>json-to-xml</code>. It also affects the result of the expression 
+               <code>for key $k value $v return <var>EXPR</var></code>, and the output
+            of the <code>json</code> and <code>adaptive</code> serialization methods.</p>
+         
+            
+         </div2>
          
          <div2 id="map-composition-decomposition" diff="add" at="2023-04-19">
             <head>Composing and Decomposing Maps</head>
@@ -7637,7 +7705,7 @@ return <table>
             <head>Formal Specification of Maps</head>
             <p>The XDM data model (<bibref ref="xpath-datamodel-40"/>) defines three primitive operations on maps:</p>
             <ulist>
-               <item><p><code>dm:empty-map</code> constructs an empty map.</p></item>
+               <item><p><code>dm:empty-map</code> constructs an empty map with a given ordering property.</p></item>
                <item><p><code>dm:map-put</code> adds or replaces an entry in a map.</p></item>
                <item><p><code>dm:iterate-map</code> applies a supplied function to every entry in a map.</p></item>
             </ulist>
@@ -13046,6 +13114,12 @@ ISBN 0 521 77752 6.</bibl>
                <p>Raised by <code>fn:xml-to-json</code> if the XML input uses the attribute
                   <code>escaped="true"</code> or <code>escaped-key="true"</code>, and the corresponding string
                   or key contains an invalid JSON escape sequence.</p>
+            </error>
+            
+            <error class="JS" code="0008" label="Non-comparable keys for sorted map" type="dynamic">
+               <p>Raised by various functions if an attempt is made to construct a map with the <code>ordering</code>
+                  property set to <code>sorted</code> when the keys to be included in the map
+                  are not <termref def="dt-strictly-comparable"/>.</p>
             </error>
             
             
