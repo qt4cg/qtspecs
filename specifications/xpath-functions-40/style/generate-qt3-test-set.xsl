@@ -117,7 +117,7 @@
                    <xsl:apply-templates select="parse-xml($trimmed)" mode="strip-space"/>
                    <xsl:catch>
                      <xsl:message expand-text="1">** Failure in parse-xml on fos:result of {$fos-function/@name}-{$n}</xsl:message>
-                     <xsl:message>:::{$trimmed}:::</xsl:message>
+                     <!--<xsl:message>:::{$trimmed}:::</xsl:message>-->
                      <substitute-for-unparseable-result-xml/>
                    </xsl:catch>
                  </xsl:try>
