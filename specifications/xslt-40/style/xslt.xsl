@@ -772,7 +772,11 @@ constructor. These elements are:</p>
   <xsl:variable name="fname" select="string(.)"/>
   <xsl:variable name="link" select="translate(if (contains($fname, '#')) then substring-before($fname, '#') else $fname, ':', '-')"/>
   <xsl:variable name="vn" select="if (@spec eq 'FO31') then '31' else if (@spec eq '30') then '30' else '40'"/>
-  <a href="https://www.w3.org/TR/xpath-functions-{$vn}/#func-{$link}">
+  <xsl:variable name="baseuri"
+                select="if ($vn = '40')
+                        then 'https://www.w3.org/TR/xpath-functions'
+                        else 'https://qt4cg.org/specifications/xpath-functions'"/>
+  <a href="{$baseuri}-{$vn}/#func-{$link}">
     <code><xsl:value-of select="."/></code>
   </a><sup><small><xsl:value-of select="(@spec, 'FO40')[1]"/></small></sup>
 </xsl:template>
