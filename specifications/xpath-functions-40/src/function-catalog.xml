@@ -24845,11 +24845,9 @@ return map:build($titles/title, fn($title) { $title/ix })
       <fos:signatures>
          <fos:proto name="range" return-type="xs:integer">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
-            <fos:arg name="min-inclusive" type="xs:anyAtomicType?" usage="absorption" default="()"/>
-            <fos:arg name="min-exclusive" type="xs:anyAtomicType?" usage="absorption" default="()"/>
-            <fos:arg name="max-inclusive" type="xs:anyAtomicType?" usage="absorption" default="()"/>
-            <fos:arg name="max-exclusive" type="xs:anyAtomicType?" usage="absorption" default="()"/>
-            <fos:arg name="limit" type="xs:integer?"  usage="absorption" default="()"/>
+            <fos:arg name="min" type="xs:anyAtomicType?" usage="absorption" default="()"/>
+            <fos:arg name="max" type="xs:anyAtomicType?" usage="absorption" default="()"/>
+            <fos:arg name="count" type="xs:integer?"  usage="absorption" default="()"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -24863,29 +24861,39 @@ return map:build($titles/title, fn($title) { $title/ix })
       <fos:rules>
          <p>The function filters the supplied <code>$map</code> to return those entries that are
          within a given range of values.</p>
-         <p>The entries selected are those, up to a maximum count of <code>$limit</code> if specified, where the
+         <p>The function first selects those entries whose
             key <var>K</var> satisfies all the following conditions:</p>
        
          <ulist>
-            <item><p>If <code>$min-inclusive</code> is supplied, then <var>K</var> is 
-               greater than or equal to <code>$min-inclusive</code></p></item>
-            <item><p>If <code>$min-exclusive</code> is supplied, then <var>K</var> is 
-               greater than <code>$min-exclusive</code></p></item>
-            <item><p>If <code>$max-inclusive</code> is supplied, then <var>K</var> is 
-               less than or equal to <code>$max-inclusive</code></p></item>
-            <item><p>If <code>$max-exclusive</code> is supplied, then <var>K</var> is 
-               less than <code>$max-exclusive</code></p></item>
+            <item><p>If <code>$min</code> is supplied, then <var>K</var> is 
+               greater than or equal to <code>$min</code>.</p></item>
+            <item><p>If <code>$max</code> is supplied, then <var>K</var> is 
+               less than <code>$max</code>.</p></item>
          </ulist>
+         
+         <p>If <code>$count</code> is specified, then:</p>
+         <ulist>
+            <item><p>If <code>$count</code> is positive and is less than the number of selected
+            entries, it then selects the first <code>$count</code> of these entries, in key order.</p></item>
+            <item><p>If <code>$count</code> is negative and <code>-$count</code> is less than the number of selected
+            entries, it then selects the last <code>-$count</code> of these entries, in key order.</p></item>
+         </ulist>
+         
+         <p>For example, specifying <code>count := 1</code> selects the first qualifying entry, while
+         <code>count := -1</code> selects the last.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 let $CC := "http://www.w3.org/2005/xpath-functions/collation/codepoint"         
-return map:pairs(map:sort($map)) [
-   (empty($min-inclusive) or compare(?key, $min-inclusive, $CC) ge 0) and  
-   (empty($min-exclusive) or compare(?key, $min-exclusive, $CC) gt 0) and
-   (empty($max-inclusive) or compare(?key, $max-exclusive, $CC) le 0) and 
-   (empty($max-inclusive) or compare(?key, $max-exclusive, $CC) le 0)
-] => subsequence(1, $limit otherwise xs:double('+INF'))
-  => map:of-pairs({ "ordering": "sorted" })
+let $pairs := map:pairs(map:sort($map)) [
+   (empty($min) or compare(?key, $min, $CC) ge 0) and  
+   (empty($max) or compare(?key, $max, $CC) lt 0)
+]
+let $slice := 
+  if ($count gt 0) then slice($pairs, 1, $count)
+  else if ($count lt 0) then slice($pairs, -$count, -1)
+  else $pairs
+return
+  map:of-pairs($slice, { "ordering": "sorted" })
 </fos:equivalent>
       <fos:errors>
          <p>An error is raised <errorref spec="FO" class="JS" code="0008"/> if 
@@ -24896,22 +24904,35 @@ return map:pairs(map:sort($map)) [
          <p>The function is intended primarily to take advantage of efficiencies that
             become possible when the supplied <code>$map</code> has <code>ordering=sorted</code>,
             but it still works if the input is not sorted. </p>
-         <p>It would be unusual to supply both <code>$min-inclusive</code> and <code>$min-exclusive</code>,
-         or both <code>$max-inclusive</code> and <code>$max-exclusive</code>, but all combinations are permitted.</p>
+         <p>Note that <code>$min</code> is an inclusive bound, while <code>$max</code> is exclusive.
+         If <code>$min</code> is omitted, the selection starts at the first entry in <code>$map</code>,
+         and if <code>$max</code> is omitted, the selection ends at the last entry.</p>
       </fos:notes>
-      <fos:examples>
+      <fos:examples role="wide">
          <fos:example>
             <fos:test>
-               <fos:expression>map:sort({ "a": 1, "b": 2, "c": 3 }) => map:range(max-inclusive:="b") </fos:expression>
-               <fos:result>{ "a": 1, "b": 2 }</fos:result>
+               <fos:expression><eg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(count:=1) </eg></fos:expression>
+               <fos:result><eg>{ "a": 1 }</eg></fos:result>
+               <fos:postamble>Selects the first entry in the map, in key order</fos:postamble>
             </fos:test>
             <fos:test>
-               <fos:expression>map:sort({ "a": 1, "b": 2, "c": 3 }) => map:range(min-inclusive:="b", max-exclusive="d") </fos:expression>
-               <fos:result>{ "b": 2, "c": 3 }</fos:result>
+               <fos:expression><eg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(count:=-1) </eg></fos:expression>
+               <fos:result><eg>{ "c": 3 }</eg></fos:result>
+               <fos:postamble>Selects the last entry in the map, in key order</fos:postamble>
             </fos:test>
             <fos:test>
-               <fos:expression>map:sort({ "aa": 1, "bb": 2, "cc": 3 }) => map:range(min-inclusive:="b", limit:=1) => map:keys() </fos:expression>
-               <fos:result>"bb"</fos:result>
+               <fos:expression><eg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(max:="b") </eg></fos:expression>
+               <fos:result><eg>{ "a": 1, "b": 2 }</eg></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eeg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(min:="b", max="d") </eeg></fos:expression>
+               <fos:result><eg>{ "b": 2, "c": 3 }</eg></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>map:sort({ "aa": 1, "cc": 3, "bb": 2 }) 
+  => map:range(min:="b", count:=1) 
+  => map:keys() </eg></fos:expression>
+               <fos:result><eg>"bb"</eg></fos:result>
                <fos:postamble>Returns the first key greater than or equal to the supplied value.</fos:postamble>
             </fos:test>
          </fos:example>
