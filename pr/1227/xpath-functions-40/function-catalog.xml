@@ -17,6 +17,19 @@
       <fos:variable id="v-item3" name="item3" select="$po/line-item[3]"/>
    </fos:global-variables>
    
+   <fos:record-type id="key-value-pair" extensible="true">
+      <fos:field name="key" type="xs:anyAtomicType" required="true">
+         <fos:meaning>
+            <p>A key suitable for use in a map entry.</p>
+         </fos:meaning>
+      </fos:field>
+      <fos:field name="value" type="item()*" required="true">
+         <fos:meaning>
+            <p>The value corresponding to the key.</p>
+         </fos:meaning>
+      </fos:field>
+   </fos:record-type>
+   
    <fos:record-type id="uri-structure-record" extensible="true">
       <fos:field name="uri" type="xs:string?" required="false">
          <fos:meaning>
@@ -612,6 +625,157 @@ $node ! (
       </fos:examples>
       <fos:changes>
          <fos:change issue="148" PR="1523" date="2024-10-22"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
+   <fos:function name="type-of" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="type-of" return-type="xs:string">
+            <fos:arg name="value" type="item()*" usage="inspection"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns information about the type of a value, as a string.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The function returns a string, whose lexical form will always match
+            the grammar of <xnt spec="XP40" ref="SequenceType">SequenceType</xnt>, representing a sequence type that matches
+         <code>$value</code>.</p>
+         <p>If <code>$value</code> is the empty sequence, the function returns the string <code>"empty-sequence()"</code>.</p>
+         <p>Otherwise, the returned string is the concatenation of:</p>
+         <olist>
+            <item><p>A string representing the distinct item types that are present in <code>$value</code>,
+               formed as follows:</p>
+               <olist>
+                  <item><p>For each item in <code>$value</code>, construct a string representing its item type
+                  as described below.</p></item>
+                  <item><p>Eliminate duplicate strings from this list by applying the <code>fn:distinct-values</code>
+                  function, forming a sequence of strings <var>$ss</var>.</p></item>
+                  <item><p>If <var>$ss</var> contains only one string, use that string.</p></item>
+                  <item><p>Otherwise, return the result of the expression <code>`({fn:string-join(<var>$ss</var>, "|")})`</code>.</p></item>
+               </olist>
+            </item>
+            <item><p>An occurrence indicator: absent if <code>$value</code> contains exactly one item, or
+            <code>"+"</code> if it contains more than one item.</p></item>
+         </olist>
+         <p>The string representing the type of an individual item <var>J</var> is constructed as follows:</p>
+         <olist>
+            <item><p>If <var>J</var> is a node, the result is one of the following
+            strings, determined by the node kind of the node (see <xspecref spec="DM40" ref="dm-node-kind"/>):</p>
+            <p><slist>
+               <sitem><code>"document-node()"</code></sitem>
+               <sitem><code>"element()"</code></sitem>
+               <sitem><code>"attribute()"</code></sitem>
+               <sitem><code>"text()"</code></sitem>
+               <sitem><code>"processing-instruction()"</code></sitem>
+               <sitem><code>"comment()"</code></sitem>
+               <sitem><code>"namespace-node()"</code></sitem>
+            </slist></p>
+            </item>
+            <item>
+               <p>If <var>J</var> is an atomic item, the result is a string chosen as follows:</p>
+               <olist>
+                  <item><p>Let <var>T</var> be the type denoted by the type annotation of <var>J</var>.</p></item>
+                  <item><p>If <var>T</var> is an anonymous type, set <var>T</var> to the base type of <var>T</var>, and
+                  repeat until a type is reached that is not anonymous.</p></item>
+                  <item><p>If the name of <var>T</var> is in the namespace <code>http://www.w3.org/2001/XMLSchema</code>,
+                  return the string <code>"xs:<var>local</var>"</code> where <var>local</var> is the local part of the
+                  name of <var>T</var>.</p></item>
+                  <item><p>Otherwise, return the name of <var>T</var> in the form of a 
+                     <xnt spec="XP40" ref="URIQualifiedName">URIQualifiedName</xnt> (that is, <code>"Q{<var>uri</var>}<var>local</var>"</code>,
+                     or <code>"Q{}<var>local</var>"</code> if the name is in no namespace).</p></item>
+               </olist>
+            </item>
+            <item><p>If <var>J</var> is a function item:</p>
+               <olist>
+                 <item><p>If <var>J</var> is an array, return <code>"array(*)"</code>.</p></item>
+                 <item><p>If <var>J</var> is a map, return <code>"map(*)"</code>.</p></item>
+                 <item><p>Otherwise, return <code>"function(*)"</code>.</p></item>
+               </olist>
+            </item>
+         </olist>
+      </fos:rules>
+ 
+      <fos:errors>
+         <p>If the <code>$value</code> argument is omitted and the context value is <xtermref ref="dt-absent" spec="DM40"
+                     >absent</xtermref>, the function raises
+                  type error <xerrorref spec="XP"
+                     class="DY" code="0002" type="type"/>.</p>
+
+      </fos:errors>
+      <fos:notes>
+         <p>In general, an item matches more than one type, and there are cases where there is no single matching type that
+         is more specific than all the others. This is especially true with functions, maps, and arrays. This function therefore
+         selects one of the types that matches the item, which is not necessarily the most specific type.</p>
+         
+         <p>This function should not be used as a substitute for an <code>instance of</code> test. The precise type annotation
+         of the result of an expression is not always predictable, because processors are free to deliver a more specific type
+         than is mandated by the specification. For example, if <code>$n</code> is of type <code>xs:positiveInteger</code>,
+         then the result of <code>abs($n)</code> is guaranteed to be an instance of <code>xs:integer</code>, but an 
+         implementation might reasonably return the supplied value unchanged: that is, a value whose actual type 
+         annotation is <code>xs:positiveInteger</code>. Similarly the type annotation of the value returned by
+         <code>position()</code> might be <code>xs:long</code> rather than <code>xs:integer</code>.</p>
+         
+         <p>Implementations <rfc2119>should</rfc2119>, however, refrain from exposing types that are purely internal.
+         For example, an implementation might have an optimized internal representation for strings consisting entirely
+         of ASCII characters, or for single-character strings; if this is the case then the type annotation returned by this function
+         should be a user-visible supertype such as <code>xs:string</code>.</p>
+      </fos:notes>
+ 
+      <fos:examples>
+         <fos:variable name="e" id="v-type-of-e"><![CDATA[<doc>
+  <p id="alpha" xml:id="beta">One</p>
+  <p id="gamma" xmlns="http://example.com/ns">Two</p>
+  <ex:p id="delta" xmlns:ex="http://example.com/ns">Three</ex:p>
+  <?pi 3.14159?>
+</doc>]]>
+         </fos:variable>
+         <fos:example>
+            <fos:test use="v-type-of-e" spec="XQuery">
+               <fos:expression>type-of($e//*[@id = 'alpha'])</fos:expression>
+               <fos:result>"element()"</fos:result>
+            </fos:test>
+            <fos:test use="v-type-of-e" spec="XQuery">
+               <fos:expression>type-of($e//*)</fos:expression>
+               <fos:result>"element()+"</fos:result>
+            </fos:test>
+            <fos:test use="v-type-of-e" spec="XQuery">
+               <fos:expression>type-of($e//@id[. = 'gamma'])</fos:expression>
+               <fos:result>"attribute()"</fos:result>
+            </fos:test>
+            <fos:test use="v-type-of-e" spec="XQuery">
+               <fos:expression>type-of($e//node()[.='3.14159'])</fos:expression>
+               <fos:result>"processing-instruction()"</fos:result>
+            </fos:test>
+            <fos:test use="v-type-of-e" spec="XQuery">
+               <fos:expression>type-of($e//no-such-node)</fos:expression>
+               <fos:result>"empty-sequence()"</fos:result>
+            </fos:test>
+            <fos:test use="v-type-of-e" spec="XQuery">
+               <fos:expression>type-of($e//doc/child::node())</fos:expression>
+               <fos:result>"(element()|processing-instruction())+"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>type-of(1)</fos:expression>
+               <fos:result>"xs:integer"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>type-of(1 to 5)</fos:expression>
+               <fos:result>"xs:integer+"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>type-of((1, 1.2, 2))</fos:expression>
+               <fos:result>"(xs:integer|xs:decimal)+"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="1550" PR="1570" date="2024-11-12"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
    
@@ -5113,7 +5277,7 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:changes>
          <fos:change issue="701" PR="702" date="2023-09-19">
             <p>The function can now take any number of arguments (previously it had to be two or more), and
-            the arguments can sequences of strings rather than single strings.</p>
+            the arguments can be sequences of strings rather than single strings.</p>
          </fos:change>
       </fos:changes>
    </fos:function>
@@ -17521,13 +17685,13 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
   }
 }]]></fos:variable>
          <fos:example>
-            <fos:test xslt-version="3.0" use="v-id-emp" spec="XQuery">
+            <fos:test xslt-version="3.0" use="v-id-emp" spec="XQuery" schema-aware="true">
                <fos:expression><eg>$emp/id('ID21256')/name()</eg></fos:expression>
                <fos:result>"employee"</fos:result>
                <fos:postamble>The <code>xml:id</code> attribute has the <code>is-id</code> property,
                   so the employee element is selected.</fos:postamble>
             </fos:test>
-            <fos:test xslt-version="3.0" use="v-id-emp" spec="XQuery">
+            <fos:test xslt-version="3.0" use="v-id-emp" spec="XQuery" schema-aware="true">
                <fos:expression><eg>$emp/id('E21256')/name()</eg></fos:expression>
                <fos:result>"empnr"</fos:result>
                <fos:postamble>Assuming the <code>empnr</code> element is given the type
@@ -17694,7 +17858,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
 }]]>
          </fos:variable>
          <fos:example>
-            <fos:test xslt-version="3.0" use="v-element-with-id-emp" spec="XQuery">
+            <fos:test xslt-version="3.0" use="v-element-with-id-emp" spec="XQuery" schema-aware="true">
                <fos:expression><eg>$emp/element-with-id('ID21256')/name()</eg></fos:expression>
                <fos:result>"employee"</fos:result>
                <fos:postamble>The <code>xml:id</code> attribute has the <code>is-id</code> property,
@@ -17702,7 +17866,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             </fos:test>
          </fos:example>
          <fos:example>
-            <fos:test xslt-version="3.0" use="v-element-with-id-emp" spec="XQuery">
+            <fos:test xslt-version="3.0" use="v-element-with-id-emp" spec="XQuery" schema-aware="true">
                <fos:expression>$emp/element-with-id('E21256')/name()</fos:expression>
                <fos:result>"employee"</fos:result>
                <fos:postamble>Assuming the <code>empnr</code> element is given the type
@@ -17855,7 +18019,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
 }]]>
          </fos:variable>
          <fos:example>
-            <fos:test xslt-version="3.0" use="v-idref-emp" spec="XQuery">
+            <fos:test xslt-version="3.0" use="v-idref-emp" spec="XQuery" schema-aware="true">
                <fos:expression><eg>$emp/(
   element-with-id('ID21256')/@xml:id => idref()
 )/ancestor::employee/last
@@ -17867,7 +18031,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             </fos:test>
          </fos:example>
          <fos:example>
-            <fos:test xslt-version="3.0" use="v-idref-emp" spec="XQuery">
+            <fos:test xslt-version="3.0" use="v-idref-emp" spec="XQuery" schema-aware="true">
                <fos:expression><eg>$emp/(
   element-with-id('E30561')/empnr => idref()
 )/ancestor::employee/last
@@ -18876,7 +19040,7 @@ return $lines[not(position() = last() and . = '')]
    
    <fos:function name="parse-xml" prefix="fn">
       <fos:signatures>
-         <fos:proto name="parse-xml" return-type="document-node(element(*))?">
+         <fos:proto name="parse-xml" return-type="document-node(*)?">
             <fos:arg name="value" type="xs:string?" example="'&lt;a/&gt;'"/>
             <fos:arg name="options" type="map(*)?" default="{}"/>
          </fos:proto>
@@ -19672,7 +19836,7 @@ serialize(
    </fos:function>
    <fos:function name="parse-html" prefix="fn">
       <fos:signatures>
-         <fos:proto name="parse-html" return-type="document-node(element(*:html))?">
+         <fos:proto name="parse-html" return-type="document-node(*:html)?">
             <fos:arg name="html" type="(xs:string | xs:hexBinary | xs:base64Binary)?"/>
             <fos:arg name="options" type="map(*)?"
                      default="{
@@ -20459,20 +20623,6 @@ return function-arity($initial)</eg></fos:expression>
 declare %private function local:inc($c) { $c + 1 };
 function-annotations(local:inc#1)</eg></fos:expression>
                <fos:result><eg>{ "key": QName("http://www.w3.org/2012/xquery", "private"),
-  "value": () 
-}</eg></fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>
-declare %private %variadic 
-        function local:sum($c as xs:integer*) { sum($c) };
-function-annotations(local:sum#3)</eg></fos:expression>
-               <fos:result><eg>{ "key": QName("http://www.w3.org/2012/xquery", "private"),
-  "value": () 
-},
-{ "key": QName("http://www.w3.org/2012/xquery", "variadic"),
   "value": () 
 }</eg></fos:result>
             </fos:test>
@@ -22230,7 +22380,7 @@ declare function transitive-closure (
          then the result of <code>abs($n)</code> is guaranteed to be an instance of <code>xs:integer</code>, but an 
          implementation might reasonably return the supplied value unchanged: that is, a value whose actual type 
          annotation is <code>xs:positiveInteger</code>. Similarly the type annotation of the value returned by
-         <code>position()</code> might have a type annotation of <code>xs:long</code> rather than <code>xs:integer</code>.</p>
+         <code>position()</code> might be <code>xs:long</code> rather than <code>xs:integer</code>.</p>
          
          <p>Implementations <rfc2119>should</rfc2119>, however, refrain from exposing types that are purely internal.
          For example, an implementation might have an optimized internal representation for strings consisting entirely
@@ -22293,22 +22443,35 @@ return atomic-type-annotation($x)?matches($y)</eg></fos:expression>
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[let $e := parse-xml("<e/>")/*
-return node-type-annotation($e)]]></eg></fos:expression>
+return node-type-annotation($e)?name]]></eg></fos:expression>
                <fos:result>xs:QName('xs:untyped')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[let $a := parse-xml("<e a='3'/>")//@a
-return node-type-annotation($a)]]></eg></fos:expression>
+return node-type-annotation($a)?name]]></eg></fos:expression>
                <fos:result>xs:QName('xs:untypedAtomic')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
-            <fos:test>
+            <fos:test schema-aware="true">
                <fos:expression><eg><![CDATA[let $x := json-to-xml('[23, 24]', { 'validate': true() })
-return node-type-annotation($x/*)]]></eg></fos:expression>
+return node-type-annotation($x/*)?name]]></eg></fos:expression>
                <fos:result>xs:QName('fn:arrayType')</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test schema-aware="true">
+               <fos:expression><eg><![CDATA[let $x := json-to-xml('[23, 24]', { 'validate': true() })
+let $n23 := $x//fn:number[. = 23]                  
+let $type := node-type-annotation($n23)
+return ($type?name, 
+        $type?base-type()?name, 
+        $type?base-type()?base-type()?name)]]></eg></fos:expression>
+               <fos:result><eg>xs:QName('fn:numberType'), 
+xs:QName('fn:finiteNumberType'), 
+xs:QName('xs:double')</eg></fos:result>
             </fos:test>
          </fos:example>
          
@@ -22885,7 +23048,7 @@ return fold-left($maps, {},
       <fos:signatures>
          <fos:proto name="of-pairs" return-type="map(*)">
             <fos:arg name="input" 
-                     type="record(key as xs:anyAtomicType, value as item()*)*" 
+                     type-ref="key-value-pair" type-ref-occurs="*"
                      usage="inspection"
                      example="{ 'key':'n','value':false() }, { 'key':'y','value':true() }"/>
             <fos:arg name="combine" type="(fn(item()*, item()*) as item()*)?" usage="inspection" default="fn:op(',')"/>
@@ -23257,7 +23420,7 @@ return map:keys-where($birthdays, fn($name, $date) {
 
    <fos:function name="pairs" prefix="map">
       <fos:signatures>
-         <fos:proto name="pairs" return-type="record(key as xs:anyAtomicType, value as item()*)*">
+         <fos:proto name="pairs" return-type-ref="key-value-pair" return-type-ref-occurs="*">
             <fos:arg name="map" type="map(*)" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -23295,6 +23458,14 @@ return map:keys-where($birthdays, fn($name, $date) {
   { 1: "Y", 2: "N" }
 )</eg></fos:expression>
                <fos:result allow-permutation="true"><eg>({ "key": 1, "value": "Y" }, { "key": 2, "value": "N" })</eg></fos:result>
+               <fos:test-assertion>
+                  <result xmlns="http://www.w3.org/2010/09/qt-fots-catalog">
+                     <any-of>
+                        <assert-deep-eq>{ "key": 1, "value": "Y" }, { "key": 2, "value": "N" }</assert-deep-eq>
+                        <assert-deep-eq>{ "key": 2, "value": "N" }, { "key": 1, "value": "Y" }</assert-deep-eq>
+                     </any-of>
+                  </result>
+               </fos:test-assertion>
                <fos:postamble>The result is in <termref def="implementation-dependent"
                   >implementation-dependent</termref> order.</fos:postamble>
             </fos:test>
@@ -23753,7 +23924,7 @@ map:merge(//book ! map:entry(isbn, .))]]></eg>
 
    <fos:function name="pair" prefix="map">
       <fos:signatures>
-         <fos:proto name="pair" return-type="record(key as xs:anyAtomicType, value as item()*)">
+         <fos:proto name="pair" return-type-ref="key-value-pair">
             <fos:arg name="key" type="xs:anyAtomicType"/>
             <fos:arg name="value" type="item()*" usage="navigation"/>
          </fos:proto>
@@ -24252,7 +24423,7 @@ fold-left($input, {}, fn($map, $item, $pos) {
                <fos:postamble>Returns an inverted index for the input sequence with the 
                   string stored as key and the position stored as value.</fos:postamble>
             </fos:test>
-            <fos:test>
+            <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
 let $titles := <titles>
   <title>A Beginner’s Guide to <ix>Java</ix></title>
@@ -24271,6 +24442,16 @@ return map:build($titles/title, fn($title) { $title/ix })
     <title>Using <ix>XML</ix> with <ix>Java</ix></title>
   )
 }]]></eg></fos:result>
+               <fos:test-assertion>
+                  <result xmlns="http://www.w3.org/2010/09/qt-fots-catalog">
+                     <all-of>
+                        <assert><![CDATA[?Java[1][self::title][ix='Java'][string(.)="A Beginner’s Guide to Java"]]]></assert>
+                        <assert><![CDATA[?Java[2][self::title][ix='XML'][ix='Java'][string(.)="Using XML with Java"]]]></assert>
+                        <assert><![CDATA[?XML[1][self::title][ix='XML'][string(.)="Learning XML"]]]></assert>
+                        <assert><![CDATA[?XML[2][self::title][ix='XML'][ix='Java'][string(.)="Using XML with Java"]]]></assert>
+                     </all-of>
+                  </result>
+               </fos:test-assertion>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -24490,6 +24671,14 @@ return map:build($titles/title, fn($title) { $title/ix })
             <fos:test>
                <fos:expression>collation({ 'lang': 'de', 'strength': 'primary' })</fos:expression>
                <fos:result>"http://www.w3.org/2013/collation/UCA?lang=de;strength=primary"</fos:result>
+               <fos:test-assertion>
+                  <result xmlns="http://www.w3.org/2010/09/qt-fots-catalog">
+                     <any-of>
+                        <assert-string-value>http://www.w3.org/2013/collation/UCA?lang=de;strength=primary</assert-string-value>
+                        <assert-string-value>http://www.w3.org/2013/collation/UCA?strength=primary;lang=de;</assert-string-value>
+                     </any-of>
+                  </result>
+               </fos:test-assertion>
                <fos:postamble>The order of query parameters may vary.</fos:postamble>
             </fos:test>
             
@@ -24708,7 +24897,7 @@ return $M(collation-key("a", $C))</eg></fos:expression>
 
    <fos:function name="json-to-xml" prefix="fn">
       <fos:signatures>
-         <fos:proto name="json-to-xml" return-type="document-node()?">
+         <fos:proto name="json-to-xml" return-type="document-node(fn:*)?">
             <fos:arg name="value" type="xs:string?" example="'[22, 23]'"/>
             <fos:arg name="options" type="map(*)?" usage="inspection" default="{}"/>
          </fos:proto>
@@ -25568,7 +25757,7 @@ return json-to-xml($json, $options)]]></eg>
     <list>
       <item value='1'/>
       <item value='2'/>
-    </foo>
+    </list>
   ")/*)]]></eg></fos:expression>
                <fos:result><eg>{ "list": [ 
     { "@value": "1" },
@@ -25580,7 +25769,7 @@ return json-to-xml($json, $options)]]></eg>
     <name>
       <first>Jane</first>
       <last>Smith</last>
-    </foo>
+    </name>
   ")/*)]]></eg></fos:expression>
                <fos:result><eg>{ "name": { 
     "first": "Jane",
@@ -25767,10 +25956,8 @@ return json-to-xml($json, $options)]]></eg>
             </fos:option>
          </fos:options>
 
-         <p>The result of the function is a <code>parsed-csv-structure-record</code>, which is defined as
-            follows:</p>
-         
-         <?record-description parsed-csv-structure-record?>
+         <p>The result of the function is a <code>parsed-csv-structure-record</code>, as
+         defined in <specref ref="parsed-csv-structure-record"/>.</p>
          
 
 
@@ -25857,7 +26044,7 @@ return (
   "quote-character": "|"
 }
 let $input := "|name|;|city|§|Bob|;|Berlin|§|Alice|;|Aachen|"
-let $result := parse-csv($csv, $options)
+let $result := parse-csv($input, $options)
 return (
   $result => $display(),
   $result?get(3, 1)
@@ -25907,7 +26094,7 @@ let $options := {
 let $result := parse-csv($input, $options)
 return (
   $result => $display(),
-  $result?get(2, "city")
+  $result?get(2, "amount")
 )</eg></fos:expression>
                <fos:result><eg>{
   "columns": ("name", "date", "amount"),
@@ -25919,19 +26106,19 @@ return (
   ),
   "get": "(: function :)"                  
 },
-"Aachen"</eg></fos:result>
+"15.00"</eg></fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <p>Filtering columns, with supplied column map</p>
             <fos:test use="csv-display">
                <fos:expression><eg>let $input := string-join((
+  "2023-07-20,Alice,Aachen,15.00",                  
   "2023-07-19,Bob,Berlin,10.00,USD,13.99",
-  "2023-07-20,Alice,Aachen,15.00",
   "2023-07-20,Charlie,Celle,15.00,GBP,11.99,cake,not a lie"
 ), char('\n'))
 let $options := { 
-  "header": { "Person": 1, "Amount": 3 }, 
+  "header": ( "Person", "", "Amount" ),
   "select-columns": (2, 1, 4)
 }
 let $result := parse-csv($input, $options)
@@ -25944,11 +26131,13 @@ return (
                <fos:result><eg>{
   "columns": ("Person", "", "Amount"),
   "column-index": { "Person": 1, "Amount": 3 },
-  "rows": ([ "Alice", "Aachen" ], [ "Bob", "Berlin" ]),
+  "rows": ([ "Alice", "2023-07-20", "15.00" ], 
+           [ "Bob", "2023-07-19", "10.00" ], 
+           [ "Charlie", "2023-07-20", "15.00" ]),
   "get": "(: function :)"                  
 },
-"Alice",
-"15.00"</eg></fos:result>
+"Bob",
+"10.00"</eg></fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -25981,7 +26170,7 @@ return (
   ),
   "get": "(: function :)"                  
 },
-"15:00"</eg></fos:result>
+"15.00"</eg></fos:result>
                
             </fos:test>
          </fos:example>
@@ -26001,7 +26190,8 @@ return (
   $result?get(3, "original amount")
 )</eg></fos:expression>
                <fos:result><eg>{
-  "columns": ("date", "name", "city", "amount", "currency", "original amount"),
+  "columns": ("date", "name", "city", 
+              "amount", "currency", "original amount"),
   "column-index": {
     "date": 1, "name": 2, "city": 3, "amount": 4,
     "currency": 5, "original amount": 6
@@ -26399,7 +26589,6 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
                <fos:expression><eg>csv-to-xml("", { "header": true() })</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
-  <columns/>
   <rows/>
 </csv>
 ]]></eg></fos:result>
@@ -26424,7 +26613,8 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          <fos:example>
             <p>With defaults for delimiters and quotes, recognizing headers:</p>
             <fos:test use="escaped-crlf-3 csv-string-2">
-               <fos:expression><eg>csv-to-xml($csv-string, { "header": true() })</eg></fos:expression>
+               <fos:expression><eg>csv-to-xml($csv-string, 
+         { "header": true(), "normalize-newlines": true() })</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
@@ -26456,7 +26646,10 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
-  { "header": true(), "select-columns": (2, 1, 4) }
+  { "header": true(), 
+    "select-columns": (2, 1, 4), 
+    "normalize-newlines": true() 
+  }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
@@ -26491,7 +26684,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
-  { "header": true() }
+  { "header": true(), "normalize-newlines": true() }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
@@ -26539,7 +26732,10 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
-  { "header": true(), "trim-rows": true() }
+  { "header": true(), 
+    "trim-rows": true(), 
+    "normalize-newlines": true() 
+  }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
@@ -26590,7 +26786,10 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
-  { "header": true(), "select-columns": 1 to 6 }
+  { "header": true(), 
+    "select-columns": 1 to 6, 
+    "normalize-newlines": true() 
+  }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
@@ -29551,9 +29750,7 @@ declare function array:flatten(
 
   
          <p>The result of the function is a map
-         <var>R</var> with two entries:</p>
-
-         <?record-description load-xquery-module-record?>
+         <var>R</var> with two entries, as defined in <specref ref="load-xquery-module-record"/>.</p>
 
          
          <p>The static and dynamic context of the library module are established according to the rules in 
@@ -30455,9 +30652,9 @@ return $result?output//body
       <fos:rules>
          <p diff="chg" at="2022-12-19"
                >The function returns a random number generator. A random number generator is represented as a value of type 
-            <code>random-number-generator-record</code>, defined as follows:</p>
-         
-          <?record-description random-number-generator-record?>
+            <code>random-number-generator-record</code>, defined in
+         <specref ref="random-number-generator-record"/>.</p>
+        
 
    
 
@@ -33317,7 +33514,7 @@ return $result
   "fr": { "capital": "Paris", "languages": [ "French" ] }, 
   "de": { "capital": "Berlin", "languages": [ "German" ] }
 }
-return pin($data)??languages[. = 'German'] ! label()?path()[1]</eg></fos:expression>
+return pin($data)??languages[. = 'German'] ! label(.)?path()[1]</eg></fos:expression>
                <fos:result>"de"</fos:result>
             </fos:test>
          </fos:example>
