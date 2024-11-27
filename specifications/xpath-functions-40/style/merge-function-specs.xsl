@@ -117,16 +117,6 @@
 				<def>
 					<xsl:copy-of select="$fspec/fos:signatures/(@diff, @at)"/>
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>
-					<xsl:for-each select="distinct-values($fspec/fos:signatures//(@type-ref|@return-type-ref))">
-						<xsl:call-template name="show-record-type">
-							<xsl:with-param name="name" select="."/>
-							<xsl:with-param name="definition" select="key('record-type', ., $fosdoc)"/>
-							<xsl:with-param name="is-first" 
-								select="empty($fspec/preceding-sibling::fos:function[
-								                fos:signatures//(@type-ref|@return-type-ref) = current()])"/>
-						</xsl:call-template>
-					</xsl:for-each>
-					<xsl:apply-templates select="$fspec/fos:signatures/fos:record"/>
 				</def>
 			</gitem>
 			<xsl:if test="$fspec/fos:properties">
@@ -235,6 +225,24 @@
 		</glist>
 	</xsl:template>
 	
+	<xsl:template match="head[processing-instruction('record-description')]" expand-text="yes">
+		<xsl:variable name="lexname" select="processing-instruction('record-description')/normalize-space(.)"/>
+		<xsl:variable name="definition" select="$fosdoc/fos:functions/fos:record-type[@id = $lexname]"/>
+		<xsl:if test="empty($definition)">
+			<xsl:message terminate="yes">*** Record definition {$lexname} not found ***</xsl:message>
+		</xsl:if>
+		<head>Record fn:{$definition/@id}</head>
+		<xsl:apply-templates select="processing-instruction('record-description')   (:$definition:)"/>
+	</xsl:template>
+
+   <xsl:template match="fos:record-type">
+   	<xsl:call-template name="show-record-type">
+   		<xsl:with-param name="name" select="@id"/>
+   		<xsl:with-param name="definition" select="."/>
+   		<xsl:with-param name="is-first" select="true()"/>
+   	</xsl:call-template>
+   </xsl:template>
+	
 	<xsl:function name="fos:use-two-column-format" as="xs:boolean">
 		<xsl:param name="examples" as="element(fos:examples)"/>
 		<xsl:sequence select="not(contains-token($examples/@role, 'wide'))
@@ -271,16 +279,19 @@
 		<xsl:param name="name" as="xs:string"/>
 		<xsl:param name="definition" as="element(fos:record-type)"/>
 		<xsl:param name="is-first" as="xs:boolean"/>
-		<eg>
-			<xsl:if test="$is-first">
-				<xsl:attribute name="id" select="$name"/>
-			</xsl:if>
-			<xsl:text>record {$name} (&#xa;</xsl:text>
-			<xsl:for-each select="$definition/fos:field">
-				<xsl:text>   {@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>
-			</xsl:for-each>
-			<xsl:text>)&#xa;</xsl:text>
-		</eg>
+		<example role="record">
+			<record>
+				<xsl:if test="$is-first">
+					<xsl:attribute name="id" select="$name"/>
+				</xsl:if>
+				<!--<xsl:text>record {$name} (&#xa;</xsl:text>-->
+				<xsl:for-each select="$definition/fos:field">
+					<arg name="{@name}" type="{@type}" occur="{if (xs:boolean(@required)) then 'req' else 'opt'}"/>
+					<!--<xsl:text>   {@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>-->
+				</xsl:for-each>
+				<!--<xsl:text>)&#xa;</xsl:text>-->
+			</record>
+		</example>
 	</xsl:template>
 
 	<xsl:template match="@dependency"> It depends on 
@@ -555,7 +566,7 @@
 			</thead>
 			<tbody>
 				<xsl:for-each
-					select="following-sibling::*[starts-with(local-name(), 'div')][head/processing-instruction()]">
+					select="following-sibling::*[starts-with(local-name(), 'div')][head/processing-instruction('function')]">
 					<xsl:variable name="lexname" select="string(head/processing-instruction())"/>
 					<xsl:variable name="fspec"
 						select="fos:get-function(substring-before($lexname, ':'), substring-after($lexname, ':'))"/>
@@ -578,7 +589,8 @@
 	<xsl:template match="p[termdef[@role = 'placemarker']]"/>
 	
 	<xsl:template match="processing-instruction(record-description)">
-		<xsl:variable name="target" select="key('record-type', string(.), $fosdoc)"/>
+		<xsl:variable name="record-name" select="normalize-space()"/>
+		<xsl:variable name="target" select="key('record-type', $record-name, $fosdoc)"/>
 		<xsl:if test="count($target) ne 1">
 			<xsl:message expand-text="yes">Failed to locate record type {.}</xsl:message>
 		</xsl:if>
@@ -616,6 +628,12 @@
 		  </thead>
 		  <tbody>
 		    <xsl:apply-templates select="$record/fos:field" mode="narrative"/>
+		    <xsl:if test="xs:boolean($record/@extensible)">
+		    	<tr>
+		    		<td><p><code>*</code></p></td>
+		    		<td><p>The record type is extensible (it may contain additional fields beyond those listed).</p></td>
+		    	</tr>
+		    </xsl:if> 
 		  </tbody>
 		</table>
 
@@ -674,6 +692,7 @@
     <p>
       <code>
 	     <xsl:value-of select="@key|@name"/>
+      	<xsl:if test="not(xs:boolean(@required))">?</xsl:if>
       </code>
     </p>
   </td>

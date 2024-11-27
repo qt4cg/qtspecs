@@ -2,6 +2,7 @@
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="3.0"
    xmlns="http://www.w3.org/2010/09/qt-fots-catalog"
    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+   xmlns:f="http://local.functions/"
    xpath-default-namespace="http://www.w3.org/xpath-functions/spec/namespace"
    exclude-result-prefixes="#all"
    expand-text="yes">
@@ -13,7 +14,7 @@
    <xsl:output method="xml" indent="yes"/>
    <xsl:strip-space elements="*"/>
    
-   <xsl:key name="type-ref" match="type" use="@id"/>
+   <xsl:key name="type-ref" match="record-type" use="@id"/>
    
    <xsl:template match="/">
      <xsl:comment> ************************************************** </xsl:comment>
@@ -90,8 +91,8 @@
    </xsl:template>
    
    <xsl:template match="@type-ref | @return-type-ref">
-      <xsl:variable name="type" select="key('type-ref', .)"/>
-      <xsl:apply-templates select="$type/*"/>
+      <!-- For the moment, assume the named types will become built-in types in the fn namespace -->
+      <xsl:text>fn:{.}</xsl:text>
    </xsl:template>
    
    <xsl:template match="type/record">
