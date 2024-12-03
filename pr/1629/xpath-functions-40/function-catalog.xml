@@ -4790,12 +4790,12 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
       </fos:signatures>
       <fos:properties arity="2">
          <fos:property>deterministic</fos:property>
-         <fos:property dependency="collations">context-dependent</fos:property>
+         <fos:property dependency="collations implicit-timezone">context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:properties arity="3">
          <fos:property>deterministic</fos:property>
-         <fos:property dependency="collations static-base-uri">context-dependent</fos:property>
+         <fos:property dependency="collations implicit-timezone static-base-uri">context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
@@ -5055,6 +5055,9 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
       <fos:changes>
          <fos:change issue="893" PR="909" date="2024-01-10">
             <p>The function has been expanded in scope to handle comparison of values other than strings.</p>
+         </fos:change>
+         <fos:change issue="1608" date="2024-11-26">
+            <p>The spec has been corrected to note that the function depends on the implicit timezone.</p>
          </fos:change>
       </fos:changes>
    </fos:function>
@@ -25712,6 +25715,14 @@ return json-to-xml($json, $options)]]></eg>
                   "record", "sequence", "mixed", "xml"))</fos:type>
                <fos:default>map{}</fos:default>
             </fos:option>
+            <fos:option key="disable-layouts">
+               <fos:meaning>A list of layouts that will not be used for elements unless they are
+                  selected explicitly. (Note that <code>mixed</code> and <code>xml</code>
+                  layout cannot be disabled.)</fos:meaning>
+               <fos:type>enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
+                  "record", "sequence")*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
          </fos:options>
          
          
@@ -25719,12 +25730,13 @@ return json-to-xml($json, $options)]]></eg>
          
          
          <p>The principles for conversion from elements to maps are described
-            in <specref ref="element-layouts"/>.</p>
+            in <specref ref="id-element-layouts"/>, and the rules for selecting
+         an element layout for each element are given in <specref ref="id-selecting-element-layout"/>.</p>
          
         
          <p>In general, an element node maps to a key-value pair in which the key represents the element name, and the
          corresponding value represents the attributes and children of the element. In the case of a top-level element
-         (a node directly supplied in <code>$nodes</code>), the result will be a singleton map containing this key-value
+         (a node directly supplied in <code>$elements</code>), the result will be a singleton map containing this key-value
          pair as its only entry. In the case of a descendant element, the key-value pair for a child element will be added 
          to the content representing its parent element, in a way that depends on the parent element's layout.</p>
          
@@ -25732,16 +25744,7 @@ return json-to-xml($json, $options)]]></eg>
          
          
       </fos:rules>
-      <fos:errors>
-         <p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
-            value (typically because it has been validated against an element-only content model): <errorref
-               class="TY" code="0012"/>.</p>
-      </fos:errors>
-      <!--<fos:notes>
-         <p>The namespace URI and local name of all elements and attributes is available in the JSON output.
-            Prefixes are not retained, and namespaces that are declared but not used are not retained.</p>
-         
-      </fos:notes>-->
+ 
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -25803,9 +25806,9 @@ return json-to-xml($json, $options)]]></eg>
             </fos:test>-->
          </fos:example>
       </fos:examples>
-      <fos:history>
-         <fos:version version="4.0">Proposed for 4.0; initial review on 2023-06-27.</fos:version>
-      </fos:history>
+      <fos:changes>
+         <fos:change><p>New in 4.0.</p></fos:change>
+      </fos:changes>
    </fos:function>
 
 
@@ -26484,7 +26487,7 @@ return csv-to-arrays(
 
    <fos:function name="csv-to-xml" prefix="fn">
       <fos:signatures>
-         <fos:proto name="csv-to-xml" return-type="element(fn:csv)?">
+         <fos:proto name="csv-to-xml" return-type="document-node(fn:csv)?">
             <fos:arg name="value" type="xs:string?"/>
             <fos:arg name="options" type="map(*)?" usage="inspection" default="{}"/>
          </fos:proto>
@@ -26510,23 +26513,25 @@ return csv-to-arrays(
          
          <eg><![CDATA[let $parsedCSV := parse-csv($value, $options)
 let $colNames := $parsedCSV?columns
-return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
-  if (exists($colNames)) {
-    <columns>{ $colNames ! <column>{ . }</column> }</columns>
-  },
-  <rows>{
-    for $row in $parsedCSV?rows
-    return <row>{
-      for member $field at $col in $row
-      return <field>{
-        if ($colnames[$col]) {
-          attribute column { $colnames[$col] }
-        },
-        $field
-      }</field>
-    }</row>
-  }</rows> 
-}</csv>]]></eg>
+return document {
+   <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
+     if (exists($colNames)) {
+       <columns>{ $colNames ! <column>{ . }</column> }</columns>
+     },
+     <rows>{
+       for $row in $parsedCSV?rows
+       return <row>{
+         for member $field at $col in $row
+         return <field>{
+           if ($colnames[$col]) {
+             attribute column { $colnames[$col] }
+           },
+           $field
+         }</field>
+       }</row>
+     }</rows> 
+   }</csv> 
+}]]></eg>
          
          <p>The namespace prefix used in the names of elements (or its absence) is 
             <termref def="implementation-dependent"/>.</p>
@@ -26539,7 +26544,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          <p>The base URI of the element nodes in the result is <termref
             def="implementation-dependent"/>.</p>
          
-         <p>A schema is defined for the structure of the returned element: see <specref
+         <p>A schema is defined for the structure of the returned document: see <specref
             ref="schema-for-csv"/>.</p>
          
          <p>The result of the function will always be such that validation against this schema would succeed.
@@ -26548,7 +26553,6 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             that is, whether the elements and attributes in the returned tree have type annotations that reflect
             the result of validating against this schema.</p>
          
-         <p>The returned element node has no parent node.</p>
          
  
       </fos:rules>
@@ -26833,7 +26837,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change PR="533 719 834 1066" issue="413 1052"><p>New in 4.0</p></fos:change>
+         <fos:change PR="533 719 834 1066 1605" issue="413 1052"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
 
