@@ -761,13 +761,7 @@ constructor. These elements are:</p>
   <sup><small>XP</small></sup>
 </xsl:template>
 
-<xsl:template match="function">
-  <xsl:variable name="fname" select="string(.)"/>
-  <xsl:variable name="link" select="translate(if (contains($fname, '#')) then substring-before($fname, '#') else $fname, ':', '-')"/>  
-  <a href="#func-{$link}"><code><xsl:apply-templates/></code></a>
-</xsl:template>
-
-<xsl:template match="xfunction">
+<xsl:template match="NOT-xfunction"> <!-- now in xmlspec-2016.xsl -->
   <!--<u><xsl:value-of select="."/></u>-->
   <xsl:variable name="fname" select="string(.)"/>
   <xsl:variable name="link" select="translate(if (contains($fname, '#')) then substring-before($fname, '#') else $fname, ':', '-')"/>
