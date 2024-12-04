@@ -743,7 +743,7 @@
     <xsl:variable name="div" select="$doc//*[@id=$ref]"/>
     <xsl:variable name="nt" select="($doc//*[@def=$ref])[1]"/>
     <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
-
+    <xsl:variable name="shortSpec" select="replace(@spec, '40$', '')"/>
     <xsl:choose>
       <xsl:when test="$div">
         <xsl:variable name="linktext">
@@ -770,7 +770,7 @@
         </xsl:choose>
         <sup>
           <small>
-            <xsl:value-of select="@spec"/>
+            <xsl:value-of select="$shortSpec"/>
           </small>
         </sup>
       </xsl:when>
@@ -787,7 +787,7 @@
         </xsl:choose>
         <sup>
           <small>
-            <xsl:value-of select="@spec"/>
+            <xsl:value-of select="$shortSpec"/>
           </small>
         </sup>
       </xsl:when>
@@ -804,7 +804,7 @@
         </xsl:choose>
         <sup>
           <small>
-            <xsl:value-of select="@spec"/>
+            <xsl:value-of select="$shortSpec"/>
           </small>
         </sup>
       </xsl:when>
@@ -855,7 +855,7 @@
     -->
     <xsl:variable name="nt" select="($doc//prod[@id=$ref], $doc//prod[.=$ref], $doc//nt[@def=$ref])[1]"/>
     <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
-
+    <xsl:variable name="shortSpec" select="replace(@spec, '40$', '')"/>
     <xsl:choose>
       <xsl:when test="contains(@spec, 'XP') and not($nt)">
         <!-- XP and XQ are a special case -->
@@ -879,7 +879,7 @@
         </xsl:choose>
         <sup>
           <small>
-            <xsl:value-of select="@spec"/>
+            <xsl:value-of select="$shortSpec"/>
           </small>
         </sup>
       </xsl:when>
@@ -906,7 +906,7 @@
         </xsl:choose>
         <sup>
           <small>
-            <xsl:value-of select="@spec"/>
+            <xsl:value-of select="$shortSpec"/>
           </small>
         </sup>
       </xsl:when>
@@ -929,7 +929,7 @@
         </xsl:choose>
         <sup>
           <small>
-            <xsl:value-of select="@spec"/>
+            <xsl:value-of select="$shortSpec"/>
           </small>
         </sup>
       </xsl:otherwise>
@@ -1002,6 +1002,7 @@
         <xsl:variable name="doc" select="document(concat('../build/etc/', @spec, '.xml'))"/>
         <xsl:variable name="termdef" select="$doc//termdef[@id=$ref]"/>
         <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
+        <xsl:variable name="shortSpec" select="replace(@spec, '40$', '')"/>
 
         <xsl:choose>
           <xsl:when test="not($termdef)">
@@ -1035,7 +1036,7 @@
             </xsl:choose>
             <sup>
               <small>
-                <xsl:value-of select="@spec"/>
+                <xsl:value-of select="$shortSpec"/>
               </small>
             </sup>
           </xsl:when>
@@ -1052,7 +1053,7 @@
             </xsl:choose>
             <sup>
               <small>
-                <xsl:value-of select="@spec"/>
+                <xsl:value-of select="$shortSpec"/>
               </small>
             </sup>
           </xsl:otherwise>
