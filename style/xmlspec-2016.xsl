@@ -43,7 +43,7 @@
 
   <xsl:key name="ids" match="*[@id]" use="@id"/>
   <xsl:key name="specrefs" match="specref" use="@ref"/>
-
+  <xsl:key name="divids" match="div1|div2|div3|div4|div5|div6" use="@id"/>
 
 <xsl:output method="html" version="5.0" encoding="UTF-8" indent="yes" />
 
@@ -708,11 +708,81 @@
     </div>
   </xsl:template>
 
-  <!-- function: name of a function -->
+  <!-- This stylesheet gets loaded while constructing the inputs for database.xml.
+       We make that not raise an error; the cross reference is unnecessary. -->
+  <xsl:variable name="database"
+                as="document-node()?"
+                select="if (doc-available('../build/etc/database.xml'))
+                        then doc('../build/etc/database.xml')
+                        else ()"/>
+  <xsl:variable name="FO40uri" select="'https://qt4cg.org/specifications/xpath-functions-40/'"/>
+  <xsl:variable name="XT40uri" select="'https://qt4cg.org/specifications/xslt-40/'"/>
+
+  <!-- Function: name of a function -->
   <!-- format as HTML <code> for monospaced presentation -->
-  <xsl:template match="function">
-    <code><xsl:apply-templates/></code>
+  <xsl:template match="function[empty($database)] | xfunction[empty($database)]"
+                priority="10">
+    <code>
+      <xsl:apply-templates/>
+    </code>
   </xsl:template>
+
+  <xsl:template match="function|xfunction">
+    <xsl:variable name="fid" select="normalize-space(.)"/>
+    <xsl:variable name="fname"
+                  select="if (contains($fid, '#')) then substring-before($fid, '#') else $fid"/>
+    <xsl:variable name="prefix"
+                  select="if (contains($fname, ':')) then substring-before($fname, ':') else 'fn'"/>
+    <xsl:variable name="name"
+                  select="if (contains($fname, ':')) then substring-after($fname, ':') else $fname"/>
+
+    <xsl:variable name="id-prefix" as="xs:string">
+      <xsl:choose>
+        <xsl:when test="$prefix = 'fn'">func-</xsl:when>
+        <xsl:when test="$prefix = 'array'">func-array-</xsl:when>
+        <xsl:when test="$prefix = 'map'">func-map-</xsl:when>
+        <xsl:when test="$prefix = 'math'">func-math-</xsl:when>
+        <xsl:when test="$prefix = 'op'">func-op-</xsl:when>
+        <xsl:otherwise>
+          <xsl:message select="'Unexpected function prefix: ' || $prefix || ':'"/>
+          <xsl:sequence select="'func-'"/>
+        </xsl:otherwise>
+      </xsl:choose>
+    </xsl:variable>
+
+    <xsl:variable name="targets" select="key('divids', $id-prefix || $name, $database)"/>
+    <xsl:variable name="target"
+                  select="($targets[ancestor::document-summary/@uri = $FO40uri],
+                           $targets[ancestor::document-summary/@uri = $XT40uri])[1]"/>
+    <xsl:variable name="target-uri" select="$target/ancestor::document-summary/@uri/string()"/>
+
+    <xsl:choose>
+      <xsl:when test="empty($target-uri)">
+        <xsl:message select="'Cannot find unique function: ' || $prefix || ':' || $name"/>
+        <xsl:for-each select="$target" expand-text="yes">
+          <xsl:message>   {ancestor::document-summary/@uri/string()}</xsl:message>
+        </xsl:for-each>
+        <code><xsl:apply-templates/></code>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:variable name="spec" select="tokenize($target-uri, '/')[last() - 1]"/>
+        <xsl:variable name="same-spec"
+                      select="contains(base-uri(.), '/'||$spec||'/')"/>
+        <a href="{if ($same-spec) then '' else $target-uri||'Overview.html'}#{$id-prefix}{$name}">
+          <code>
+            <xsl:apply-templates/>
+          </code>
+        </a>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
+
+<!--
+  <xsl:variable name="fname" select="string(.)"/>
+  <xsl:variable name="link" select="translate(if (contains($fname, '#')) then substring-before($fname, '#') else $fname, ':', '-')"/>  
+  <a href="#func-{$link}"><code><xsl:apply-templates/></code></a>
+</xsl:template>
+-->
 
   <!-- gitem: glossary list entry -->
   <!-- just pass children through for <dd>/<dt> formatting -->
