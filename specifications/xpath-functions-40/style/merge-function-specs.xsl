@@ -157,7 +157,7 @@
 			</gitem>
 			<xsl:if test="$fspec/fos:equivalent">
 				<gitem>
-					<label>Formal Specification</label>
+					<label>Formal Equivalent</label>
 					<def>
 						<xsl:copy-of select="$fspec/fos:eqivalent/(@diff, @at)"/>
 						<xsl:apply-templates select="$fspec/fos:equivalent"/>
