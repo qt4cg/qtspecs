@@ -50,7 +50,8 @@ task publish(dependsOn: ["publish-xpath-functions-40",
                          "publish-xquery-40",
                          "publish-xslt-40",
                          "publish-datamodel-40",
-                         "publish-xslt-xquery-serialization-40"]) {
+                         "publish-xslt-xquery-serialization-40",
+                         "publish-expath-40"]) {
   inputs.dir "${buildDir}/www"
   outputs.file "${buildDir}/www/index.html"
 
@@ -76,7 +77,7 @@ task publish(dependsOn: ["publish-xpath-functions-40",
     def www = new File("${buildDir}/www")
     def indexes = []
     www.listFiles().each { file ->
-      int pos = file.toString().indexOf("/www/");
+      int pos = Math.max(file.toString().indexOf("/www/"),file.toString().indexOf("\\www\\"));
       String path = file.toString().substring(pos+5)
       if (new File("${file}/Overview.html").exists()) {
         index.println("<li><a href='${path}/Overview.html'>${path}</a></li>")
@@ -102,6 +103,8 @@ task "publish-datamodel-40"(dependsOn: ["datamodel_40"]) {
 }
 task "publish-xslt-xquery-serialization-40"(dependsOn: ["serialization_40"]) {
 }
+
+
 
 // ============================================================
 
@@ -161,6 +164,161 @@ task fo_generate_tests(
     }
   }
 }
+
+
+// ============================================================
+// EXPath modules
+
+task "publish-expath-40"(dependsOn: ["binary_40", "file_40"]) {
+}
+["binary","file"].each { shortName ->
+
+  def expathDir = "${projectDir}/specifications/EXPath"
+  def mainDir = "${expathDir}/$shortName"  
+  def srcDir = "${mainDir}/src"  
+  def src = "${srcDir}/$shortName-functions.xml"
+  def xmlFile = "$shortName-40.xml"
+  def expanded = "${buildDir}/expanded/$shortName/$shortName-functions-40.xml" 
+  def wwwDir = "${buildDir}/www/expath-$shortName-40"
+  def specName = ("$shortName" == "binary") ? "BIN40" : "FILE40"
+   
+  
+
+  task "${shortName}_40"(
+    group: "Specifications",
+    description: "Build the EXPath ${shortName} 4.0 specification",
+    dependsOn: ["${shortName}_xml", "${shortName}_html", "${shortName}_resources"]
+  ) {
+    // Just somewhere to hang dependencies
+  }
+  
+  task "etc_${specName}"(
+    dependsOn: ["${shortName}_merge", "saxon_config"],
+    description: "Build the etc/${specName}.xml index"
+  ) {
+    inputs.file "${projectDir}/style/extract.xsl"
+    outputs.file "${buildDir}/etc/${specName}.xml"
+  
+    doLast {
+      transform(expanded,
+                "${projectDir}/style/extract.xsl",
+                "${buildDir}/etc/${specName}.xml",
+                ["specdoc": "${specName}",
+                 "uri": "https://qt4cg.org/specifications/EXPath/${shortName}-40/"])
+    }
+  }
+  
+  task "${shortName}_merge"(
+    description: "Expand the EXPath ${shortName} sources into a single XML file",
+    dependsOn: ["common_sources", "saxon_config"]
+  ) {
+    inputs.dir "$srcDir"
+    inputs.dir "${projectDir}/specifications/xpath-functions-40/style"
+    outputs.file "$expanded"
+  
+    doLast {
+      transform(src,
+                "${projectDir}/specifications/xpath-functions-40/style/merge-function-specs.xsl",
+                expanded)
+    }
+    doLast {
+      xmlvalidate(expanded)
+    }
+  }
+  
+  task "${shortName}_xml"(
+    dependsOn: ["${shortName}_merge", "saxon_config"],
+    group: "Spec XML",
+    description: "Create the XML version of the specification"
+  ) {
+    inputs.file "${projectDir}/style/identity.xsl"
+    inputs.file "$expanded"
+    outputs.file "${wwwDir}/$xmlFile"
+  
+    doLast {
+      transform(expanded,
+                "${projectDir}/style/identity.xsl",
+                "${wwwDir}/$xmlFile")
+    }
+  }
+  
+  task "${shortName}_html"(
+    dependsOn: ["${shortName}_merge", "setup_crossref_indexes", "saxon_config"],
+    group: "Spec HTML",
+    description: "Create the HTML and XHTML versions of the specification"
+  ) {
+    inputs.dir "${projectDir}/style"
+    inputs.dir "${expathDir}/style"
+    inputs.dir "${mainDir}/style"
+    inputs.file "$expanded"
+    outputs.file "$wwwDir/Overview.xml"
+    outputs.file "$wwwDir/Overview.html"
+  
+    doLast {
+      transform(expanded,
+                "$mainDir/style/expath-functions.xsl",
+                "$wwwDir/Overview.xml")
+    }
+  
+    doLast {
+      fixupHtml("$wwwDir/Overview.xml",
+                "$wwwDir/Overview.html")
+    }
+  }
+  task "${shortName}_resources"(
+    description: "Copy static resources for publication"
+  ) {
+    doFirst {
+      mkdir "${wwwDir}"
+    }
+  
+    doLast {
+      copy {
+        from "$srcDir"
+        into "${wwwDir}"
+        include "function-catalog.xml"
+      }
+    }
+  
+    doLast {
+      copy {
+        from "${projectDir}/specifications/css"
+        into "${wwwDir}/css"
+        include "w3c-base.css"
+        include "qtspecs.css"
+        include "showdiff.css"
+        include "xpath-functions-40.css"
+      }
+    }
+  
+    doLast {
+      copy {
+        from "${projectDir}/specifications/js"
+        into "${wwwDir}/js"
+        include "fo-datalist.js"
+      }
+    }
+  
+    doLast {
+      // The W3C uses index files called Overview.html, so that's what the
+      // build produces. But everyone else, including the GitHub pages that
+      // back qt4cg.org, uses index.html. So redirect.
+      PrintStream index = new PrintStream(new File("${wwwDir}/index.html"));
+      index.println("<!DOCTYPE html>")
+      index.println("<html xmlns='http://www.w3.org/1999/xhtml'>")
+      index.println("<head>");
+      index.println("<meta http-equiv='refresh' content='0; url=Overview.html' />");
+      index.println("</head>");
+      index.println("<body>");
+      index.println("<p>See <a href='Overview.html'>Overview</a>.</p>");
+      index.println("</body>");
+      index.println("</html>");
+      index.close();
+    }
+  }
+
+}
+
 
 // ============================================================
 
@@ -1227,7 +1385,8 @@ task serialization_resources(
 
 task setup_crossref_indexes(
   dependsOn: ["etc_copy", "etc_DM40", "etc_FO40", "etc_XT40", "etc_SE40",
-              "etc_XP40", "etc_XQ40", "etc_XQ40XP40"]
+              "etc_XP40", "etc_XQ40", "etc_XQ40XP40",
+              "etc_BIN40", "etc_FILE40"]
 ) {
   // Just somewhere to hang dependencies
 }
