@@ -4790,12 +4790,12 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
       </fos:signatures>
       <fos:properties arity="2">
          <fos:property>deterministic</fos:property>
-         <fos:property dependency="collations">context-dependent</fos:property>
+         <fos:property dependency="collations implicit-timezone">context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:properties arity="3">
          <fos:property>deterministic</fos:property>
-         <fos:property dependency="collations static-base-uri">context-dependent</fos:property>
+         <fos:property dependency="collations implicit-timezone static-base-uri">context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
@@ -5055,6 +5055,9 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
       <fos:changes>
          <fos:change issue="893" PR="909" date="2024-01-10">
             <p>The function has been expanded in scope to handle comparison of values other than strings.</p>
+         </fos:change>
+         <fos:change issue="1608" date="2024-11-26">
+            <p>The spec has been corrected to note that the function depends on the implicit timezone.</p>
          </fos:change>
       </fos:changes>
    </fos:function>
@@ -20446,27 +20449,33 @@ serialize(
             dependencies on the static or dynamic context of its caller, the context that applies is
             the static and/or dynamic context of the call to the <code>fn:function-lookup</code>
             function itself. The context thus effectively forms part of the closure of the returned
-            function. In practice this applies only where the target of
+            function. This mainly applies when the target of
                <code>fn:function-lookup</code> is a built-in function, because user-defined
-            functions never depend on the static or dynamic context of the function call. The rule
+            functions typically have no dependency on the static or dynamic context of the function call
+            (an exception arises when the expressions used to define default values for parameters
+            are context-dependent). The rule
             applies recursively, since <code>fn:function-lookup</code> is itself a context-dependent
             built-in function. </p>
-         <p diff="add" at="2023-05-26">However, the static and dynamic context of the call to <code>fn:function-lookup</code>
+         <p>However, the static and dynamic context of the call to <code>fn:function-lookup</code>
             may play a role even when the selected function definition is not itself context dependent,
             if the expressions used to establish default parameter values are context dependent.</p>
+         <p>User-defined XSLT or XQuery functions should be accessible to <code>fn:function-lookup</code>
+         only if they are statically visible at the location where the call to <code>fn:function-lookup</code>
+         appears. This means that private functions, if they are not statically visible in the containing
+         module, should not be accessible using <code>fn:function-lookup</code>.</p>
          <p diff="add" at="2023-05-26">The function identity is determined in the same way as for
          a named function reference. Specifically, if there is no context dependency, two calls
          on <code>fn:function-lookup</code> with the same name and arity must return the same function.</p>
          <p>These specifications do not define any circumstances in which the dynamic context will
             contain functions that are not present in the static context, but neither do they rule
             this out. For example an API <rfc2119>may</rfc2119> provide the ability to add functions
-            to the dynamic context. Equally, these specifications do not define any mechanism for
-            creating context-dependent functions other than the built-in context-dependent
-            functions, but neither do they rule out the existence of such functions. </p>
+            to the dynamic context, and such functions may potentially be context-dependent. </p>
          
          <p>The mere fact that a function exists and has a name does not of itself mean that the
          function is present in the dynamic context. For example, functions obtained through
          use of the <code>fn:load-xquery-module</code> function are not added to the dynamic context.</p>
+         
+         
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -25712,6 +25721,14 @@ return json-to-xml($json, $options)]]></eg>
                   "record", "sequence", "mixed", "xml"))</fos:type>
                <fos:default>map{}</fos:default>
             </fos:option>
+            <fos:option key="disable-layouts">
+               <fos:meaning>A list of layouts that will not be used for elements unless they are
+                  selected explicitly. (Note that <code>mixed</code> and <code>xml</code>
+                  layout cannot be disabled.)</fos:meaning>
+               <fos:type>enum("empty", "empty-plus", "simple", "simple-plus", "list", "list-plus", 
+                  "record", "sequence")*</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
          </fos:options>
          
          
@@ -25719,12 +25736,13 @@ return json-to-xml($json, $options)]]></eg>
          
          
          <p>The principles for conversion from elements to maps are described
-            in <specref ref="element-layouts"/>.</p>
+            in <specref ref="id-element-layouts"/>, and the rules for selecting
+         an element layout for each element are given in <specref ref="id-selecting-element-layout"/>.</p>
          
         
          <p>In general, an element node maps to a key-value pair in which the key represents the element name, and the
          corresponding value represents the attributes and children of the element. In the case of a top-level element
-         (a node directly supplied in <code>$nodes</code>), the result will be a singleton map containing this key-value
+         (a node directly supplied in <code>$elements</code>), the result will be a singleton map containing this key-value
          pair as its only entry. In the case of a descendant element, the key-value pair for a child element will be added 
          to the content representing its parent element, in a way that depends on the parent element's layout.</p>
          
@@ -25732,16 +25750,7 @@ return json-to-xml($json, $options)]]></eg>
          
          
       </fos:rules>
-      <fos:errors>
-         <p>A dynamic error is raised if the selected layout rules require atomization of an element that does not have a typed
-            value (typically because it has been validated against an element-only content model): <errorref
-               class="TY" code="0012"/>.</p>
-      </fos:errors>
-      <!--<fos:notes>
-         <p>The namespace URI and local name of all elements and attributes is available in the JSON output.
-            Prefixes are not retained, and namespaces that are declared but not used are not retained.</p>
-         
-      </fos:notes>-->
+ 
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -25803,9 +25812,9 @@ return json-to-xml($json, $options)]]></eg>
             </fos:test>-->
          </fos:example>
       </fos:examples>
-      <fos:history>
-         <fos:version version="4.0">Proposed for 4.0; initial review on 2023-06-27.</fos:version>
-      </fos:history>
+      <fos:changes>
+         <fos:change><p>New in 4.0.</p></fos:change>
+      </fos:changes>
    </fos:function>
 
 
@@ -25864,7 +25873,8 @@ return json-to-xml($json, $options)]]></eg>
                <fos:meaning>The character used to delimit rows within
                   the CSV string. An instance of
                   <code>xs:string</code> whose length is exactly one.
-                  Defaults to a single newline character (<char>U+000A</char>).</fos:meaning>
+                  Defaults to a single newline character (<char>U+000A</char>).
+                  Note that this is tested after line endings are normalized.</fos:meaning>
                <fos:type>xs:string</fos:type>
                <fos:default>char('\n')</fos:default>
             </fos:option>
@@ -25888,7 +25898,7 @@ return json-to-xml($json, $options)]]></eg>
                   </fos:value>
                </fos:values>
             </fos:option>
-            <fos:option key="normalize-newlines">
+            <!--<fos:option key="normalize-newlines">
                <fos:meaning>Determines whether CR and CRLF character sequences
                   are treated as equivalent to NL characters.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
@@ -25903,7 +25913,7 @@ return json-to-xml($json, $options)]]></eg>
                   whether or not NL is used as the row delimiter.
                   </fos:value>
                </fos:values>
-            </fos:option>
+            </fos:option>-->
             <fos:option key="header">
                <fos:meaning>Determines whether the first row of the CSV should be treated as a list
                   of column names, or whether column names are being supplied by the caller. 
@@ -25975,11 +25985,10 @@ return json-to-xml($json, $options)]]></eg>
 
       </fos:errors>
       <fos:notes>
-         <p>The default row delimiter is a single newline character <char>U+000A</char>. If the content
-         is read using the <code>unparsed-text</code> function, alternative line endings
-         such as <code>CR</code> and <code>CRLF</code> will have been normalized to a single
-         newline. In other cases, this normalization can be achieved by setting the 
-         <code>normalize-newlines</code> option.</p>
+         <p>The default row delimiter is a single newline character <char>U+000A</char>. 
+            Alternative line endings
+         such as <code>CR</code> and <code>CRLF</code> will already have been normalized to a single
+         newline.</p>
          <p>All fields are returned as <code>xs:string</code> values.</p>
          <p>Quoted fields in the input are returned without the quotes.</p>
          <p>For more discussion of the returned data, see <specref ref="csv-to-xdm-mapping"/>.</p>
@@ -26231,7 +26240,9 @@ return (
       <fos:rules>
          
          <p>The <code>$value</code> argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of an
-            <code>xs:string</code> value. The function parses this string.
+            <code>xs:string</code> value. The function parses this string,
+            after normalizing newlines so that <char>U+000D</char> and (<char>U+000D</char>, <char>U+000A</char>)
+            sequences are converted to <char>U+000A</char>.
             The result of the function is a sequence of arrays of strings, that is
             <code>array(xs:string)*</code>; each array represents one row of the CSV input.</p>
          
@@ -26286,7 +26297,7 @@ return (
                   </fos:value>
                </fos:values>
             </fos:option>
-            <fos:option key="normalize-newlines">
+            <!--<fos:option key="normalize-newlines">
                <fos:meaning>Determines whether CR and CRLF character sequences
                   are treated as equivalent to NL characters.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
@@ -26301,7 +26312,7 @@ return (
                      whether or not NL is used as the row delimiter.
                   </fos:value>
                </fos:values>
-            </fos:option>
+            </fos:option>-->
          </fos:options>
 
          <p>An empty field is represented by a zero-length string. An empty field is deemed to exist
@@ -26319,8 +26330,8 @@ return (
          contain no rows; while if <code>$value</code> consists of a single row delimiter,
          it is considered to contain a single blank row. The presence or
          absence of a final row delimiter generally has no effect on the result,
-         except in the situation described in the previous paragraph where it causes a
-         blank row to exist.</p>
+         except when it appears at the start of the input, in which case it causes a
+         single blank row to exist.</p>
          
          
       </fos:rules>
@@ -26336,12 +26347,10 @@ return (
             <code>quote-character</code>.</p>
       </fos:errors>
       <fos:notes>
-         <p>The default row delimiter is a single newline character <char>U+000A</char>. If the content
-            is read using the <code>unparsed-text</code> function, alternative line endings
-            such as <code>CR</code> and <code>CRLF</code> will have been normalized to a single
-            newline. In other cases, this normalization can be achieved by setting the
-            option <code>normalize-newlines</code>. This option does not affect CR or CRLF
-            sequences occurring within quoted fields.</p>
+         <p>The default row delimiter is a single newline character <char>U+000A</char>. 
+            Alternative line endings
+            such as <code>CR</code> and <code>CRLF</code> will already have been normalized to a single
+            newline. </p>
          <p>All fields are returned as <code>xs:string</code> values.</p>
          <p>Quoted fields in the input are returned without the quotes.</p>
          <p>The first row is not treated specially.</p>
@@ -26402,8 +26411,7 @@ return (
 return csv-to-arrays(
   `name,city{ $CRLF }` ||
   `Bob,Berlin{ $CRLF }` ||
-  `Alice,Aachen{ $CRLF }`, 
-  { "normalize-newlines": true() }
+  `Alice,Aachen{ $CRLF }`
 )</eg></fos:expression>
                <fos:result><eg>[ "name", "city" ],
 [ "Bob", "Berlin" ],
@@ -26484,7 +26492,7 @@ return csv-to-arrays(
 
    <fos:function name="csv-to-xml" prefix="fn">
       <fos:signatures>
-         <fos:proto name="csv-to-xml" return-type="element(fn:csv)?">
+         <fos:proto name="csv-to-xml" return-type="document-node(fn:csv)?">
             <fos:arg name="value" type="xs:string?"/>
             <fos:arg name="options" type="map(*)?" usage="inspection" default="{}"/>
          </fos:proto>
@@ -26510,23 +26518,25 @@ return csv-to-arrays(
          
          <eg><![CDATA[let $parsedCSV := parse-csv($value, $options)
 let $colNames := $parsedCSV?columns
-return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
-  if (exists($colNames)) {
-    <columns>{ $colNames ! <column>{ . }</column> }</columns>
-  },
-  <rows>{
-    for $row in $parsedCSV?rows
-    return <row>{
-      for member $field at $col in $row
-      return <field>{
-        if ($colnames[$col]) {
-          attribute column { $colnames[$col] }
-        },
-        $field
-      }</field>
-    }</row>
-  }</rows> 
-}</csv>]]></eg>
+return document {
+   <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
+     if (exists($colNames)) {
+       <columns>{ $colNames ! <column>{ . }</column> }</columns>
+     },
+     <rows>{
+       for $row in $parsedCSV?rows
+       return <row>{
+         for member $field at $col in $row
+         return <field>{
+           if ($colnames[$col]) {
+             attribute column { $colnames[$col] }
+           },
+           $field
+         }</field>
+       }</row>
+     }</rows> 
+   }</csv> 
+}]]></eg>
          
          <p>The namespace prefix used in the names of elements (or its absence) is 
             <termref def="implementation-dependent"/>.</p>
@@ -26539,7 +26549,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          <p>The base URI of the element nodes in the result is <termref
             def="implementation-dependent"/>.</p>
          
-         <p>A schema is defined for the structure of the returned element: see <specref
+         <p>A schema is defined for the structure of the returned document: see <specref
             ref="schema-for-csv"/>.</p>
          
          <p>The result of the function will always be such that validation against this schema would succeed.
@@ -26548,7 +26558,6 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             that is, whether the elements and attributes in the returned tree have type annotations that reflect
             the result of validating against this schema.</p>
          
-         <p>The returned element node has no parent node.</p>
          
  
       </fos:rules>
@@ -26614,7 +26623,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <p>With defaults for delimiters and quotes, recognizing headers:</p>
             <fos:test use="escaped-crlf-3 csv-string-2">
                <fos:expression><eg>csv-to-xml($csv-string, 
-         { "header": true(), "normalize-newlines": true() })</eg></fos:expression>
+         { "header": true() })</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
   <columns>
@@ -26647,8 +26656,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
   { "header": true(), 
-    "select-columns": (2, 1, 4), 
-    "normalize-newlines": true() 
+    "select-columns": (2, 1, 4)
   }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
@@ -26684,7 +26692,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
             <fos:test use="escaped-crlf-3 uneven-cols-csv-string-2">
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
-  { "header": true(), "normalize-newlines": true() }
+  { "header": true() }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
 <csv xmlns="http://www.w3.org/2005/xpath-functions">
@@ -26733,8 +26741,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
   { "header": true(), 
-    "trim-rows": true(), 
-    "normalize-newlines": true() 
+    "trim-rows": true()
   }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
@@ -26787,8 +26794,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
                <fos:expression><eg>csv-to-xml(
   $csv-uneven-cols, 
   { "header": true(), 
-    "select-columns": 1 to 6, 
-    "normalize-newlines": true() 
+    "select-columns": 1 to 6
   }
 )</eg></fos:expression>
                <fos:result normalize-space="true"><eg><![CDATA[
@@ -26833,7 +26839,7 @@ return <csv xmlns="http://www.w3.org/2005/xpath-functions"> {
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change PR="533 719 834 1066" issue="413 1052"><p>New in 4.0</p></fos:change>
+         <fos:change PR="533 719 834 1066 1605" issue="413 1052"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
 
