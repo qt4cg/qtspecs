@@ -146,8 +146,9 @@
       </fos:field>
       <fos:field name="matches" type="fn(xs:anyAtomicType) as xs:boolean" required="false">
          <fos:meaning>
-            <p>For an atomic type, a function item that can be called to establish whether the supplied atomic item
-               is an instance of this atomic type. In all other cases, absent.</p>
+            <p>For a <xtermref spec="XP40" ref="dt-generalized-atomic-type"/>, 
+               a function item that can be called to establish whether the supplied atomic item
+               is an instance of this type. In all other cases, absent.</p>
          </fos:meaning>
       </fos:field>
       <fos:field name="constructor" type="fn(xs:anyAtomicType) as xs:anyAtomicType" required="false">
@@ -158,13 +159,14 @@
                and <specref ref="constructor-functions-for-user-defined-types"/>. 
                Constructor function items are also available for
                anonymous types, and for types that might not be present in the dynamic context. 
-               The field is absent for complex types and for the abstract types <code>xs:anyAtomicType</code> and
+               The field is absent for complex types and for the abstract types <code>xs:anyAtomicType</code>,
+               <code>xs:anySimpleType</code>, and
                <code>xs:NOTATION</code>. It is also absent for all namespace-sensitive types, that is, types
                derived from <code>xs:QName</code> or <code>xs:NOTATION</code>.
             </p>
          </fos:meaning>
       </fos:field>
-      <fos:field name="validate" type="fn((document-node()|element())) as (document-node()|element())" required="true">
+      <!--<fos:field name="validate" type="fn((document-node()|element())) as (document-node()|element())" required="true">
          <fos:meaning>
             <p>A function item that can be called to validate a supplied document or element node against this type.
             The effect is equivalent to the XQuery expression <code>validate type T {$node}</code> where <var>T</var>
@@ -181,7 +183,7 @@
             call <code>$type?valid($node)</code> is equivalent to the XQuery expression:</p>
             <eg>try { exists( $type?validate($node) ) } catch * { false() }</eg>
          </fos:meaning>
-      </fos:field>
+      </fos:field>-->
    </fos:record-type>
    
    <fos:record-type id="load-xquery-module-record" extensible="false">
@@ -22384,6 +22386,13 @@ declare function transitive-closure (
          <specref ref="atomic-type-hierarchy"/>. Where a schema is in use, however, the result may be an atomic type defined
          in the schema, which may be an anonymous type.</p>
          
+         <p>Note that under the function coercion rules, it is possible to supply a node as the argument, which
+         will then be atomized. In simple cases the type annotation on the atomized value will be the same as
+         the type annotation on the node. But this is not always true: for example the type annotation on
+         the node might be a complex type with simple content, while the type annotation on its atomized
+         value is the corresponding simple content type. To get the type annotation on the node, use the function
+         <function>fn:node-type-annotation</function>.</p>
+         
          <p>This function should not be used as a substitute for an <code>instance of</code> test. The precise type annotation
          of the result of an expression is not always predictable, because processors are free to deliver a more specific type
          than is mandated by the specification. For example, if <code>$n</code> is of type <code>xs:positiveInteger</code>,
@@ -22400,20 +22409,20 @@ declare function transitive-closure (
       <fos:examples role="wide">
          <fos:example>
             <fos:test>
-               <fos:expression><eg>atomic-type-annotation(23)?name</eg></fos:expression>
+               <fos:expression><eg>atomic-type-annotation(23) ? name</eg></fos:expression>
                <fos:result>xs:QName('xs:integer')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
                <fos:expression><eg>let $x := 23, $y := 93.7 
-return atomic-type-annotation($x)?matches($y)</eg></fos:expression>
+return atomic-type-annotation($x) ? matches($y)</eg></fos:expression>
                <fos:result>false()</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression><eg>atomic-type-annotation(xs:numeric('23.2'))?name</eg></fos:expression>
+               <fos:expression><eg>atomic-type-annotation(xs:numeric('23.2')) ? name</eg></fos:expression>
                <fos:result>xs:QName('xs:double')</fos:result>
             </fos:test>
          </fos:example>
@@ -22453,21 +22462,21 @@ return atomic-type-annotation($x)?matches($y)</eg></fos:expression>
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[let $e := parse-xml("<e/>")/*
-return node-type-annotation($e)?name]]></eg></fos:expression>
+return node-type-annotation($e) ? name]]></eg></fos:expression>
                <fos:result>xs:QName('xs:untyped')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
                <fos:expression><eg><![CDATA[let $a := parse-xml("<e a='3'/>")//@a
-return node-type-annotation($a)?name]]></eg></fos:expression>
+return node-type-annotation($a) ? name]]></eg></fos:expression>
                <fos:result>xs:QName('xs:untypedAtomic')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test schema-aware="true">
                <fos:expression><eg><![CDATA[let $x := json-to-xml('[23, 24]', { 'validate': true() })
-return node-type-annotation($x/*)?name]]></eg></fos:expression>
+return node-type-annotation($x/*) ? name]]></eg></fos:expression>
                <fos:result>xs:QName('fn:arrayType')</fos:result>
             </fos:test>
          </fos:example>
@@ -22476,9 +22485,9 @@ return node-type-annotation($x/*)?name]]></eg></fos:expression>
                <fos:expression><eg><![CDATA[let $x := json-to-xml('[23, 24]', { 'validate': true() })
 let $n23 := $x//fn:number[. = 23]                  
 let $type := node-type-annotation($n23)
-return ($type?name, 
-        $type?base-type()?name, 
-        $type?base-type()?base-type()?name)]]></eg></fos:expression>
+return ($type ? name, 
+        $type ? base-type() ? name, 
+        $type ? base-type() ? base-type() ? name)]]></eg></fos:expression>
                <fos:result><eg>xs:QName('fn:numberType'), 
 xs:QName('fn:finiteNumberType'), 
 xs:QName('xs:double')</eg></fos:result>
@@ -22515,37 +22524,37 @@ xs:QName('xs:double')</eg></fos:result>
       <fos:examples role="wide">
          <fos:example>
             <fos:test>
-               <fos:expression>schema-type(xs:QName('xs:integer'))?name</fos:expression>
+               <fos:expression>schema-type(xs:QName('xs:integer')) ? name</fos:expression>
                <fos:result>xs:QName('xs:integer')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>schema-type(xs:QName('xs:long'))?primitive-type()?name</fos:expression>
+               <fos:expression>schema-type(xs:QName('xs:long')) ? primitive-type() ? name</fos:expression>
                <fos:result>xs:QName('xs:decimal')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>schema-type(xs:QName('xs:positiveInteger'))?base-type()?name</fos:expression>
+               <fos:expression>schema-type(xs:QName('xs:positiveInteger')) ? base-type() ? name</fos:expression>
                <fos:result>xs:QName('xs:nonNegativeInteger')</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>schema-type(xs:QName('xs:integer'))?matches(23)</fos:expression>
+               <fos:expression>schema-type(xs:QName('xs:integer')) ? matches(23)</fos:expression>
                <fos:result>true()</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>schema-type(xs:QName('xs:numeric'))?variety</fos:expression>
+               <fos:expression>schema-type(xs:QName('xs:numeric')) ? variety</fos:expression>
                <fos:result>"union"</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression>schema-type(xs:QName('xs:numeric'))?members()?name</fos:expression>
+               <fos:expression>schema-type(xs:QName('xs:numeric')) ? members() ? name</fos:expression>
                <fos:result>xs:QName('xs:double'), xs:QName('xs:float'), xs:QName('xs:decimal')</fos:result>
             </fos:test>
          </fos:example>
