@@ -1017,12 +1017,6 @@
           </xsl:when>
           <xsl:when test="not($termdef)">
             <xsl:message>
-              <xsl:text>starts-with(@spec, 'XS11') </xsl:text>
-              <xsl:value-of select="starts-with(@spec, 'XS11')"/>
-              <xsl:text>matches(., '^\{[-a-z ]\}$') </xsl:text>
-              <xsl:value-of select="matches(., '^\{[-a-z ]\}$')"/>
-            </xsl:message>
-            <xsl:message>
               <xsl:text>Error: cannot resolve xtermref </xsl:text>
               <xsl:value-of select="@ref"/>
               <xsl:text> in </xsl:text>
