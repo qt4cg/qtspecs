@@ -26,7 +26,7 @@
 
 <xsl:param name="additional.css" select="'xpath-functions-40.css'"/>
 
-<xsl:param name="toc.level" select="3"/>
+<xsl:param name="toc.level" select="5"/>
 
 <xsl:key name="id" match="*" use="@id"/>
 
@@ -719,35 +719,7 @@
     </div>
   </xsl:template>
 
-<!-- ============================================================ -->
-  
-  <!-- Deleted MHK 2016-11-10 - can't see any need for this -->
 
-  <!--<xsl:template match="table">
-    <table summary="A table [this is bad style]">
-      <xsl:for-each select="@*">
-        <!-\- Wait: some of these aren't HTML attributes after all... -\->
-        <xsl:if test="local-name(.) != 'diff'
-                      and local-name(.) != 'role'">
-          <xsl:copy>
-            <xsl:apply-templates/>
-          </xsl:copy>
-        </xsl:if>
-      </xsl:for-each>
-      <xsl:apply-templates/>
-
-      <xsl:if test=".//footnote">
-        <tbody>
-          <tr>
-            <td>
-              <xsl:apply-templates select=".//footnote" mode="table.notes"/>
-            </td>
-          </tr>
-        </tbody>
-      </xsl:if>
-    </table>
-  </xsl:template>
--->
 <!-- ============ CREATE THE QUICK REFERENCE APPENDIX ===================== -->
 
 <xsl:template match="/">
