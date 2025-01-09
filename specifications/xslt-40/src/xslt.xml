@@ -22940,6 +22940,15 @@ return if ($i le count($S))
             </div3>
             <div3 id="comparing-sort-keys">
                <head>Comparing Sort Key Values</head>
+               <changes>
+                  <change>
+                     Numeric values of type <code>xs:decimal</code> are compared
+                     as decimals, without first converting to <code>xs:double</code>.
+                  </change>
+                  <change issue="1662">
+                     Composite sort keys are allowed in <elcode>xsl:sort</elcode>.
+                  </change>
+               </changes>
                <p>It is possible to force the system to compare <termref def="dt-sort-key-value">sort key values</termref> using the rules for a particular datatype by
                   including a cast as part of the <termref def="dt-sort-key-component">sort key
                      component</termref>. For example, <code>&lt;xsl:sort
@@ -22966,30 +22975,64 @@ return if ($i le count($S))
                   the <elcode>xsl:sort</elcode> element has a value other than <code>text</code> or
                      <code>number</code>, the effect is implementation-defined.</imp-def-feature>
                <p>
-                  <error spec="XT" type="type" class="TE" code="1020">
-                     <p>If any <termref def="dt-sort-key-value">sort key value</termref>, after
+                  If the <elcode>xsl:sort</elcode> element is processed with <termref def="dt-xslt-10-behavior">XSLT 1.0
+                              behavior</termref>,
+                  then if any <termref def="dt-sort-key-value">sort key value</termref>, after
                            <termref def="dt-atomization">atomization</termref> and any type
                         conversion <rfc2119>required</rfc2119> by the <code>data-type</code>
-                        attribute, is a sequence containing more than one item, then the effect
-                        depends on whether the <elcode>xsl:sort</elcode> element is processed with <termref def="dt-xslt-10-behavior">XSLT 1.0
-                              behavior</termref>. With XSLT 1.0 behavior, the effective
-                        sort key value is the first item in the sequence. In other cases, this is a
-                           <termref def="dt-type-error">type error</termref>.</p>
-                  </error>
-               </p>
-               <p>The set of <termref def="dt-sort-key-value">sort key values</termref> (after any
-                  conversion) is first divided into two categories: empty values, and ordinary
-                  values. The empty sort key values represent those items where the sort key value
-                  is an empty sequence. These values are considered for sorting purposes to be equal
-                  to each other, but less than any other value. The remaining values are classified
-                  as ordinary values.</p>
+                        attribute, is a sequence containing more than one item, then the effective
+                        sort key value is the first item in the sequence.</p>
+               
+               <p>In general the <termref def="dt-sort-key-value">sort key values</termref> (after any
+                  conversion) are sequences of atomic items. Two sequences of atomic items
+                  <var>S1</var> and <var>S2</var> are compared as follows:</p>
+               
+                  <olist>
+                     <item><p>If both <var>S1</var> and <var>S2</var> are empty sequences,
+                     then they compare equal.</p></item>
+                     <item><p>A sequence that is empty is considered to be less than
+                        a sequence that is not empty.</p></item>
+                     <item><p>If neither sequence is empty, then
+                        <code>head(<var>S1</var>)</code> and 
+                        <code>head(<var>S2</var>)</code> are compared
+                        according to the rules below.</p>
+                     <olist>
+                        <item><p>If they compare equal, the result is obtained
+                        by comparing <code>tail(<var>S1</var>)</code> to 
+                        <code>tail(<var>S2</var>)</code>.</p></item>
+                        <item><p>Otherwise, the result of comparing these two
+                        items is used as the result of the sequence comparison.</p></item>
+                     </olist></item>
+                  </olist>
+               <p>For example:</p>
+               <ulist>
+                  <item><p><code>(1, 2, 3)</code> precedes <code>(1, 2, 4)</code>.</p></item>
+                  <item><p><code>(1, 2)</code> precedes <code>(1, 2, 3)</code></p></item>
+                  <item><p><code>()</code> precedes <code>(1, 2)</code></p></item>
+               </ulist>
+            <p diff="chg" at="2023-12-06">Individual atomic items are compared as follows:</p>
+               <olist diff="chg" at="2023-12-06">
+                  <item><p>If both values are instances of <code>xs:string</code>, <code>xs:anyURI</code>,
+                  or <code>xs:untypedAtomic</code>, they are compared using the appropriate collation,
+                  as described in the next section.</p></item>
+                  <item><p>If both values are instances of <code>xs:numeric</code>, they are compared
+                  using the <xfunction>compare</xfunction> function.</p>
+                  <note><p>This is a change from earlier versions, since <code>xs:decimal</code> values are now compared
+                  as decimals, rather than being first converted to <code>xs:double</code>.</p></note></item>
+                  <item><p>In all other cases, values are compared according to the rules
+                     of the XPath <code>lt</code> operator. This will raise an error if the values are
+                  not comparable (for example, if one is an <code>xs:integer</code> and the other is
+                  an <code>xs:date</code>).</p></item>
+               </olist>
+                  
+ 
                <p>
                   <error spec="XT" type="dynamic" class="DE" code="1030">
                      <p>It is a <termref def="dt-dynamic-error"> dynamic error</termref> if, for any <termref def="dt-sort-key-component">sort key component</termref>, the set of
                            <termref def="dt-sort-key-value">sort key values</termref> evaluated for
                         all the items in the <termref def="dt-initial-sequence">initial
                            sequence</termref>, after any type conversion requested, contains a pair
-                        of ordinary values for which the result of the XPath <code>lt</code>
+                        of atomic items for which the result of the XPath <code>lt</code>
                         operator is an error. If the processor is
                            able to detect the error statically, it <rfc2119>may</rfc2119> optionally
                            raise it as a <termref def="dt-static-error">static
@@ -23009,20 +23052,7 @@ return if ($i le count($S))
                      the corresponding major sort key values are equal.</p>
                </note>
  
-               <p diff="chg" at="2023-12-06">Individual values are compared as follows:</p>
-               <olist diff="chg" at="2023-12-06">
-                  <item><p>If both values are instances of <code>xs:string</code>, <code>xs:anyURI</code>,
-                  or <code>xs:untypedAtomic</code>, they are compared using the appropriate collation,
-                  as described in the next section.</p></item>
-                  <item><p>If both values are instances of <code>xs:numeric</code>, they are compared
-                  using the <xfunction>compare</xfunction> function.</p>
-                  <note><p>This is a change from earlier versions, since <code>xs:decimal</code> values are now compared
-                  as decimals, rather than being first converted to <code>xs:double</code>.</p></note></item>
-                  <item><p>In all other cases, values are compared according to the rules
-                     of the XPath <code>lt</code> operator. This will raise an error if the values are
-                  not comparable (for example, if one is an <code>xs:integer</code> and the other is
-                  an <code>xs:date</code>).</p></item>
-               </olist>
+               
                
             </div3>
             <div3 id="collating-sequences">
