@@ -22005,7 +22005,8 @@ and <code>version="1.0"</code> otherwise.</p>
                   <p>For the elements <elcode>xsl:sequence</elcode>, <elcode>xsl:on-empty</elcode>,
                      <elcode>xsl:on-non-empty</elcode>, <elcode>xsl:when</elcode>,
                      <elcode>xsl:otherwise</elcode>, <elcode>xsl:matching-substring</elcode>,
-                     <elcode>xsl:non-matching-substring</elcode>, <elcode>xsl:array</elcode>,
+                     <elcode>xsl:non-matching-substring</elcode>, <elcode>xsl:map</elcode>,
+                     <elcode>xsl:map-entry</elcode>, <elcode>xsl:array</elcode>,
                      <elcode>xsl:array-member</elcode>, and <elcode>xsl:result-document</elcode>,
                      it is a <termref def="dt-static-error">static error</termref> if the
                         <code>select</code> attribute is present
@@ -35508,6 +35509,18 @@ the same group, and the-->
          
          <div2 id="map-instructions">
             <head>Map Instructions</head>
+            <changes>
+               <change issue="1632">
+                  The <elcode>xsl:map</elcode> instruction allows a <code>select</code> attribute
+                  as an alternative to the contained sequence constructor.
+               </change>
+               <change issue="1632">
+                  The <elcode>xsl:map-entry</elcode> instruction, in common with other instructions,
+                  now raises error XTSE3185 (rather than XTSE3280) if both a <code>select</code>
+                  attribute and a sequence constructor are present.
+               </change>
+               
+            </changes>
             <p>Two instructions are added to XSLT to facilitate the construction of maps.</p>
 
             <?element xsl:map?>
@@ -35515,9 +35528,15 @@ the same group, and the-->
 
             <p>The instruction <elcode>xsl:map</elcode> constructs and returns a new map.</p>
 
+            <p>The <code>select</code> attribute and the contained sequence constructor are mutually
+               exclusive: if a <code>select</code> attribute is present, then the content
+                  <rfc2119>must</rfc2119> be empty except optionally for
+                  <elcode>xsl:fallback</elcode> instructions. <errorref spec="XT" class="SE" code="3185"/></p>
             
+            <p>The result of evaluating the <code>select</code> expression or the contained
+            sequence constructor is referred to as the <term>input sequence</term>.</p>
 
-            <p>The contained sequence constructor <rfc2119>must</rfc2119> evaluate to a sequence of
+            <p>The input sequence <rfc2119>must</rfc2119> be a sequence of
                maps: call this <code>$maps</code>.</p>
 
             <p><phrase diff="chg" at="2022-01-01">In the absense of duplicate keys,</phrase> the result of the instruction  
@@ -35534,7 +35553,7 @@ the same group, and the-->
   
 
 
-            <p>There is no requirement that the supplied input maps should have the same or
+            <p>There is no requirement that the maps in the input sequence should have the same or
                compatible types. The type of a map (for example <code>map(xs:integer,
                   xs:string)</code>) is descriptive of the entries it currently contains, but is not
                a constraint on how the map may be combined with other maps.</p>
@@ -35548,21 +35567,29 @@ the same group, and the-->
             </note>
 
             <p><error spec="XT" class="TE" code="3375" type="type">
-                  <p>A type error occurs if the result of evaluating the sequence constructor
-                        <error.extra>within an <elcode>xsl:map</elcode> instruction</error.extra> is
+                  <p>A type error occurs if the result of the input sequence
+                        <error.extra>of an <elcode>xsl:map</elcode> instruction</error.extra> is
                      not an instance of the required type <code>map(*)*</code>.</p>
                </error></p>
 
 
 
             <note>
-               <p>In practice, the effect of this rule is that the sequence
+               <p>In practice, the effect of this rule is that the result of the 
+                  <code>select</code> expression or sequence
                   constructor contained in the <elcode>xsl:map</elcode> instruction is severely
                   constrained: it doesn’t make sense, for example, for it to contain
                   instructions such as <elcode>xsl:element</elcode> that create new nodes. As with
                   other type errors, processors are free to raise the error statically if they are
                   able to determine that the sequence constructor would always fail when
                   evaluated.</p>
+            </note>
+            
+            <note>
+               <p>It is legitimate to construct a map using an instruction such as
+               <code>&lt;xsl:map select="{'a':1, 'b':2}"/></code>. In this situation
+               <elcode>xsl:map</elcode> has exactly the same effect as <elcode>xsl:sequence</elcode>,
+               but users may feel that it improves readability.</p>
             </note>
 
             <?element xsl:map-entry?>
@@ -35575,16 +35602,16 @@ the same group, and the-->
             <p>The <code>select</code> attribute and the contained sequence constructor are mutually
                exclusive: if a <code>select</code> attribute is present, then the content
                   <rfc2119>must</rfc2119> be empty except optionally for
-                  <elcode>xsl:fallback</elcode> instructions.</p>
+                  <elcode>xsl:fallback</elcode> instructions. <errorref spec="XT" class="SE" code="3185"/></p>
 
-            <p>
+            <!--<p>
                <error spec="XT" type="static" class="SE" code="3280">
                   <p>It is a <termref def="dt-static-error">static error</termref> if the
                         <code>select</code> attribute of the <elcode>xsl:map-entry</elcode> element
                      is present unless the element has no children other than
                         <elcode>xsl:fallback</elcode> elements.</p>
                </error>
-            </p>
+            </p>-->
 
             
 
@@ -35658,6 +35685,10 @@ the same group, and the-->
   &lt;/xsl:for-each&gt;
 &lt;/xsl:map&gt; 
 </eg>
+               <p>This could also be written:</p>
+               <eg role="xslt-declaration" xml:space="preserve"><![CDATA[<xsl:map select="
+  map:key-value-pairs($map) ! { ?key : array{ ?value } }"/>
+]]></eg>
             </example>
             
             <div3 id="duplicate-keys" diff="add" at="2022-01-01">
@@ -35671,7 +35702,7 @@ the same group, and the-->
                   </change>
                </changes>
                
-               <p>This section describes what happens when two or more maps returned by the sequence constructor
+               <p>This section describes what happens when two or more maps in the input sequence of
                within an <elcode>xsl:map</elcode> instruction contain duplicate keys: that is, when one of these
                maps contains an entry with key <var>K</var>, and another contains an entry with key <var>L</var>,
                   and <code diff="chg" at="2023-01-25">fn:atomic-equal(K, L)</code> returns <code>true</code>.</p>
@@ -35679,8 +35710,8 @@ the same group, and the-->
                <p><error spec="XT" class="DE" code="3365" type="dynamic">
                   <p>In the absence of the <code>on-duplicates</code> attribute, 
                      a <termref def="dt-dynamic-error">dynamic error</termref> occurs if the set of
-                     keys in the maps resulting from evaluating the sequence constructor
-                     <error.extra>within an <elcode>xsl:map</elcode> instruction</error.extra>
+                     keys in the maps making up the input sequence
+                     <error.extra>of an <elcode>xsl:map</elcode> instruction</error.extra>
                      contains duplicates.</p>
                </error></p>
                
