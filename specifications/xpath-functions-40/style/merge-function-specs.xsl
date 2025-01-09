@@ -598,6 +598,9 @@
 			<xsl:message expand-text="yes">Record type {.} has no name</xsl:message>
 		</xsl:if>
 		<xsl:variable name="record" select="$target" as="element(fos:record-type)"/>
+		
+		<xsl:apply-templates select="$record/fos:summary/node()"/>
+		
 		<!--<example role="record" id="{$record/@id}-narrative">
 	    <record>
               <xsl:for-each select="$record/fos:field">
