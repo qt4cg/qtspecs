@@ -526,27 +526,7 @@ constructor. These elements are:</p>
     </pre>
   </xsl:template>
 
-<!--<xsl:template match="processing-instruction('glossary')">
-    <dl>
-    <xsl:for-each select="//termdef[not(ancestor-or-self::*[@diff][1][@diff='del'])]">
-      <xsl:sort select="lower-case(@term)"/>
-      <dt>
-        <a href="#{@id}"><xsl:value-of select="@term"/></a>
-      </dt>
-      <dd>
-        <p>
-          <xsl:apply-templates/>
-        </p>
-        <xsl:if test="@open='true'">
-          <xsl:variable name="close" select="../following-sibling::p[@role='closetermdef'][1]"/>
-          <xsl:apply-templates select="../following-sibling::*[$close >> .]"/>
-        </xsl:if>
-      </dd>
-    </xsl:for-each>
-    </dl>
-</xsl:template>-->
-  
-  
+
   <xsl:template match="processing-instruction('xslt-defined-functions')">
       <xsl:variable name="content">
       <glist>
@@ -824,32 +804,7 @@ constructor. These elements are:</p>
 			</a>
 	</xsl:template>
 
-<!--
-  <xsl:template match="altlocs">
-    <p>
-      <xsl:text>This document is also available </xsl:text>
-      <xsl:text>in these non-normative formats: </xsl:text>
-      <xsl:for-each select="loc">
-        <xsl:if test="position() &gt; 1">
-          <xsl:if test="last() &gt; 2">
-            <xsl:text>, </xsl:text>
-          </xsl:if>
-          <xsl:if test="last() = 2">
-            <xsl:text> </xsl:text>
-          </xsl:if>
-        </xsl:if>
-        <xsl:if test="position() = last() and position() &gt; 1">and&#160;</xsl:if>
-        <!- - next line changed by MHK - ->
-        <xsl:apply-templates select="."/>
-      </xsl:for-each>
-      <xsl:text>.</xsl:text>
-    </p>
-  </xsl:template>
-	
-	<xsl:template match="altlocs/loc">
-	        <a href="{$latest}{@href}"><xsl:value-of select="."/></a>
-	</xsl:template>
--->
+
   
   <!-- Links to Bugzilla entries in the form <loc href="bugNNNNN"/> -->
     

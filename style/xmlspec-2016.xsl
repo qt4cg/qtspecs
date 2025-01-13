@@ -904,6 +904,13 @@
       <xsl:text> (Non-Normative)</xsl:text>
     </h2>
   </xsl:template>
+  
+  <xsl:template match="div1/head/text() | div2/head/text() | div3/head/text() | div4/head/text() | inform-div1/head/text()">
+    <!-- insert a link to self, to make the ID value visible for the benefit of anyone wanting to create a link -->
+    <a href="#{../../@id}" style="text-decoration: none">
+      <xsl:next-match/>
+    </a>
+  </xsl:template>
 
   <xsl:template match="issue/head">
     <p class="prefix">
