@@ -1149,9 +1149,9 @@
   
   <xsl:template match="processing-instruction('imp-def-features')" priority="100">
     <ol>
-      <xsl:for-each select="//termref[@def='implementation-defined']">
+      <xsl:for-each select="//termref[@def='implementation-defined'][not(.//ancestor::*[@diff='del'])]">
         <xsl:variable name="container" select="ancestor::*[not(ancestor::p)][1]"/>
-        <xsl:variable name="section" select="ancestor::*[@id][1]"/>
+        <xsl:variable name="section" select="ancestor::*[@id][head or @key][1]"/>
         <xsl:if test=". is ($container//termref[@def='implementation-defined'])[1]">
           <!-- avoid duplicates, see bug 27115 -->
           <li><p>
