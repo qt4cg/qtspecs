@@ -1,0 +1,124 @@
+<item>
+   <title>Issue #1702 created</title>
+   <pubDate>2025-01-14T15:19:10Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/1702</link>
+   <guid>https://qt4cg.org/@qt4cg/2025/#created-1702</guid>
+   <description>&lt;div&gt;&lt;p&gt;Node Updates: Functions&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;In #1225, I have summarized some thoughts on generalizing updates for both nodes and structured items (maps/arrays).&lt;/p&gt;
+&lt;p&gt;XQuery Update is complex, as updates are in general, so we may still decide that it is too ambitious to introduce update features in the core language. If we want to give it a try, we could offer functions that are based on XQUF, but that only perform one update operation at a a time on a given input. This way, we could ignore the sophisticated &lt;a href="https://www.w3.org/TR/xquery-update-30/#id-pending-update-lists"&gt;Pending Update List&lt;/a&gt; semantics, which is only important when multiple updating expressions are specified and need to be checked and brought into order.&lt;/p&gt;
+&lt;p&gt;A function set that provides an equivalent functionality for all XQUF update operations could look as follows (the presented functions are valid XQuery Update code):&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;declare namespace update = 'http://www.w3.org/TR/xquery-update';
+
+declare function update:delete(
+  $node  as node(),
+  $path  as fn(node()) as node()*
+) as node() {
+  copy $c := $node
+  modify delete node $path($c)
+  return $c
+};
+
+declare function update:rename(
+  $node  as node(),
+  $path  as fn(node()) as node()*,
+  $name  as (xs:QName | xs:NCName | fn(node(), xs:integer) as (xs:QName | xs:NCName))
+) as node() {
+  copy $c := $node
+  modify (
+    for $target at $pos in $path($c)
+    let $result := if($name instance of fn(*)) {
+      $name($target, $pos)
+    } else {
+      $name
+    }
+    return rename node $target as $result
+  )
+  return $c
+};
+
+declare function update:replace(
+  $node      as node(),
+  $path      as fn(node()) as node()*,
+  $contents  as (node() | xs:anyAtomicType | fn(node(), xs:integer) as node()*)*,
+  $options   as record(value? as xs:boolean)? := {}
+) as node() {
+  copy $c := $node
+  modify (
+    for $target at $pos in $path($c)
+    let $result := (
+      for $content in $contents
+      return if($content instance of fn(*)) {
+        $content($target, $pos)
+      } else {
+        $content
+      }
+    )
+    return if($options?value) {
+      replace value of node $target with $result
+    } else {
+      replace node $target with $result
+    }
+  )
+  return $c
+};
+
+declare function update:insert(
+  $node      as node(),
+  $path      as fn(node()) as node()*,
+  $contents  as (node() | xs:anyAtomicType | fn(node(), xs:integer) as (node() | xs:anyAtomicType))*,
+  $options   as record(position? as enum('last', 'first', 'before', 'after'))? := {}
+) as node() {
+  copy $c := $node
+  modify (
+    for $target at $pos in $path($c)
+    let $result := (
+      for $content in $contents
+      return if($content instance of fn(*)) {
+        $content($target, $pos)
+      } else {
+        $content
+      }
+    )
+    return switch($options?position) {
+      case 'before' return insert node $result before $target
+      case 'after'  return insert node $result after $target
+      case 'first'  return insert node $result as first into $target
+      default       return insert node $result as last into $target
+    }
+  )
+  return $c
+};
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Here are some exemplary function calls:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;let $node := &amp;lt;xml&amp;gt;&amp;lt;e/&amp;gt;&amp;lt;e/&amp;gt;&amp;lt;/xml&amp;gt;
+return (
+  (: deletes all &amp;lt;e/&amp;gt; child nodes :)
+  update:delete($node, fn { e }),
+  (: renames the &amp;lt;e/&amp;gt; child nodes to &amp;lt;f/&amp;gt; :)
+  update:rename($node, fn { e }, 'f'),
+  (: replaces the &amp;lt;e/&amp;gt; child nodes with &amp;lt;replaced/&amp;gt; :)
+  update:replace($node, fn { e }, &amp;lt;replaced/&amp;gt;),
+  (: replaces the string value of the &amp;lt;e/&amp;gt; child nodes with 'text' :)
+  update:replace($node, fn { e }, 'text', { 'value': true() }),
+  (: inserts a 'text' text node into the &amp;lt;e/&amp;gt; child nodes :)
+  update:insert($node, fn { e }, 'text'),
+  (: inserts 'text1' and 'text2' text nodes into the &amp;lt;e/&amp;gt; child nodes :)
+  update:insert($node, fn { e }, fn($node, $pos) { 'text' || $pos }),
+  (: inserts an &amp;lt;x/&amp;gt; element after each &amp;lt;e/&amp;gt; child node :)
+  update:insert($node, fn { e }, &amp;lt;x/&amp;gt;, { 'position': 'after' })
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Multiple update operations can easily be chained:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;(: rename &amp;lt;e/&amp;gt; child nodes to &amp;lt;f/&amp;gt;, insert 'x' text nodes :)
+&amp;lt;xml&amp;gt;&amp;lt;e/&amp;gt;&amp;lt;e/&amp;gt;&amp;lt;/xml&amp;gt;
+=&amp;gt; update:rename(fn { e }, 'f')
+=&amp;gt; update:insert(fn { f }, 'x')
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Ideally, we could offer a similar function set (or maybe even the same) for maps and arrays in a next step (see #77). The map/array syntax would be similar for deletions…&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;let $data := { 'a': [ 1, 2, 3 ] }
+return update:delete($data, fn { ?a?2 })
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;…but it certainly gets trickier for other operations.&lt;/p&gt;
+&lt;p&gt;If some of you believe that the presented approach is something that we should pursue, I will be happy to add details. As an alternative, we could pursue the XQUF light approach that I have sketched in #1225, based on the existing XQUF update keywords.&lt;/p&gt;
+&lt;p&gt;Yet another solution could be to stick with what we have, but add map/array update features to XQUF.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
