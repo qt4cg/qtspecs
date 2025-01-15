@@ -26,7 +26,7 @@
 
 <xsl:param name="additional.css" select="'xpath-functions-40.css'"/>
 
-<xsl:param name="toc.level" select="3"/>
+<xsl:param name="toc.level" select="5"/>
 
 <xsl:key name="id" match="*" use="@id"/>
 
@@ -719,35 +719,7 @@
     </div>
   </xsl:template>
 
-<!-- ============================================================ -->
-  
-  <!-- Deleted MHK 2016-11-10 - can't see any need for this -->
 
-  <!--<xsl:template match="table">
-    <table summary="A table [this is bad style]">
-      <xsl:for-each select="@*">
-        <!-\- Wait: some of these aren't HTML attributes after all... -\->
-        <xsl:if test="local-name(.) != 'diff'
-                      and local-name(.) != 'role'">
-          <xsl:copy>
-            <xsl:apply-templates/>
-          </xsl:copy>
-        </xsl:if>
-      </xsl:for-each>
-      <xsl:apply-templates/>
-
-      <xsl:if test=".//footnote">
-        <tbody>
-          <tr>
-            <td>
-              <xsl:apply-templates select=".//footnote" mode="table.notes"/>
-            </td>
-          </tr>
-        </tbody>
-      </xsl:if>
-    </table>
-  </xsl:template>
--->
 <!-- ============ CREATE THE QUICK REFERENCE APPENDIX ===================== -->
 
 <xsl:template match="/">
@@ -1177,9 +1149,9 @@
   
   <xsl:template match="processing-instruction('imp-def-features')" priority="100">
     <ol>
-      <xsl:for-each select="//termref[@def='implementation-defined']">
+      <xsl:for-each select="//termref[@def='implementation-defined'][not(.//ancestor::*[@diff='del'])]">
         <xsl:variable name="container" select="ancestor::*[not(ancestor::p)][1]"/>
-        <xsl:variable name="section" select="ancestor::*[@id][1]"/>
+        <xsl:variable name="section" select="ancestor::*[@id][head or @key][1]"/>
         <xsl:if test=". is ($container//termref[@def='implementation-defined'])[1]">
           <!-- avoid duplicates, see bug 27115 -->
           <li><p>

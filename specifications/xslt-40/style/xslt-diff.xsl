@@ -50,12 +50,7 @@
     xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax">
     <xsl:text>element-syntax-chg</xsl:text>
   </xsl:template>
-  
-  <!--<xsl:template match="*[@mark='yes']" priority="100">
-    <mark>
-      <xsl:next-match/>
-    </mark>
-    </xsl:template>-->
+ 
   
   <!-- following template can be activated to insert paragraph numbers after every para -->
   <xsl:template match="p[$show.diff.markup=1]" use-when="false()">   

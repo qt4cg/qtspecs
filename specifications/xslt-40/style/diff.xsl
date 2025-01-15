@@ -81,40 +81,6 @@
 
 <xsl:param name="called.by.diffspec" as="xs:integer" select="1"/>
 
-<!-- ==================================================================== -->
-
-  <!--<!-\- spec: the specification itself -\->
-  <xsl:template match="spec">
-    <html>
-      <xsl:call-template name="make-lang-attribute"/>
-      <xsl:call-template name="make-head"/>
-      
-      <body>
-        
-        
-        <xsl:apply-templates/>
-        <xsl:if test="//footnote[not(ancestor::table)]">
-          <hr/>
-          <div class="endnotes">
-            <xsl:text>&#10;</xsl:text>
-            <h3>
-              <xsl:call-template name="anchor">
-                <xsl:with-param name="conditional" select="0"/>
-                <xsl:with-param name="default.id" select="'endnotes'"/>
-              </xsl:call-template>
-              <xsl:text>End Notes</xsl:text>
-            </h3>
-            <dl>
-              <xsl:apply-templates select="//footnote[not(ancestor::table)]"
-                                   mode="notes"/>
-            </dl>
-          </div>
-        </xsl:if>
-      </body>
-    </html>
-  </xsl:template>
-  -->
-  
 
 <!-- ==================================================================== -->
 
