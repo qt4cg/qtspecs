@@ -25,7 +25,7 @@
 
   <!-- xsl:variable name="grammar" select="document($grammar-file)"/ -->
   <xsl:variable name="sourceTree" select="/"/>
-  <xsl:variable name="prodrecaps" select="//prodrecap"/>
+  <xsl:variable name="prodrecaps" select="//prodrecap[not(parent::*/@role='example')]"/>
 
   <!-- Generate a comment that identifies as much as we can about the XSLT processor being used -->
   <xsl:template match="/" priority="100">
@@ -149,16 +149,14 @@
     </xsl:for-each>
   </xsl:template>
   
-  <!-- MHK 2025-01-19: ignore a prodrecap that isn't the first in a scrap -->
   
-  <xsl:variable name="principal-productions" select="//prodrecap[not(preceding-sibling::prodrecap)]"/>
-  <xsl:template match="prodrecap[preceding-sibling::prodrecap]"/>
-
-  <!-- Handle a prodrecap that is the first in a scrap -->
-  <!-- MHK 2025-01-19: ignore any subsequent prodrecap elements; instead, decide which productions
+  <xsl:variable name="principal-productions" select="$prodrecaps"/>
+  
+  <!-- Handle a prodrecap -->
+  <!-- MHK 2025-01-19: We now decide which productions
        to include in this scrap algorithmically. The logic is basically to include all productions
        in the subtree of this one that are not themselves principal productions, where a principal
-       production is one that is the first production in its own scrap. -->
+       production is one that appears in its own scrap. -->
   <xsl:template match="prodrecap">
 
     <xsl:variable name="debugging" select="false()"/>
@@ -172,7 +170,7 @@
       </xsl:comment>
     </xsl:if>
 
-    <xsl:variable name="name" select="@ref"/>
+    <xsl:variable name="name" select="@ref" as="attribute(ref)"/>
 
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>

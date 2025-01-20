@@ -610,12 +610,12 @@
   
   <xsl:mode name="gather-sub-productions" on-no-match="deep-skip"/>
   
-  <xsl:template match="g:production | g:token[.//g:ref]" mode="gather-sub-productions" as="element(*)*">
+  <xsl:template match="g:production | g:token[.//g:ref][not(@inline='true')][not(@is-xml='yes')]" mode="gather-sub-productions" as="element(*)*">
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
       <xsl:variable name="this" select="."/>
-    
-      <xsl:if test="$depth lt 10 and not(@if[not(contains(., $spec) or ($spec = 'shared'))])">
+      <xsl:message expand-text="yes">Processing {name()}/{$this/@name} depth="{$depth}</xsl:message>
+      <xsl:if test="$depth lt 6 and not(@if[not(contains(., $spec) or ($spec = 'shared'))])">
           <xsl:variable name="refs" as="xs:string*" 
                         select="$this//g:ref[not(@node-type='void')]/@name"/>
           <xsl:variable name="children" 
@@ -623,14 +623,16 @@
                                 return key('defns_by_name', $name, root($this))[not(@show='no')]"
                         as="element(*)*"/>
           <xsl:sequence select="$this"/>
-          <xsl:message expand-text="yes">Production {$this/@name} : children {$children ! @name}</xsl:message>
+          <xsl:if test="$this/@name = ('Digits', 'DecDigit')">
+            <xsl:message expand-text="yes">Production {$this/@name} : children {$children ! @name}</xsl:message>
+          </xsl:if>
           <xsl:variable name="descendants" as="element(*)*">
-            <xsl:apply-templates select="$children[$depth eq 0 or not(@name = $principal-productions/(@id, @ref))]"
+            <xsl:apply-templates select="$children[$depth eq 0 or not($this/@name = $principal-productions/@ref)]"
                                  mode="#current">
               <xsl:with-param name="depth" select="$depth + 1"/>
             </xsl:apply-templates> 
           </xsl:variable>
-          <xsl:if test="$this/@name = 'FunctionCall'">
+          <xsl:if test="$this/@name = ('Digits', 'DecDigit')">
             <xsl:message expand-text="yes">Production {$this/@name} : descendants {$descendants ! @name}</xsl:message>   
           </xsl:if>
           <xsl:sequence select="$descendants"/>
@@ -641,13 +643,13 @@
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
       <xsl:variable name="this" select="."/>
-      <xsl:if test="$depth lt 10">
+      <xsl:if test="$depth lt 6">
           <xsl:variable name="refs" as="xs:string*" 
                 select="$this/../following-sibling::g:level[1]/*/@name, 
                         $this//g:ref[not(@node-type='void')]/@name"/>
           <xsl:variable name="children" 
                         select="for $name in $refs 
-                                return key('defns_by_name', $name, root($this))[not(@show='no')][not(@node-type='void')]"/>
+                                return key('defns_by_name', $name, root($this))[not(@show='no')][@is-binary='yes' or not(@node-type='void')]"/>
           <xsl:sequence select="$this"/>
           <xsl:apply-templates select="$children[$depth eq 0 or not(@name = $principal-productions/(@id, @ref))]"
                                mode="#current">
@@ -659,7 +661,7 @@
   <xsl:template match="g:token" mode="gather-sub-productions" as="element(*)?">
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
-      <xsl:if test="$depth lt 10 and $subtree-root[@whitespace-spec='explicit']">
+      <xsl:if test="$depth lt 10 and (child::g:charClass or $subtree-root[@whitespace-spec='explicit']) and not(@inline='true')">
          <xsl:sequence select="."/>
       </xsl:if>
   </xsl:template>
@@ -707,7 +709,7 @@
         </xsl:choose>
       </xsl:variable>
       
-      <xsl:variable name="num" as="xs:string">
+      <!--<xsl:variable name="num" as="xs:string">
         <xsl:call-template name="make-absolute-nt-number">
           <xsl:with-param name="name" select="@name"/>
         </xsl:call-template>
@@ -716,7 +718,7 @@
       <xsl:attribute name="num">       
         <xsl:value-of select="$num || $orig"/>
       </xsl:attribute>
-
+-->
       <xsl:variable name="result_id_symbol_part" select="$expo-name"/>
 
       <xsl:if test="$result_id_docprod_part != 'NONE'">
@@ -1735,7 +1737,7 @@
                  -->
             <xsl:for-each select="$sourceTree">
               <xsl:choose>
-                <xsl:when test="//prodrecap[@id=$symbol_ename] or $is-xslt30">
+                <xsl:when test="$prodrecaps[@id=$symbol_ename] or $is-xslt30">
                   <xsl:text>doc-</xsl:text>
                 </xsl:when>
                 <xsl:otherwise>
