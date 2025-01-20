@@ -148,7 +148,17 @@
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
+  
+  <!-- MHK 2025-01-19: ignore a prodrecap that isn't the first in a scrap -->
+  
+  <xsl:variable name="principal-productions" select="//prodrecap[not(preceding-sibling::prodrecap)]"/>
+  <xsl:template match="prodrecap[preceding-sibling::prodrecap]"/>
 
+  <!-- Handle a prodrecap that is the first in a scrap -->
+  <!-- MHK 2025-01-19: ignore any subsequent prodrecap elements; instead, decide which productions
+       to include in this scrap algorithmically. The logic is basically to include all productions
+       in the subtree of this one that are not themselves principal productions, where a principal
+       production is one that is the first production in its own scrap. -->
   <xsl:template match="prodrecap">
 
     <xsl:variable name="debugging" select="false()"/>
@@ -382,16 +392,20 @@
       <xsl:attribute name="def">
         <xsl:variable name="def" select="@def"/>
         <xsl:choose>
-          <!-- Bit of a hack here.  The problem is no doc def exists for some productions.  -->
-          <!-- In any case, perhaps -->
-          <!--   there should other criteria to decide if we link to the exposition or not! -->
+          <xsl:when test="$def = $principal-productions/@id">doc-</xsl:when>
+          <xsl:otherwise>prod-</xsl:otherwise>
+        </xsl:choose>
+        <!--<xsl:choose>
+          <!-\- Bit of a hack here.  The problem is no doc def exists for some productions.  -\->
+          <!-\- In any case, perhaps -\->
+          <!-\-   there should other criteria to decide if we link to the exposition or not! -\->
           <xsl:when test="$grammar/g:grammar//g:token[@name=$def and @is-xml='yes']">
             <xsl:text>prod-</xsl:text>
           </xsl:when>
           <xsl:otherwise>
             <xsl:text>doc-</xsl:text>
           </xsl:otherwise>
-        </xsl:choose>
+        </xsl:choose>-->
         <xsl:if test="true()">
           <xsl:value-of select="$grammar/g:grammar/g:language/@id"/>
           <xsl:text>-</xsl:text>
