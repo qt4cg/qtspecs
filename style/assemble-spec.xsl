@@ -13,9 +13,10 @@
 -->
 
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-  version="1.0"
+  version="3.0"
   xmlns:g="http://www.w3.org/2001/03/XPath/grammar"
-  exclude-result-prefixes="g xlink"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  exclude-result-prefixes="g xlink xs"
   xmlns:xlink="http://www.w3.org/1999/xlink">
 
   <xsl:param name="spec" select="'xpath'"/>
@@ -116,7 +117,7 @@
     </xsl:variable>
     <xsl:for-each select="$grammar/g:grammar">
       <xsl:call-template name="add-terminals">
-        <xsl:with-param name="orig" select="$orig"/>
+        <!--<xsl:with-param name="orig" select="$orig"/>-->
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
@@ -124,12 +125,12 @@
   <xsl:template match="prodrecap[@id='LocalTerminalSymbols' or @role='LocalTerminalSymbols']">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:variable name="orig">
+    <!--<xsl:variable name="orig">
       <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>
+    </xsl:variable>-->
     <xsl:for-each select="$grammar/g:grammar">
       <xsl:call-template name="add-terminals">
-        <xsl:with-param name="orig" select="$orig"/>
+        <!--<xsl:with-param name="orig" select="$orig"/>-->
         <xsl:with-param name="do-local-terminals" select="true()"/>
       </xsl:call-template>
     </xsl:for-each>
@@ -138,28 +139,49 @@
   <xsl:template match="prodrecap[@id='BNF-Grammar-prods' or @role='BNF-Grammar-prods']">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:variable name="orig">
+    <!--<xsl:variable name="orig">
       <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>
+    </xsl:variable>-->
 
     <xsl:for-each select="$grammar/g:grammar">
       <xsl:call-template name="add-non-terminals">
-        <xsl:with-param name="orig" select="$orig"/>
+        <!--<xsl:with-param name="orig" select="$orig"/>-->
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
   
   
-  <xsl:variable name="principal-productions" select="$prodrecaps"/>
   
   <!-- Handle a prodrecap -->
   <!-- MHK 2025-01-19: We now decide which productions
-       to include in this scrap algorithmically. The logic is basically to include all productions
+       to include in each scrap algorithmically. The logic is basically to include all productions
        in the subtree of this one that are not themselves principal productions, where a principal
        production is one that appears in its own scrap. -->
+  
   <xsl:template match="prodrecap">
 
     <xsl:variable name="debugging" select="false()"/>
+    
+    <!-- Avoid generating duplicate IDs for productions used as examples -->
+    <xsl:variable name="in-example" select="../@role='example'" as="xs:boolean"/>
+    
+    <!-- Normally there should not be more than one prodrecap for the same production.
+         But if it happens, generate distinct names to avoid DTD invalidity -->
+    
+    <xsl:variable name="duplicate" as="xs:integer" 
+      select="count(preceding::prodrecap[@ref=current()/@ref][not(../@role='example')]) + 1"/>
+
+    <xsl:if test="$duplicate != 1">
+      <xsl:message expand-text="1">*** Duplicate prodrecap {@ref} ***</xsl:message>
+    </xsl:if>
+    
+    <xsl:variable name="id-prefix" as="xs:string">
+      <xsl:choose>
+        <xsl:when test="$in-example">example-</xsl:when>
+        <xsl:when test="$duplicate != 1"><xsl:value-of select="'x'||$duplicate||'-'"/></xsl:when>
+        <xsl:otherwise><xsl:sequence select="''"/></xsl:otherwise>
+      </xsl:choose>
+    </xsl:variable>
     <xsl:if test="$debugging">
       <xsl:comment>
         DEBUG: template match="prodrecap" starting
@@ -212,11 +234,13 @@
       </xsl:comment>
     </xsl:if>
 
-    <xsl:for-each select="$grammar">
+    <xsl:for-each select="$grammar"> 
+      <!-- switch context to the grammar document -->
       <xsl:call-template name="show-prod">
         <xsl:with-param name="name" select="$name"/>
-        <xsl:with-param name="orig" select="$orig"/>
+        <!--<xsl:with-param name="orig" select="$orig"/>-->
         <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
+        <xsl:with-param name="id-prefix" select="$id-prefix" tunnel="yes"/>
       </xsl:call-template>
     </xsl:for-each>
 
@@ -371,13 +395,7 @@
     </xsl:choose>
   </xsl:template>
 
-  <!--
-  <xsl:template match="nt[@def]">
-    <nt def="doc-{@def}">
-      <xsl:apply-templates/>
-    </nt>
-  </xsl:template>
-  -->
+
 
   <xsl:template match="nt[@def]">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
@@ -390,7 +408,7 @@
       <xsl:attribute name="def">
         <xsl:variable name="def" select="@def"/>
         <xsl:choose>
-          <xsl:when test="$def = $principal-productions/@id">doc-</xsl:when>
+          <xsl:when test="$def = $prodrecaps/@ref">doc-</xsl:when>
           <xsl:otherwise>prod-</xsl:otherwise>
         </xsl:choose>
         <!--<xsl:choose>
@@ -405,12 +423,14 @@
           </xsl:otherwise>
         </xsl:choose>-->
         <xsl:if test="true()">
-          <xsl:value-of select="$grammar/g:grammar/g:language/@id"/>
+          <!--<xsl:value-of select="$grammar/g:grammar/g:language/@id"/>-->
+          <xsl:value-of select="$spec"/>
           <xsl:text>-</xsl:text>
         </xsl:if>
         <xsl:value-of select="@def"/>
       </xsl:attribute>
       <xsl:apply-templates/>
+      <xsl:comment expand-text="1">$spec = {$spec}</xsl:comment>
     </nt>
   </xsl:template>
 

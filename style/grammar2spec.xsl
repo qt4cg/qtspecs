@@ -231,7 +231,9 @@
         </xsl:when>
         <xsl:otherwise>
           <xsl:variable name="prefix" select="'prod'"/>
-          <nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+          <!--<nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+          --><nt def="{$prefix}-{$spec}-{@name}"><xsl:value-of select="@name"/></nt>
+        
         </xsl:otherwise>
       </xsl:choose>
       <xsl:text> </xsl:text>
@@ -251,7 +253,7 @@
       <xsl:if test="$indirect-references intersect $ordinary-rules">
         <!--<code><xsl:value-of select="@name"/></code>-->
         <xsl:variable name="prefix" select="if (@name = 'NCName') then 'doc' else 'prod'"/>
-        <nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+        <nt def="{$prefix}-{$spec}-{@name}"><xsl:value-of select="@name"/></nt>
         <xsl:text> </xsl:text>
       </xsl:if>
     </xsl:for-each>
@@ -533,12 +535,11 @@
 
   <!-- EXPORT -->
   <xsl:template name="add-non-terminals">
-    <xsl:param name="orig"/>
-
     <xsl:for-each select="key('visible_nonterminal_defns', '')">
       <xsl:sort select="@name" lang="en"/>
       <xsl:call-template name="make-prod">
-        <xsl:with-param name="orig" select="$orig"/>
+        <xsl:with-param name="id-generator" 
+                        select="function($name) {'prod-' || $spec || '-' || $name}"/>
         <xsl:with-param name="result_id_docprod_part" select="'prod-'"/>
       </xsl:call-template>
     </xsl:for-each>
@@ -546,24 +547,26 @@
 
   <!-- EXPORT -->
   <xsl:template name="add-terminals">
-    <xsl:param name="orig"/>
     <xsl:param name="xml-only" select="false()"/>
     <xsl:param name="do-local-terminals" select="false()"/>
 
     <xsl:for-each select="key('visible_terminal_defns', '')[(@is-local-to-terminal-symbol='yes')=$do-local-terminals]">
       <xsl:if test="not($xml-only) or @is-xml='yes'">
         <xsl:call-template name="make-prod">
-          <xsl:with-param name="orig" select="$orig"/>
+          <xsl:with-param name="id-generator" 
+                        select="function($name) {'prod-' || $spec || '-' || $name}"/>
           <xsl:with-param name="result_id_docprod_part" select="'prod-'"/>
         </xsl:call-template>
       </xsl:if>
     </xsl:for-each>
   </xsl:template>
 
-  <!-- EXPORT -->
+  <!-- Show a "scrap": a production rule followed by selected production
+       rules from its subtree -->
+  
   <xsl:template name="show-prod">
     <xsl:param name="name"/>
-    <xsl:param name="orig"/>
+    <xsl:param name="id-prefix" as="xs:string" tunnel="yes" select="''"/>
     <xsl:param name="result_id_noid_part"/>
 
     <xsl:variable name="production" select="key('defns_by_name', $name)
@@ -575,7 +578,8 @@
       </xsl:message>
     </xsl:if>
     
-    <!--<xsl:variable name="descendants" select="g:descendant-productions($production, 3)"/>-->
+    <!-- Get all referenced productions, recursively, stopping at productions that
+         have their own scrap elsewhere in the document -->
     
     <xsl:variable name="descendants" as="element(*)*">
       <xsl:apply-templates select="$production" mode="gather-sub-productions">
@@ -584,6 +588,8 @@
       </xsl:apply-templates>
     </xsl:variable>
     
+    <!-- Eliminate duplicates -->
+    
     <xsl:variable name="included-descendants" as="element(*)*">
        <xsl:for-each-group select="$descendants"
                            group-by="@name">
@@ -591,17 +597,22 @@
        </xsl:for-each-group>
     </xsl:variable>
 
+    <!-- Make the leading production rule -->
     <xsl:for-each select="$production">
       <xsl:call-template name="make-prod">
-        <xsl:with-param name="orig" select="$orig"/>
+        <xsl:with-param name="id-generator" 
+                        select="function($name) {$id-prefix || 'doc-' || $spec || '-' || $name}"/>
         <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
         <xsl:with-param name="result_id_docprod_part" select="'doc-'"/>
       </xsl:call-template>
     </xsl:for-each>
     
+    <!-- Make the production rules for subsidiary rules in the grammar (in tree-walking order) -->
     <xsl:for-each select="$included-descendants[not(. is $production)]">
+      <xsl:variable name="scrap-root-name" select="$name" as="xs:string"/>
       <xsl:call-template name="make-prod">
-        <xsl:with-param name="orig" select="$orig"/>
+        <xsl:with-param name="id-generator" 
+                        select="function($name) {$id-prefix || 'doc-' || $spec || '-' || $scrap-root-name || '-' || $name}"/>
         <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
         <xsl:with-param name="result_id_docprod_part" select="'NONE'"/>
       </xsl:call-template>
@@ -614,7 +625,7 @@
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
       <xsl:variable name="this" select="."/>
-      <xsl:message expand-text="yes">Processing {name()}/{$this/@name} depth="{$depth}</xsl:message>
+      <!--<xsl:message expand-text="yes">Processing {name()}/{$this/@name} depth="{$depth}</xsl:message>-->
       <xsl:if test="$depth lt 6 and not(@if[not(contains(., $spec) or ($spec = 'shared'))])">
           <xsl:variable name="refs" as="xs:string*" 
                         select="$this//g:ref[not(@node-type='void')]/@name"/>
@@ -623,18 +634,14 @@
                                 return key('defns_by_name', $name, root($this))[not(@show='no')]"
                         as="element(*)*"/>
           <xsl:sequence select="$this"/>
-          <xsl:if test="$this/@name = ('Digits', 'DecDigit')">
-            <xsl:message expand-text="yes">Production {$this/@name} : children {$children ! @name}</xsl:message>
-          </xsl:if>
+
           <xsl:variable name="descendants" as="element(*)*">
-            <xsl:apply-templates select="$children[$depth eq 0 or not($this/@name = $principal-productions/@ref)]"
+            <xsl:apply-templates select="$children[$depth eq 0 or not($this/@name = $prodrecaps/@ref)]"
                                  mode="#current">
               <xsl:with-param name="depth" select="$depth + 1"/>
             </xsl:apply-templates> 
           </xsl:variable>
-          <xsl:if test="$this/@name = ('Digits', 'DecDigit')">
-            <xsl:message expand-text="yes">Production {$this/@name} : descendants {$descendants ! @name}</xsl:message>   
-          </xsl:if>
+
           <xsl:sequence select="$descendants"/>
       </xsl:if>
   </xsl:template>
@@ -651,7 +658,7 @@
                         select="for $name in $refs 
                                 return key('defns_by_name', $name, root($this))[not(@show='no')][@is-binary='yes' or not(@node-type='void')]"/>
           <xsl:sequence select="$this"/>
-          <xsl:apply-templates select="$children[$depth eq 0 or not(@name = $principal-productions/(@id, @ref))]"
+          <xsl:apply-templates select="$children[$depth eq 0 or not(@name = $prodrecaps/@ref)]"
                                mode="#current">
             <xsl:with-param name="depth" select="$depth + 1"/>
           </xsl:apply-templates>       
@@ -669,22 +676,16 @@
  
 
   <xsl:template name="make-prod">
-    <xsl:param name="orig"/>
+    <!-- A function to generate an ID for the production rule, given the production name -->
+    <xsl:param name="id-generator" as="function(xs:string) as xs:string"/>
+    <!-- A function to generate a link for the LHS -->
+    <xsl:param name="lhs-link-generator" as="(function(xs:string) as xs:string)?" select="()"/>
+    <xsl:param name="id-prefix" as="xs:string" tunnel="yes" select="''"/>
     <xsl:param name="result_id_noid_part" select="''"/>
     <xsl:param name="result_id_docprod_part"/> <!-- 'doc-' or 'prod-' or "NONE"-->
 
-    <xsl:variable name="base_language_id" select="(/g:grammar/g:language/@id)[1]"/>
+    <xsl:variable name="base_language_id" select="$spec (: (/g:grammar/g:language/@id)[1] :)"/>
     <xsl:variable name="result_id_lang_part" select="concat($base_language_id, '-')"/>
-
-    <!--
-    <xsl:variable name="debugging" select="@name = 'ReplaceExpr' or @name = 'EscapeQuot'"/>
-    <xsl:if test="$debugging">
-      <xsl:message>Template *, name = <xsl:value-of select="@name"/>. orig = <xsl:value-of select="$orig"/>.
-        result_id_noid_part    = '<xsl:value-of select="$result_id_noid_part"/>'
-        result_id_docprod_part = '<xsl:value-of select="$result_id_docprod_part"/>'
-      </xsl:message>
-    </xsl:if>
-    -->
 
     <xsl:text>&#xA;</xsl:text>
     <prod>
@@ -709,19 +710,11 @@
         </xsl:choose>
       </xsl:variable>
       
-      <!--<xsl:variable name="num" as="xs:string">
-        <xsl:call-template name="make-absolute-nt-number">
-          <xsl:with-param name="name" select="@name"/>
-        </xsl:call-template>
-      </xsl:variable>
-
-      <xsl:attribute name="num">       
-        <xsl:value-of select="$num || $orig"/>
-      </xsl:attribute>
--->
       <xsl:variable name="result_id_symbol_part" select="$expo-name"/>
+      
+      <xsl:attribute name="id" select="$id-prefix || $id-generator($expo-name)"/>
 
-      <xsl:if test="$result_id_docprod_part != 'NONE'">
+      <!--<xsl:if test="$result_id_docprod_part != 'NONE'">
         <xsl:attribute name="id">
           <xsl:variable name="computed-id">
             <xsl:value-of select="$result_id_noid_part"/>
@@ -729,17 +722,17 @@
             <xsl:value-of select="$result_id_lang_part"/>
             <xsl:value-of select="$result_id_symbol_part"/>
           </xsl:variable>
-          <!--
+          <!-\-
           <xsl:if test="$debugging">
             <xsl:message>^*^*^* The calculated id value is <xsl:value-of select="$computed-id"/>.</xsl:message>
           </xsl:if>
-          -->
+          -\->
           <xsl:value-of select="$computed-id"/>
         </xsl:attribute>
-      </xsl:if>
+      </xsl:if>-->
 
       <xsl:call-template name="add-role-attribute"/>
-
+      <xsl:comment expand-text="1">base_language_id = {$base_language_id}</xsl:comment>
       <lhs>
         <xsl:call-template name="add-role-attribute"/>
         <xsl:value-of select="$expo-name"/>
@@ -979,7 +972,7 @@
     <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)[1]"/>
     <xsl:call-template name="add-nt-link">
       <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
-      <xsl:with-param name="docprod_part" select="if ($left-name = $principal-productions/@name) then 'doc-' else 'prod-'"/>
+      <xsl:with-param name="docprod_part" select="if ($left-name = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>
       <xsl:with-param name="symbol_ename" select="$left-name"/>
     </xsl:call-template>
     <xsl:text>&nbsp;</xsl:text>
@@ -1452,7 +1445,7 @@
           <xsl:when test="not($inlineable_token)">
             <xsl:call-template name="add-nt-link">
               <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
-              <xsl:with-param name="docprod_part" select="if ($name = $principal-productions/@name) then 'doc-' else 'prod-'"/>
+              <xsl:with-param name="docprod_part" select="if ($name = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>
               <xsl:with-param name="symbol_ename" select="$name"/>
             </xsl:call-template>
           </xsl:when>
@@ -1469,7 +1462,7 @@
                   <xsl:call-template name="g:group">
                     <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
                     <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
-                    <xsl:with-param name="docprod_part" select="if ($name = $principal-productions/@name) then 'doc-' else 'prod-'"/>
+                    <xsl:with-param name="docprod_part" select="if ($name = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>
                     <!-- xsl:with-param name="conn-new" select="$conn-seq"/ -->
                     <xsl:with-param name="conn-new" select="$conn-seq"/>
                     <!-- xsl:with-param name="conn-cur" select="$conn-cur"/ -->
@@ -1633,7 +1626,7 @@
 
           <xsl:call-template name="add-nt-link">
             <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
-            <xsl:with-param name="docprod_part" select="if (. = $principal-productions/@name) then 'doc-' else 'prod-'"/>                   
+            <xsl:with-param name="docprod_part" select="if (. = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>                   
             <xsl:with-param name="symbol_ename" select="."/>
           </xsl:call-template>
 
@@ -1645,7 +1638,7 @@
       <xsl:otherwise>
         <xsl:call-template name="add-nt-link">
           <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
-          <xsl:with-param name="docprod_part" select="if (. = $principal-productions/@name) then 'doc-' else 'prod-'"/>                   
+          <xsl:with-param name="docprod_part" select="if (. = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>                   
           <xsl:with-param name="symbol_ename" select="$left-name"/>
         </xsl:call-template>
       </xsl:otherwise>
@@ -1679,27 +1672,12 @@
         wasn't necessary, since stringifying a node-set only stringifies
         the doc-order-first of its nodes.)
       -->
-      <xsl:variable name="lang-id" select="(/g:grammar/g:language/@id)[1]"/>
+      <xsl:variable name="lang-id" select="$spec (:(/g:grammar/g:language/@id)[1]:)"/>
       <!--
       <xsl:message>DEBUG: ~~ $lang-id = <xsl:value-of select="$lang-id"/>. </xsl:message>
       -->
 
-      <xsl:variable name="idref_lang_part">
-        <xsl:choose>
-          <xsl:when test="@orig">
-            <!--
-                The only g:* elements that can have an @orig
-                are g:ref ang g:xref.
-                The only place they actually do is in xpath-semantics-30.
-            -->
-            <xsl:value-of select="@orig"/>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:value-of select="$lang-id"/>
-          </xsl:otherwise>
-        </xsl:choose>
-        <xsl:text>-</xsl:text>
-      </xsl:variable>
+      <xsl:variable name="idref_lang_part" select="$lang-id || '-'"/>
 
       <xsl:variable name="docprod_part_adjusted">
         <xsl:choose>
@@ -1765,6 +1743,7 @@
       </xsl:call-template>
 
       <xsl:value-of select="$symbol_ename"/>
+      <xsl:comment expand-text="1">$idref_lang_part = {$idref_lang_part}</xsl:comment>
     </nt>
     <!--
     <xsl:message>DEBUG: Exiting template add-nt-link. </xsl:message>

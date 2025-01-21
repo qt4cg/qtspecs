@@ -1195,6 +1195,24 @@
       </xsl:choose>
     </a>
   </xsl:template>
+  
+  <!-- Matching of production names within the RHS of a production rule in the document body -->
+  <xsl:template match="scrap/prod/rhs//nt">
+    <xsl:variable name="localDefn" select="ancestor::scrap/prod[lhs = current()]"/>
+    <xsl:choose>
+      <!-- If the relevant rule appears within the same scrap -->
+      <xsl:when test="exists($localDefn)">
+        <a href="#{$localDefn/@id}"><xsl:value-of select="."/></a>
+      </xsl:when>
+      <!-- If the relevant rule is the head rule of another scrap -->
+      <xsl:when test="exists(//prod[@id=replace(current()!@def, '^prod-', 'doc-')])">
+        <a href="#{replace(@def, '^prod-', 'doc-')}"><xsl:value-of select="."/></a>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:next-match/>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:template>
 
 
   <!-- ====================================================================== -->
