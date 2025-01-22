@@ -567,8 +567,8 @@
   <xsl:template name="show-prod">
     <xsl:param name="name"/>
     <xsl:param name="id-prefix" as="xs:string" tunnel="yes" select="''"/>
-    <xsl:param name="result_id_noid_part"/>
-
+    <!--<xsl:param name="result_id_noid_part"/>
+-->
     <xsl:variable name="production" select="key('defns_by_name', $name)
                             [not(@alias-for and not(@inline='false'))]"/>
 
@@ -602,7 +602,7 @@
       <xsl:call-template name="make-prod">
         <xsl:with-param name="id-generator" 
                         select="function($name) {$id-prefix || 'doc-' || $spec || '-' || $name}"/>
-        <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
+        <!--<xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>-->
         <xsl:with-param name="result_id_docprod_part" select="'doc-'"/>
       </xsl:call-template>
     </xsl:for-each>
@@ -613,7 +613,7 @@
       <xsl:call-template name="make-prod">
         <xsl:with-param name="id-generator" 
                         select="function($name) {$id-prefix || 'doc-' || $spec || '-' || $scrap-root-name || '-' || $name}"/>
-        <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
+        <!--<xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>-->
         <xsl:with-param name="result_id_docprod_part" select="'NONE'"/>
       </xsl:call-template>
     </xsl:for-each>
@@ -673,15 +673,23 @@
       </xsl:if>
   </xsl:template>
   
- 
+  <xsl:template match="g:ref[@unfold='yes']" mode="gather-sub-productions" as="element(*)?">
+      <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
+      <xsl:param name="depth" as="xs:integer"/>
+      <xsl:variable name="this" select="."/>
+      <xsl:apply-templates select="key('defns_by_name', $this/@name)">
+         <xsl:with-param name="depth" select="$depth"/>
+      </xsl:apply-templates>
+  </xsl:template>
+  
+  <!-- Make a production rule -->
 
   <xsl:template name="make-prod">
     <!-- A function to generate an ID for the production rule, given the production name -->
     <xsl:param name="id-generator" as="function(xs:string) as xs:string"/>
-    <!-- A function to generate a link for the LHS -->
-    <xsl:param name="lhs-link-generator" as="(function(xs:string) as xs:string)?" select="()"/>
+    <!-- A prefix to be used to make the ID unique, for example 'example-' -->
     <xsl:param name="id-prefix" as="xs:string" tunnel="yes" select="''"/>
-    <xsl:param name="result_id_noid_part" select="''"/>
+    <!--<xsl:param name="result_id_noid_part" select="''"/>-->
     <xsl:param name="result_id_docprod_part"/> <!-- 'doc-' or 'prod-' or "NONE"-->
 
     <xsl:variable name="base_language_id" select="$spec (: (/g:grammar/g:language/@id)[1] :)"/>

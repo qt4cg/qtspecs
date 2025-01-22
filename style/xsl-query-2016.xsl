@@ -4,7 +4,7 @@
   xmlns:xs="http://www.w3.org/2001/XMLSchema"
   xmlns:my="http://www.w3.org/qtspecs/build/functions"
   exclude-result-prefixes="my xs"
-  version="2.0"
+  version="3.0"
 >
   
   <!-- Modified version of xsl-query.xsl produced November 2016 to produce HTML5 -->
@@ -947,20 +947,10 @@
         </a>
       </xsl:when>
       <xsl:when test="not($nt)">
-        <xsl:message>
-          <xsl:text>Error: cannot resolve xnt </xsl:text>
-          <xsl:value-of select="@ref"/>
-          <xsl:text> in </xsl:text>
-          <xsl:value-of select="@spec"/>
-          <xsl:text> at id=</xsl:text>
-          <xsl:value-of select="(ancestor::*/@id)[last()]"/>
-        </xsl:message>
+        <xsl:message expand-text='1'>Error: cannot resolve xnt {@ref} in {@spec
+          } at id={(ancestor::*/@id)[last()]}</xsl:message>  
         <span class="markup-error">
-          <xsl:text>[NT </xsl:text>
-          <xsl:value-of select="@ref"/>
-          <xsl:text> IN </xsl:text>
-          <xsl:value-of select="@spec"/>
-          <xsl:text>]</xsl:text>
+          <xsl:text expand-text='1'>[NT {@ref} IN {@spec}]</xsl:text>
           <xsl:apply-templates/>
         </span>
       </xsl:when>
@@ -1169,14 +1159,9 @@
                           else key('ids', $doc-def)"/>
 
     <xsl:if test="not($target)">
-      <xsl:message>
-        <xsl:text>Error: cannot resolve nt: </xsl:text>
-        <xsl:value-of select="@def"/>
-      </xsl:message>
+      <xsl:message expand-text="1">Error: cannot resolve nt: {@def} at {(ancestor::*/@id)[last()]}</xsl:message>
       <span class="markup-error">
-        <xsl:text>[ERROR: no </xsl:text>
-        <xsl:value-of select="@def"/>
-        <xsl:text>]</xsl:text>
+        <xsl:text expand-text="1">[ERROR: no nt {@def}]</xsl:text>
       </span>
     </xsl:if>
     <a>
@@ -1197,6 +1182,8 @@
   </xsl:template>
   
   <!-- Matching of production names within the RHS of a production rule in the document body -->
+  <!-- Added by MHK 21 Jan 2025 -->
+  
   <xsl:template match="scrap/prod/rhs//nt">
     <xsl:variable name="localDefn" select="ancestor::scrap/prod[lhs = current()]"/>
     <xsl:choose>

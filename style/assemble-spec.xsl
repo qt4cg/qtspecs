@@ -91,46 +91,22 @@
     </xsl:choose>
   </xsl:template>
 
-  <xsl:template name="get-gnotation">
-    <!-- Assumes predrecap context -->
-    <xsl:variable name="k" select="@orig"/>
-    <xsl:choose>
-      <xsl:when test="$k">
-        <xsl:variable name="gfn" select="document($grammar-map-file-name,.)//*[string(@name)=string($k)]"/>
-        <xsl:value-of select="$gfn/@notation"/>
-        <!-- xsl:message>
-          <xsl:text>grammar file: </xsl:text><xsl:value-of select="$gfn"/>
-          <xsl:text>, k: '</xsl:text><xsl:value-of select="$k"/><xsl:text>'</xsl:text>
-        </xsl:message -->
-      </xsl:when>
-      <xsl:otherwise>
-      </xsl:otherwise>
-    </xsl:choose>
-  </xsl:template>
 
 
   <xsl:template match="prodrecap[@id='DefinedLexemes' or @role='DefinedLexemes']">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:variable name="orig">
-      <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>
     <xsl:for-each select="$grammar/g:grammar">
-      <xsl:call-template name="add-terminals">
-        <!--<xsl:with-param name="orig" select="$orig"/>-->
-      </xsl:call-template>
+      <xsl:call-template name="add-terminals"/>
     </xsl:for-each>
   </xsl:template>
 
   <xsl:template match="prodrecap[@id='LocalTerminalSymbols' or @role='LocalTerminalSymbols']">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <!--<xsl:variable name="orig">
-      <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>-->
+
     <xsl:for-each select="$grammar/g:grammar">
       <xsl:call-template name="add-terminals">
-        <!--<xsl:with-param name="orig" select="$orig"/>-->
         <xsl:with-param name="do-local-terminals" select="true()"/>
       </xsl:call-template>
     </xsl:for-each>
@@ -139,20 +115,16 @@
   <xsl:template match="prodrecap[@id='BNF-Grammar-prods' or @role='BNF-Grammar-prods']">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <!--<xsl:variable name="orig">
-      <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>-->
 
     <xsl:for-each select="$grammar/g:grammar">
       <xsl:call-template name="add-non-terminals">
-        <!--<xsl:with-param name="orig" select="$orig"/>-->
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
   
   
   
-  <!-- Handle a prodrecap -->
+  <!-- Handle a general prodrecap -->
   <!-- MHK 2025-01-19: We now decide which productions
        to include in each scrap algorithmically. The logic is basically to include all productions
        in the subtree of this one that are not themselves principal productions, where a principal
@@ -196,59 +168,14 @@
 
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:variable name="orig">
-      <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>
-
-    <xsl:if test="$debugging">
-      <xsl:comment>
-        DEBUG: template match="prodrecap" ...
-        $fn      = '<xsl:value-of select="$fn"/>'
-        $grammar = [the document at $fn]
-        $orig    = '<xsl:value-of select="$orig"/>'
-      </xsl:comment>
-    </xsl:if>
-
-    <xsl:variable name="result_id_noid_part">
-      <xsl:if test="not(@id)">
-        <!-- pull some nasty trick to handle multiply defined productions. -->
-        <!-- Don wants this... -->
-        <!-- Don't change the 'noid_' text... "lhs-text" template depends on it. -->
-        <xsl:value-of select="concat('noid_', generate-id(.), '.')"/>
-      </xsl:if>
-    </xsl:variable>
-
-    <!--
-        Note that in this template, we're only concerned with
-        whether or not @id is present; we ignore any value it has.
-    -->
-
-    <xsl:if test="$debugging">
-      <xsl:comment>
-        DEBUG: template match="prodrecap" ...
-        Calling template "show-prod"
-        with parameters:
-          name         = <xsl:value-of select="$name"/>
-          orig         = <xsl:value-of select="$orig"/>
-          result_id_noid_part   = <xsl:value-of select="$result_id_noid_part"/>
-      </xsl:comment>
-    </xsl:if>
 
     <xsl:for-each select="$grammar"> 
       <!-- switch context to the grammar document -->
       <xsl:call-template name="show-prod">
         <xsl:with-param name="name" select="$name"/>
-        <!--<xsl:with-param name="orig" select="$orig"/>-->
-        <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
         <xsl:with-param name="id-prefix" select="$id-prefix" tunnel="yes"/>
       </xsl:call-template>
     </xsl:for-each>
-
-    <xsl:if test="$debugging">
-      <xsl:comment>
-        DEBUG: template match="prodrecap" exiting
-      </xsl:comment>
-    </xsl:if>
 
   </xsl:template>
 
@@ -400,9 +327,6 @@
   <xsl:template match="nt[@def]">
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:variable name="orig">
-      <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>
 
     <nt>
       <xsl:attribute name="def">
@@ -411,19 +335,8 @@
           <xsl:when test="$def = $prodrecaps/@ref">doc-</xsl:when>
           <xsl:otherwise>prod-</xsl:otherwise>
         </xsl:choose>
-        <!--<xsl:choose>
-          <!-\- Bit of a hack here.  The problem is no doc def exists for some productions.  -\->
-          <!-\- In any case, perhaps -\->
-          <!-\-   there should other criteria to decide if we link to the exposition or not! -\->
-          <xsl:when test="$grammar/g:grammar//g:token[@name=$def and @is-xml='yes']">
-            <xsl:text>prod-</xsl:text>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:text>doc-</xsl:text>
-          </xsl:otherwise>
-        </xsl:choose>-->
+
         <xsl:if test="true()">
-          <!--<xsl:value-of select="$grammar/g:grammar/g:language/@id"/>-->
           <xsl:value-of select="$spec"/>
           <xsl:text>-</xsl:text>
         </xsl:if>
