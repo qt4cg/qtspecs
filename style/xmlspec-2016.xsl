@@ -1329,6 +1329,15 @@
     <xsl:apply-templates/>
   </xsl:template>
 
+  <!-- dedication -->
+  <xsl:template match="note[contains-token(@role, 'dedication')]">
+    <div class="dedication">
+      <xsl:sequence select="@id"/>
+      <h3>Dedication</h3>
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+
   <!-- note: a note about the spec -->
   <xsl:template match="note">
     <div class="note">
