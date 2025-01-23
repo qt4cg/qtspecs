@@ -23025,8 +23025,8 @@ xs:QName('xs:double')</eg></fos:result>
                <p>If there are duplicate keys, that is, if two or more maps contain entries having the
                   <termref
                      def="dt-same-key"
-                     >same key</termref>, then the way this is handled is
-                  controlled by the second (<code>$options</code>) argument.</p>
+                     >same key</termref>, then the entries are combined into a single entry as
+                     controlled by the second (<code>$options</code>) argument.</p>
             </item>
          </olist>
 
@@ -23044,6 +23044,24 @@ xs:QName('xs:double')</eg></fos:result>
                      def="option-parameter-conventions"
                   >option parameter conventions</termref> apply.
             </p>
+            </item>
+            <item><p>In the event that two or more entries in the input maps have the 
+               <termref def="dt-same-key"/>:</p>
+               <olist>
+                  <item><p>A single entry is created by combining the duplicates.</p></item>
+                  <item><p>The value of the resulting entry is formed by combining
+                  the entries in the input maps according to the value of the
+                  <code>duplicates</code> option.</p></item>
+                  <item><p>The key of the resulting entry is one of the keys from
+                  the duplicate entries: which one is chosen is <termref def="implementation-defined"/>.
+                  (Two keys that are deemed duplicates may differ: for example they may have
+                  different type annotations, or they may be <code>xs:dateTime</code>
+                   values with different timezones.)</p></item>
+                  <item><p>The position of the combined entry in the <xtermref spec="DM40" ref="dt-entry-order"/>
+                  of the result map corresponds to the position of the first appearance of
+                  the corresponding key value in the input.</p></item>
+               </olist>
+            
             </item>
             <item>
                <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
@@ -23088,14 +23106,7 @@ xs:QName('xs:double')</eg></fos:result>
                            If duplicate keys are present, the result map includes an entry for the key whose 
                            associated value is the 
                            <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref> 
-                           of all the values associated with the key, 
-                           retaining order based on the order of maps in the <code>$maps</code> argument.
-                           The key value in the result map that corresponds to such a set of duplicates must
-                           be the <termref
-                              def="dt-same-key"
-                              >same key</termref> as each of the duplicates, but it is
-                           otherwise unconstrained: for example if the duplicate keys are <code>xs:byte(1)</code>
-                           and <code>xs:short(1)</code>, the key in the result could legitimately be <code>xs:long(1)</code>.
+                           of all the values associated with the key.
                         </fos:value>
                      </fos:values>
                   </fos:option>
@@ -23104,6 +23115,8 @@ xs:QName('xs:double')</eg></fos:result>
                
             </item>
          </olist>
+         
+         
  
 
       </fos:rules>
@@ -23116,16 +23129,8 @@ let $duplicates-handler := {
   "reject":    fn($a, $b) { fn:error($FOJS0003) },
   "use-any":   fn($a, $b) { fn:random-number-generator()?permute(($a, $b))[1] }
 }
-let $combine := fn($A as map(*), $B as map(*), $deduplicator as fn(*)) {
-  fold-left(map:keys($B), $A, fn($z, $k) { 
-    if (map:contains($z, $k))
-    then map:put($z, $k, $deduplicator($z($k), $B($k)))
-    else map:put($z, $k, $B($k))
-  })
-}
-return fold-left($maps, {},
-  $combine(?, ?, $duplicates-handler($options?duplicates otherwise "use-first"))
-)        
+return map:of-pairs($maps =!> map:pairs(), 
+                    $duplicates-handler?($options?duplicates otherwise 'use-first'))  
       </fos:equivalent>
      
       <fos:errors>
@@ -23140,24 +23145,22 @@ return fold-left($maps, {},
 
       <fos:notes>
          <note>
-            <p>By way of explanation, <code>$combine</code> is a function that combines
-            two maps by iterating over the keys of the second map, adding each key and its corresponding
-            value to the first map as it proceeds. The second call of <function>fn:fold-left</function>
-            in the <code>return</code> clause then iterates over the maps supplied in the call
-            to <function>map:merge</function>, accumulating a single map that absorbs successive maps
-            in the input sequence by calling <code>$combine</code>.</p>
+            <p>By way of explanation, the function first reduces the sequence of input maps
+               to a sequence of key-value pairs, retaining order of both the maps and of the
+               entries within each map. It then combines key-value pairs having the
+               <termref def="dt-same-key"/> by applying the <code>$combine</code> function
+               successively to pairs of duplicates. The position in the <xtermref spec="DM40" ref="dt-entry-order"/>
+               of the result map of an entry formed by combining duplicates corresponds to the
+               position of the first occurrence of the key in the input sequence. This is true
+               even whien the option <code>use-last</code> is used: the value of the resulting
+               entry corresponds to the last entry with a given key, but the position of the entry
+               in the result map corresponds to the position of the first entry with that key.
+            </p>
 
-
-            <p>This algorithm processes the supplied maps in a defined order, but processes the keys within
-         each map in implementation-dependent order.</p>
 
             <p>The use of <function>fn:random-number-generator</function> represents one possible conformant
          implementation for <code>"duplicates": "use-any"</code>, but it is not the only conformant
-         implementation and is not intended to be a realistic implementation. The purpose of this
-         option is to allow the implementation to use whatever strategy is most efficient; for example,
-         if the input maps are processed in parallel, then specifying <code>"duplicates": "use-any"</code>
-         means that the implementation does not need to keep track of the original order of the sequence of input
-         maps.</p>
+         implementation and is not intended to be a realistic implementation.</p>
 
          </note>
 
@@ -23269,7 +23272,14 @@ return fold-left($maps, {},
          
          <p>The optional <code>$combine</code> argument can be used to define how
          duplicate keys should be handled. The default is to form the sequence concatenation 
-         of the corresponding values, retaining their order in the input sequence.</p>
+         of the corresponding values, retaining the order in which they appear 
+         in the input sequence; the position of the combined entry in the 
+         <xtermref spec="DM40" ref="dt-entry-order"/> of the result map corresponds
+         to the position of the first occurrence of the key value in <code>$input</code>.
+         Given that two keys deemed to be duplicates might differ (for example, they
+         might have different type annotations, or they might be <code>xs:dateTime</code>
+         values with different timezones), it is <termref def="implementation-dependent"/>
+         which of the key values is used in the combined entry.</p>
         
 
       </fos:rules>
@@ -24522,10 +24532,21 @@ else map:put($map, $key, $action(()))
             Then, for each key value:</p>
          <ulist>
             <item><p>If the key is not already present in the target map, the processor adds a
-               new key-value pair to the map, with that key  and that value. </p></item>
+               new key-value pair to the map, with that key and that value. The new entry
+               appears after all existing entries in the <xtermref spec="DM40" ref="dt-entry-order"/> 
+               of the result map.</p></item>
             <item><p>If the key is already present, the processor calls the <code>$combine</code>
                function to combine the existing value for the key with the new value,
-               and replaces the entry with this combined value.</p></item>
+               and replaces the existing entry with this combined value, in its existing
+               position. The effect is that in the presence of duplicate keys, the order
+               of entries in the result map reflects the <emph>order of first appearance</emph>
+               of a key in the <code>$input</code> sequence.
+            </p>
+            <p>Given that two keys deemed to be duplicates might differ (for example, they
+               might have different type annotations, or they might be <code>xs:dateTime</code>
+               values with different timezones), it is <termref def="implementation-dependent"/>
+               which of the key values is used in the combined entry.
+            </p></item>
          </ulist>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
