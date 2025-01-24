@@ -6,8 +6,8 @@
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
   version="3.0"
   xmlns:g="http://www.w3.org/2001/03/XPath/grammar"
-  xmlns:xalan="http://xml.apache.org/xslt"
-  exclude-result-prefixes="g xalan">
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  exclude-result-prefixes="g xs">
   <!-- $Id: grammar2spec.xsl,v 1.108 2016/06/29 14:56:59 mdyck Exp $ -->
 
   <!-- * Copyright (c) 2002 World Wide Web Consortium,
@@ -27,28 +27,12 @@
        a document that conforms to xmlspec.dtd, in particular
        the prod elements. -->
 
-  <!-- 2008-09-23: In template add-nt-link, Jim and Jonathan added a predicate
-       to ensure that $lang-id has only a single NCName as a value, not a
-       sequence of NCNames (e.g., 'xquery' instead of 'xquery update'). -->
-  <!-- 2008-09-23: Jim and Jonathan replaced:
-         <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)"/>
-       with:
-         <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)[1]"/>
-       as proposed by Michael Dyck in email to resolve a problem that causes IDREF values
-       used in attributes to contain more than one NCName. -->
-  <!-- 2008-09-25: Jim and Jonathan replaced version="2.0" with version="1.0" - -
-       there is no reason for this stylesheet to be marked 2.0, plus the behavior of
-       some expressions changed between 1.0 processors and 2.0 processors...which is
-       the reason for the other two changes, adding predicate [1] in two places. -->
 
-  <xsl:output method="xml" indent="no" xalan:indent-amount="2"
+  <xsl:output method="xml" indent="no"
               doctype-system = "../../../schema/xsl-query.dtd" />
 
   <!-- Specifies the desired grammar subset for many targets. -->
-  <!-- xsl:param name="spec" select="'xpath'"/ -->
-
-  <!-- xsl:variable name="grammar" select="/"/ -->
-
+  
   <xsl:param name="tokens-file" select="'tokens.xml'"/>
   
   <xsl:param name="is-xslt30" select="false()"/>
@@ -231,7 +215,9 @@
         </xsl:when>
         <xsl:otherwise>
           <xsl:variable name="prefix" select="'prod'"/>
-          <nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+          <!--<nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+          --><nt def="{$prefix}-{$spec}-{@name}"><xsl:value-of select="@name"/></nt>
+        
         </xsl:otherwise>
       </xsl:choose>
       <xsl:text> </xsl:text>
@@ -251,7 +237,7 @@
       <xsl:if test="$indirect-references intersect $ordinary-rules">
         <!--<code><xsl:value-of select="@name"/></code>-->
         <xsl:variable name="prefix" select="if (@name = 'NCName') then 'doc' else 'prod'"/>
-        <nt def="{$prefix}-{($grammar//g:language)[1]/@id}-{@name}"><xsl:value-of select="@name"/></nt>
+        <nt def="{$prefix}-{$spec}-{@name}"><xsl:value-of select="@name"/></nt>
         <xsl:text> </xsl:text>
       </xsl:if>
     </xsl:for-each>
@@ -269,9 +255,6 @@
       [not(g:string and count(*)=1)]
       [@name=$ordinary-rules//g:ref/@name]"/>
     
-    <!--<xsl:message select="'All rules: ' || string-join($grammar//g:production/@name, ', ')"/>
-    <xsl:message select="'Ordinary rules: ' || string-join($ordinary-rules/@name, ', ')"/>
-    <xsl:message select="'Unordinary rules: ' || string-join($unordinary-rules/@name, ', ')"/>-->
     <xsl:sequence select="($unordinary-rules|$inline-tokens)[@name = $ordinary-rules//g:ref/@name]"/>
   </xsl:function>
   
@@ -290,10 +273,6 @@
     <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
     <xsl:variable name="grammar" select="document($fn,.)"/>
 
-    <!--
-    <xsl:message>DEBUG: Starting template show-dt. </xsl:message>
-    <xsl:message>DEBUG: template show-dt ~~ $type = <xsl:value-of select="$type"/>. </xsl:message>
-    -->
     <xsl:for-each select="document($tokens-file,.)/token-list/token[@type = $type]">
       <xsl:sort select="@expo-name"/>
       <xsl:sort select="lower-case(.)"/>
@@ -456,11 +435,8 @@
     <xsl:param name="delimiters" select="' &#x9;&#10;'"/>
     <xsl:param name="count" select="0"/>
 
-    <xsl:variable name="delimiter"
-      select="substring($delimiters, 1, 1)"/>
-    <!-- xsl:message>
-      <xsl:value-of select="$string"/>
-    </xsl:message -->
+    <xsl:variable name="delimiter" select="substring($delimiters, 1, 1)"/>
+
     <xsl:choose>
       <xsl:when test="not($delimiter)">
         <xsl:variable name="ref" select="(/g:grammar//g:ref[$string=@name]|/g:grammar//g:xref[$string=@name])[1]"/>
@@ -533,38 +509,42 @@
 
   <!-- EXPORT -->
   <xsl:template name="add-non-terminals">
-    <xsl:param name="orig"/>
-
     <xsl:for-each select="key('visible_nonterminal_defns', '')">
       <xsl:sort select="@name" lang="en"/>
       <xsl:call-template name="make-prod">
-        <xsl:with-param name="orig" select="$orig"/>
-        <xsl:with-param name="result_id_docprod_part" select="'prod-'"/>
+        <xsl:with-param name="id-generator" 
+                        select="function($name) {'prod-' || $spec || '-' || $name}"/>
+        <!--<xsl:with-param name="result_id_docprod_part" select="'prod-'"/>-->
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
 
   <!-- EXPORT -->
   <xsl:template name="add-terminals">
-    <xsl:param name="orig"/>
     <xsl:param name="xml-only" select="false()"/>
     <xsl:param name="do-local-terminals" select="false()"/>
 
     <xsl:for-each select="key('visible_terminal_defns', '')[(@is-local-to-terminal-symbol='yes')=$do-local-terminals]">
       <xsl:if test="not($xml-only) or @is-xml='yes'">
         <xsl:call-template name="make-prod">
-          <xsl:with-param name="orig" select="$orig"/>
-          <xsl:with-param name="result_id_docprod_part" select="'prod-'"/>
+          <xsl:with-param name="id-generator" 
+                        select="function($name) {'prod-' || $spec || '-' || $name}"/>
+          <!--<xsl:with-param name="result_id_docprod_part" select="'prod-'"/>-->
         </xsl:call-template>
       </xsl:if>
     </xsl:for-each>
   </xsl:template>
 
-  <!-- EXPORT -->
+  <!-- Show a "scrap": a production rule followed by selected production
+       rules from its subtree. Changed (MHK, Jan 2025) to expand the subtree of
+       productions automatically, rather than relying on all the desired
+       `prodrecap` elements being listed explicitly in the source. -->
+  
   <xsl:template name="show-prod">
+    <!-- The production name -->
     <xsl:param name="name"/>
-    <xsl:param name="orig"/>
-    <xsl:param name="result_id_noid_part"/>
+    <!-- A prefix, such as 'example-' to be added to the generated id to make it unique -->
+    <xsl:param name="id-prefix" as="xs:string" tunnel="yes" select="''"/>
 
     <xsl:variable name="production" select="key('defns_by_name', $name)
                             [not(@alias-for and not(@inline='false'))]"/>
@@ -574,85 +554,132 @@
         WARNING!! production with name="<xsl:value-of select="$name"/>" not found
       </xsl:message>
     </xsl:if>
+    
+    <!-- Get all referenced productions, recursively, stopping at productions that
+         have their own scrap elsewhere in the document -->
+    
+    <xsl:variable name="descendants" as="element(*)*">
+      <xsl:apply-templates select="$production" mode="gather-sub-productions">
+        <xsl:with-param name="subtree-root" select="$production" tunnel="yes"/>
+        <xsl:with-param name="depth" select="0"/>
+      </xsl:apply-templates>
+    </xsl:variable>
+    
+    <!-- Eliminate duplicates -->
+    
+    <xsl:variable name="included-descendants" as="element(*)*">
+       <xsl:for-each-group select="$descendants" group-by="@name">
+         <xsl:sequence select="current-group()[1]"/>
+       </xsl:for-each-group>
+    </xsl:variable>
 
+    <!-- Make the leading production rule -->
     <xsl:for-each select="$production">
       <xsl:call-template name="make-prod">
-        <xsl:with-param name="orig" select="$orig"/>
-        <xsl:with-param name="result_id_noid_part" select="$result_id_noid_part"/>
-        <xsl:with-param name="result_id_docprod_part" select="'doc-'"/>
+        <xsl:with-param name="id-generator" 
+                        select="function($name) {$id-prefix || 'doc-' || $spec || '-' || $name}"/>
+      </xsl:call-template>
+    </xsl:for-each>
+    
+    <!-- Make the production rules for subsidiary rules in the grammar (in tree-walking order) -->
+    <xsl:for-each select="$included-descendants[not(. is $production)]">
+      <xsl:variable name="scrap-root-name" select="$name" as="xs:string"/>
+      <xsl:call-template name="make-prod">
+        <xsl:with-param name="id-generator" 
+                        select="function($name) {$id-prefix || 'doc-' || $spec || '-' || $scrap-root-name || '-' || $name}"/>
       </xsl:call-template>
     </xsl:for-each>
   </xsl:template>
+  
+  <!-- Mode gather-sub-productions is used to recursively search for descendant productions
+       to be included in a scrap. -->
+  
+  <xsl:mode name="gather-sub-productions" on-no-match="deep-skip"/>
+  
+  <xsl:template match="g:production | g:token[.//g:ref][not(@inline='true')][not(@is-xml='yes')]" mode="gather-sub-productions" as="element(*)*">
+      <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
+      <xsl:param name="depth" as="xs:integer"/>
+      <xsl:variable name="this" select="."/>
 
-  <!-- -->
+      <xsl:if test="$depth lt 6 and not(@if[not(contains(., $spec) or ($spec = 'shared'))])">
+          <xsl:variable name="refs" as="xs:string*" 
+                        select="$this//g:ref[not(@node-type='void')]/@name"/>
+          <xsl:variable name="children" 
+                        select="for $name in $refs 
+                                return key('defns_by_name', $name, root($this))[not(@show='no')]"
+                        as="element(*)*"/>
+          <xsl:sequence select="$this"/>
+
+          <xsl:variable name="descendants" as="element(*)*">
+            <!-- Include children of this production if either (a) this is the top-level
+                 production of a scrap, or (b) the children are not themselves top-level
+                 productions in a different scrap -->
+            <xsl:apply-templates select="$children[$depth eq 0 or not($this/@name = $prodrecaps/@ref)]"
+                                 mode="#current">
+              <xsl:with-param name="depth" select="$depth + 1"/>
+            </xsl:apply-templates> 
+          </xsl:variable>
+
+          <xsl:sequence select="$descendants"/>
+      </xsl:if>
+  </xsl:template>
+  
+  <xsl:template match="g:level/*" mode="gather-sub-productions" as="element(*)*">
+      <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
+      <xsl:param name="depth" as="xs:integer"/>
+      <xsl:variable name="this" select="."/>
+      <xsl:if test="$depth lt 6">
+          <xsl:variable name="refs" as="xs:string*" 
+                select="$this/../following-sibling::g:level[1]/*/@name, 
+                        $this//g:ref[not(@node-type='void')]/@name"/>
+          <xsl:variable name="children" 
+                        select="for $name in $refs 
+                                return key('defns_by_name', $name, root($this))[not(@show='no')][@is-binary='yes' or not(@node-type='void')]"/>
+          <xsl:sequence select="$this"/>
+          <xsl:apply-templates select="$children[$depth eq 0 or not(@name = $prodrecaps/@ref)]"
+                               mode="#current">
+            <xsl:with-param name="depth" select="$depth + 1"/>
+          </xsl:apply-templates>       
+      </xsl:if>
+  </xsl:template>
+  
+  <xsl:template match="g:token" mode="gather-sub-productions" as="element(*)?">
+      <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
+      <xsl:param name="depth" as="xs:integer"/>
+      <xsl:if test="$depth lt 10 and (child::g:charClass or $subtree-root[@whitespace-spec='explicit']) and not(@inline='true')">
+         <xsl:sequence select="."/>
+      </xsl:if>
+  </xsl:template>
+  
+  <xsl:template match="g:ref[@unfold='yes']" mode="gather-sub-productions" as="element(*)?">
+      <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
+      <xsl:param name="depth" as="xs:integer"/>
+      <xsl:variable name="this" select="."/>
+      <xsl:apply-templates select="key('defns_by_name', $this/@name)">
+         <xsl:with-param name="depth" select="$depth"/>
+      </xsl:apply-templates>
+  </xsl:template>
+  
+  <!-- Make a production rule -->
 
   <xsl:template name="make-prod">
-    <xsl:param name="orig"/>
-    <xsl:param name="result_id_noid_part" select="''"/>
-    <xsl:param name="result_id_docprod_part"/> <!-- 'doc-' or 'prod-' -->
-
-    <xsl:variable name="base_language_id" select="(/g:grammar/g:language/@id)[1]"/>
+    <!-- A function to generate an ID for the production rule, given the production name -->
+    <xsl:param name="id-generator" as="function(xs:string) as xs:string"/>
+    <!-- A prefix to be used to make the ID unique, for example 'example-' -->
+    <xsl:param name="id-prefix" as="xs:string" tunnel="yes" select="''"/>
+    
+    <xsl:variable name="base_language_id" select="$spec"/>
     <xsl:variable name="result_id_lang_part" select="concat($base_language_id, '-')"/>
-
-    <!--
-    <xsl:variable name="debugging" select="@name = 'ReplaceExpr' or @name = 'EscapeQuot'"/>
-    <xsl:if test="$debugging">
-      <xsl:message>Template *, name = <xsl:value-of select="@name"/>. orig = <xsl:value-of select="$orig"/>.
-        result_id_noid_part    = '<xsl:value-of select="$result_id_noid_part"/>'
-        result_id_docprod_part = '<xsl:value-of select="$result_id_docprod_part"/>'
-      </xsl:message>
-    </xsl:if>
-    -->
 
     <xsl:text>&#xA;</xsl:text>
     <prod>
-      <xsl:variable name="expo-name">
-        <!--
-        <xsl:if test="$debugging">
-          <xsl:message>Checking <xsl:value-of select="@name"/></xsl:message>
-        </xsl:if>
-        -->
-        <xsl:choose>
-          <xsl:when test="@exposition-name">
-            <!--
-            <xsl:if test="$debugging">
-              <xsl:message>Putting out lhs for <xsl:value-of select="@name"/> as <xsl:value-of select="@exposition-name"/></xsl:message>
-            </xsl:if>
-            -->
-            <xsl:value-of select="@exposition-name"/>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:value-of select="@name"/>
-          </xsl:otherwise>
-        </xsl:choose>
-      </xsl:variable>
-
-      <xsl:attribute name="num">
-        <xsl:call-template name="make-absolute-nt-number">
-          <xsl:with-param name="name" select="@name"/>
-        </xsl:call-template>
-        <xsl:value-of select="$orig"/>
-      </xsl:attribute>
-
+      <xsl:variable name="expo-name" select="if (@exposition-name) then @exposition-name else @name"/>     
       <xsl:variable name="result_id_symbol_part" select="$expo-name"/>
-
-      <xsl:attribute name="id">
-        <xsl:variable name="computed-id">
-          <xsl:value-of select="$result_id_noid_part"/>
-          <xsl:value-of select="$result_id_docprod_part"/>
-          <xsl:value-of select="$result_id_lang_part"/>
-          <xsl:value-of select="$result_id_symbol_part"/>
-        </xsl:variable>
-        <!--
-        <xsl:if test="$debugging">
-          <xsl:message>^*^*^* The calculated id value is <xsl:value-of select="$computed-id"/>.</xsl:message>
-        </xsl:if>
-        -->
-        <xsl:value-of select="$computed-id"/>
-      </xsl:attribute>
+      
+      <xsl:attribute name="id" select="$id-prefix || $id-generator($expo-name)"/>
 
       <xsl:call-template name="add-role-attribute"/>
-
+      
       <lhs>
         <xsl:call-template name="add-role-attribute"/>
         <xsl:value-of select="$expo-name"/>
@@ -671,10 +698,8 @@
                     <xsl:text>XML</xsl:text>
                   </xsl:when>
                   <xsl:otherwise>
-                    <xsl:message terminate="yes">
-                      <xsl:text>Can't figure out spec for: </xsl:text>
-                      <xsl:value-of select="@xhref"/>
-                    </xsl:message>
+                    <xsl:message terminate="yes" expand-text="1"
+                      >Can't figure out spec for: {@xhref}</xsl:message>
                   </xsl:otherwise>
                 </xsl:choose>
               </xsl:attribute>
@@ -683,16 +708,12 @@
               <xsl:text>]</xsl:text>
             </xnt>
           </xsl:when>
-          <xsl:when test="false()">
-            <xnt href="{@xhref}" ref="{substring-after(@xhref, '#')}" spec="XML">[<xsl:value-of select="@xhref"/>]</xnt>
-          </xsl:when>
+
           <xsl:otherwise>
             <xsl:call-template name="wrap-with-rhs-group">
               <xsl:with-param name="wrapper-name" select="'rhs-group'"/>
               <xsl:with-param name="content">
-                <xsl:apply-templates select=".">
-                  <xsl:with-param name="docprod_part" select="$result_id_docprod_part"/>
-                </xsl:apply-templates>
+                <xsl:apply-templates select="."/>
                 <xsl:if test="@subtract-reg-expr">
                   <xsl:text> - </xsl:text>
                   <xsl:value-of select="@subtract-reg-expr"/>
@@ -714,11 +735,10 @@
         these annotations were omitted from the EBNF
         in the main body of the doc "to increase readability".
 
-        But in the 3.1 series (and hypothetical future series),
-        we show the annotations in the main body too.
+        But from 3.1 we show the annotations in the main body too.
         See Bug 29702.
       -->
-      <xsl:if test="$result_id_docprod_part = 'prod-' or ends-with($base_language_id, '40')">
+      <xsl:if test="ends-with($base_language_id, '40') (: always true nowadays :)">
         <xsl:if test="@whitespace-spec">
           <xsl:call-template name="do-whitespace-comment"/>
         </xsl:if>
@@ -743,6 +763,7 @@
   </xsl:template>
 
   <xsl:template name="make-absolute-nt-number">
+    <!-- This is a leftover from when productions were numbered -->
     <!--
       Returns a number (positive integer or NaN).
     -->
@@ -879,19 +900,12 @@
     </xsl:for-each>
   </xsl:template>
 
-  <!-- 2008-09-23: Jim and Jonathan replaced:
-         <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)"/>
-       with:
-         <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)[1]"/>
-       as proposed by Michael Dyck in email to resolve a problem that causes IDREF values
-       used in attributes to contain more than one NCName.
-  -->
   <xsl:template match="g:postfix">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)[1]"/>
     <xsl:call-template name="add-nt-link">
-      <xsl:with-param name="docprod_part" select="$docprod_part"/>
+      <xsl:with-param name="docprod_part" select="if ($left-name = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>
       <xsl:with-param name="symbol_ename" select="$left-name"/>
     </xsl:call-template>
     <xsl:text>&nbsp;</xsl:text>
@@ -1006,57 +1020,16 @@
     </xsl:call-template>
   </xsl:template>
 
-  <!-- -->
-
-  <!--
   <xsl:template match="g:token">
-    <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
+    <xsl:param name="docprod_part"/>
 
     <xsl:call-template name="g:group">
       <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
       <xsl:with-param name="conn-cur" select="$conn-top"/>
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
     </xsl:call-template>
-  </xsl:template>
-  -->
-
-  <xsl:template match="g:token">
-    <xsl:param name="wrapper-name" select="'rhs-group'"/>
-    <xsl:param name="docprod_part"/>
-
-    <xsl:choose>
-      <xsl:when test="@alias-for">
-        <xsl:choose>
-          <xsl:when test="false()">
-            <!-- for right now, never expand, but treat like a production. -->
-            <xsl:apply-templates select="key('defns_by_name', @alias-for)">
-              <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
-              <xsl:with-param name="docprod_part" select="$docprod_part"/>
-            </xsl:apply-templates>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:call-template name="g:ref">
-              <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
-              <xsl:with-param name="docprod_part" select="$docprod_part"/>
-              <xsl:with-param name="tname" select="key('defns_by_name', @alias-for)/@name"/>
-            </xsl:call-template>
-          </xsl:otherwise>
-        </xsl:choose>
-
-      </xsl:when>
-      <xsl:otherwise>
-        <xsl:call-template name="g:group">
-          <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
-          <xsl:with-param name="conn-cur" select="$conn-top"/>
-          <xsl:with-param name="docprod_part" select="$docprod_part"/>
-        </xsl:call-template>
-        <!-- xsl:if test="@subtract-reg-expr" -->
-        <!-- xsl:text> - z</xsl:text -->
-        <!-- xsl:value-of select="@subtract-reg-expr"/ -->
-        <!-- /xsl:if -->
-      </xsl:otherwise>
-    </xsl:choose>
+ 
   </xsl:template>
 
   <!-- -->
@@ -1197,23 +1170,6 @@
     <xsl:text>]</xsl:text>
   </xsl:template>
 
-  <!--
-  <xsl:template match="g:charClass[count(g:*) > 1]">
-    <xsl:param name="wrapper-name" select="'rhs-group'"/>
-    <xsl:text>(</xsl:text>
-    <xsl:for-each select="g:*">
-      <xsl:text>[</xsl:text>
-      <xsl:apply-templates select=".">
-        <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
-      </xsl:apply-templates>
-      <xsl:text>]</xsl:text>
-      <xsl:if test="last() != position()">
-        <xsl:text> |&nbsp;</xsl:text>
-      </xsl:if>
-    </xsl:for-each>
-    <xsl:text>)</xsl:text>
-  </xsl:template>
-  -->
 
   <xsl:template match="g:charClass[count(g:char) > 1]">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
@@ -1325,24 +1281,6 @@
         <xsl:when test="$deref/@exposition-name">
           <xsl:value-of select="$deref/@exposition-name"/>
         </xsl:when>
-        <xsl:when test="$deref/@alias-for">
-          <xsl:variable name="de-aliased" select="key('defns_by_name',$deref/@alias-for)"/>
-          <xsl:choose>
-            <xsl:when test="$de-aliased/@exposition-name">
-              <xsl:value-of select="$de-aliased/@exposition-name"/>
-            </xsl:when>
-            <xsl:otherwise>
-              <xsl:choose>
-                <xsl:when test="$deref/@inline = 'false'">
-                  <xsl:value-of select="$deref/@name"/>
-                </xsl:when>
-                <xsl:otherwise>
-                  <xsl:value-of select="$de-aliased/@name"/>
-                </xsl:otherwise>
-              </xsl:choose>
-            </xsl:otherwise>
-          </xsl:choose>
-        </xsl:when>
         <xsl:otherwise>
           <xsl:value-of select="$tname"/>
         </xsl:otherwise>
@@ -1363,7 +1301,7 @@
         <xsl:choose>
           <xsl:when test="not($inlineable_token)">
             <xsl:call-template name="add-nt-link">
-              <xsl:with-param name="docprod_part" select="$docprod_part"/>
+              <xsl:with-param name="docprod_part" select="if ($name = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>
               <xsl:with-param name="symbol_ename" select="$name"/>
             </xsl:call-template>
           </xsl:when>
@@ -1379,10 +1317,8 @@
                 <xsl:for-each select="$inlineable_token">
                   <xsl:call-template name="g:group">
                     <xsl:with-param name="wrapper-name" select="$wrapper-name"/>
-                    <xsl:with-param name="docprod_part" select="$docprod_part"/>
-                    <!-- xsl:with-param name="conn-new" select="$conn-seq"/ -->
+                    <xsl:with-param name="docprod_part" select="if ($name = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>
                     <xsl:with-param name="conn-new" select="$conn-seq"/>
-                    <!-- xsl:with-param name="conn-cur" select="$conn-cur"/ -->
                     <xsl:with-param name="conn-cur" select="$conn-seq"/>
                   </xsl:call-template>
                 </xsl:for-each>
@@ -1396,10 +1332,6 @@
           </xsl:otherwise>
         </xsl:choose>
 
-      <!-- xsl:when test="$deref/@alias-for and $deref/@subtract-reg-expr">
-        <xsl:text> - </xsl:text>
-        <xsl:value-of select="$deref/@subtract-reg-expr"/>
-      </xsl:when -->
 
       <!-- bit of a hack here... -->
       <xsl:if test="@subtract-reg-expr">
@@ -1542,7 +1474,8 @@
           -->
 
           <xsl:call-template name="add-nt-link">
-            <xsl:with-param name="docprod_part" select="$docprod_part"/>
+            <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
+            <xsl:with-param name="docprod_part" select="if (. = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>                   
             <xsl:with-param name="symbol_ename" select="."/>
           </xsl:call-template>
 
@@ -1553,7 +1486,8 @@
       </xsl:when>
       <xsl:otherwise>
         <xsl:call-template name="add-nt-link">
-          <xsl:with-param name="docprod_part" select="$docprod_part"/>
+          <!--<xsl:with-param name="docprod_part" select="$docprod_part"/>-->
+          <xsl:with-param name="docprod_part" select="if (. = $prodrecaps/@ref) then 'doc-' else 'prod-'"/>                   
           <xsl:with-param name="symbol_ename" select="$left-name"/>
         </xsl:call-template>
       </xsl:otherwise>
@@ -1587,27 +1521,12 @@
         wasn't necessary, since stringifying a node-set only stringifies
         the doc-order-first of its nodes.)
       -->
-      <xsl:variable name="lang-id" select="(/g:grammar/g:language/@id)[1]"/>
+      <xsl:variable name="lang-id" select="$spec (:(/g:grammar/g:language/@id)[1]:)"/>
       <!--
       <xsl:message>DEBUG: ~~ $lang-id = <xsl:value-of select="$lang-id"/>. </xsl:message>
       -->
 
-      <xsl:variable name="idref_lang_part">
-        <xsl:choose>
-          <xsl:when test="@orig">
-            <!--
-                The only g:* elements that can have an @orig
-                are g:ref ang g:xref.
-                The only place they actually do is in xpath-semantics-30.
-            -->
-            <xsl:value-of select="@orig"/>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:value-of select="$lang-id"/>
-          </xsl:otherwise>
-        </xsl:choose>
-        <xsl:text>-</xsl:text>
-      </xsl:variable>
+      <xsl:variable name="idref_lang_part" select="$lang-id || '-'"/>
 
       <xsl:variable name="docprod_part_adjusted">
         <xsl:choose>
@@ -1645,7 +1564,7 @@
                  -->
             <xsl:for-each select="$sourceTree">
               <xsl:choose>
-                <xsl:when test="//prodrecap[@id=$symbol_ename] or $is-xslt30">
+                <xsl:when test="$prodrecaps[@id=$symbol_ename] or $is-xslt30">
                   <xsl:text>doc-</xsl:text>
                 </xsl:when>
                 <xsl:otherwise>
@@ -1673,6 +1592,7 @@
       </xsl:call-template>
 
       <xsl:value-of select="$symbol_ename"/>
+      <xsl:comment expand-text="1">$idref_lang_part = {$idref_lang_part}</xsl:comment>
     </nt>
     <!--
     <xsl:message>DEBUG: Exiting template add-nt-link. </xsl:message>
@@ -1771,5 +1691,4 @@
   </xsl:template>
 
 </xsl:stylesheet>
-<!-- vim: sw=2 ts=2 expandtab
--->
+

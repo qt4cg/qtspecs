@@ -14,12 +14,6 @@
     ... which see for decls of 'show-markup', 'show.diff.markup', etc.
   -->
 
-  <!--
-  <xsl:import href="issues.xsl"/>
-  <xsl:include href="issues-spec.xsl"/>
-  <xsl:param name="issues-file" select="'issues.xml'"/>
-  -->
-
   <xsl:output method="xml" encoding="utf-8"/>
 
   <xsl:param name="additional.css.2"/>
@@ -41,27 +35,6 @@
     <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
     <xsl:apply-templates/>
   </xsl:template> 
-
-  <!--========= Issues related templates ========== -->
-  <!--
-  <xsl:template match="p[@id='issues-list']">
-    <xsl:apply-templates select="document($issues-file)"/>
-  </xsl:template>
-  -->
-
-  <!-- mode: number -->
-  <!-- xsl:template mode="number-simple" match="prod">
-    <xsl:text>[</xsl:text>
-    <xsl:choose>
-      <xsl:when test="lhs/@number-id">
-        <xsl:value-of select="lhs/@number-id"/>
-      </xsl:when>
-      <xsl:otherwise>
-        <xsl:text>XX</xsl:text>
-      </xsl:otherwise>
-    </xsl:choose>
-    <xsl:text>]</xsl:text>
-  </xsl:template -->
 
   <!-- ===================================================================== -->
   <!-- Templates that deal with EBNF -->
@@ -210,15 +183,17 @@
             <xsl:value-of select="."/>
           </xsl:otherwise>
         </xsl:choose>
-
-        <!--
+        
+        <!-- Following code deleted by MHK 2025-01-21. For rationale see QT4 issue 1719. -->
+<!--
+        <!-\-
           Our inability to create a link for $ref-id may be a sign of
           something wrong, so we'll print a message saying so, unless
           its one of the cases where it's expected...
-        -->
+        -\->
         <xsl:variable name="doc_designation" select="ancestor::spec/header/w3c-designation"/>
 
-        <!--
+        <!-\-
           Exception #1:
           In specs for language extensions (update, scripting, full text),
           the appendix provides EBNF for the whole language (base + extension),
@@ -226,7 +201,7 @@
           Thus, in the appendix, the LHS symbol in a base language production,
           which wants to point to the corresponding production in the doc body,
           doesn't have one to point to.
-        -->
+        -\->
         <xsl:variable name="exception_for_extension_to_base" select="
             (
               contains($doc_designation, 'xquery-update-10')
@@ -267,20 +242,20 @@
             )
           "/>
 
-        <!--
+        <!-\-
           Also, the Update 1.0 doc has Core productions in the body,
           but they're not collected in an appendix. So we expect
           inability to link from the former to the latter.
-        -->
+        -\->
         <xsl:variable name="exception_for_update10_core" select="
             contains($doc_designation, 'xquery-update-10')
             and
             starts-with($ref-id, 'prod-core-')
           "/>
 
-        <xsl:if test="not($exception_for_extension_to_base) and not($exception_for_update10_core)">
+        <!-\-<xsl:if test="not($exception_for_extension_to_base) and not($exception_for_update10_core)">
           <xsl:message>Warning: link-text-with-check was unable to make a link for $ref-id="<xsl:value-of select="$ref-id"/>"</xsl:message>
-        </xsl:if>
+        </xsl:if>-\->-->
 
       </xsl:otherwise>
     </xsl:choose>
