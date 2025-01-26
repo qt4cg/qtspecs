@@ -179,13 +179,7 @@
 
   </xsl:template>
 
-  <xsl:template match="p[@role='lexical-state-tables']">
-    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
-    <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:for-each select="$grammar">
-      <xsl:call-template name="show-tokens-transition-to-state"/>
-    </xsl:for-each>
-  </xsl:template>
+
 
   <!-- This template "fills in" a paragraph in the EBNF section of document source files -->
   <xsl:template match="phrase[@role='defined-tokens-delimiting']">
