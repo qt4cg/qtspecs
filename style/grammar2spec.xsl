@@ -496,7 +496,7 @@
       </xsl:if>
   </xsl:template>
   
-  <xsl:template match="g:level/*" mode="gather-sub-productions" as="element(*)*">
+  <!--<xsl:template match="g:level/*" mode="gather-sub-productions" as="element(*)*">
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
       <xsl:variable name="this" select="."/>
@@ -513,7 +513,7 @@
             <xsl:with-param name="depth" select="$depth + 1"/>
           </xsl:apply-templates>       
       </xsl:if>
-  </xsl:template>
+  </xsl:template>-->
   
   <xsl:template match="g:token" mode="gather-sub-productions" as="element(*)?">
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
@@ -758,7 +758,7 @@
 
   <!-- -->
 
-  <xsl:template match="g:exprProduction">
+  <!--<xsl:template match="g:exprProduction">
     <xsl:param name="docprod_part"/>
     <xsl:for-each select="g:level[1]/*">
       <xsl:if test="position()!=1">
@@ -770,9 +770,9 @@
         <xsl:with-param name="level-list" select=".. | ../following-sibling::g:level"/>
       </xsl:call-template>
     </xsl:for-each>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:postfix">
+  <!--<xsl:template match="g:postfix">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)[1]"/>
@@ -797,9 +797,9 @@
         <xsl:text>*</xsl:text>
       </xsl:otherwise>
     </xsl:choose>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:prefix" name="g:prefix">
+  <!--<xsl:template match="g:prefix" name="g:prefix">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:param name="docprod_part"/>
     <xsl:variable name="next-name" select="following-sibling::*/@name"/>
@@ -829,9 +829,9 @@
     <xsl:call-template name="output-spec-based-next">
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
     </xsl:call-template>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:binary">
+  <!--<xsl:template match="g:binary">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:call-template name="output-spec-based-next">
@@ -856,9 +856,9 @@
         <xsl:text>*</xsl:text>
       </xsl:otherwise>
     </xsl:choose>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:primary">
+  <!--<xsl:template match="g:primary">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:variable name="is-not-last" select="boolean(../following-sibling::g:level)"/>
@@ -877,20 +877,20 @@
         <xsl:with-param name="docprod_part" select="$docprod_part"/>
       </xsl:call-template>
     </xsl:if>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:next">
+  <!--<xsl:template match="g:next">
     <xsl:param name="docprod_part"/>
-    <!-- The assumption is this we're in a exprProduction,
-         in a prefix, primary, etc., and want to call the next level. -->
-    <!-- xsl:variable name="name" select="ancestor::g:exprProduction/@name"/ -->
+    <!-\- The assumption is this we're in a exprProduction,
+         in a prefix, primary, etc., and want to call the next level. -\->
+    <!-\- xsl:variable name="name" select="ancestor::g:exprProduction/@name"/ -\->
     <xsl:variable name="name" select="ancestor::g:level/following-sibling::g:level/*/@name"/>
 
     <xsl:call-template name="add-nt-link">
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
       <xsl:with-param name="symbol_ename" select="$name"/>
     </xsl:call-template>
-  </xsl:template>
+  </xsl:template>-->
 
   <xsl:template match="g:token">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
