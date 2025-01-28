@@ -298,135 +298,7 @@
 
   <!-- ===================================================================== -->
 
-  <!-- EXPORT -->
-  <xsl:template name="show-tokens-transition-to-state">
-    <glist>
-      <xsl:variable name="whichLang" select="/g:grammar/g:language/@id"/>
-      <xsl:for-each select="/g:grammar/g:state-list/g:state[not(@show='no')]">
-        <xsl:variable name="rstate" select="@name"/>
-
-        <xsl:variable name="header-id">
-          <xsl:text>state-</xsl:text>
-          <xsl:choose>
-            <xsl:when test="starts-with($rstate, '#')">
-              <xsl:value-of select="substring($rstate, 2)"/>
-            </xsl:when>
-            <xsl:otherwise>
-              <xsl:value-of select="$rstate"/>
-            </xsl:otherwise>
-          </xsl:choose>
-        </xsl:variable>
-
-        <xsl:variable name="description" select="g:description/node()"/>
-        <xsl:variable name="recognizeTestString" select="concat(' ', normalize-space($rstate), ' ')"/>
-
-        <xsl:variable name="delimiters" select="' &#x9;&#10;'"/>
-        <gitem id="{$rstate}_{$whichLang}">
-          <xsl:call-template name="add-role-attribute">
-            <xsl:with-param name="default-class" select="'note'"/>
-          </xsl:call-template>
-          <label>The <xsl:value-of select="$rstate"/> State</label>
-          <def>
-            <p>
-              <xsl:apply-templates select="$description"/>
-            </p>
-            <p>
-              <table border = "1" summary="Transition table">
-                <thead>
-                  <tr>
-                    <th>Pattern</th>
-                    <th>Transition To State</th>
-                    <!-- th>Explanation</th -->
-                  </tr>
-                </thead>
-                <tbody>
-                  <xsl:for-each select="g:transition[g:tref[key('defns_by_name', @name)]]">
-                    <tr>
-                      <td>
-                        <xsl:for-each select="g:tref[not(@show='no') and key('defns_by_name', @name)]">
-                          <xsl:choose>
-                            <xsl:when test="@name = 'NotOccurrenceIndicator'">
-                              <xsl:text>[</xsl:text>
-                              <xsl:value-of select="@name"/>
-                              <xsl:text>]</xsl:text>
-                            </xsl:when>
-                            <xsl:otherwise>
-                              <xsl:call-template name="apply-refs">
-                                <xsl:with-param name="wrapper-name" select="'phrase'"/>
-                                <xsl:with-param name="string" select="@name"/>
-                              </xsl:call-template>
-                              <xsl:if test="position() != last()">
-                                <xsl:text>, </xsl:text>
-                              </xsl:if>
-                            </xsl:otherwise>
-                          </xsl:choose>
-                        </xsl:for-each>
-                      </td>
-                      <td>
-                        <table summary="Transition table">
-                          <tbody>
-                            <xsl:if test="@action">
-                              <tr>
-                                <td>
-                                  <loc>
-                                    <xsl:attribute name="href">
-                                      <xsl:choose>
-                                        <xsl:when test="@action='pushState' or @action='pushState()'">
-                                          <xsl:text>#lexaction-pushstate</xsl:text>
-                                        </xsl:when>
-                                        <xsl:when test="contains(@action, 'pushState(')">
-                                          <xsl:text>#lexaction-pushstate-with-param</xsl:text>
-                                        </xsl:when>
-                                        <xsl:when test="contains(@action, 'popState')">
-                                          <xsl:text>#lexaction-popstate</xsl:text>
-                                        </xsl:when>
-                                        <xsl:when test="contains(@action, 'input_stream.backup')">
-                                          <xsl:text>#lexaction-backup</xsl:text>
-                                        </xsl:when>
-                                      </xsl:choose>
-                                    </xsl:attribute>
-                                    <xsl:value-of select="@action"/>
-                                    <xsl:if test="not(contains(@action, '('))">
-                                      <xsl:text>()</xsl:text>
-                                    </xsl:if>
-                                  </loc>
-                                </td>
-                              </tr>
-                            </xsl:if>
-                            <xsl:choose>
-                              <xsl:when test="@next-state">
-                                <tr>
-                                  <td>
-                                    <loc href="#{@next-state}_{$whichLang}">
-                                      <xsl:value-of select="@next-state"/>
-                                    </loc>
-                                  </td>
-                                </tr>
-                              </xsl:when>
-                              <xsl:when test="not(@action)">
-                                <tr>
-                                  <td>
-                                    <loc href="#lexaction-maintain-state">
-                                      <xsl:text>(maintain state)</xsl:text>
-                                    </loc>
-                                  </td>
-                                </tr>
-                              </xsl:when>
-                            </xsl:choose>
-                          </tbody>
-                        </table>
-                      </td>
-                    </tr>
-                  </xsl:for-each>
-                </tbody>
-              </table>
-            </p>
-            <!-- p>&#160;</p -->
-          </def>
-        </gitem>
-      </xsl:for-each>
-    </glist>
-  </xsl:template>
+  
 
   <!-- Try to apply a space-delimited list of references to tokens. -->
   <xsl:template name="apply-refs">
@@ -624,7 +496,7 @@
       </xsl:if>
   </xsl:template>
   
-  <xsl:template match="g:level/*" mode="gather-sub-productions" as="element(*)*">
+  <!--<xsl:template match="g:level/*" mode="gather-sub-productions" as="element(*)*">
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
       <xsl:variable name="this" select="."/>
@@ -641,7 +513,7 @@
             <xsl:with-param name="depth" select="$depth + 1"/>
           </xsl:apply-templates>       
       </xsl:if>
-  </xsl:template>
+  </xsl:template>-->
   
   <xsl:template match="g:token" mode="gather-sub-productions" as="element(*)?">
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
@@ -886,7 +758,7 @@
 
   <!-- -->
 
-  <xsl:template match="g:exprProduction">
+  <!--<xsl:template match="g:exprProduction">
     <xsl:param name="docprod_part"/>
     <xsl:for-each select="g:level[1]/*">
       <xsl:if test="position()!=1">
@@ -898,9 +770,9 @@
         <xsl:with-param name="level-list" select=".. | ../following-sibling::g:level"/>
       </xsl:call-template>
     </xsl:for-each>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:postfix">
+  <!--<xsl:template match="g:postfix">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:variable name="left-name" select="(../following-sibling::g:level/*/@name)[1]"/>
@@ -925,9 +797,9 @@
         <xsl:text>*</xsl:text>
       </xsl:otherwise>
     </xsl:choose>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:prefix" name="g:prefix">
+  <!--<xsl:template match="g:prefix" name="g:prefix">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:param name="docprod_part"/>
     <xsl:variable name="next-name" select="following-sibling::*/@name"/>
@@ -957,9 +829,9 @@
     <xsl:call-template name="output-spec-based-next">
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
     </xsl:call-template>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:binary">
+  <!--<xsl:template match="g:binary">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:call-template name="output-spec-based-next">
@@ -984,9 +856,9 @@
         <xsl:text>*</xsl:text>
       </xsl:otherwise>
     </xsl:choose>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:primary">
+  <!--<xsl:template match="g:primary">
     <xsl:param name="docprod_part"/>
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
     <xsl:variable name="is-not-last" select="boolean(../following-sibling::g:level)"/>
@@ -1005,20 +877,20 @@
         <xsl:with-param name="docprod_part" select="$docprod_part"/>
       </xsl:call-template>
     </xsl:if>
-  </xsl:template>
+  </xsl:template>-->
 
-  <xsl:template match="g:next">
+  <!--<xsl:template match="g:next">
     <xsl:param name="docprod_part"/>
-    <!-- The assumption is this we're in a exprProduction,
-         in a prefix, primary, etc., and want to call the next level. -->
-    <!-- xsl:variable name="name" select="ancestor::g:exprProduction/@name"/ -->
+    <!-\- The assumption is this we're in a exprProduction,
+         in a prefix, primary, etc., and want to call the next level. -\->
+    <!-\- xsl:variable name="name" select="ancestor::g:exprProduction/@name"/ -\->
     <xsl:variable name="name" select="ancestor::g:level/following-sibling::g:level/*/@name"/>
 
     <xsl:call-template name="add-nt-link">
       <xsl:with-param name="docprod_part" select="$docprod_part"/>
       <xsl:with-param name="symbol_ename" select="$name"/>
     </xsl:call-template>
-  </xsl:template>
+  </xsl:template>-->
 
   <xsl:template match="g:token">
     <xsl:param name="wrapper-name" select="'rhs-group'"/>
