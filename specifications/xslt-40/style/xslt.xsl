@@ -82,7 +82,8 @@
 
           <xsl:choose>
             <xsl:when test="$pcount gt 0">
-              <xsl:message select="'Cannot reach occurrence #' || $pcount+1 || ' of ' || $name"/>
+              <!-- MHK: dropped the message, we just link to the first occurrence and this is harmless -->
+              <!--<xsl:message select="'In function finder, cannot reach occurrence #' || $pcount+1 || ' of xsl:' || $name"/>--> 
             </xsl:when>
             <xsl:otherwise>
               <option><xsl:sequence select="'xsl:' || @name || '&#8291;'"/></option>

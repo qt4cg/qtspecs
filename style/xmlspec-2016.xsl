@@ -1230,17 +1230,30 @@
           </xsl:attribute>
         </xsl:if>-->
 
+        <xsl:variable name="id-parts" select="tokenize(../@id, '-')"/>
         <xsl:choose>
-          <!-- Make a link to the production table ... -->
-          <xsl:when test="starts-with(../@id,'doc-')
-                          and id(concat('prod-',substring-after(../@id,'doc-')))">
+          <!-- For a principal production in the document body, make a link to the appendix ... -->
+          <xsl:when test="$id-parts[1] = 'doc'
+                          and id('prod-' || substring-after(../@id,'doc-'))">
             <code>
-              <a href="#{concat('prod-',substring-after(../@id,'doc-'))}">
+              <a href="#prod-{substring-after(../@id, 'doc-')}">
                 <xsl:apply-templates/>
               </a>
             </code>
           </xsl:when>
-          <!-- Make a link to the lhs in the doc ... -->
+          <!-- For a subsidiary production in the document body, make a link to the appendix ... -->
+          <xsl:when test="$id-parts[1] = 'doc'
+                          and $id-parts[3] = ../../prod[1]/lhs[1]
+                          and id('prod-' || $id-parts[2] || '-' || string(.))">
+            <!-- for example: doc-xpath40-SequenceType-ItemType links to prod-xpath40-ItemType -->
+            <code>
+              <a href="#prod-{$id-parts[2]}-{.}">
+                <xsl:apply-templates/>
+              </a>
+            </code>
+          </xsl:when>
+          <!-- For a production in the appendix corresponding to a principal production in the
+            document body, make a link to the inline version ... -->
           <xsl:when test="starts-with(../@id,'prod-')
                           and id(concat('doc-',substring-after(../@id,'prod-')))">
             <code>
