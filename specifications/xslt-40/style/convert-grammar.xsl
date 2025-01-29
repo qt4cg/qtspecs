@@ -52,27 +52,5 @@
     <xsl:next-match/>
   </xsl:template>
   
-<!--  <xsl:template match="nt[@def]">
-    <xsl:variable name="fn"><xsl:call-template name="get-gfn"/></xsl:variable>
-    <xsl:variable name="grammar" select="document($fn,.)"/>
-    <xsl:variable name="orig">
-      <xsl:call-template name="get-gnotation"/>
-    </xsl:variable>
-    
-    <nt>
-      <xsl:attribute name="def">
-        <xsl:variable name="def" select="@def"/>
-        <!-\- Override "hack" in base template so we always link to doc- -\->
-        <xsl:text>doc-</xsl:text>
-        <xsl:if test="true()">
-          <xsl:value-of select="$grammar/g:grammar/g:language/@id"/>
-          <xsl:text>-</xsl:text>
-        </xsl:if>
-        <xsl:value-of select="@def"/>
-      </xsl:attribute>
-      <xsl:apply-templates/>
-    </nt>
-  </xsl:template>-->
-  
 </xsl:stylesheet>
 
