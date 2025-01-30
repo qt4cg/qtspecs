@@ -325,6 +325,7 @@
             <xsl:with-param name="default.id" select="'contents'"/>
           </xsl:call-template>
           <xsl:text>Table of Contents</xsl:text>
+          <span class="expalltoc collapsed">&#x2009;▶</span>
         </h2>
         <ol class="toc">
           <xsl:apply-templates select="div1|../back/inform-div1|../back/div1" mode="toc"/>
@@ -1793,6 +1794,7 @@
           <p role="navigation" id="back-to-top"><a href="#title"><abbr title="Back to top">↑</abbr></a></p>
         </xsl:if>
         <xsl:call-template name="make-script"/>
+        <script src="js/toc.js"></script>
       </body>
     </html>
   </xsl:template>
@@ -2735,124 +2737,164 @@
 
   <!-- mode: toc -->
   <xsl:template mode="toc" match="div1">
+    <xsl:variable name="more-toc" select="$toc.level gt 1 and div2"/>
     <li>
-    <a>
-      <xsl:attribute name="href">
-        <xsl:call-template name="href.target">
-          <xsl:with-param name="target" select="."/>
-        </xsl:call-template>
-      </xsl:attribute>
-      <span class="secno">
-        <xsl:apply-templates select="." mode="divnum"/>
-      </span>
-      <span>
-        <xsl:call-template name="toc-entry-class"/>
-        <xsl:apply-templates select="head" mode="text"/>
-      </span>
-    </a>
-    <xsl:text>&#10;</xsl:text>
-    <xsl:if test="$toc.level &gt; 1">
-      <ol class="toc">
-        <xsl:apply-templates select="div2" mode="toc"/>
-      </ol>
-    </xsl:if>
+      <details>
+        <summary>
+          <a>
+            <xsl:attribute name="href">
+              <xsl:call-template name="href.target">
+                <xsl:with-param name="target" select="."/>
+              </xsl:call-template>
+            </xsl:attribute>
+            <span class="secno">
+              <xsl:apply-templates select="." mode="divnum"/>
+            </span>
+            <span>
+              <xsl:call-template name="toc-entry-class"/>
+              <xsl:apply-templates select="head" mode="text"/>
+            </span>
+          </a>
+          <xsl:if test="$more-toc">
+            <span class="exptoc collapsed">&#x2009;▶</span>
+          </xsl:if>
+        </summary>
+        <xsl:if test="$more-toc">
+          <ol class="toc">
+            <xsl:apply-templates select="div2" mode="toc"/>
+          </ol>
+        </xsl:if>
+      </details>
     </li>
   </xsl:template>
 
   <xsl:template mode="toc" match="div2">
+    <xsl:variable name="more-toc" select="$toc.level gt 2 and div3"/>
     <li>
-    <a>
-      <xsl:attribute name="href">
-        <xsl:call-template name="href.target">
-          <xsl:with-param name="target" select="."/>
-        </xsl:call-template>
-      </xsl:attribute>
-      <span class="secno">
-        <xsl:apply-templates select="." mode="divnum"/>
-      </span>
-      <span>
-        <xsl:call-template name="toc-entry-class"/>
-        <xsl:apply-templates select="head" mode="text"/>
-      </span>
-    </a>
-    <xsl:if test="$toc.level &gt; 2 and child::div3">
-      <ol class="toc">
-        <xsl:apply-templates select="div3" mode="toc"/>
-     </ol>
-    </xsl:if>
+      <details>
+        <summary>
+          <a>
+            <xsl:attribute name="href">
+              <xsl:call-template name="href.target">
+                <xsl:with-param name="target" select="."/>
+              </xsl:call-template>
+            </xsl:attribute>
+            <span class="secno">
+              <xsl:apply-templates select="." mode="divnum"/>
+            </span>
+            <span>
+              <xsl:call-template name="toc-entry-class"/>
+              <xsl:apply-templates select="head" mode="text"/>
+            </span>
+          </a>
+          <xsl:if test="$more-toc">
+            <span class="exptoc">&#x2009;▶</span>
+          </xsl:if>
+        </summary>
+        <xsl:if test="$more-toc">
+          <ol class="toc">
+            <xsl:apply-templates select="div3" mode="toc"/>
+          </ol>
+        </xsl:if>
+      </details>
     </li>
   </xsl:template>
 
   <xsl:template mode="toc" match="div3">
-    <!--<xsl:text>&#10;</xsl:text>-->
+    <xsl:variable name="more-toc" select="$toc.level gt 3 and div4"/>
     <li>
-    <a>
-      <xsl:attribute name="href">
-        <xsl:call-template name="href.target">
-          <xsl:with-param name="target" select="."/>
-        </xsl:call-template>
-      </xsl:attribute>
-      <span class="secno">
-        <xsl:apply-templates select="." mode="divnum"/>
-      </span>
-      <span>
-        <xsl:call-template name="toc-entry-class"/>
-        <xsl:apply-templates select="head" mode="text"/>
-      </span>
-    </a>
-    <!--<xsl:text>&#10;</xsl:text>-->
-    <xsl:if test="$toc.level &gt; 3 and child::div4">
-      <xsl:apply-templates select="div4" mode="toc"/>
-    </xsl:if>
-   </li>
+      <details>
+        <summary>
+          <a>
+            <xsl:attribute name="href">
+              <xsl:call-template name="href.target">
+                <xsl:with-param name="target" select="."/>
+              </xsl:call-template>
+            </xsl:attribute>
+            <span class="secno">
+              <xsl:apply-templates select="." mode="divnum"/>
+            </span>
+            <span>
+              <xsl:call-template name="toc-entry-class"/>
+              <xsl:apply-templates select="head" mode="text"/>
+            </span>
+          </a>
+          <xsl:if test="$more-toc">
+            <span class="exptoc">&#x2009;▶</span>
+          </xsl:if>
+        </summary>
+        <xsl:if test="$more-toc">
+          <ol class="toc">
+            <xsl:apply-templates select="div4" mode="toc"/>
+          </ol>
+        </xsl:if>
+      </details>
+    </li>
   </xsl:template>
 
   <xsl:template mode="toc" match="div4">
-    <!--<xsl:text>&#10;</xsl:text>-->
-    <a>
-      <xsl:attribute name="href">
-        <xsl:call-template name="href.target">
-          <xsl:with-param name="target" select="."/>
-        </xsl:call-template>
-      </xsl:attribute>
-      <span class="secno">
-        <xsl:apply-templates select="." mode="divnum"/>
-      </span>
-      <span>
-        <xsl:call-template name="toc-entry-class"/>
-        <xsl:apply-templates select="head" mode="text"/>
-      </span>
-    </a>
-    <xsl:text>&#10;</xsl:text>
-    <xsl:if test="$toc.level &gt; 4">
-      <xsl:apply-templates select="div5" mode="toc"/>
-    </xsl:if>
+    <xsl:variable name="more-toc" select="$toc.level gt 4 and div5"/>
+    <li>
+      <details>
+        <summary>
+          <a>
+            <xsl:attribute name="href">
+              <xsl:call-template name="href.target">
+                <xsl:with-param name="target" select="."/>
+              </xsl:call-template>
+            </xsl:attribute>
+            <span class="secno">
+              <xsl:apply-templates select="." mode="divnum"/>
+            </span>
+            <span>
+              <xsl:call-template name="toc-entry-class"/>
+              <xsl:apply-templates select="head" mode="text"/>
+            </span>
+          </a>
+          <xsl:if test="$more-toc">
+            <span class="exptoc">&#x2009;▶</span>
+          </xsl:if>
+        </summary>
+        <xsl:if test="$more-toc">
+          <ol class="toc">
+            <xsl:apply-templates select="div5" mode="toc"/>
+          </ol>
+        </xsl:if>
+      </details>
+    </li>
   </xsl:template>
 
   <xsl:template mode="toc" match="div5">
-    <!--<xsl:text>&#10;</xsl:text>-->
-    <a>
-      <xsl:attribute name="href">
-        <xsl:call-template name="href.target">
-          <xsl:with-param name="target" select="."/>
-        </xsl:call-template>
-      </xsl:attribute>
-      <span class="secno">
-        <xsl:apply-templates select="." mode="divnum"/>
-      </span>
-      <span>
-        <xsl:call-template name="toc-entry-class"/>
-        <xsl:apply-templates select="head" mode="text"/>
-      </span>
-    </a>
-    <!--<xsl:text>&#10;</xsl:text>-->
-    <xsl:if test="$toc.level &gt; 5">
-      <xsl:apply-templates select="div6" mode="toc"/>
-    </xsl:if>
+    <xsl:variable name="more-toc" select="$toc.level gt 5 and div6"/>
+    <li>
+      <details>
+        <summary>
+          <a>
+            <xsl:attribute name="href">
+              <xsl:call-template name="href.target">
+                <xsl:with-param name="target" select="."/>
+              </xsl:call-template>
+            </xsl:attribute>
+            <span class="secno">
+              <xsl:apply-templates select="." mode="divnum"/>
+            </span>
+            <span>
+              <xsl:call-template name="toc-entry-class"/>
+              <xsl:apply-templates select="head" mode="text"/>
+            </span>
+          </a>
+          <xsl:if test="$more-toc">
+            <span class="exptoc">&#x2009;▶</span>
+          </xsl:if>
+        </summary>
+        <xsl:if test="$more-toc">
+          <xsl:apply-templates select="div6" mode="toc"/>
+        </xsl:if>
+      </details>
+    </li>
   </xsl:template>
 
   <xsl:template mode="toc" match="div6">
-    <!--<xsl:text>&#10;</xsl:text>-->
     <a>
       <xsl:attribute name="href">
         <xsl:call-template name="href.target">
@@ -2867,32 +2909,38 @@
         <xsl:apply-templates select="head" mode="text"/>
       </span>
     </a>
-    <!--<xsl:text>&#10;</xsl:text>-->
   </xsl:template>
 
   <xsl:template mode="toc" match="inform-div1">
+    <xsl:variable name="more-toc" select="$toc.level gt 1 and div2"/>
     <li>
-    <a>
-      <xsl:attribute name="href">
-        <xsl:call-template name="href.target">
-          <xsl:with-param name="target" select="."/>
-        </xsl:call-template>
-      </xsl:attribute>
-     <span class="secno">
-        <xsl:apply-templates select="." mode="divnum"/>
-      </span>
-      <span>
-        <xsl:call-template name="toc-entry-class"/>
-        <xsl:apply-templates select="head" mode="text"/>
-      </span>
-    </a>
-    <xsl:text> (Non-Normative)</xsl:text>
-    <!--<xsl:text>&#10;</xsl:text>-->
-    <xsl:if test="$toc.level &gt; 2">
-      <ol class="toc">
-       <xsl:apply-templates select="div2" mode="toc"/>
-      </ol>
-    </xsl:if>
+      <details>
+        <summary>
+          <a>
+            <xsl:attribute name="href">
+              <xsl:call-template name="href.target">
+                <xsl:with-param name="target" select="."/>
+              </xsl:call-template>
+            </xsl:attribute>
+            <span class="secno">
+              <xsl:apply-templates select="." mode="divnum"/>
+            </span>
+            <span>
+              <xsl:call-template name="toc-entry-class"/>
+              <xsl:apply-templates select="head" mode="text"/>
+            </span>
+          </a>
+          <xsl:text> (Non-Normative)</xsl:text>
+          <xsl:if test="$more-toc">
+            <span class="exptoc">&#x2009;▶</span>
+          </xsl:if>
+        </summary>
+        <xsl:if test="$more-toc">
+          <ol class="toc">
+            <xsl:apply-templates select="div2" mode="toc"/>
+          </ol>
+        </xsl:if>
+      </details>
     </li>
   </xsl:template>
 
