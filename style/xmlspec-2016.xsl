@@ -1360,6 +1360,13 @@
       <xsl:apply-templates/>
     </div>
   </xsl:template>
+  
+  <xsl:template match="gitem[label='Notes']/def/note">
+    <!--Avoid the extra "Note" label in the Notes section of the F&O spec -->
+    <div class="note">
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
 
   <!-- notice: a front-matter advisory about the spec's status -->
   <!-- make sure people notice it -->
