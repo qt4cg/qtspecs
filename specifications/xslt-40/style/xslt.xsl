@@ -6,13 +6,11 @@
 	version="2.0"
 	xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
         xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax"
-        xmlns:g="http://www.martin-loetzsch.de/DOTML"
-        exclude-result-prefixes="e xs g"
+        exclude-result-prefixes="e xs"
         xmlns:xs="http://www.w3.org/2001/XMLSchema"
 >
 <xsl:import href="../../../style/xsl-query-2016.xsl"/>
 <xsl:import href="../../../style/funcproto.xsl"/>
-<xsl:import href="dotml2dot.xsl"/>
 
 <xsl:output method="xml" indent="no" encoding="utf-8"/>
 <xsl:output name="xml" method="xml" indent="no" encoding="utf-8"/>
@@ -997,74 +995,6 @@ constructor. These elements are:</p>
     </xsl:choose>
   </div>
 </xsl:template>
-  
-<!-- Handle DotML graphs -->
-  
-<xsl:template match="/" mode="make-dot-files">
-  <!-- entry point for processing that only makes the .dot files -->
-  <xsl:for-each select=".//g:graph">
-    <xsl:variable name="preprocessed-graph">
-      <xsl:apply-templates select="." mode="preprocess-dotml"/>
-    </xsl:variable>  
-    <xsl:variable name="n" select="count(preceding::g:graph) + 1"/>  
-    <xsl:result-document href="img/fig{$n}.dot" method="text">
-      <!-- invoke template in imported DotML stylesheet -->
-      <xsl:apply-templates select="$preprocessed-graph/g:graph"/>
-    </xsl:result-document>
-  </xsl:for-each>
-</xsl:template>  
-  
-<xsl:template match="*/g:graph">
-  <!-- */g:graph so that this template doesn't match when we 
-       are preprocessing the graphs from make-dot-files mode. -->
-  <xsl:variable name="n" select="count(preceding::g:graph) + 1"/>
-  <xsl:variable name="svgfile" select="concat('../img/fig', $n, '.svg')"/>
-  <xsl:variable name="svgdoc" select="doc(resolve-uri($svgfile, base-uri($root)))"/>
-  
-  <xsl:apply-templates select="$svgdoc" mode="copy-svg"/>
-</xsl:template>
-  
-  <xsl:template match="node() | @*" mode="copy-svg">
-    <xsl:copy copy-namespaces="no">
-      <xsl:apply-templates select="@*, node()" mode="copy-svg"/>
-    </xsl:copy>
-  </xsl:template>
-  
-  <xsl:template match="@contentScriptType | @contentStyleType" mode="copy-svg"/>
-  
-  <xsl:function name="g:points-to-pixels" as="xs:string">
-    <xsl:param name="points" as="xs:string"/>
-    <xsl:sequence select="string(round(number(replace($points, 'pt', '')) * 1.33))"/>
-  </xsl:function>
-  
-<xsl:template match="g:*" mode="preprocess-dotml">
-   <xsl:copy>
-      <xsl:copy-of select="@*"/>
-      <xsl:apply-templates mode="preprocess-dotml"/>
-   </xsl:copy>
-</xsl:template>
-  
-  <xsl:template match="g:node" mode="preprocess-dotml">
-    <xsl:copy>
-      <xsl:copy-of select="@* except @edge-color"/>
-      <xsl:if test="empty(@id)">
-        <xsl:attribute name="id" select="generate-id(.)"/>
-      </xsl:if>
-    </xsl:copy>
-    <xsl:apply-templates mode="preprocess-dotml"/>
-    <xsl:for-each select="g:node">
-       <g:edge from="{g:node-id(..)}" to="{g:node-id(.)}" >
-         <xsl:if test="@edge-color">
-           <xsl:attribute name="color" select="@edge-color"/>
-         </xsl:if>
-       </g:edge>
-    </xsl:for-each>    
-  </xsl:template>
-  
-  <xsl:function name="g:node-id" as="xs:string">
-    <xsl:param name="node" as="element(g:node)"/>
-    <xsl:sequence select="($node/@id, generate-id($node))[1]"/>
-  </xsl:function>
   
   <xsl:template match="eg">
     <xsl:variable name="max-length"
