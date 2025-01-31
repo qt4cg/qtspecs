@@ -23067,9 +23067,7 @@ map:of-pairs($maps =!> map:pairs(),
       </fos:equivalent>
      
       <fos:errors>
-         <p>An error is raised <errorref spec="FO" class="RG" code="0013"
-               /> if both the <code>combine</code> and <code>duplicates</code>
-            options are present.</p>
+
          
          <p>An error is raised <errorref spec="FO" class="JS" code="0003"
                /> if the value of 
@@ -23092,6 +23090,11 @@ map:of-pairs($maps =!> map:pairs(),
             types. The type of a map (for example <code>map(xs:integer, xs:string)</code>) is
             descriptive of the entries it currently contains, but is not a constraint on how the map
             may be combined with other maps.</p>
+         <p>The XSLT 3.0 recommendation included a specification of this function that incorrectly used
+            the option value <code>{'duplicates':'unspecified'}</code> in place of
+            <code>{'duplicates':'use-any'}</code>. XSLT implementations wishing to
+            preserve backwards compatibility <rfc2119>may</rfc2119> choose to retain support
+            for this setting.</p>
       </fos:notes>
       <fos:examples>
          <fos:variable name="week" id="v-map-merge-week"
@@ -23109,6 +23112,12 @@ map:of-pairs($maps =!> map:pairs(),
 ))</eg></fos:expression>
                <fos:result>{ 0: "no", 1: "yes" }</fos:result>
                <fos:postamble>Returns a map with two entries</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>map:merge(({ "red": 0 }, { "green": 1}, { "blue": 2 })) 
+                  => map:keys()</eg></fos:expression>
+               <fos:result>"red", "green", "blue"</fos:result>
+               <fos:postamble>Note the order of the result.</fos:postamble>
             </fos:test>
             <fos:test use="v-map-merge-week">
                <fos:expression><eg>map:merge(
@@ -23159,21 +23168,26 @@ map:of-pairs($maps =!> map:pairs(),
                   entry that appears in the result is the <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref> of the entries
                   in the input maps, retaining order.</fos:postamble>
             </fos:test>
-           
             <fos:test>
-               <fos:expression><eg>map:merge(({ "red": 0 }, { "green": 1}, { "blue": 2 })) 
-                  => map:keys()</eg></fos:expression>
-               <fos:result>"red", "green", "blue"</fos:result>
+               <fos:expression>map:merge(
+  ({ "oxygen": 0.22, "hydrogen": 0.68, "nitrogen": 0.1 },
+   { "oxygen": 0.24, "hydrogen": 0.70, "nitrogen": 0.06 }), 
+  { "duplicates": fn($a, $b){ max(($a, $b)) } })
+               </fos:expression>
+               <fos:result>{ "oxygen": 0.24, "hydrogen": 0.70, "nitrogen": 0.1 }</fos:result>
+               <fos:postamble>The result map holds, for each distinct key, the maximum of the values
+               for that key in the input.</fos:postamble>
             </fos:test>
+            
 
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="1725">
+         <fos:change issue="1725" PR="1727" date="2025-01-31">
             <p>For consistency with the new functions <function>map:build</function>
             and <function>map:of-pairs</function>, the handling of duplicates
-            may now be controlled by the <code>combine</code> option as an alternative
-            to the existing <code>duplicates</code> option.</p>
+            may now be controlled by supplying a user-defined callback function as an alternative
+            to the fixed values for the earlier <code>duplicates</code> option.</p>
          </fos:change>
       </fos:changes>
    </fos:function>
@@ -23220,54 +23234,49 @@ map:of-pairs($maps =!> map:pairs(),
                   taken if two entries in the input sequence have key values
                   <var>K1</var> and <var>K2</var> where <var>K1</var> and <var>K2</var> are the 
                   <termref
-                     def="dt-same-key">same key</termref>. This option and the <code>combine</code>
-                  option are mutually exclusive.
+                     def="dt-same-key">same key</termref>. 
                </fos:meaning>
-               <fos:type>xs:string</fos:type>
-               <fos:default>combine</fos:default>
+               <fos:type>(enum( "reject", "use-first", "use-last", "use-any", "combine") | fn(item()*, item()*) as item()*)?</fos:type>
+               <fos:default>"combine"</fos:default>
                <fos:values>
-                  <fos:value value="reject">
-                     Equivalent to specifying <code>"combine": fn(){error(xs:QName("err:FOJS0003"), ...)</code>
-                     (the remaining arguments to <function>fn:error</function> being
-                     <termref def="implementation-defined"/>).
+                  <fos:value value='"reject"'>
+                     Equivalent to supplying a function that raises a dynamic error
+                     with error code "FOJS0003". The effect is that duplicate keys
+                     result in an error.
                   </fos:value>
-                  <fos:value value="use-first"
-                        >Equivalent to specifying <code>"combine": fn($a, $b){ $a }</code>.
+                  <fos:value value='"use-first"'
+                        >Equivalent to supplying the function <code>fn($a, $b){ $a }</code>.
+                     The effect is that the first of the duplicates is chosen.
                   </fos:value>
-                  <fos:value value="use-last"
-                        >Equivalent to specifying <code>"combine": fn($a, $b){ $b }</code>.
+                  <fos:value value='"use-last"'
+                        >Equivalent to supplying the function <code>fn($a, $b){ $b }</code>.
+                     The effect is that the last of the duplicates is chosen.
                   </fos:value>
-                  <fos:value value="use-any"
-                        >Equivalent to specifying <code>"combine": fn($a, $b){ one-of($a, $b) }</code>
+                  <fos:value value='"use-any"'
+                        >Equivalent to supplying the function <code>fn($a, $b){ one-of($a, $b) }</code>
                      where <code>one-of</code> chooses either <code>$a</code> or <code>$b</code> in
-                     an <termref def="implementation-defined"/> way.
+                     an <termref def="implementation-dependent"/> way. The effect is that it is
+                     <termref def="implementation-dependent"/> which of the duplicates is chosen.
                   </fos:value>
-                  <fos:value value="combine"
-                        >Equivalent to specifying <code>"combine": fn($a, $b){ $a, $b }</code>.
+                  <fos:value value='"combine"'
+                        >Equivalent to supplying the function <code>fn($a, $b){ $a, $b }</code>
+                     (or equivalently, the function <code>op(",")</code>).
+                     The effect is that the result contains the <xtermref spec="XP40" ref="dt-sequence-concatenation"/>
+                     of the values having the same key, retaining order.
+                  </fos:value>
+                  <fos:value value="function(*)">
+                     A function with signature <code>fn(item()*, item()*) as item()*</code>.
+                     The function is called for any entry in the input sequence that has the 
+                     <termref def="dt-same-key"/> as a previous entry. The first argument
+                     is the existing value associated with the key; the second argument
+                     is the value associated with the key in the duplicate input entry,
+                     and the result is the new value to be associated with the key. The effect
+                     is cumulative: for example if there are three values <var>X</var>, <var>Y</var>,
+                     and <var>Z</var> associated with the same key, and the supplied function is
+                     <var>F</var>, then the result is an entry whose value is 
+                     <code><var>X</var> => <var>F</var>(<var>Y</var>) => <var>F</var>(<var>Z</var>)</code>.
                   </fos:value>
                </fos:values>
-            </fos:option>
-
-            <fos:option key="combine">
-                  <fos:meaning>Supplies a function for handling duplicate keys: specifically, the action to be
-                     taken if entries in the input sequence contain entries with key values
-                     <var>K1</var> and <var>K2</var> where <var>K1</var> and <var>K2</var> are the 
-                     <termref
-                        def="dt-same-key">same key</termref>. This option and the <code>duplicates</code>
-                     option are mutually exclusive.
-                  </fos:meaning>
-                  <fos:type>(fn($existing-value as item()*, $new-value as item()*) as item()*)?</fos:type>
-                  <fos:default>fn($a, $b){ $a, $b }</fos:default>
-                  <fos:values>
-                     <fos:value value="User-supplied function">
-                        A function with signature <code>fn(item()*, item()*) as item()*</code>.
-                        The function is called for any entry in the input sequence that has the 
-                        <termref def="dt-same-key"/> as a previous entry. The first argument
-                        is the existing value associated with the key; the second argument
-                        is the value associated with the key in the duplicate input entry,
-                        and the result is the new value to be associated with the key.
-                     </fos:value>
-                  </fos:values>
                         
              </fos:option>
 
@@ -23282,15 +23291,19 @@ let $one-of := fn($a, $b) {
    (: select either $a or $b at implementation option :)
    if (environment-variable("X")) then $a else $b
 }
+let $duplicates := $options ? duplicates
 let $combine as function(item()*, item()*) as item()* :=
-  { "reject":    fn($a, $b){ error(xs:QName("err:FOJS0003")) },
-    "use-first": fn($a, $b){ $a },
-    "use-last":  fn($a, $b){ $b },
-    "use-any":   fn($a, $b){ $one-of($a, $b) },
-    "combine":   fn($a, $b){ $a, $b }
-  } ? ($options?duplicates)
-  otherwise $options?combine
-  otherwise fn($a, $b) { $a, $b }
+  if ($duplicates instance of xs:string)
+  then 
+      { "reject":    fn($a, $b){ error(xs:QName("err:FOJS0003")) },
+        "use-first": fn($a, $b){ $a },
+        "use-last":  fn($a, $b){ $b },
+        "use-any":   fn($a, $b){ $one-of($a, $b) },
+        "combine":   fn($a, $b){ $a, $b }
+      } ? $duplicates
+  else if ($duplicates instance of function(*))    
+  then $duplicates
+  else fn($a, $b) { $a, $b }
 return fold-left( $input, {},
          fn ( $out, $next ) {
            let $newVal :=
@@ -23301,17 +23314,11 @@ return fold-left( $input, {},
          })
       </fos:equivalent>
       <fos:errors>
-         <p>An error is raised <errorref spec="FO" class="RG" code="0013"
-               /> if both the <code>combine</code> and <code>duplicates</code>
-            options are present.</p>
          
          <p>An error is raised <errorref spec="FO" class="JS" code="0003"
                /> if the value of 
           <code>$options</code> indicates that duplicates are to be rejected, and a duplicate key is encountered.</p>
-         <p>An error is raised <errorref spec="FO" class="JS" code="0005"
-               /> if the value of 
-          <code>$options</code> includes an entry whose key is defined 
-          in this specification, and whose value is not a permitted value for that key.</p>
+         
          
       </fos:errors>
 
@@ -23399,25 +23406,36 @@ return fold-left( $input, {},
             <fos:test use="v-map-of-week">
                <fos:expression><eg>map:of-pairs(
   (map:pairs($week), { "key": 6, "value": "Sonnabend" }),
-  { "combine": fn($old, $new) { $new } }
+  { "duplicates": "use-last" }
 )</eg></fos:expression>
                <fos:result>{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Sonnabend" }</fos:result>
                <fos:postamble>The value of the existing map is unchanged; the returned map
                   contains all the entries from <code>$week</code>, with one entry replaced by a
                   new entry. Both input maps contain an entry with the key <code>6</code>; the
-                  supplied <code>$combine</code> function ensures that the one used in the result 
+                  supplied <code>$duplicates</code> option ensures that the one used in the result 
                   is the one that comes last in the input sequence.</fos:postamble>
             </fos:test>
             <fos:test use="v-map-of-week">
                <fos:expression><eg>map:of-pairs(
   (map:pairs($week), { "key": 6, "value": "Sonnabend" }),
-  { "combine": concat(?, '|', ?) }
+  { "duplicates": concat(?, '|', ?) }
 )</eg></fos:expression>
                <fos:result>{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag|Sonnabend" }</fos:result>
                <fos:postamble>In the result map, the value for key <code>6</code> is obtained by concatenating the values
                   from the two input maps, with a separator character.</fos:postamble>
+            </fos:test>
+            
+            <fos:test>
+               <fos:expression><eg>map:of-pairs(
+   (  map:pairs({ "England": 2, "Germany": 1 }),
+      map:pairs({ "France": 2, "Germany": 2 })
+      map:pairs({ "England": 0, "France": 1 }) ), 
+   { "duplicates": op("+") })</eg></fos:expression>
+            
+            <fos:result>{ "England": 2, "Germany": 3, "France": 3 }</fos:result>
+               <fos:postamble>The values for each distinct key are summed.</fos:postamble>
             </fos:test>
             
             <fos:test>
@@ -24610,8 +24628,8 @@ else map:put($map, $key, $action(()))
             <item><p>If the key is not already present in the target map, the processor adds a
                new key-value pair to the map, with that key and that value. </p></item>
             <item><p>If the key is already present, the processor combines the new value for the key
-               with the existing value as determined by the <code>combine</code>
-               and <code>duplicates</code> options.</p>
+               with the existing value as determined by the 
+               and <code>duplicates</code> option.</p>
                <p>By default, when two duplicate entries occur:</p>
                <ulist>
                   <item><p>A single combined entry will be present in the result.</p></item>
@@ -24650,7 +24668,17 @@ else map:put($map, $key, $action(()))
   return map:pair($key, $val)
 ) => map:of-pairs($options)      
       </fos:equivalent>
-      
+      <fos:errors>
+         
+         <p>An error is raised <errorref spec="FO" class="JS" code="0003"
+               /> if the value of 
+          <code>$options</code> indicates that duplicates are to be rejected, and a duplicate key is encountered.</p>
+         <p>An error is raised <errorref spec="FO" class="JS" code="0005"
+               /> if the value of 
+          <code>$options</code> includes an entry whose key is defined 
+          in this specification, and whose value is not a permitted value for that key.</p>
+         
+      </fos:errors>
       
       <fos:notes>
 
@@ -24703,7 +24731,7 @@ else map:put($map, $key, $action(()))
   ("apple", "apricot", "banana", "blueberry", "cherry"), 
   substring(?, 1, 1),
   string-length#1,
-  { "combine": op("+") }
+  { "duplicates": op("+") }
 )</eg></fos:expression>
                <fos:result>{ "a": 12, "b": 15, "c": 6 }</fos:result>
                <fos:postamble>Constructs a map where the key is the first character of an input item, and where the corresponding value
@@ -24759,7 +24787,7 @@ return map:build($titles/title, fn($title) { $title/ix })
             <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
                corresponding values represent the number of employees at each distinct location. Any employees that
                lack an <code>@location</code> attribute will be excluded from the result.</p>
-            <eg>map:build(//employee, fn { @location }, fn { 1 }, { "combine": op("+") })</eg>
+            <eg>map:build(//employee, fn { @location }, fn { 1 }, { "duplicates": op("+") })</eg>
          </fos:example>
          <fos:example>
             <p>The following expression creates a map whose keys are employee <code>@location</code> values, and whose
