@@ -28,9 +28,6 @@
   <xsl:param name="off-color" select="'#ffffff'"/>
 
   <xsl:param name="additional.css.diff">
-    <xsl:if test="xs:integer($show.diff.markup) != 0">
-      <xsl:sequence select="'showdiff.css'"/>
-    </xsl:if>
   </xsl:param>
 
   <xsl:param name="additional.title">

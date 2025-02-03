@@ -3,10 +3,7 @@
                 version="1.0">
   <xsl:import href="../../../style/xsl-query-2016.xsl"/>
 
-  <!-- Baseline date from which differences will be shown -->
-  <xsl:param name="diff.baseline" select="'0001-01-01'"/>
-
-<xsl:param name="additional.css" select="'xslt-xquery-serialization-40.css'"/>
+  <xsl:param name="additional.css" select="'xslt-xquery-serialization-40.css'"/>
 
 <!-- ==================================================================== -->
 
@@ -24,4 +21,3 @@
   </xsl:template>
 
 </xsl:stylesheet>
-
