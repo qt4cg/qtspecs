@@ -94,6 +94,18 @@
     </xsl:for-each>
   </xsl:variable>
 
+  <xsl:variable name="triage-required" as="xs:integer*">
+    <xsl:for-each select="$issue-list">
+      <xsl:variable name="issue" select="."/>
+      <xsl:if test="$issue?state='open'
+                    and not(f:has-label($issue,
+                             ('PRG-required', 'PRG-easy', 'PRG-hard',
+                              'PRG-optional', 'Build', 'PR Pending')))">
+        <xsl:sequence select="xs:integer($issue?number)"/>
+      </xsl:if>
+    </xsl:for-each>
+  </xsl:variable>
+
   <xsl:variable name="special" as="xs:integer*"
                 select="distinct-values(($requires-confirmation, $propose-close, $propose-merge,
                                          $blocked, $xslt))"/>
@@ -206,11 +218,21 @@
     <xsl:text>The following issues are labeled “required for V4.0”.&#10;&#10;</xsl:text>
     <xsl:sequence select="f:issue-list($prg-required)"/>
   </xsl:if>
+
+  <xsl:if test="exists($triage-required)">
+    <xsl:text>*** To be triaged&#10;</xsl:text>
+    <xsl:text>:PROPERTIES:&#10;</xsl:text>
+    <xsl:text>:CUSTOM_ID: triage&#10;</xsl:text>
+    <xsl:text>:END:&#10;&#10;</xsl:text>
+    <xsl:text>The following issues need to be triaged.&#10;&#10;</xsl:text>
+    <xsl:sequence select="f:issue-list($triage-required)"/>
+  </xsl:if>
+
 </xsl:template>
 
 <xsl:function name="f:has-label" as="xs:boolean">
   <xsl:param name="issue" as="map(*)"/>
-  <xsl:param name="label" as="xs:string"/>
+  <xsl:param name="label" as="xs:string+"/>
 
   <xsl:variable name="labels" as="xs:string*">
     <xsl:if test="map:contains($issue, 'labels')">
