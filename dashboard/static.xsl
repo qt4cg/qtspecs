@@ -53,6 +53,20 @@
         <xsl:map-entry key="'title'" select="'XSLT and XQuery Serialization 4.0'"/>
       </xsl:map>
     </xsl:map-entry>
+    <xsl:map-entry key="'expath-binary-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'expath-binary-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'EXPath Binary Module 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
+    <xsl:map-entry key="'expath-file-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'expath-file-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'EXPath File Module 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
   </xsl:map>
 </xsl:variable>
 
