@@ -3062,8 +3062,8 @@ compare($N * $arg2, 0) eq compare($arg1, 0).</eg>
          <p>The <code>$value</code> argument may be of any numeric data type
             (<code>xs:double</code>, <code>xs:float</code>, <code>xs:decimal</code>, or their
             subtypes including <code>xs:integer</code>). Note that if an <code>xs:decimal</code> is
-            supplied, it is not automatically promoted to an <code>xs:double</code>, as such
-            promotion can involve a loss of precision.</p>
+            supplied, it is not automatically converted to an <code>xs:double</code>, as such
+            conversion can involve a loss of precision.</p>
          <p>If the supplied value of the <code>$value</code> argument is an empty sequence, the
             function behaves as if the supplied value were the <code>xs:double</code> value
                <code>NaN</code>.</p>
@@ -3928,8 +3928,8 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
                ref="ieee754-2019"
             /> specification of the <code>pown</code> function applied to a
             64-bit binary floating point value and an integer.</p>
-         <p>Otherwise <code>$y</code> is converted to an <code>xs:double</code> by numeric
-            promotion, and the result is <code>$x</code> raised to the power of
+         <p>Otherwise <code>$y</code> is cast to an <code>xs:double</code>, 
+            and the result is <code>$x</code> raised to the power of
                <code>$y</code> as defined in the <bibref
                ref="ieee754-2019"
             /> specification of the
@@ -4577,9 +4577,9 @@ translate(value := '٢٠٢٣', replace := '٠١٢٣٤٥٦٧٨٩', with := '01234
          <p diff="chg" at="B">If <code>$x</code> is negative, then:</p>
          <ulist diff="chg" at="B">
             <item><p>If <code>$y</code> is positive, then the value of <code>atan2($y, $x)</code> is 
-               <code>atan($y div $x) + </code><var>π</var>.</p></item>
+               <code>atan($y div $x) + <var>π</var></code>.</p></item>
             <item><p>If <code>$y</code> is negative, then the value of <code>atan2($y, $x)</code> is 
-               <code>atan($y div $x) - </code><var>π</var>.</p></item>
+               <code>atan($y div $x) - <var>π</var></code>.</p></item>
          </ulist>
          <p>Some results for special values of the arguments are shown in the examples below.</p>
 
@@ -8373,7 +8373,7 @@ xs:dayTimeDuration($arg2) div xs:dayTimeDuration('PT1S')
          <p>The result of <code>seconds($n)</code> is approximately equal to the result of
          the expression <code>xs:dayTimeDuration('PT1S') * $n</code>. The equivalence is only
          approximate, because <code>seconds($n)</code> uses the exact <code>xs:decimal</code>
-         value supplied, whereas multiplying a duration by a number first promotes the number
+         value supplied, whereas multiplying a duration by a number first converts the number
          to an <code>xs:double</code> value, which may lose precision.</p>
       </fos:notes>
       <fos:examples>
@@ -17112,26 +17112,21 @@ declare function equal-strings(
       </fos:summary>
       <fos:rules>
          <p>If <code>$values</code> is the empty sequence, the empty sequence is returned.</p>
-         <p>If <code>$values</code> contains values of type <code>xs:untypedAtomic</code> they are cast
-            to <code>xs:double</code>. </p>
-         <p>Duration values must either all be <code>xs:yearMonthDuration</code> values or must all
-            be <code>xs:dayTimeDuration</code> values. For numeric values, the numeric promotion
-            rules defined in <specref
-               ref="op.numeric"
-               /> are used to promote all values to a single
-            common type. After these operations, <code>$values</code> must satisfy the following condition:</p>
-         <p>There must be a type <var>T</var> such that:</p>
+         <p>Any item in <code>$values</code> that is an instance of <code>xs:untypedAtomic</code> 
+            is cast to <code>xs:double</code>. </p>
+         <p>After this conversion, one of the following conditions must be true:</p>
          <olist>
-            <item><p>every item in <code>$values</code> is an instance of <var>T</var>.</p></item>
-            <item><p><var>T</var> is one of <code>xs:double</code>, <code>xs:float</code>,
-                  <code>xs:decimal</code>, <code>xs:yearMonthDuration</code>, or
-                  <code>xs:dayTimeDuration</code>.</p></item>
+            <item><p>Every item in <code>$values</code> is an instance of <code>xs:yearMonthDuration</code>.</p></item>
+            <item><p>Every item in <code>$values</code> is an instance of <code>xs:dayTimeDuration</code>.</p></item>
+            <item><p>Every item in <code>$values</code> is an instance of <code>xs:numeric</code>.</p></item>
          </olist>
-
+         
 
          <p>The function returns the average of the values as <code>sum($values) div
             count($values)</code>; but the implementation may use an otherwise equivalent algorithm
-            that avoids arithmetic overflow.</p>
+            that avoids arithmetic overflow. Note that the <function>fn:sum</function> function
+            allows the input sequence to be reordered, which may affect the result in edge cases
+            when the sequence contains a mixture of different numeric types.</p>
 
       </fos:rules>
       <fos:errors>
@@ -17179,6 +17174,16 @@ declare function equal-strings(
                   code="0006"/>. </p>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change issue="1682" date="2025-01-27">
+            <p>In 3.1, given a mixed input sequence such as (1, 3, 4.2e0), the specification 
+            was unclear whether it was permitted to add the first two integer items using
+            integer arithmetic, rather than converting all items to doubles before
+            performing any arithmetic. The 4.0 specification is clear that this is
+            permitted; but since the items can be reordered before being added, this
+            is not required.</p>
+         </fos:change>
+      </fos:changes>
    </fos:function>
    
    <fos:function name="max" prefix="fn">
@@ -17518,34 +17523,36 @@ declare function equal-strings(
          <p>Returns a value obtained by adding together the values in <code>$values</code>.</p>
       </fos:summary>
       <fos:rules>
-         <p>Any values of type <code>xs:untypedAtomic</code> in <code>$values</code> are cast to
+         <p>The result of the function when a single argument 
+            is supplied is the result of the expression: <code>fn:sum($arg, 0)</code>.</p>
+         <p>Any value of type <code>xs:untypedAtomic</code> in <code>$values</code> is cast to
                <code>xs:double</code>. The items in the resulting sequence may be reordered in an
             arbitrary order. The resulting sequence is referred to below as the converted
             sequence.</p>
-         <p diff="chg" at="2023-01-17">If the converted sequence is empty, then the function returns
+         <p>If the converted sequence is empty, then the function returns
             the value of the argument <code>$zero</code>, which defaults to 
             the <code>xs:integer</code> value <code>0</code>.</p>
-         <p>If the converted sequence contains the value <code>NaN</code>, <code>NaN</code> is
-            returned.</p>
-         <p>All items in <code>$values</code> must be numeric or derived from a single base type. In
-            addition, the type must support addition. Duration values must either all be
-               <code>xs:yearMonthDuration</code> values or must all be
-               <code>xs:dayTimeDuration</code> values. For numeric values, the numeric promotion
-            rules defined in <specref
-               ref="op.numeric"
-               /> are used to promote all values to a single
-            common type. The sum of a sequence of integers will therefore be an integer, while the
-            sum of a numeric sequence that includes at least one <code>xs:double</code> will be an
-               <code>xs:double</code>. </p>
-         <p>The result of the function is the value of the
+         <p>In other cases the items in the converted sequence are added pairwise according
+         the rules of the <code>+</code> operator.</p>
+
+         <p>Specifically, the result of the function is the value of the
             expression:</p>
          <eg xml:space="preserve">
 if (empty($c)) then $zero
 else if (count($c) eq 1) then $c
 else head($c) + sum(tail($c))</eg>
          <p>where <code>$c</code> is the converted sequence.</p>
-         <p>The result of the function <phrase diff="chg" at="2023-01-17">when a single argument is supplied</phrase> is the result of the expression:
-               <code>fn:sum($arg, 0)</code>.</p>
+         
+         <p>This has the effect that a type error will occur unless one of the following
+         conditions is satisfied:</p>
+         
+          <olist>
+            <item><p>Every item in <code>$values</code> is an instance of <code>xs:yearMonthDuration</code>.</p></item>
+            <item><p>Every item in <code>$values</code> is an instance of <code>xs:dayTimeDuration</code>.</p></item>
+            <item><p>Every item in <code>$values</code> is an instance of <code>xs:numeric</code>.</p></item>
+         </olist>
+         
+         
 
       </fos:rules>
       <fos:errors>
@@ -17564,7 +17571,20 @@ else head($c) + sum(tail($c))</eg>
             the <code>$zero</code> argument is used only when the input sequence is empty, not
             when a non-empty sequence sums to zero. For example, <code>sum((-1, +1), xs:double('NaN'))</code>
             returns the <code>xs:integer</code> value <code>0</code>, not <code>NaN</code>.</p>
-         <p> If the converted sequence contains exactly one value then that value is returned.</p>
+         <p>The sum of a sequence of integers will be an integer, while the
+            sum of a numeric sequence that includes at least one <code>xs:double</code> will be an
+               <code>xs:double</code>.</p>
+         <p>If the converted sequence contains exactly one value then that value is returned.</p>
+         <p>If the converted sequence contains the value <code>NaN</code>, <code>NaN</code> is
+            returned.</p>
+         <p>In edge cases the fact that the input sequence may be reordered makes the result
+            slightly unpredictable. For example, if the input contains two <code>xs:decimal</code>
+            values and an <code>xs:float</code>, then the decimal values might be added using
+            decimal arithmetic, or they might both be converted to <code>xs:float</code> 
+            (potentially losing precision) before any arithmetic is performed.
+            </p>
+         
+         
       </fos:notes>
       <fos:examples>
          <fos:variable name="d1" id="v-sum-d1" select="xs:yearMonthDuration(&quot;P20Y&quot;)"/>
@@ -17638,6 +17658,16 @@ else head($c) + sum(tail($c))</eg>
                />. </p>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change issue="1682" date="2025-01-27">
+            <p>In 3.1, given a mixed input sequence such as (1, 3, 4.2e0), the specification 
+            was unclear whether it was permitted to add the first two integer items using
+            integer arithmetic, rather than converting all items to doubles before
+            performing any arithmetic. The 4.0 specification is clear that this is
+            permitted; but since the items can be reordered before being added, this
+            is not required.</p>
+         </fos:change>
+      </fos:changes>
    </fos:function>
    <!--<fos:function name="to" prefix="op">
       <fos:signatures>
@@ -18209,7 +18239,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
          <p>If <code>$source</code> is the empty sequence, the result is an empty sequence.</p>
          <p>If <code>$source</code> is a relative URI reference, it is resolved relative to the value
             of the <term>static base URI</term> property from the static context. The resulting absolute URI is
-            promoted to an <code>xs:string</code>.</p>
+            cast to an <code>xs:string</code>.</p>
          <p>If the <term>available documents</term> described in <xspecref spec="XP31"
                ref="eval_context"
             /> provides a mapping from this string to a document node, the
@@ -31352,16 +31382,16 @@ return every($dl/*, fn($elem, $pos) {
                at <loc href="https://html.spec.whatwg.org/multipage/named-characters.html">https://html.spec.whatwg.org/multipage/named-characters.html</loc>. The name is
                written with no leading ampersand and no trailing semicolon.
                For example <code>fn:char("pi")</code> represents the character
-               <code>π</code> (<code>x3C0</code>) and <code>fn:char("nbsp")</code> returns the
-               non-breaking space character, <code>xA0</code>.</p>
+               <char>U+03C0</char> and <code>fn:char("nbsp")</code> returns 
+               <char>U+00A0</char>.</p>
                <p>A processor <rfc2119>may</rfc2119> recognize additional character reference names defined in
                   other versions of HTML. Character reference names are case-sensitive.</p>
                <p>In the event that the HTML5 character reference name identifies a string
                comprising multiple codepoints, that string is returned.</p>
                <p>[TODO: add a proper bibliographic reference.]</p></item>
-            <item><p>A backslash-escape sequence from the set <code>\n</code> (newline, <code>x0A</code>), 
-               <code>\r</code> (carriage return, <code>x0D</code>),
-               or <code>\t</code> (tab, <code>x09</code>).</p></item>
+            <item><p>A backslash-escape sequence from the set <code>\n</code> (<char>U+000A</char>), 
+               <code>\r</code> (<char>U+000D</char>),
+               or <code>\t</code> (<char>U+0009</char>).</p></item>
             
             
          </olist>
@@ -33277,7 +33307,7 @@ path with an explicit <code>file:</code> scheme.</p>
            the map, then the path is constructed from the segments. To
            construct the path, the possibly encoded segments are
            concatentated together, separated by
-           <code>/</code> (solidus) characters.</p>
+           <char>U+002F</char> characters.</p>
 
            <p>The rules for encoding the path segments are different
            for hierarchical and non-hierarchical URIs. If the URI is
@@ -33285,11 +33315,11 @@ path with an explicit <code>file:</code> scheme.</p>
            encoding is performed on the segments. Otherwise,
            each segment is encoded by replacing any control characters (codepoints less than 0x20)
            and exclusively the following characters with their
-           percent-escaped forms: <code> </code> (space) <code>%</code> (percent
-           sign), <code>/</code> (solidus), <code>?</code> (question mark),
-           <code>#</code> (number sign), <code>+</code> (plus sign),
-           <code>[</code> (left square bracket), and <code>]</code> (right
-           square bracket). That is “<code>[#0-#20%/\?\#\+\[\]]</code>”.</p>
+           percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>, 
+              <char>U+002F</char>, <char>U+003F</char>,
+           <char>U+0023</char>, <char>U+002B</char>,
+           <char>U+005B</char>, and <char>U+005D</char>. 
+              That is “<code>[#0-#20%/\?\#\+\[\]]</code>”.</p>
 
            <note>
               <p>Encoding is performed unless the URI is known to be non-hierarchical;
@@ -33298,7 +33328,7 @@ path with an explicit <code>file:</code> scheme.</p>
               <code>fn:parse-uri()</code>. (For example,
               <code>fn:parse-uri('a+b/c') => fn:build-uri()</code> will return 
               <code>a+b/c</code>.)</p>
-              <p>It’s necessary to avoid encoding non-hierarchical schemes because there is more
+              <p>It is necessary to avoid encoding non-hierarchical schemes because there is more
               variation in them (for example, the <code>tel:</code> scheme
               uses a “<code>+</code>” that must not be encoded). Users working with
               non-hierarchical schemes may need to address the encoding issue directly
@@ -33322,13 +33352,12 @@ path with an explicit <code>file:</code> scheme.</p>
         is encoded.
         The encoding performed replaces any control characters (codepoints less than 0x20)
         and exclusively the following characters with their
-        percent-escaped forms: <code> </code> (space) <code>%</code> (percent
-        sign), <code>=</code> (equals sign), <code>&amp;</code> (ampersand),
-        <code>#</code> (number sign), <code>+</code> (plus sign),
-        <code>[</code> (left square bracket), and <code>]</code> (right
-        square bracket). That is “<code>[#0-#20%=&amp;\#\+\[\]]</code>”.
-        (This differs from the path encoding in that it excludes <code>/</code>
-        and <code>?</code> but includes <code>=</code> and <code>&amp;</code>.)
+        percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>, <char>U+003D</char>,
+        <char>U+0026</char>,
+        <char>U+0023</char>, <char>U+002B</char>,
+        <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%=&amp;\#\+\[\]]</code>”.
+        (This differs from the path encoding in that it excludes <char>U+002F</char>
+        and <char>U+003F</char> but includes <char>U+003D</char> and <char>U+0026</char>.)
         For each <emph>key</emph> and each <emph>value</emph> associated with
         that key in turn:</p>
 
@@ -33336,7 +33365,7 @@ path with an explicit <code>file:</code> scheme.</p>
            <item><p>If the <emph>key</emph> is the empty string, the string constructed
            is the encoded <emph>value</emph>.</p></item>
            <item><p>Otherwise, the string constructed is the value of the
-           <emph>key</emph>, encoded, followed by an equal sign (<code>=</code>),
+           <emph>key</emph>, encoded, followed by an equal sign (<char>U+003D</char>),
            followed by the <emph>value</emph>, encoded.</p></item>
         </ulist>
 
@@ -33346,21 +33375,19 @@ path with an explicit <code>file:</code> scheme.</p>
         the <code>query</code> key does, then the query is the value of the
         <code>query</code> key.</p>
         <p>If there is a query, it is added to the URI with
-        a preceding <code>?</code> (question mark).</p>
+        a preceding <char>U+003F</char>.</p>
 
         <p>If the <code>fragment</code> key exists in the map, then
         the value of that key is encoded and added to the URI with a
-        preceding hash mark (<code>#</code>).
+        preceding <char>U+0023</char>.
 
         The encoding performed replaces any control characters (codepoints less than 0x20)
         and exclusively the following characters with their
-        percent-escaped forms: <code> </code> (space) <code>%</code> (percent
-        sign),
-        <code>#</code> (number sign), <code>+</code> (plus sign),
-        <code>[</code> (left square bracket), and <code>]</code> (right
-        square bracket). That is “<code>[#0-#20%\#\+\[\]]</code>”.
-        (This differs from the path encoding in that it excludes <code>/</code>
-        and <code>?</code>.)</p>
+        percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>,
+        <char>U+0023</char>, <char>U+002B</char>,
+        <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%\#\+\[\]]</code>”.
+        (This differs from the path encoding in that it excludes <char>U+002F</char>
+        and <char>U+003F</char>.)</p>
 
         <p>The resulting URI is returned.</p>
       </fos:rules>
