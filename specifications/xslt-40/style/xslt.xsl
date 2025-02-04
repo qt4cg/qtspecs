@@ -6,13 +6,11 @@
 	version="2.0"
 	xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
         xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax"
-        xmlns:g="http://www.martin-loetzsch.de/DOTML"
-        exclude-result-prefixes="e xs g"
+        exclude-result-prefixes="e xs"
         xmlns:xs="http://www.w3.org/2001/XMLSchema"
 >
 <xsl:import href="../../../style/xsl-query-2016.xsl"/>
 <xsl:import href="../../../style/funcproto.xsl"/>
-<xsl:import href="dotml2dot.xsl"/>
 
 <xsl:output method="xml" indent="no" encoding="utf-8"/>
 <xsl:output name="xml" method="xml" indent="no" encoding="utf-8"/>
@@ -120,16 +118,13 @@
   </xsl:template>
   
   <!-- Override rendition of altlocs in xmlspec.xsl -->
-  
   <xsl:template match="altlocs">
-    <p>The following associated resources are available:</p>
-    <slist>
-      <xsl:for-each select="loc">
-        <sitem>
-          <xsl:apply-templates select="."/>
-        </sitem>
-      </xsl:for-each>
-    </slist>
+    <p>The following associated resources are available:
+    <xsl:for-each select="loc">
+      <xsl:if test="position() gt 1">, </xsl:if>
+      <xsl:apply-templates select="."/>
+    </xsl:for-each>
+    </p>
   </xsl:template>
 
   <!-- specref: reference to another part of the current specification -->
@@ -998,86 +993,93 @@ constructor. These elements are:</p>
   </div>
 </xsl:template>
   
-<!-- Handle DotML graphs -->
-  
-<xsl:template match="/" mode="make-dot-files">
-  <!-- entry point for processing that only makes the .dot files -->
-  <xsl:for-each select=".//g:graph">
-    <xsl:variable name="preprocessed-graph">
-      <xsl:apply-templates select="." mode="preprocess-dotml"/>
-    </xsl:variable>  
-    <xsl:variable name="n" select="count(preceding::g:graph) + 1"/>  
-    <xsl:result-document href="img/fig{$n}.dot" method="text">
-      <!-- invoke template in imported DotML stylesheet -->
-      <xsl:apply-templates select="$preprocessed-graph/g:graph"/>
-    </xsl:result-document>
-  </xsl:for-each>
-</xsl:template>  
-  
-<xsl:template match="*/g:graph">
-  <!-- */g:graph so that this template doesn't match when we 
-       are preprocessing the graphs from make-dot-files mode. -->
-  <xsl:variable name="n" select="count(preceding::g:graph) + 1"/>
-  <xsl:variable name="svgfile" select="concat('../img/fig', $n, '.svg')"/>
-  <xsl:variable name="svgdoc" select="doc(resolve-uri($svgfile, base-uri($root)))"/>
-  
-  <xsl:apply-templates select="$svgdoc" mode="copy-svg"/>
+<xsl:template match="eg">
+  <xsl:variable name="max-length"
+                select="max(for $line in tokenize(., '\n') return string-length($line))"/>
+  <xsl:if test="$pedantic != 'false' and $max-length gt 75">
+    <!-- ideally, get this down to 60 -->
+    <xsl:message>*** WARNING: code example has max line length <xsl:value-of select="$max-length"/> 
+    at <xsl:value-of select="(ancestor::*/@id)[last()]"/> 
+    (example <xsl:value-of select="ancestor::example/head"/>)</xsl:message>
+  </xsl:if>
+  <xsl:next-match/>
+</xsl:template>
+
+<xsl:template match="t:tree" xmlns:t="http://www.w3.org/2008/XSL/Spec/TreeDiagram"
+                             xmlns:svg="http://www.w3.org/2000/svg"
+                             exclude-result-prefixes="t svg">
+  <xsl:variable name="number">
+    <xsl:number level="any"/>
+  </xsl:variable>
+  <xsl:variable name="svg">
+    <xsl:apply-imports/>
+  </xsl:variable>
+  <xsl:result-document href="tree{$number}.svg">
+    <xsl:copy-of select="$svg"/>
+  </xsl:result-document>
+  <xsl:variable name="max-x" select="max($svg//svg:rect/(@x + @width))"/>
+  <xsl:variable name="max-y" select="max($svg//svg:rect/(@y + @height))"/>
+  <embed src="tree{$number}.svg" width="{$max-x + 20}" height="{$max-y + 20}" type="image/svg+xml"/>
 </xsl:template>
   
-  <xsl:template match="node() | @*" mode="copy-svg">
-    <xsl:copy copy-namespaces="no">
-      <xsl:apply-templates select="@*, node()" mode="copy-svg"/>
-    </xsl:copy>
+  <xsl:template match="div1/head/text() | div2/head/text() | div3/head/text() | div4/head/text()">
+    <!-- insert a link to self, to make the ID value visible for the benefit of spec editors -->
+    <a href="#{../../@id}" style="text-decoration: none">
+      <xsl:apply-imports/>
+    </a>
+  </xsl:template>
+ 
+  <xsl:template match="e:element-syntax[@diff and $show.diff.markup=1 and (string(@at) gt $baseline or not(@at))]" mode="get-diff-class"
+    xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax">
+    <xsl:text>element-syntax-chg</xsl:text>
+  </xsl:template>
+ 
+  
+  <!-- following template can be activated to insert paragraph numbers after every para -->
+  <xsl:template match="p[$show.diff.markup=1]" use-when="false()">   
+    <xsl:next-match/> 
+    <span style="font-size:10; background-color:DarkRed; color:white; float:right">&#xa0;&#xa0;P<xsl:number select="(ancestor::div1|ancestor::informdiv1|/)[last()]" level="any"/>.<xsl:number level="any" from="div1|informdiv1"/></span>
   </xsl:template>
   
-  <xsl:template match="@contentScriptType | @contentStyleType" mode="copy-svg"/>
-  
-  <xsl:function name="g:points-to-pixels" as="xs:string">
-    <xsl:param name="points" as="xs:string"/>
-    <xsl:sequence select="string(round(number(replace($points, 'pt', '')) * 1.33))"/>
-  </xsl:function>
-  
-<xsl:template match="g:*" mode="preprocess-dotml">
-   <xsl:copy>
-      <xsl:copy-of select="@*"/>
-      <xsl:apply-templates mode="preprocess-dotml"/>
-   </xsl:copy>
-</xsl:template>
-  
-  <xsl:template match="g:node" mode="preprocess-dotml">
-    <xsl:copy>
-      <xsl:copy-of select="@* except @edge-color"/>
-      <xsl:if test="empty(@id)">
-        <xsl:attribute name="id" select="generate-id(.)"/>
-      </xsl:if>
-    </xsl:copy>
-    <xsl:apply-templates mode="preprocess-dotml"/>
-    <xsl:for-each select="g:node">
-       <g:edge from="{g:node-id(..)}" to="{g:node-id(.)}" >
-         <xsl:if test="@edge-color">
-           <xsl:attribute name="color" select="@edge-color"/>
-         </xsl:if>
-       </g:edge>
-    </xsl:for-each>    
-  </xsl:template>
-  
-  <xsl:function name="g:node-id" as="xs:string">
-    <xsl:param name="node" as="element(g:node)"/>
-    <xsl:sequence select="($node/@id, generate-id($node))[1]"/>
-  </xsl:function>
-  
-  <xsl:template match="eg">
-    <xsl:variable name="max-length"
-      select="max(for $line in tokenize(., '\n') return string-length($line))"/>
-    <xsl:if test="$pedantic != 'false' and $max-length gt 75">
-      <!-- ideally, get this down to 60 -->
-      <xsl:message>*** WARNING: code example has max line length <xsl:value-of select="$max-length"/> 
-        at <xsl:value-of select="(ancestor::*/@id)[last()]"/> 
-        (example <xsl:value-of select="ancestor::example/head"/>)</xsl:message>
-    </xsl:if>
+  <xsl:template match="p[$show.diff.markup=1][loc[1][matches(@href, '^bug[0-9]+$')]]">   
     <xsl:next-match/>
+    <xsl:variable name="href" select="string(loc[1]/@href)"/>
+    <xsl:variable name="refs" select="//*[ends-with(@at, $href) and string(@at) gt $baseline]"/>
+    <xsl:choose>
+      <xsl:when test="empty($refs)">
+        <p>(No highlighted changes.)</p>
+      </xsl:when>
+      <xsl:otherwise>
+        <p><xsl:text>(See </xsl:text>
+          <xsl:for-each select="$refs">
+            <xsl:variable name="n" as="xs:string">
+              <xsl:number value="position()" format="a"/>
+            </xsl:variable>
+            <a href="#{$href}{$n}"><xsl:value-of select="$n"/></a>
+            <xsl:value-of select="if (position() = last()) then '' else ' '"/>  
+          </xsl:for-each> 
+          <xsl:text>)</xsl:text>      
+        </p>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
   
+  <xsl:template match="prodrecap">
+    <xsl:variable name="capture">
+      <xsl:next-match/>
+    </xsl:variable>
+    <xsl:message>===============================</xsl:message>
+    <xsl:message select="$capture"/>
+    <xsl:message>===============================</xsl:message>
+    <xsl:sequence select="$capture"/>   
+  </xsl:template>
   
+  <xsl:template match="def[@role='example']" priority="100">
+    <dd>
+      <div class="example">
+        <xsl:apply-templates/>
+      </div>
+    </dd>
+  </xsl:template>
 
 </xsl:stylesheet>

@@ -178,7 +178,10 @@
 					<label>Notes</label>
 					<def>
 						<xsl:copy-of select="$fspec/fos:notes/(@diff, @at)"/>
-						<xsl:apply-templates select="$fspec/fos:notes/node()" mode="make-note"/>
+						<!--<xsl:apply-templates select="$fspec/fos:notes/node()" mode="make-note"/>-->
+						<note>
+							<xsl:apply-templates select="$fspec/fos:notes/node()"/>
+						</note>
 					</def>
 				</gitem>
 			</xsl:if>
