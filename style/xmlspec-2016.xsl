@@ -743,7 +743,7 @@
         <xsl:when test="$prefix = 'array'">func-array-</xsl:when>
         <xsl:when test="$prefix = 'map'">func-map-</xsl:when>
         <xsl:when test="$prefix = 'math'">func-math-</xsl:when>
-        <xsl:when test="$prefix = 'op'">func-op-</xsl:when>
+        <xsl:when test="$prefix = 'op'">func-</xsl:when>
         <xsl:otherwise>
           <xsl:message select="'Unexpected function prefix: ' || $prefix || ':'"/>
           <xsl:sequence select="'func-'"/>
@@ -1358,6 +1358,13 @@
       <p class="prefix">
         <b>Note:</b>
       </p>
+      <xsl:apply-templates/>
+    </div>
+  </xsl:template>
+  
+  <xsl:template match="gitem[label='Notes']/def/note">
+    <!--Avoid the extra "Note" label in the Notes section of the F&O spec -->
+    <div class="note">
       <xsl:apply-templates/>
     </div>
   </xsl:template>
