@@ -1,13 +1,7 @@
 # X(Q)uery and XSL(T) Specifications (qtspecs)
 This is a forked source for the XSLT and XQuery Specifications created for the development of draft 4.0 proposals. This source builds the HTML specs and errata. It is maintained by the W3C XSLT-4.0 Community Group established by Michael Kay.
 
-View the latest HTML version of the draft specs via the links below:
-| Draft 4.0 Spec | Diff against 3.0 Specs |
-| -------------- | ---------------------- |
-| [XSLT Transformations (XSLT) Version 4.0](https://qt4cg.org/specifications/xslt-40/Overview.html) | [(Diffs)](https://qt4cg.org/specifications/xslt-40/Overview-diff.html) |
-| [XPath and XQuery Functions and Operators 4.0](https://qt4cg.org/specifications/xpath-functions-40/Overview.html) | [(Diffs)](https://qt4cg.org/specifications/xpath-functions-40/Overview-diff.html) |
-| [XML Path Language (XPath) 4.0](https://qt4cg.org/specifications/xquery-40/xpath-40.html) | [(Diffs)](https://qt4cg.org/specifications/xquery-40/xpath-40-diff.html) |
-| [XQuery 4.0: An XML Query Language](https://qt4cg.org/specifications/xquery-40/xquery-40.html) | [(Diffs)](https://qt4cg.org/specifications/xquery-40/xquery-40-diff.html) |
+For the lastest specifications, see the [QT4CG home page](https://qt4cg.org/).
 
 ## Participate in Spec Development
 There are numerous paths to participating in qtspec development.
