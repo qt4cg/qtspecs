@@ -1,19 +1,4 @@
-window.onload = function() {
-  document.querySelectorAll(".exptoc").forEach(span => {
-    span.addEventListener("click", (event) => {
-      let target = event.target;
-      if (target.classList.contains("collapsed")) {
-        target.classList.remove("collapsed")
-        target.classList.add("expanded")
-        target.innerHTML = "\u2009▼"
-      } else {
-        target.classList.remove("expanded")
-        target.classList.add("collapsed")
-        target.innerHTML = "\u2009▶"
-      }
-    });
-  });
-
+(function() {
   const updateToc = function(open) {
     document.querySelectorAll(".toc details").forEach(details => {
       details.open = open
@@ -31,21 +16,38 @@ window.onload = function() {
     });
   }
 
-  let expandAll = document.querySelector(".expalltoc")
-  if (expandAll) {
-    expandAll.addEventListener("click", (event) => {
-      let target = event.target;
-      if (target.classList.contains("collapsed")) {
-        target.classList.remove("collapsed")
-        target.classList.add("expanded")
-        target.innerHTML = "\u2009▼"
-        updateToc(true)
-      } else {
-        target.classList.remove("expanded")
-        target.classList.add("collapsed")
-        target.innerHTML = "\u2009▶"
-        updateToc(false)
-      }
+  window.addEventListener("load", () => {
+    document.querySelectorAll(".exptoc").forEach(span => {
+      span.addEventListener("click", (event) => {
+        let target = event.target;
+        if (target.classList.contains("collapsed")) {
+          target.classList.remove("collapsed")
+          target.classList.add("expanded")
+          target.innerHTML = "\u2009▼"
+        } else {
+          target.classList.remove("expanded")
+          target.classList.add("collapsed")
+          target.innerHTML = "\u2009▶"
+        }
+      });
     });
-  }
-}
+
+    let expandAll = document.querySelector(".expalltoc")
+    if (expandAll) {
+      expandAll.addEventListener("click", (event) => {
+        let target = event.target;
+        if (target.classList.contains("collapsed")) {
+          target.classList.remove("collapsed")
+          target.classList.add("expanded")
+          target.innerHTML = "\u2009▼"
+          updateToc(true)
+        } else {
+          target.classList.remove("expanded")
+          target.classList.add("collapsed")
+          target.innerHTML = "\u2009▶"
+          updateToc(false)
+        }
+      });
+    }
+  });
+})();
