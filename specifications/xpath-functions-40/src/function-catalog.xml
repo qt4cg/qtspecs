@@ -28477,8 +28477,6 @@ return document {
          <fos:proto name="get" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
             <fos:arg name="position" type="xs:integer"/>
-            <fos:arg name="fallback" type="(fn(xs:integer) as item()*)?" 
-               default="fn($i) { fn:error(fn:QName('', 'FOAY0001')) }"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -28491,26 +28489,21 @@ return document {
             (counting from 1).</p>
       </fos:summary>
       <fos:rules>
-         <p diff="chg" at="2022-12-16">Informally, the function returns the member at a specified position in the array.
+         <p>Informally, the function returns the member at a specified position in the array.
          If <code>$position</code> is less than one or greater than <code>array:size($array)</code>,
-         then the <code>$fallback</code> function is called, supplying the value of <code>$position</code>
-         as the argument value; and the result of this call is returned.</p>
-         <p diff="chg" at="2022-12-16">The default <code>$fallback</code> function raises a dynamic error. The call on <function>fn:error</function>
-         shown as the default is for illustrative purposes only; apart from the error code (<code>err:FOAY0001</code>)
-            the details of the error (such as the error message) are <termref def="implementation-dependent">implementation-dependent</termref>.</p>
-        
+         then the function returns an empty sequence.</p>       
       </fos:rules>
-      <fos:equivalent style="xpath-expression" covers-error-cases="false">
-if ($position = (1 to array:size($array)))
-then items-at(array:members($array), $position) => map:get('value'))
-else $fallback($position)
+
+      <fos:equivalent style="xpath-expression" covers-error-cases="true">
+array:members($array)[$position] ? value 
+
       </fos:equivalent>
-      <fos:errors>
-         <p><phrase diff="add" at="2022-12-16">In the absence of a <code>$fallback</code> function</phrase>,
-            a dynamic error occurs <errorref class="AY" code="0001"
-               /> if <code>$position</code> is not in the range <code>1 to
-               array:size($array)</code> inclusive.</p>
-      </fos:errors>
+      <fos:notes>
+         <p>Array bound checking is dropped in version 4.0 of the specification. If bound checking
+         is required, the new function <function>array:get-if-present</function> is available. This
+         delivers the same result as <function>array:get</function> if the index is within
+         bounds, but raises a dynamic error (<errorref class="AY" code="0001"/>) if not.</p>
+      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -28518,23 +28511,77 @@ else $fallback($position)
                <fos:result>"b"</fos:result>
             </fos:test>
             <fos:test>
+               <fos:expression>[ "a", "b", "c" ] => array:get(0)</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>[ "a", "b", "c" ] => array:get(4)</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+            <fos:test>
                <fos:expression>[ "a", [ "b", "c" ] ] => array:get(2)</fos:expression>
                <fos:result>[ "b", "c" ]</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>[ "a" ] => array:get(1, void#1)</fos:expression>
-               <fos:result>"a"</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>[] => array:get(1, void#1)</fos:expression>
-               <fos:result>()</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change>
-            <p>A third argument is added, allowing user control of how index-out-of-bounds
-            conditions should be handled.</p>
+         <fos:change issue="1715">
+            <p>No error is raised when the array index is out of bounds.
+            See also <function>array:get-if-present</function>.</p>
+         </fos:change>
+      </fos:changes>
+   </fos:function>
+   
+   <fos:function name="get-if-present" prefix="array">
+      <fos:signatures>
+         <fos:proto name="get" return-type="item()*">
+            <fos:arg name="array" type="array(*)" usage="inspection"/>
+            <fos:arg name="position" type="xs:integer"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns the value at the specified position in the supplied array
+            (counting from 1), raising an error if the position is out of bounds.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>Informally, the function returns the member at a specified position in the array.
+         If <code>$position</code> is less than one or greater than <code>array:size($array)</code>,
+         then the function raises an error.</p>       
+      </fos:rules>
+      <fos:equivalent style="xpath-expression" covers-error-cases="false">
+if ($position = (1 to array:size($array)))
+then array:get($position) 
+else error(xs:QName("err:FOAY0001"))
+      </fos:equivalent>
+      <fos:notes>
+         <p>The <function>array:get</function> function no longer performs bound checking 
+            in this version of the specification. If bound checking
+         is required, this new function can be used in its place.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>[ "a", "b", "c" ] => array:get-if-present(2)</fos:expression>
+               <fos:result>"b"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>[ "a", "b", "c" ] => array:get-if-present(0)</fos:expression>
+               <fos:error-result error-code="FOAY0001"/>
+            </fos:test>
+            <fos:test>
+               <fos:expression>[ "a", "b", "c" ] => array:get-if-present(4)</fos:expression>
+               <fos:error-result error-code="FOAY0001"/>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:changes>
+         <fos:change issue="1715">
+            <p>New in 4.0</p>
          </fos:change>
       </fos:changes>
    </fos:function>
