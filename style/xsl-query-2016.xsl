@@ -1878,18 +1878,6 @@
     <xsl:value-of select="normalize-unicode(., 'NFC')"/>
   </xsl:template>
   
-  <!-- recognize graphic role="full-width" -->
-  
-  <xsl:template match="graphic[@role='full-width']">
-    <img src="{@source}" style="width:100%">
-      <xsl:if test="@alt">
-        <xsl:attribute name="alt">
-          <xsl:value-of select="@alt"/>
-        </xsl:attribute>
-      </xsl:if>
-    </img>
-  </xsl:template>
-
   <!-- ================================================================= -->
 
   <xsl:function name="my:diff-markup-effect" as="xs:string">
