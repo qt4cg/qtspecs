@@ -10711,7 +10711,7 @@ and <code>version="1.0"</code> otherwise.</p>
                <p>
                   <error spec="XT" type="static" class="SE" code="0340">
                      <p>Where an attribute is defined to contain a <termref def="dt-pattern">pattern</termref>, it is a <termref def="dt-static-error">static
-                           error</termref> if the pattern does not match the production <nt def="Pattern40">Pattern40</nt>.</p>
+                           error</termref> if the pattern does not match the production <nt def="Pattern">Pattern</nt>.</p>
                   </error></p>
                <p>The complete grammar for patterns is listed in <specref ref="pattern-syntax-summary"/>. 
                   It uses the notation defined in <xspecref spec="XP40" ref="EBNFNotation">Notation</xspecref>. </p>
@@ -10722,26 +10722,39 @@ and <code>version="1.0"</code> otherwise.</p>
                   extra-grammatical constraints.</p>
                
                <scrap headstyle="show" id="Patterns-scrap" >
-                  <prodrecap ref="Pattern40"/>
+                  <prodrecap ref="Pattern"/>
                </scrap>
                
-               <p diff="add" at="2022-01-01">Patterns fall into three groups:</p>
+               <p>Patterns fall into four groups:</p>
                
-               <ulist diff="add" at="2022-01-01">
+               <ulist>
+                  
                   <item><p>A <code>PredicatePattern</code> matches items according to conditions that the item must
                   satisfy: for example <code>.[. castable as xs:integer]</code> matches any value (it might
-                  be an atomic item, a node, or an array) that is castable as an integer.</p></item>
+                  be an atomic item, a node, or an array) that is castable as an integer.
+                  See <specref ref="predicate-patterns"/>.</p></item>
+                  
+                  <item><p>A <code>LookupPattern</code> matches items within a tree of maps and arrays,
+                  often the result of parsing JSON. For example the pattern 
+                     <code>.[?course = "Physics"] ?? ~u:student</code> matches instances of the
+                  named type <code>u:student</code> within a subtree rooted at a record having the property
+                  <code>course = "Physics"</code>. See <specref ref="lookup-patterns"/>.</p></item>
+                  
                   <item><p>A <code>TypePattern</code> matches items according to their type. For example
-                  <code>type(xs:integer)</code> matches an atomic item that is an instance of <code>xs:integer</code>,
-                  while <code>record(longitude, latitude)</code> matches a map that has exactly two entries, with
-                  keys <code>"longitude"</code> and <code>"latitude"</code></p></item>
+                  <code>~xs:integer</code> matches an atomic item that is an instance of <code>xs:integer</code>,
+                  while <code>~record(longitude, latitude)</code> matches a map that has exactly two entries, with
+                  keys <code>"longitude"</code> and <code>"latitude"</code>.
+                  See <specref ref="type-patterns"/>.</p></item>
+                  
                   <item><p>A <code>NodePattern</code> matches nodes in a tree, typically by specifying a path that
                   can be used to locate the nodes: for example <code>order</code> matches an element node
                   named <code>order</code>, while <code>billing-address/city</code> matches an element named <code>city</code>
-                  whose parent node is an element named <code>billing-address</code>.</p></item>
+                  whose parent node is an element named <code>billing-address</code>.
+                  See <specref ref="node-patterns"/></p></item>
+                  
                </ulist>
                
-               <p diff="add" at="2022-01-01">The following sections define the rules for each of these groups.</p>
+               <p>The following sections define the rules for each of these groups.</p>
                
                <div4 id="predicate-patterns">
                   <head>Predicate Patterns</head>
@@ -10783,7 +10796,73 @@ and <code>version="1.0"</code> otherwise.</p>
                   
                </div4>
                
-               <div4 id="type-patterns" diff="add" at="2022-01-01">
+               <div4 id="lookup-patterns">
+                  <head>Lookup Patterns</head>
+                  
+                  <changes>
+                     <change issue="1776">
+                        Lookup patterns are introduced to allow items to be matched by context within
+                        a tree of maps and arrays, often produced as the result of parsing JSON.
+                     </change>
+                  </changes>
+                  
+                  <scrap headstyle="show" id="LookupPatterns-scrap">
+                     <prodrecap ref="LookupPattern"/>
+                  </scrap>
+                  
+                  <p>Informally, a shallow lookup pattern of the form <code><var>P</var> ? <var>Q</var></code> matches an
+                  item <var>J</var> if <var>J</var> matches the pattern <var>Q</var>, and is immediately
+                  contained in a map or array that matches <var>P</var>. Similarly, a deep lookup pattern of the form <code><var>P</var> ?? <var>Q</var></code> matches an
+                  item <var>J</var> if <var>J</var> matches the pattern <var>Q</var>, and is 
+                  contained at any depth within a map or array that matches <var>P</var>.</p>
+                  
+                  <p>For example, the pattern <code>~record(course, faculty, *) ?? ~record(first, last, *)</code>
+                  matches a value of type <code>record(first, last, *)</code> (that is, a map containing entries
+                  with keys <code>first</code> and <code>last</code>, perhaps representing a student) anywhere
+                  within a subtree rooted at a value of type <code>record(course, faculty, *)</code>, perhaps
+                  representing a course offered by some academic institution.</p>
+                  
+                  <p>Such patterns work only within a tree of maps and arrays that has been <term>pinned</term>,
+                  by explicit or implicit use of the function <function>fn:pin</function>: this operation adds labels
+                  to the items within a tree of maps and arrays indicating their context within the overall tree.</p>
+                  
+                  <p>More formally:</p>
+                  
+                  <olist>
+                     <item><p>An item <var>J</var> matches a shallow lookup pattern
+                           <code><var>P</var> ? <var>Q</var></code> if both the following conditions
+                           are satisfied:</p>
+                        
+                        <olist>
+                           <item><p><var>J</var> matches <var>Q</var>.</p></item>
+                           <item><p><code>(<var>J</var> => label())?parent</code> matches <var>P</var>.</p></item>
+                        </olist>
+                     
+                     </item>
+                     
+                     <item><p>An item <var>J</var> matches a deep lookup pattern
+                           <code><var>P</var> ?? <var>Q</var></code> if both the following conditions
+                           are satisfied:</p>
+                        
+                        <olist>
+                           <item><p><var>J</var> matches <var>Q</var>.</p></item>
+                           <item><p><code>(<var>J</var> => label())?ancestors()</code> is a sequence
+                              containing at least one item that matches <var>P</var>.</p></item>
+                        </olist>
+                     
+                     </item>
+                  </olist>
+                  
+                  <note><p>Note that the operators <code>?</code> and <code>??</code> are suggestive of the
+                  XPath lookup operators <code>?</code> and <code>??</code>, but neither the syntax
+                  nor the semantics are precisely the same. In particular, when <code>?</code> and <code>??</code>
+                  are used in a <nt def="LookupPattern">LookupPattern</nt>, the right-hand side is
+                  a <code>TypePattern</code>, not a <code>KeySpecifier</code>.</p></note>
+                  
+                  
+               </div4>
+               
+               <div4 id="type-patterns">
                   <head>Type Patterns</head>
                   
                   <changes>
@@ -10805,44 +10884,50 @@ and <code>version="1.0"</code> otherwise.</p>
                   <p>A type pattern tests whether an item matches a given item type, optionally qualified
                   with one or more predicates that the value must also satisfy.</p>
                   
-                  <p>The general-purpose construct <code>type(ItemType)</code> allows any <code>ItemType</code>
-                  to be used in a pattern. Where syntactic constraints permit, many <code>ItemTypes</code> can 
+                  <p>The construct <code>~ItemType</code> allows any <code>ItemType</code>
+                  to be used as a pattern.<!-- Where syntactic constraints permit, many <code>ItemTypes</code> can 
                      also be used directly: for example
-                  <code>type(item())</code> can be abbreviated as <code>item()</code>.</p>
+                  <code>type(item())</code> can be abbreviated as <code>item()</code>.--></p>
                   <p>For example:</p>
                   <ulist>
-                     <item><p><code>type(xs:integer)</code> matches any instance of
+                     <item><p><code>~xs:integer</code> matches any instance of
                         <code>xs:integer</code></p></item>
-                     <item><p><code>type(xs:integer)[. gt 0]</code> matches
+                     <item><p><code>~xs:integer[. gt 0]</code> matches
                         any positive integer.</p></item>
-                     <item><p><code>type(xs:string | xs:untypedAtomic)[matches(., '[0-9]+')]</code> matches
+                     <item><p><code>~(xs:string | xs:untypedAtomic)[matches(., '[0-9]+')]</code> matches
                         any instance of <code>xs:string</code> or <code>xs:untypedAtomic</code> that
                         contains a sequence of decimal digits.</p></item>
-                     <item><p><code>type(node())</code> matches any node. (This is not the same as the pattern
+                     <item><p><code>~node()</code> matches any node. (This is not the same as the pattern
                         <code>node()</code>, which for historical reasons only matches  element, text, comment, 
                         and processing instruction nodes).</p></item>
                   </ulist>
                   
                   
-                  <p>More formally, an item <var>$J</var> matches a pattern <code>type(<var>T</var>)[<var>P1</var>][<var>P2</var>][<var>P3</var>]</code> if
+                  <p>More formally, an item <var>$J</var> matches a pattern <code>~<var>T</var>)[<var>P1</var>][<var>P2</var>][<var>P3</var>]</code> if
                   the XPath expression <code>$J instance of <var>T</var> and exists($J[<var>P1</var>][<var>P2</var>][<var>P3</var>])</code> is true.</p>
                   
                   <note><p>As with predicate patterns, numeric predicates are allowed, but serve no useful purpose.</p></note>
                   
                   
                   
-                  <p>A pattern written as <code>record(<var>A</var>, <var>B</var>, <var>C</var>)</code> 
-                     is an abbreviation for <code>type(record(<var>A</var>, <var>B</var>, <var>C</var>))</code>
-                     (retaining any predicates). For example, the pattern <code>record(first, last, *)[?first eq "Sharon"]</code>
+                  <p>Type patterns are particularly useful with record types. 
+                     For example, the pattern <code>~record(first, last, *)[?first eq "Sharon"]</code>
                   matches any map having entries with the string-valued keys <code>"first"</code> and <code>"last"</code>,
-                     where the entry for the key <code>"first"</code> is equal to the string <code>"Sharon"</code>.</p>
+                     where the entry for the key <code>"first"</code> is equal to the string <code>"Sharon"</code>.
+                     If the stylesheet declares a named record type:</p>
+                  <eg><![CDATA[<xsl:record-type name="my:person" extensible="yes">
+   <xsl:field name="first"/>
+   <xsl:field name="last"/>
+</xsl:record-type>]]></eg>
+                  
+                  <p>then this can be simplified to <code>~my:person[?first eq "Sharon"]</code>.</p>
                   
                   <note>
                      <p>The item type in a pattern can be any <code>ItemType</code>, but patterns that match
                         nodes can usually be expressed more economically
-                        as a <code>NodeTest</code>: for example <code>match="type(element(PERSON))"</code> has the same meaning as
+                        as a <code>NodeTest</code>: for example <code>match="~element(PERSON)"</code> has the same meaning as
                         <code>match="element(PERSON)"</code>, which in turn is usually abbreviated to <code>match="PERSON"</code>.</p>
-                     <p>Although <code>match="type(element(PERSON))"</code> matches exactly the same items as
+                     <p>Although <code>match="~element(PERSON)"</code> matches exactly the same items as
                      <code>match="PERSON"</code>, the priority relative to other template rules (in the absence of an explicit
                      <code>priority</code> attribute) may be different.</p>
                   </note>
@@ -10915,6 +11000,7 @@ and <code>version="1.0"</code> otherwise.</p>
                
   
 
+
                
                <olist>
                   
@@ -10930,6 +11016,7 @@ and <code>version="1.0"</code> otherwise.</p>
                   <item><p>A node matches an <code>IntersectExceptExprP</code> 
                      <code><var>A</var> except <var>B</var></code>
                      if it matches <var>A</var> and does not match <var>B</var>.</p></item>
+
                   
                   <item>
                      <p>A node matches a <code>PathExprP</code> under the following conditions:</p>
@@ -12883,7 +12970,7 @@ return $tree =?> depth()]]></eg>
                   <specref ref="named-templates"/>.</p>
             <p>A <termref def="dt-template-rule">template rule</termref> is specified using the
                   <elcode>xsl:template</elcode> element with a <code>match</code> attribute. The
-                  <code>match</code> attribute is a <nt def="Pattern40">Pattern</nt> that identifies
+                  <code>match</code> attribute is a <nt def="Pattern">Pattern</nt> that identifies
                the items to which the rule applies. The result of
                applying the template rule is the result of evaluating the sequence constructor
                contained in the <elcode>xsl:template</elcode> element, with the matching item used as the <termref def="dt-context-item">context item</termref>.</p>
@@ -24176,7 +24263,7 @@ the same group, and the-->
                </item>
                <item>
                   <p>If the <code>group-starting-with</code> attribute is present, then its value
-                        <rfc2119>must</rfc2119> be a <nt def="Pattern40">pattern</nt>. </p>
+                        <rfc2119>must</rfc2119> be a <nt def="Pattern">pattern</nt>. </p>
                   <p>The items in the <termref def="dt-population">population</termref> are examined in <termref def="dt-population-order">population order</termref>. If an item matches the pattern, or is the first item in the population, then a new group is
                      created and the item becomes its first
                      member. Otherwise, the item is appended to the same group as its preceding
@@ -24184,7 +24271,7 @@ the same group, and the-->
                </item>
                <item>
                   <p>If the <code>group-ending-with</code> attribute is present, then its value
-                        <rfc2119>must</rfc2119> be a <nt def="Pattern40">pattern</nt>. </p>
+                        <rfc2119>must</rfc2119> be a <nt def="Pattern">pattern</nt>. </p>
                   <p>The items in the <termref def="dt-population">population</termref> are examined in <termref def="dt-population-order">population order</termref>. If an item is the first item in the population, or if the previous item in the population matches the pattern, then a new group
                      is created and the item becomes its first
                      member. Otherwise, the item is appended to the same group as its preceding
@@ -35822,7 +35909,7 @@ the same group, and the-->
                   of the key. The value of the <code>name</code> attribute is 
                   an <termref def="dt-eqname">EQName</termref>, which is expanded as
                   described in <specref ref="qname"/>. The <code>match</code> attribute 
-                  is a <nt def="Pattern40">Pattern</nt>; an <elcode>xsl:key</elcode> element applies to
+                  is a <nt def="Pattern">Pattern</nt>; an <elcode>xsl:key</elcode> element applies to
                   all nodes that match the pattern specified in the <code>match</code>
                   attribute.</p>
                <p>
@@ -39860,7 +39947,7 @@ See <loc href="http://www.w3.org/TR/xhtml11/"/>
          <head>Pattern Syntax Summary</head>
          
          <p>This appendix gives the grammar for XSLT patterns. The top-level rule for
-         patterns is <nt def="Pattern40"/>.</p>
+         patterns is <nt def="Pattern"/>.</p>
          
          <p>This is an extension of the grammar for XPath expressions.
             The extended BNF notation is explained at <xspecref spec="XP40" ref="EBNFNotation"/>.</p>
