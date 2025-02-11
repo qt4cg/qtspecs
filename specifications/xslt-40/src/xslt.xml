@@ -10861,6 +10861,12 @@ and <code>version="1.0"</code> otherwise.</p>
                         If two functions are called, for example <code>doc('a.xml')/id('abc')</code>,
                         it is no longer necessary to put the second call in parentheses.
                      </change>
+                     <change issue="402">
+                        The semantics of patterns using the <code>intersect</code> and <code>except</code>
+                        operators have been changed to reflect the intuitive meaning: for example
+                        a node now matches <code>A except B</code> if it matches <code>A</code>
+                        and does not match <code>B</code>.
+                     </change>
                   </changes>
                
 
@@ -10909,20 +10915,45 @@ and <code>version="1.0"</code> otherwise.</p>
                
   
 
-               <p>The pattern is converted to an <termref def="dt-expression">expression</termref>, called the <term>equivalent expression</term>. The
-                  equivalent expression to a <nt def="Pattern40">Pattern</nt> is the XPath
-                  expression that takes the same lexical form as the <code>Pattern</code> as
-                  written, with the following adjustment:</p>
-               <ulist>
+               
+               <olist>
+                  
+                  <item><p>A node matches a <code>UnionExprP</code> 
+                     <code><var>A</var> union <var>B</var></code> (or equivalently,
+                     <code><var>A</var> | <var>B</var></code>) if it matches either
+                     <var>A</var> or <var>B</var> or both.</p></item>
+                  
+                  <item><p>A node matches an <code>IntersectExceptExprP</code> 
+                     <code><var>A</var> intersect <var>B</var></code>
+                     if it matches both <var>A</var> and <var>B</var>.</p></item>
+                  
+                  <item><p>A node matches an <code>IntersectExceptExprP</code> 
+                     <code><var>A</var> except <var>B</var></code>
+                     if it matches <var>A</var> and does not match <var>B</var>.</p></item>
                   
                   <item>
+                     <p>A node matches a <code>PathExprP</code> under the following conditions:</p>
+                     
+                     <olist>
+                        <item><p>If the <code>PathExprP</code> consists in its entirety
+                        of a <code>ParenthesizedExprP</code>, then the node matches
+                        the <code>ParenthesizedExprP</code> if it matches the <code>UnionExprP</code>
+                        enclosed within the parentheses.</p></item>
+                        
+                        <item><p>Otherwise, the <code>PathExprP</code> pattern is converted to an 
+                           <termref def="dt-expression">expression</termref>, 
+                           called the <term>equivalent expression</term>. The
+                           equivalent expression to a <nt def="PathExprP">PathExprP</nt> is the XPath
+                           expression that takes the same lexical form as the <code>PathExprP</code> as
+                           written, with the following adjustment:</p>
                      <p>If any <code>PathExprP</code> in the
                               <code>Pattern</code> is a <code>RelativePathExprP</code>, then the
                            first <code>StepExprP</code>
                            <var>PS</var> of this <code>RelativePathExprP</code> is adjusted
                         to allow it to match a parentless element, attribute, or namespace node. The
                         adjustment depends on the axis used in this step, whether it appears
-                        explicitly or implicitly (according to the rules of <xspecref spec="XP40" ref="abbrev"/>), and is made as follows:</p>
+                        explicitly or implicitly (according to the rules of <xspecref spec="XP40" ref="abbrev"/>), 
+                        and is made as follows:</p>
                      <olist>
                         <item>
                            <p>If the <code>NodeTest</code> in <var>PS</var> is
@@ -10985,23 +11016,27 @@ and <code>version="1.0"</code> otherwise.</p>
                      </note>
 
                   </item>
-               </ulist>
+               </olist>
 
                <p>The meaning of the pattern is then defined in terms of the semantics of the
                   equivalent expression, denoted below as <code>EE</code>.</p>
 
-               <p>Specifically, an item <var>N</var> matches a pattern <var>P</var> if  the following applies, where
+               <p>Specifically, an item <var>N</var> matches a <code>PathExprP</code>
+                  pattern <var>P</var> if  the following applies, where
                      <code>EE</code> is the <term>equivalent expression</term> to <var>P</var>:</p>
-               <olist>
+               <ulist>
 
                   <item>
                      <p><var>N</var> is a node, and the result of evaluating the expression
                            <code>root(.)//(EE)</code> with a <termref def="dt-singleton-focus">singleton focus</termref> based on <var>N</var> is a sequence that
-                        includes the node <var>N</var>
+                        includes the node <var>N</var>.
                      </p>
                   </item>
                   
-               </olist>
+               </ulist>
+               </item>
+            </olist>
+               
 
                <p>If a pattern appears in an attribute of an element that
                      is processed with <termref def="dt-xslt-10-behavior">XSLT 1.0
@@ -11009,6 +11044,40 @@ and <code>version="1.0"</code> otherwise.</p>
                   semantics of the pattern are defined on the basis that the equivalent XPath
                   expression is evaluated with <termref def="dt-xpath-compat-mode">XPath 1.0
                      compatibility mode</termref> set to <code>true</code>.</p>
+               
+               <note>
+                  <p>This version of the specification includes an incompatible change
+                  to the semantics of patterns using the <code>intersect</code> and
+                  <code>except</code> operators. This change is made to eliminate 
+                  cases where the behavior defined in XSLT 3.0 was counter-intuitive.</p>
+                  
+                  <p>Consider the pattern <code>para except appendix//para</code>.
+                  In XSLT 4.0 this matches any <code>para</code> element that is not
+                  the descendant of an <code>appendix</code> element. In XSLT 3.0 it
+                  would match the <code>para</code> element in the XML tree shown below:</p>
+                  
+                  <eg><![CDATA[<appendix>
+  <section>
+     <para/>
+  </section>
+</appendix>]]>  
+</eg> 
+                  <p>because there is an element <code>$S</code> (specifically, 
+                     the <code>section</code> element), such that the expression
+                     <code>$S//(para except appendix//para)</code> selects this
+                     <code>para</code> element.</p>
+                  
+                  <p>It is <rfc2119>recommended</rfc2119> that processors should report
+                  a compatibility warning when such constructs are encountered. The problem
+                  arises with patterns using <code>intersect</code> or <code>except</code>
+                  where one of the branches uses the descendant axis: it does not arise
+                  in simple cases like <code>* except A</code>, or <code>@* except @code</code>,
+                  where the branches only use the child or attribute axis.</p>
+                  
+                  <p>The change does not affect the meaning of patterns that use the <code>intersect</code>
+                  or <code>except</code> operators nested within a path expression, for example
+                  a pattern such as <code>A[.//C except B//C]</code>.</p>
+               </note>
 
 
                <example>
@@ -40168,6 +40237,10 @@ See <loc href="http://www.w3.org/TR/xhtml11/"/>
                in the previous specification, which meant that in edge cases involving rounding of numeric values
                of different types, two items in different groups could compare equal. Any change in behavior
                is confined to this edge case.</p>
+            </item>
+            <item>
+               <p>The rules for matching nodes against patterns using the <code>intersect</code>
+               and <code>except</code> operators have changed to deliver a more intuitive result.</p>
             </item>
             <item>
                <p>The rules for comparing values in <termref def="dt-key">keys</termref> have changed,
