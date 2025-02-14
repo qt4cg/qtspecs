@@ -329,6 +329,12 @@
             If it is known that octal values will always represent single octets, 
             the required octet can be extracted by an expression such as
             <code>bin:octal($in) => bin:to-octets() => foot() => bin:from-octets()</code></p>-->
+            
+            <p>The result of the expression <code>bin:octal("177 177 177 177")</code>
+            is the 5-octet value <code>bin:hex("03 F9 FC FE 7F")</code> and not (as some
+            users might imagine) the 4-octet value <code>bin:hex("7F 7F 7F 7F")</code>.
+            To achieve the latter result, the expression <code>$in => tokenize() =>
+            bin:octal() => bin:join()</code> can be used.</p>
         </fos:notes>
         <fos:examples>
             <fos:example>
@@ -829,7 +835,8 @@ $in =!> bin:to-octets() => bin:from-octets()
                 sequence.</p>
             <p>If <code>$offset</code> and <code>$size</code> are provided, the <code>$size</code>
                 octets from <code>$offset</code> are decoded. If <code>$offset</code> alone is
-                provided, octets from <code>$offset</code> to the end are decoded, otherwise the
+                provided, octets from <code>$offset</code> to the end are decoded. If neither
+                <code>$offset</code> nor <code>$size</code> is provided, the
                 entire octet sequence is decoded.</p>
             <p>The function returns the string obtained by decoding the selected octets using
                 the specified <code>$encoding</code> name.</p>
@@ -837,16 +844,22 @@ $in =!> bin:to-octets() => bin:from-octets()
                 <code>$encoding</code> follow the same rules as for the 
                 <code>encoding</code> attribute in an XML
                 declaration. The only values which every implementation is
-                    <rfc2119>required</rfc2119> to recognize are <code>utf-8</code> and
-                <code>utf-16</code>.</p>
+                    <rfc2119>required</rfc2119> to recognize are <code>utf-8</code>, 
+                <code>utf-16</code>, <code>utf-16be</code>, and <code>utf-16le</code>.
+                The encoding name <code>utf-16</code> is interpreted as <code>utf16be</code>
+                unless <code>$in</code> starts with the two octets <code>fffe</code>, in which
+                case it is interpreted as <code>utf-16le</code>.
+            </p>
             <p>If <code>$encoding</code> is omitted, <code>utf-8</code> encoding is assumed.</p>
+            <p>If the data being decoded includes a byte order mark (<char>U+FEFF</char>), this
+            is decoded and returned in the same way as any other character.</p>
             <p>The values of <code>$offset</code> and <code>$size</code>, if present,
-                <rfc2119>must</rfc2119> be non-negative integers.</p>
+                <rfc2119>must</rfc2119> be non-negative integers.</p>           
             
             <p><code>$offset</code> is zero based.</p>
         </fos:rules>
         <fos:errors>
-            <p><errorref spec="BIN40" code="index-out-of-range"/>is raised if <code>$offset</code> is
+            <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$offset</code> is
                 negative or <code>$offset + $size</code> is larger than the size of the binary data
                 of <code>$in</code>.</p>
             <p><errorref spec="BIN40" code="negative-size"/> is raised if <code>$size</code> is
@@ -865,9 +878,14 @@ $in =!> bin:to-octets() => bin:from-octets()
                     <fos:result>"ABC"</fos:result>
                 </fos:test>
                 <fos:test>
-                    <fos:expression>bin:decode-string(bin:hex('FEFF004100420043'), 'utf-16')</fos:expression>
+                    <fos:expression>bin:decode-string(bin:hex('FEFF004100420043'), 'utf-16be', 2)</fos:expression>
                     <fos:result>"ABC"</fos:result>
-                    <fos:postamble>TODO: See issue 1751 regarding the BOM.</fos:postamble>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:decode-string(bin:hex('FFFE410042004300'), 'utf-16', 2)</fos:expression>
+                    <fos:result>"ABC"</fos:result>
+                    <fos:postamble>Little-endian byte order is used because of the BOM at the start
+                    of the data.</fos:postamble>
                 </fos:test>
             </fos:example>
             <fos:example>
@@ -877,6 +895,10 @@ $in =!> bin:to-octets() => bin:from-octets()
                 <eg xml:space="preserve">bin:decode-string($data, 'UTF-8', 0, 4) eq '%PDF'</eg>
             </fos:example>
         </fos:examples>
+        <fos:changes>
+            <fos:change issue="1751" PR="1765" date="2025-02-11"><p>The handling of byte order marks has been clarified. This may
+            differ from the interpretation adopted by exising implementations.</p></fos:change>
+        </fos:changes>
     </fos:function>
 
     <fos:function name="encode-string" prefix="bin">
@@ -901,11 +923,17 @@ $in =!> bin:to-octets() => bin:from-octets()
                 <code>$encoding</code> follow the same rules as for the 
                 <code>encoding</code> attribute in an XML
                 declaration. The only values which every implementation is
-                    <rfc2119>required</rfc2119> to recognize are <code>utf-8</code> and
-                <code>utf-16</code>.</p>
+                    <rfc2119>required</rfc2119> to recognize are <code>utf-8</code>,
+                <code>utf-16</code>, <code>utf-16be</code>, and <code>utf-16le</code>.
+                The encoding <code>utf-16</code> is interpreted as <code>utf-16be</code> (that is,
+                most significant byte first).
+            </p>
             <p>The function returns the binary value obtained by encoding the string <code>$in</code> using
                 the specified <code>$encoding</code> name.</p>
             <p>If <code>$encoding</code> is omitted, <code>utf-8</code> encoding is assumed.</p>
+            <p>The function does not add a byte order mark to the data. 
+                But if <code>$in</code> includes a byte order mark (<char>U+FEFF</char>) then it is encoded in the same
+            way as any other character.</p>
             
         </fos:rules>
         <fos:errors>
@@ -924,11 +952,20 @@ $in =!> bin:to-octets() => bin:from-octets()
                 </fos:test>
                 <fos:test>
                     <fos:expression>bin:encode-string('ABC', 'utf-16')</fos:expression>
-                    <fos:result>bin:hex('FEFF004100420043')</fos:result>
-                    <fos:postamble>TODO: The result has a BOM. See issue 1751.</fos:postamble>
+                    <fos:result>bin:hex('004100420043')</fos:result>
+                    <fos:postamble>The result has no BOM, and uses big-endian encoding.</fos:postamble>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:encode-string(char(0xfeff) || 'ABC', 'utf-16le')</fos:expression>
+                    <fos:result>bin:hex('fffe410042004300')</fos:result>
+                    <fos:postamble>The result has a BOM, and uses little-endian encoding.</fos:postamble>
                 </fos:test>
             </fos:example>
         </fos:examples>
+        <fos:changes>
+            <fos:change issue="1751" PR="1765" date="2025-02-11"><p>The handling of byte order marks has been clarified. This may
+            differ from the interpretation adopted by exising implementations.</p></fos:change>
+        </fos:changes>
     </fos:function>
 
     <fos:function name="pack-integer" prefix="bin">
