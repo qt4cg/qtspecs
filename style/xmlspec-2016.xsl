@@ -809,12 +809,25 @@
   <!-- reference external graphic file with alt text -->
   <xsl:template match="graphic">
     <img src="{@source}">
+      <xsl:if test="contains-token(@role, 'full-width')">
+        <xsl:attribute name="style" select="'width:100%'"/>
+      </xsl:if>
       <xsl:if test="@alt">
         <xsl:attribute name="alt">
           <xsl:value-of select="@alt"/>
         </xsl:attribute>
       </xsl:if>
     </img>
+  </xsl:template>
+
+  <!-- Inline SVG -->
+  <xsl:template match="graphic[ends-with(@source, '.svg')]">
+    <div class="svg-image">
+      <xsl:if test="contains-token(@role, 'full-width')">
+        <xsl:attribute name="style" select="'width:100%'"/>
+      </xsl:if>
+      <xsl:sequence select="doc(resolve-uri('../images/' || @source, base-uri(.)))"/>
+    </div>
   </xsl:template>
 
   <!-- group: -->

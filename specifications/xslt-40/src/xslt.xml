@@ -10861,6 +10861,12 @@ and <code>version="1.0"</code> otherwise.</p>
                         If two functions are called, for example <code>doc('a.xml')/id('abc')</code>,
                         it is no longer necessary to put the second call in parentheses.
                      </change>
+                     <change issue="402">
+                        The semantics of patterns using the <code>intersect</code> and <code>except</code>
+                        operators have been changed to reflect the intuitive meaning: for example
+                        a node now matches <code>A except B</code> if it matches <code>A</code>
+                        and does not match <code>B</code>.
+                     </change>
                   </changes>
                
 
@@ -10909,20 +10915,45 @@ and <code>version="1.0"</code> otherwise.</p>
                
   
 
-               <p>The pattern is converted to an <termref def="dt-expression">expression</termref>, called the <term>equivalent expression</term>. The
-                  equivalent expression to a <nt def="Pattern40">Pattern</nt> is the XPath
-                  expression that takes the same lexical form as the <code>Pattern</code> as
-                  written, with the following adjustment:</p>
-               <ulist>
+               
+               <olist>
+                  
+                  <item><p>A node matches a <code>UnionExprP</code> 
+                     <code><var>A</var> union <var>B</var></code> (or equivalently,
+                     <code><var>A</var> | <var>B</var></code>) if it matches either
+                     <var>A</var> or <var>B</var> or both.</p></item>
+                  
+                  <item><p>A node matches an <code>IntersectExceptExprP</code> 
+                     <code><var>A</var> intersect <var>B</var></code>
+                     if it matches both <var>A</var> and <var>B</var>.</p></item>
+                  
+                  <item><p>A node matches an <code>IntersectExceptExprP</code> 
+                     <code><var>A</var> except <var>B</var></code>
+                     if it matches <var>A</var> and does not match <var>B</var>.</p></item>
                   
                   <item>
+                     <p>A node matches a <code>PathExprP</code> under the following conditions:</p>
+                     
+                     <olist>
+                        <item><p>If the <code>PathExprP</code> consists in its entirety
+                        of a <code>ParenthesizedExprP</code>, then the node matches
+                        the <code>ParenthesizedExprP</code> if it matches the <code>UnionExprP</code>
+                        enclosed within the parentheses.</p></item>
+                        
+                        <item><p>Otherwise, the <code>PathExprP</code> pattern is converted to an 
+                           <termref def="dt-expression">expression</termref>, 
+                           called the <term>equivalent expression</term>. The
+                           equivalent expression to a <nt def="PathExprP">PathExprP</nt> is the XPath
+                           expression that takes the same lexical form as the <code>PathExprP</code> as
+                           written, with the following adjustment:</p>
                      <p>If any <code>PathExprP</code> in the
                               <code>Pattern</code> is a <code>RelativePathExprP</code>, then the
                            first <code>StepExprP</code>
                            <var>PS</var> of this <code>RelativePathExprP</code> is adjusted
                         to allow it to match a parentless element, attribute, or namespace node. The
                         adjustment depends on the axis used in this step, whether it appears
-                        explicitly or implicitly (according to the rules of <xspecref spec="XP40" ref="abbrev"/>), and is made as follows:</p>
+                        explicitly or implicitly (according to the rules of <xspecref spec="XP40" ref="abbrev"/>), 
+                        and is made as follows:</p>
                      <olist>
                         <item>
                            <p>If the <code>NodeTest</code> in <var>PS</var> is
@@ -10985,23 +11016,27 @@ and <code>version="1.0"</code> otherwise.</p>
                      </note>
 
                   </item>
-               </ulist>
+               </olist>
 
                <p>The meaning of the pattern is then defined in terms of the semantics of the
                   equivalent expression, denoted below as <code>EE</code>.</p>
 
-               <p>Specifically, an item <var>N</var> matches a pattern <var>P</var> if  the following applies, where
+               <p>Specifically, an item <var>N</var> matches a <code>PathExprP</code>
+                  pattern <var>P</var> if  the following applies, where
                      <code>EE</code> is the <term>equivalent expression</term> to <var>P</var>:</p>
-               <olist>
+               <ulist>
 
                   <item>
                      <p><var>N</var> is a node, and the result of evaluating the expression
                            <code>root(.)//(EE)</code> with a <termref def="dt-singleton-focus">singleton focus</termref> based on <var>N</var> is a sequence that
-                        includes the node <var>N</var>
+                        includes the node <var>N</var>.
                      </p>
                   </item>
                   
-               </olist>
+               </ulist>
+               </item>
+            </olist>
+               
 
                <p>If a pattern appears in an attribute of an element that
                      is processed with <termref def="dt-xslt-10-behavior">XSLT 1.0
@@ -11009,6 +11044,40 @@ and <code>version="1.0"</code> otherwise.</p>
                   semantics of the pattern are defined on the basis that the equivalent XPath
                   expression is evaluated with <termref def="dt-xpath-compat-mode">XPath 1.0
                      compatibility mode</termref> set to <code>true</code>.</p>
+               
+               <note>
+                  <p>This version of the specification includes an incompatible change
+                  to the semantics of patterns using the <code>intersect</code> and
+                  <code>except</code> operators. This change is made to eliminate 
+                  cases where the behavior defined in XSLT 3.0 was counter-intuitive.</p>
+                  
+                  <p>Consider the pattern <code>para except appendix//para</code>.
+                  In XSLT 4.0 this matches any <code>para</code> element that is not
+                  the descendant of an <code>appendix</code> element. In XSLT 3.0 it
+                  would match the <code>para</code> element in the XML tree shown below:</p>
+                  
+                  <eg><![CDATA[<appendix>
+  <section>
+     <para/>
+  </section>
+</appendix>]]>  
+</eg> 
+                  <p>because there is an element <code>$S</code> (specifically, 
+                     the <code>section</code> element), such that the expression
+                     <code>$S//(para except appendix//para)</code> selects this
+                     <code>para</code> element.</p>
+                  
+                  <p>It is <rfc2119>recommended</rfc2119> that processors should report
+                  a compatibility warning when such constructs are encountered. The problem
+                  arises with patterns using <code>intersect</code> or <code>except</code>
+                  where one of the branches uses the descendant axis: it does not arise
+                  in simple cases like <code>* except A</code>, or <code>@* except @code</code>,
+                  where the branches only use the child or attribute axis.</p>
+                  
+                  <p>The change does not affect the meaning of patterns that use the <code>intersect</code>
+                  or <code>except</code> operators nested within a path expression, for example
+                  a pattern such as <code>A[.//C except B//C]</code>.</p>
+               </note>
 
 
                <example>
@@ -13341,6 +13410,10 @@ return $tree =?> depth()]]></eg>
                   Default priorities are added for new forms of <code>ElementTest</code> and <code>AttributeTest</code>,
                   for example <code>element(p:*)</code> and <code>element(a|b)</code>.
                </change>
+               <change issue="1770">
+                  The default priority for a template rule using a union pattern has changed.
+                  This change may cause incompatible behavior.
+               </change>
             </changes>
             <p><termdef id="dt-default-priority" term="default priority">If no <code>priority</code>
                   attribute is specified on an <elcode>xsl:template</elcode> element, a
@@ -13354,7 +13427,33 @@ return $tree =?> depth()]]></eg>
                <item>
                   <p>If the top-level pattern is a <nt def="UnionExprP">UnionExprP</nt> consisting
                      of multiple alternatives separated by <code>|</code> or <code>union</code>,
-                     then the template rule is treated equivalently to a set of template rules, one
+                     then the default priority is the maximum of the default priorities
+                     of the alternatives.</p>
+                  
+                  <note>
+                     <p>This is a backwards incompatible change from XSLT 3.0 and earlier
+                     versions, which treated the template rule as equivalent to multiple
+                     template rules with different priorities.</p>
+                     <p>The change is made because of the increasing complexity of extending
+                     the rule to patterns like <code>@(a|b)</code>, or <code>attribute(a|b, xs:integer)</code>
+                     which are defined to be semantically identical to equivalent union patterns;
+                     and to prevent confusion with type patterns such as 
+                     <code>type(element(a)|element(b))</code>, where different rules apply.</p>
+                     <p>The change affects any template rule with a union pattern that 
+                        (a) has no explicit priority attribute, and (b) has multiple branches with
+                     different default priority. It is <rfc2119>recommended</rfc2119> that processors
+                     should output a compatibility warning when such template rules are encountered.</p>
+                     
+                     <p>The change has two effects. Firstly, if two alternatives 
+                        in a union pattern have different priority
+                     (for example in a pattern such as <code>a | b/c</code>, the priority of one of
+                     the branches will be raised to that of the other branch. Secondly, in cases where
+                     the same item matches both branches, a call on <code>xsl:next-match</code> will
+                     never cause the same template rule to be evaluated repeatedly.</p>
+                  </note>
+                     
+                     
+                     <!--the template rule is treated equivalently to a set of template rules, one
                      for each alternative. For example, a rule with <code>match="a|b"</code> is treated
                      as if there were one rule with <code>match="a"</code> and another with <code>match="b"</code>.
                      These template rules are adjacent to each
@@ -13393,7 +13492,7 @@ return $tree =?> depth()]]></eg>
                         (a) the alternatives have the same default priority,
                         and (b) the alternatives are disjoint &mdash; which is the case for some
                         of the examples given above.</p>
-                  </note>
+                  </note>-->
                </item>
                <item>
                   <p>If the top-level pattern is an <nt def="IntersectExceptExprP">IntersectExceptExprP</nt> containing two or more <nt def="PathExprP">PathExprP</nt> operands separated by <code>intersect</code> or
@@ -14934,14 +15033,15 @@ return $tree =?> depth()]]></eg>
                      mode, and to exclude those rules that appear before the current template rule in this ordering. The introduction
                      of type patterns makes this approach more challenging, since types are partially ordered.</p>
                   </note>
-                  <note>
+                  <!--<note>
                      <p>As explained in <specref ref="conflict"/>, a template rule with no <code>priority</code>
                            attribute, whose match pattern contains multiple alternatives
                         separated by <code>|</code>, is treated equivalently to a set of template
-                        rules, one for each alternative. This means that where the same item matches more than one alternative, it is possible for an <elcode>xsl:next-match</elcode>
+                        rules, one for each alternative. This means that where the same item matches 
+                        more than one alternative, it is possible for an <elcode>xsl:next-match</elcode>
                         instruction to cause the current template rule to be invoked recursively.
                         This situation does not occur when the template rule has an explicit priority.</p>
-                  </note>
+                  </note>-->
                   <note>
                      <p>Because a template rule declared as a child of <elcode>xsl:override</elcode>
                         has higher precedence than any template rule declared in the used package
@@ -36726,58 +36826,7 @@ return ($m?price - $m?discount)</eg>
          
       </div1>
 
-      <div1 id="json">
-         <head>Processing JSON Data</head>
-         <p>JSON is a popular format for exchange of structured data on the web: it is specified in
-               <bibref ref="rfc7159"/>. This section
-            describes facilities allowing JSON data to be processed using XSLT.</p>
-
-         <note>
-            <p>RFC7159 is taken as the definitive specification of JSON for the purposes of this
-               document. The RFC explains its relationship with other JSON specifications such as
-                  <bibref ref="ECMA-404"/>.</p>
-         </note>
-
-         <note>
-            <p>XPath 3.1 incorporates the functions defined in this
-               section. It also provides additional JSON capability, in the form of functions
-                  <code>parse-json</code>, <code>json-doc</code>, and extensions to the
-                  <xfunction>serialize</xfunction> function. These facilities are incorporated in XSLT
-               3.0 only if the XPath 3.1 feature is supported. They depend on support for
-               arrays.</p>
-         </note>
-
-        
-
-         <div2 id="xml-to-json-transformation">
-            <head>Transforming XML to JSON</head>
-            <p>Given an XML structure that does not use the XML representation of JSON defined in
-                  <xspecref spec="FO40" ref="json-to-xml-mapping"/>, there are two practical ways to convert it
-               to JSON: either perform a transformation to the XML representation of JSON and then
-               call the <function>xml-to-json</function> function; or transform it to JSON directly
-               by using custom template rules.</p>
-
-            <p>To assist with the second approach, a stylesheet is provided in <specref ref="json-in-xml"/>. 
-               This stylesheet includes a function
-                  <code>j:xml-to-json</code> which, apart from being in a different namespace, is
-               functionally very similar to the <function>xml-to-json</function> function described in
-               the previous section. (It differs in doing less validation
-                  of the input than the function specification requires, and in the details of how
-                  special characters are escaped.)
-               The implementation of the function is exposed, using template
-               rules to perform a recursive descent of the supplied input, and the behavior of the
-               function can therefore be customized (typically by importing the stylesheet and
-               adding additional template rules) to handle arbitrary XML input.</p>
-
-            <p>The stylesheet is provided under the W3C software license for the convenience of
-               users. There is no requirement for any conformant XSLT processor to make this
-               stylesheet available. Processors <rfc2119>may</rfc2119> implement the
-               <function>xml-to-json</function> function by invoking this stylesheet (adapted
-               to achieve full conformance), but there is no requirement to do so.</p>
-         </div2>
-      </div1>
-
-     
+      
 
       <div1 id="diagnostics">
          <head>Diagnostics</head>
@@ -39200,7 +39249,7 @@ return ($m?price - $m?discount)</eg>
                <rfc2119>must</rfc2119> satisfy the requirements for processors that do not implement
             that feature.</p>
 
-         <note>
+         <!--<note>
             <p>There is no conformance level or feature defined in this specification that requires
                implementation of the static typing features described in <bibref ref="xpath-30"/>.
                An XSLT processor may provide a user option to invoke static typing, but to be
@@ -39208,7 +39257,7 @@ return ($m?price - $m?discount)</eg>
                static typing disabled. The interaction of XSLT stylesheets with the static typing
                feature of XPath 3.0 has not been specified, so
                the results of using static typing, if available, are implementation-defined.</p>
-         </note>
+         </note>-->
          <p>An XSLT processor takes as its inputs a stylesheet and zero or more XDM trees conforming to the data model defined in <bibref ref="xpath-datamodel-30"/>. It is not <rfc2119>required</rfc2119> that the processor
             supports any particular method of constructing XDM trees, but conformance can only be
             tested if it provides a mechanism that enables XDM trees representing the stylesheet and
@@ -39242,24 +39291,24 @@ return ($m?price - $m?discount)</eg>
          <p>A conforming processor <rfc2119>may</rfc2119> impose limits on the processing resources
             consumed by the processing of a stylesheet.</p>
 
-         <p>The mandatory requirements of this specification are taken to
+         <!--<p>The mandatory requirements of this specification are taken to
             include the mandatory requirements of <bibref ref="xpath-30"/>, <bibref ref="xpath-datamodel-30"/>, and <bibref ref="xpath-functions-40"/>. An XSLT 3.0
             processor <rfc2119>must</rfc2119> provide a mode of operation which conforms to the 3.0
             versions of those specifications as extended by <specref ref="map"/> and <specref ref="json"/>.</p>
-
-         <p diff="del" at="2022-01-01">A processor <rfc2119>may</rfc2119> also provide a mode of
+-->
+         <!--<p diff="del" at="2022-01-01">A processor <rfc2119>may</rfc2119> also provide a mode of
             operation which conforms to the 3.1 versions of those specifications; in this case it
             must do so as described in XPath 3.1 feature.</p>
-
-         <p>A processor <rfc2119>may</rfc2119> also provide a mode of
+-->
+         <!--<p>A processor <rfc2119>may</rfc2119> also provide a mode of
             operation which conforms to versions of those specifications later than the 3.1
             versions; in such cases the detail of how XSLT 3.0 interacts with new features
             introduced by such later versions (for example, extensions to the data model) is
-               <termref def="dt-implementation-defined"/>.</p>
+               <termref def="dt-implementation-defined"/>.</p>-->
 
-         <imp-def-feature id="idf-spec-xpath">It is <termref def="dt-implementation-defined"/>
+         <!--<imp-def-feature id="idf-spec-xpath">It is <termref def="dt-implementation-defined"/>
             whether (and if so how) an XSLT 3.0 processor is able to work with versions of XPath
-            later than XPath 3.1.</imp-def-feature>
+            later than XPath 3.1.</imp-def-feature>-->
 
 
 
@@ -39782,23 +39831,7 @@ See <loc href="http://www.w3.org/TR/xhtml11/"/>
             </blist>
          </div2>
       </div1>
-      <div1 id="json-in-xml">
-         <head>XML Representation of JSON</head>
-         <p>This appendix contains a stylesheet that can be used for converting the XML representation of JSON described in
-               <xspecref spec="FO40" ref="json-to-xml-mapping"/> into strings matching the JSON grammar.</p>
-         <p>This stylesheet is also available as a separate resource (links
-            are listed at the top of this document).</p>
-         <p>The schema for this XML representation of JSON is described at 
-            <xspecref spec="FO40" ref="json-to-xml-mapping"/>.</p>
-         
-            <p>The stylesheet contains the implementation of a function very similar to
-                  <function>xml-to-json</function>, but implemented in XSLT so that it can be
-               customized and extended. This stylesheet is provided for the benefit of users and
-               there are no conformance requirements associated with it; there is no requirement
-               that processors should make this stylesheet available. The stylesheet is reproduced
-               below:</p>
-            <?doc xml-to-json.xsl?>
-      </div1>
+      
       <inform-div1 id="glossary">
          <head>Glossary</head>
          <?glossary?>
@@ -40237,9 +40270,20 @@ See <loc href="http://www.w3.org/TR/xhtml11/"/>
                is confined to this edge case.</p>
             </item>
             <item>
+               <p>The rules for matching nodes against patterns using the <code>intersect</code>
+               and <code>except</code> operators have changed to deliver a more intuitive result.</p>
+            </item>
+            <item>
                <p>The rules for comparing values in <termref def="dt-key">keys</termref> have changed,
                to align with the rules for maps. The changes affect edge cases involving rounding of numeric values
                of different types, and the comparison of date/time values with and without timezones.</p>
+            </item>
+            <item>
+               <p>In previous versions, a template rule whose match pattern was a union pattern
+               and that had no explicity priority was treated as equivalent to a set of template
+               rules, one for each alternative in the union, each potentially with different default
+               priority. This rule has not been carried forward into XSLT 4.0: instead, the priority
+               of the rule is taken as being the highest priority of any of the alternatives.</p>
             </item>
             
             
