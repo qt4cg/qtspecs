@@ -182,12 +182,11 @@ task "publish-expath-40"(dependsOn: ["binary_40", "file_40"]) {
   def wwwDir = "${buildDir}/www/expath-$shortName-40"
   def specName = ("$shortName" == "binary") ? "BIN40" : "FILE40"
    
-  
-
   task "${shortName}_40"(
     group: "Specifications",
     description: "Build the EXPath ${shortName} 4.0 specification",
-    dependsOn: ["${shortName}_xml", "${shortName}_html", "${shortName}_resources"]
+    dependsOn: ["${shortName}_xml", "${shortName}_html",
+                "${shortName}_resources", "${shortName}_generate_tests"]
   ) {
     // Just somewhere to hang dependencies
   }
@@ -316,7 +315,26 @@ task "publish-expath-40"(dependsOn: ["binary_40", "file_40"]) {
       index.close();
     }
   }
+  
+  task "${shortName}_generate_tests"(
+    dependsOn: ["qt4tests", "saxon_config"]
+  ) {
+    inputs.file "${projectDir}/specifications/EXPath/${shortName}/src/function-catalog.xml"
+    inputs.file "${projectDir}/specifications/EXPath/style/generate-test-set.xsl"
+    outputs.file "${buildDir}/test-suite/app/${shortName}-spec-examples.xml"
+    outputs.upToDateWhen { false }
 
+    doLast {
+      if (file("${projectDir}/lib/saxon-license.lic").exists()) {
+        transform("${projectDir}/specifications/EXPath/${shortName}/src/function-catalog.xml",
+                  "${projectDir}/specifications/EXPath/style/generate-test-set.xsl",
+                  "${buildDir}/test-suite/app/${shortName}-spec-examples.xml",
+                  ["-t", "-val"], [:])
+      } else {
+        println("Cannot generate tests from specification; no Saxon license available.")
+      }
+    }
+  }
 }
 
 
@@ -829,6 +847,15 @@ task xquery_40(
     outputs.file "${buildDir}/www/xquery-40/${shortName}-40.html"
 
     String style = "${projectDir}/style/xsl-query-2016.xsl"
+
+    // Hack for SVG diagrams
+    doFirst {
+      copy {
+        from "${projectDir}/specifications/xquery-40/images"
+        into "${buildDir}/xquery-40/images"
+        include "*.svg"
+      }
+    }
 
     doLast {
       transform("${buildDir}/xquery-40/src/${shortName}-assembled.xml",
