@@ -72,16 +72,16 @@
   </xsl:template>
 
   <xsl:template match="termref">
-    <span class="arrow">&#xB7;</span>
+    <!--<span class="arrow">&#xB7;</span>-->
     <xsl:choose>
       <xsl:when test=". = ''">
-	<xsl:value-of select="key('ids', @def)/@term"/>
+	       <xsl:value-of select="key('ids', @def)/@term"/>
       </xsl:when>
       <xsl:otherwise>
-	<xsl:apply-templates/>
+	       <xsl:apply-templates/>
       </xsl:otherwise>
     </xsl:choose>
-    <span class="arrow">&#xB7;</span>
+    <!--<span class="arrow">&#xB7;</span>-->
   </xsl:template>
 
   <xsl:template match="*">
