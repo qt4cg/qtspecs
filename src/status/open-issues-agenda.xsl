@@ -71,12 +71,24 @@
     </xsl:for-each>
   </xsl:variable>
 
-  <xsl:variable name="prg-required" as="xs:integer*">
+  <xsl:variable name="required" as="xs:integer*">
     <xsl:for-each select="$issue-list">
       <xsl:variable name="issue" select="."/>
 
       <xsl:if test="$issue?state='open'
-                    and f:has-label($issue, 'PRG-required')">
+                    and f:has-label($issue, ('PRG-required', 'Reviewed-required'))">
+        <xsl:sequence select="xs:integer($issue?number)"/>
+      </xsl:if>
+    </xsl:for-each>
+  </xsl:variable>
+
+  <xsl:variable name="xslt-optional" as="xs:integer*">
+    <xsl:for-each select="$issue-list">
+      <xsl:variable name="issue" select="."/>
+
+      <xsl:if test="$issue?state='open'
+                    and f:has-label($issue, ('PRG-optional', 'Reviewed-optional'))
+                    and f:has-label($issue, 'XSLT')">
         <xsl:sequence select="xs:integer($issue?number)"/>
       </xsl:if>
     </xsl:for-each>
@@ -99,8 +111,9 @@
       <xsl:variable name="issue" select="."/>
       <xsl:if test="$issue?state='open'
                     and not(f:has-label($issue,
-                             ('PRG-required', 'PRG-easy', 'PRG-hard',
-                              'PRG-optional', 'Build', 'PR Pending')))">
+                             ('PRG-required', 'PRG-easy', 'PRG-hard', 'PRG-optional',
+                              'Reviewed-required', 'Reviewed-optional', 'Reviewed-closed',
+                              'Build', 'PR Pending')))">
         <xsl:sequence select="xs:integer($issue?number)"/>
       </xsl:if>
     </xsl:for-each>
@@ -210,14 +223,25 @@
     <xsl:sequence select="f:issue-list($requires-confirmation)"/>
   </xsl:if>
 
-  <xsl:if test="exists($prg-required)">
+  <xsl:if test="exists($required)">
     <xsl:text>*** Required for V4.0&#10;</xsl:text>
     <xsl:text>:PROPERTIES:&#10;</xsl:text>
     <xsl:text>:CUSTOM_ID: required-40&#10;</xsl:text>
     <xsl:text>:END:&#10;&#10;</xsl:text>
     <xsl:text>The following issues are labeled “required for V4.0”.&#10;&#10;</xsl:text>
-    <xsl:sequence select="f:issue-list($prg-required)"/>
+    <xsl:sequence select="f:issue-list($required)"/>
   </xsl:if>
+
+<!--
+  <xsl:if test="exists($xslt-optional)">
+    <xsl:text>*** XSLT optional for V4.0&#10;</xsl:text>
+    <xsl:text>:PROPERTIES:&#10;</xsl:text>
+    <xsl:text>:CUSTOM_ID: xslt-optional-40&#10;</xsl:text>
+    <xsl:text>:END:&#10;&#10;</xsl:text>
+    <xsl:text>The following issues are labeled “XSLT” and “optional for V4.0”.&#10;&#10;</xsl:text>
+    <xsl:sequence select="f:issue-list($xslt-optional)"/>
+  </xsl:if>
+-->
 
   <xsl:if test="exists($triage-required)">
     <xsl:text>*** To be triaged&#10;</xsl:text>
