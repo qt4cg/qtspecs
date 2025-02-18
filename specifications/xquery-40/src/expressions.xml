@@ -22142,6 +22142,12 @@ return string-join($chopped, '; ')
       <div2 id="id-arrow-operator">
          <head>Arrow Expressions</head>
          
+         <changes>
+            <change issue="1716">An arrow operator may now be followed by any dynamic function
+            call; the dynamic function call no longer needs to start with a variable reference
+            or a parenthesized expression.</change>
+         </changes>
+         
          <p>Arrow expressions apply a function to a value, using the value of the
          left-hand expression as the first argument to the function.</p>
 
@@ -22189,31 +22195,38 @@ return string-join($chopped, '; ')
 =!> upper-case()
 => string-join(" ")]]></eg>
          
-         <p diff="add" at="A">returns <code>"THE. CAT. SAT. ON. THE. MAT."</code>. The first arrow
+
+         <p>returns <code>"THE. CAT. SAT. ON. THE. MAT."</code>. The first arrow
             could be written either as <code>=></code> or <code>=!></code> because the operand is a 
             <termref def="dt-singleton"/>; the next two
+
             arrows have to be <code>=!></code> because the function is applied to each item in the tokenized
             sequence individually; the final arrow must be <code>=></code> because the <code>string-join</code>
             function applies to the sequence as a whole.</p>
          
-         <note diff="add" at="A"><p>It may be useful to think of this as a map/reduce pipeline. The functions
+         <note><p>It may be useful to think of this as a map/reduce pipeline. The functions
             introduced by <code>=!></code> are mapping operations; the function introduced by <code>=></code>
             is a reduce operation.</p></note>
          
-         <p diff="add" at="A">The following example introduces an inline function to the pipeline:</p>
+         <p>The following example introduces an inline function to the pipeline:</p>
          <eg role="parse-test" diff="add" at="A"
             ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn($a) { $a + 1 }() => sum()]]></eg>
          
-         <p diff="add" at="A">This is equivalent to <code>sum((1 to 5) ! (math:sqrt(xs:double(.)) + 1))</code>.</p>
+         <p>This is equivalent to <code>sum((1 to 5) ! (math:sqrt(xs:double(.)) + 1))</code>.</p>
          
-         <p diff="add" at="A">The same effect can be achieved using a <termref def="dt-focus-function"/>:</p>
+         <p>The same effect can be achieved using a <termref def="dt-focus-function"/>:</p>
          
-         <eg role="parse-test" diff="add" at="A"
+         <eg role="parse-test"
             ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn { . + 1 }() => sum()]]></eg>
+         
+         <p>It could also be expressed using the mapping operator <code>!</code>:</p>
+         
+         <eg role="parse-test"
+            ><![CDATA[(1 to 5) ! xs:double(.) ! math:sqrt(.) ! (. + 1) => sum()]]></eg>
          
          <p>Where the value of an expression is a map containing functions, simulating the behavior
          of objects in object-oriented languages, then the <term>lookup arrow operator</term> <code>=?></code>
-         can be used to retrive a function from the map and to invoke the function with the map as its
+         can be used to retrieve a function from the map and to invoke the function with the map as its
          first argument. For example, if <code>my:rectangle</code> returns a map with entries <code>width</code>,
          <code>height</code>, <code>expand</code>, and <code>area</code>, then it becomes possible to
          write:</p>
@@ -22221,7 +22234,8 @@ return string-join($chopped, '; ')
          <eg role="parse-test" diff="add" at="A"
             ><![CDATA[my:rectangle(3, 5) =?> expand(2) =?> area()]]></eg>
          
-         <note diff="add" at="A"><p>The <code>ArgumentList</code> may include <code>PlaceHolders</code>,
+         <note diff="add" at="A"><p>The <code>ArgumentList</code> of the function call 
+            may include <code>PlaceHolders</code>,
             though this is not especially useful. For example, the expression <code>"$" => concat(?)</code> is equivalent
             to <code>concat("$", ?)</code>: its value is a function that prepends a supplied string with
             a <code>$</code> symbol.</p></note>
@@ -22243,6 +22257,16 @@ return string-join($chopped, '; ')
             operation.</p>
          </note>
          
+         <note><p>The expression <code><var>U</var> => $V(<var>X</var>)(<var>Y</var>)</code> 
+         satisfies the grammar, but its meaning
+         might not be obvious. It is interpreted as being equivalent to 
+         <code>$V(<var>X</var>)(<var>U</var>, <var>Y</var>)</code>.
+         The same applies to the mapping arrow operator: 
+         <code><var>U</var> =!> $V(<var>X</var>)(<var>Y</var>)</code> is
+         interpreted as <code>for $u in <var>U</var> return $V(<var>X</var>)($u, <var>Y</var>)</code>. 
+         This follows from the way that the syntax of a <nt def="DynamicFunctionCall">DynamicFunctionCall</nt>
+         is defined.</p></note>
+         
          
          
 
@@ -22257,17 +22281,27 @@ return string-join($chopped, '; ')
        
          
             <ulist>
-               <item><p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
-                  <code>U</code>, an <nt def="ArrowStaticFunction">ArrowStaticFunction</nt>
-                  <code>F</code>, and an <nt def="ArgumentList">ArgumentList</nt>
-                  <code>(A, B, C...)</code>, the expression <code>U =&gt; F(A, B, C...)</code> is equivalent to the
-                  expression <code>F(U, A, B, C...)</code>.</p></item>
-               <item><p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
-                  <code>U</code>, an <nt def="ArrowDynamicFunction">ArrowDynamicFunction</nt>
-                  <code>F</code>, and an <nt def="PositionalArgumentList">PositionalArgumentList</nt>
-                  <code>(A, B, C...)</code>, the expression <code>U =&gt; F(A, B, C...)</code> is equivalent to the
-                  expression <code>F(U, A, B, C...)</code>.</p></item>
+               <item>
+                  <p>If the arrow is followed by a static <nt def="FunctionCall">FunctionCall</nt>:</p>
+                  <p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
+                  <var>U</var> and a <nt def="FunctionCall">FunctionCall</nt>
+                  <code><var>F</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code>, 
+                  the expression <code><var>U</var> => <var>F</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code> 
+                  is equivalent to the expression 
+                  <code><var>F</var>(<var>U</var>, <var>A</var>, <var>B</var>, <var>C</var>...)</code>.</p></item>
+               <item>
+                  <p>If the arrow is followed by a <nt def="DynamicFunctionCall">DynamicFunctionCall</nt>:</p>
+                  <p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
+                  <var>U</var>, and a <nt def="DynamicFunctionCall">DynamicFunctionCall</nt>
+                  <code><var>E</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code>, the expression 
+                  <code><var>U</var> => <var>E</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code> is equivalent to the
+                  expression <code><var>E</var>(<var>U</var>, <var>A</var>, <var>B</var>, <var>C</var>...)</code>.</p></item>
             </ulist>
+            
+            <note><p>Although the syntax of an arrow expression makes use of the grammatical productions
+            <nt def="FunctionCall">FunctionCall</nt> and <nt def="DynamicFunctionCall">DynamicFunctionCall</nt>,
+            these are not evaluated in the same way as a function call that appears as a 
+            free-standing expression.</p></note>
             
          </div3>
          
@@ -22283,29 +22317,30 @@ return string-join($chopped, '; ')
          </changes>
         
          
-         <p diff="add" at="A"><termdef term="mapping arrow operator" id="dt-mapping-arrow-operator">
+         <p><termdef term="mapping arrow operator" id="dt-mapping-arrow-operator">
             The <term>mapping arrow operator</term> <code>=!></code> applies a function to each
             item in a sequence.</termdef> It is defined as follows:</p>
             
-         <ulist diff="add" at="A">
+         <ulist>
+            
             <item>
-               <p>If the arrow is followed by an <nt def="ArrowStaticFunction">ArrowStaticFunction</nt>:</p>
-               <p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
-                  <code>U</code>, an <nt def="ArrowStaticFunction">ArrowStaticFunction</nt>
-               <code>F</code>, and an <nt def="ArgumentList">ArgumentList</nt>
-               <code>(A, B, C...)</code>, the expression <code>U =!&gt; F(A, B, C...)</code> is equivalent to the
-               expression <code>(for $u in U return F($u, A, B, C...))</code>.</p>
-               
-            </item>
+               <p>If the arrow is followed by a static <nt def="FunctionCall">FunctionCall</nt>:</p>
+               <p>Given a <nt def="UnaryExpr">UnaryExpr</nt>
+                  <var>U</var> and a <nt def="FunctionCall">FunctionCall</nt>
+                  <code><var>F</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code>, 
+                  the expression <code><var>U</var> =!> <var>F</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code> 
+                  is equivalent to the expression 
+                  <code>for $u in <var>U</var> return 
+                     <var>F</var>(<var>$u</var>, <var>A</var>, <var>B</var>, <var>C</var>...)</code>.</p></item>
             <item>
-               <p>If the arrow is followed by an <nt def="ArrowDynamicFunction">ArrowDynamicFunction</nt>:</p>
-               <p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
-                  <code>U</code>, an <nt def="ArrowDynamicFunction">ArrowDynamicFunction</nt>
-                  <code>F</code>, and an <nt def="PositionalArgumentList">PositionalArgumentList</nt>
-                  <code>(A, B, C...)</code>, the expression <code>U =!&gt; F(A, B, C...)</code> is equivalent to the
-                  expression <code>(for $u in U return F($u, A, B, C...))</code>.</p>
-               
-            </item>
+               <p>If the arrow is followed by a <nt def="DynamicFunctionCall">DynamicFunctionCall</nt>:</p>
+            <p>Given a  <nt def="UnaryExpr">UnaryExpr</nt>
+               <var>U</var>, and a <nt def="DynamicFunctionCall">DynamicFunctionCall</nt>
+               <code><var>E</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code>, the expression 
+               <code><var>U</var> => <var>E</var>(<var>A</var>, <var>B</var>, <var>C</var>...)</code> is equivalent to the
+               expression <code>for $u in U return <var>E</var>(<var>$u</var>, <var>A</var>, <var>B</var>, <var>C</var>...)</code>.</p></item>
+       
+     
             
          </ulist>
          
