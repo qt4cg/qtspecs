@@ -10518,9 +10518,11 @@ return $a("A")]]></eg>
                <p role="xquery"
                      >An inline function
 	  expression may have
-	  annotations. &language; does not define annotations that
-	  apply to inline function
-	  expressions, in particular it is a <termref
+	  annotations. The only annotation defined in &language; 
+	  for inline function
+	  expressions is the annotation <code>%method</code>, described in 
+                  <specref ref="id-methods"/>.
+                  It is a <termref
                      def="dt-static-error">static error</termref>
                   <errorref class="ST" code="0125"
                      /> if an inline function expression is annotated as
@@ -10528,6 +10530,9 @@ return $a("A")]]></eg>
 	  implementation can define annotations, in its own namespace,
 	  to support functionality beyond the scope of this
 	  specification.</p>
+            
+            <p role="xpath">The annotation keyword <code>%method</code> is described
+            in <specref ref="id-methods"/>.</p>
 
                <p>
           The static context for the function body is inherited from the location of the inline function expression, with the exception of the
@@ -10537,7 +10542,9 @@ return $a("A")]]></eg>
          
                <p>
           The variables in scope for the function body include all variables representing the function parameters, as well as all variables that
-          are in scope for the inline function expression.</p>
+          are in scope for the inline function expression. If the annotation <code>%method</code>
+               is present then an additional system-defined variable <code>$this</code>
+               is added to the static context for the function body, as described in <specref ref="id-methods"/>.</p>
           
           
 
@@ -10640,8 +10647,120 @@ return $incrementors[2](4)]]></eg>
                      <p>The result of this expression is <code>6</code></p>
                   </item>
                </ulist>    
-         
-      
+
+         </div4>
+            
+            <div4 id="id-methods">
+               <head>Methods</head>
+               
+               <p><termdef id="dt-method" term="method">A <term>method</term> is a
+               function item that has the annotation <code>%method</code>.</termdef></p>
+            
+               <p>A method contained in a map can refer to the containing map using the
+               special variable <code>$this</code>. For example, given the variable:</p>
+               
+               <eg>
+let $rectangle := { 'height': 3,
+                    'width': 4,
+                    'area': %method fn() { $this?height * $this?width }
+                  }
+               </eg>
+               
+               <p>The dynamic function call <code>$rectangle?area()</code> returns <code>12</code>.</p>
+               
+               <p>The detailed rules are as follows:</p>
+               
+               <olist>
+                  <item><p>The function item created by an inline function expression
+                  with the annotation <code>%method</code> (referred to as a <termref def="dt-method"/>)
+                  has an additional parameter
+                  named <code>$this</code> (in no namespace), which precedes all user-declared
+                  parameters. The static type of this parameter is <code>map(*)</code>.
+                  In consequence, the variable name <code>$this</code> is in scope within
+                  the body of the method.</p>
+                  </item>
+                  <item><p>When the lookup operator <code>?</code> or <code>??</code>
+                  is applied to a map <var>M</var> (see <specref ref="id-lookup"/>), 
+                     and selects a key/value pair
+                  whose value part is a <termref def="dt-singleton"/> <termref def="dt-method"/>,
+                  the function item that is returned by the lookup expression is a partial
+                  application of the method that binds the implicit parameter <code>$this</code>
+                  to the map <var>M</var>. This function item has no <code>%method</code>
+                  annotation and is therefore not a <termref def="dt-method"/>.</p></item>
+                  
+               </olist>
+               
+               <note>
+                  <p>Methods are typically invoked using a dynamic function call such as the call
+                  <code>$rectangle?area()</code> in the example above. In addition, a method selected
+                     using a lookup expression such as <code>$rectangle?area</code> can
+                     then be used in the same way as any other function item. For example,
+                  it can be passed as an argument to a higher-order function, or it can be partially
+                  applied.</p>
+                  <p>Although methods mimic some of the capability of object-oriented
+                  languages, the functionality is more limited:</p>
+                  <ulist>
+                     <item><p>There is no encapsulation: the entries in a map are all publicly
+                     exposed.</p></item>
+                     <item><p>There is no class hierarchy, and no inheritance or overriding.</p></item>
+                     <item><p>Methods within a map can be removed or replaced in the same way as
+                     any other entries in the map.</p></item>
+                  </ulist>
+                  <p>The <code>$this</code> variable in the body of a method is bound to the containing
+                  map by any lookup expression (using the <code>?</code> or <code>??</code> operators)
+                  that selects the method as a singleton item within a key/value pair. It is not
+                  bound by other operations that deliver the value, for example a call on
+                  <function>map:get</function> or <function>map:for-each</function>.
+                  When <code>$this</code> is bound to a map, the result is not itself a method.
+                  The means, for example that the expression:</p>
+                  <eg>
+let $rectangle1 := { 'x':3, 'y':4, 'area': %method fn() {$this?x * $this?y} }
+let $rectangle2 := { 'x':5, 'y':5, 'area': $rectangle1?area }
+return $rectangle2?area()
+                  </eg>
+                  <p>returns 12, because the function item bound to the key 'area' in 
+                  <code>$rectangle2</code> is an ordinary function item, not a method.</p>
+                  <p>If the same method is to be used in both variables, this can be written:
+                  </p>
+                  <eg>
+let $area := %method fn() {$this?x * $this?y}                     
+let $rectangle1 := { 'x':3, 'y':4, 'area': $area }
+let $rectangle2 := { 'x':5, 'y':5, 'area': $area }
+return $rectangle2?area()
+                  </eg>
+                  <p>which returns 25.</p>
+                  <p>Since a method is a function item with an implicitly declared parameter named
+                     <code>$this</code>, it is also possible to invoke it directly,
+                  using a call such as:</p>
+                  <eg>
+let $area := %method fn() {$this?x * $this?y}                     
+return $area( { 'x':3, 'y':4 } )
+                  </eg>
+               </note>
+               <note>
+                  <p>Methods can be useful when there is a need to write inline recursive
+                  functions. For example:</p>
+                  <eg>
+let $lib := {
+   'product': %method fn($in as xs:double) {
+                        if (empty($in))
+                        then 1
+                        else head($in) * $this?product(tail($in))
+                      }
+}
+return $lib?product((1.2, 1.3. 1.4))
+                  </eg>
+                  <p>In an environment that supports XPath but not XQuery, this mechanism can be used 
+                  to define all the functions that a particular XPath expression needs to invoke,
+                  and these functions can be mutually recursive.</p>
+               </note>
+               <note role="xquery">
+                  <p>Methods are often useful in conjunction with named record types:
+                  see <specref ref="id-functions-as-fields"/>.</p>
+               </note>
+
+            </div4>
+
             <div4 id="id-focus-functions">
                <head>Focus Functions</head>
                <p><termdef id="dt-focus-function" term="focus function">A <term>focus function</term>
@@ -10680,8 +10799,9 @@ return $incrementors[2](4)]]></eg>
                <p>For example, the expression <code>every(1 to 10, fn { . gt 0 })</code> returns <code>true</code>.</p>
                
             </div4>
+
          </div3>
-         
+
             
             <div3 id="id-function-identity">
                <head>Function Identity</head>
@@ -19743,19 +19863,42 @@ processing with JSON processing.</p>
                      a <termref def="dt-type-error">type error</termref> is raised <errorref class="TY"
                            code="0004"/>.</p></item>
                </olist>
-
-               <p>If the modifier is <code>items</code> (explicitly or by default), the result of
-                  <code>$V?items::KS</code> is the same as the result of 
-                  <code>$V?pairs::KS ! map:get(., "value")</code>; that is,
-               it is the <termref def="dt-sequence-concatenation"/> of the value parts.</p>
                
-               <p>If the modifier is <code>values</code>, the result of
+               <p>For modifiers other than <code>pairs</code>, the resulting key-value pair
+               is post-processed as follows:</p>
+               
+               <ulist>
+                  <item><p>If the modifier is <code>items</code> (explicitly or by default), the result of
+                  <code>$V?items::<var>KS</var></code> is the result of the expression:</p>
+                     <eg>
+for $KVP in $V?pairs::<var>KS</var>
+let $value := map:get($KVP, 'value')
+return if ($value instance of %method function(*))
+       then apply($value, [$V])
+       else $value
+                     </eg>
+                     <note><p>The effect of this is that if any of the selected values is a 
+                     <termref def="dt-singleton"/> <termref def="dt-method"/>, the selected
+                     function item is partially applied by binding the first argument to
+                     the containing map <var>$V</var>.</p></note>
+                     <ednote><edtext>This assumes than fn:apply is extended to do partial application
+                     as proposed in issue 1816.</edtext></ednote>
+                     
+                  </item>
+                  <item><p>If the modifier is <code>values</code>, the result of
                   <code>$V?values::KS</code> is the same as the result of 
-                  <code>$V?pairs::KS ! array { map:get(., "value") }</code>.</p>
-               
-               <p>If the modifier is <code>keys</code>, the result of
+                  <code>$V?pairs::KS ! array { map:get(., "value") }</code>.</p></item>
+                  
+                  <item><p>If the modifier is <code>keys</code>, the result of
                   <code>$V?keys::KS</code> is the same as the result of 
-                  <code>$V?pairs::KS ! map:get(., "key")</code>.</p>
+                  <code>$V?pairs::KS ! map:get(., "key")</code>.</p></item>
+               </ulist>
+
+               
+               
+               
+               
+               
 
 
                <p>Examples:</p>
@@ -22144,23 +22287,15 @@ return string-join($chopped, '; ')
          <eg role="parse-test"
             ><![CDATA[(1 to 5) =!> xs:double() =!> math:sqrt() =!> fn { . + 1 }() => sum()]]></eg>
          
+
          <p>It could also be expressed using the mapping operator <code>!</code>:</p>
          
          <eg role="parse-test"
             ><![CDATA[(1 to 5) ! xs:double(.) ! math:sqrt(.) ! (. + 1) => sum()]]></eg>
          
-         <p>Where the value of an expression is a map containing functions, simulating the behavior
-         of objects in object-oriented languages, then the <term>lookup arrow operator</term> <code>=?></code>
-         can be used to retrieve a function from the map and to invoke the function with the map as its
-         first argument. For example, if <code>my:rectangle</code> returns a map with entries <code>width</code>,
-         <code>height</code>, <code>expand</code>, and <code>area</code>, then it becomes possible to
-         write:</p>
-         
-         <eg role="parse-test" diff="add" at="A"
-            ><![CDATA[my:rectangle(3, 5) =?> expand(2) =?> area()]]></eg>
-         
-         <note diff="add" at="A"><p>The <code>ArgumentList</code> of the function call 
-            may include <code>PlaceHolders</code>,
+        
+        
+         <note diff="add" at="A"><p>The <code>ArgumentList</code> may include <code>PlaceHolders</code>,
             though this is not especially useful. For example, the expression <code>"$" => concat(?)</code> is equivalent
             to <code>concat("$", ?)</code>: its value is a function that prepends a supplied string with
             a <code>$</code> symbol.</p></note>
@@ -22177,9 +22312,9 @@ return string-join($chopped, '; ')
          <note><p>The mapping arrow symbol <code>=!></code> is intended to suggest a combination of
             function application (<code>=></code>) and sequence mapping
             (<code>!</code>) combined in a single operation.</p>
-            <p>Similarly, the lookup arrow symbol <code>=?></code> is intended to suggest a combination
+            <!--<p>Similarly, the lookup arrow symbol <code>=?></code> is intended to suggest a combination
                of function application (<code>=></code>) and map lookup (<code>?</code>) in a single
-            operation.</p>
+            operation.</p>-->
          </note>
          
          <p>The construct on the right-hand side of the arrow operator (<code>=></code>) can
@@ -22270,7 +22405,7 @@ return string-join($chopped, '; ')
          
          </div3>
          
-         <div3 id="lookup-arrow-expression">
+         <!--<div3 id="lookup-arrow-expression">
             <head>Lookup Arrow Expressions</head>
          
          <changes>
@@ -22321,7 +22456,7 @@ return $rectangle =?> area()</eg>
          </olist>
          
           
-         </div3>    
+         </div3>    -->
             
             
       </div2>
