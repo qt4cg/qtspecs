@@ -2950,7 +2950,6 @@
               <xsl:apply-templates select="head" mode="text"/>
             </span>
           </a>
-          <xsl:text> (Non-Normative)</xsl:text>
           <xsl:if test="$more-toc">
             <span class="exptoc">&#x2009;▶</span>
           </xsl:if>
