@@ -906,7 +906,7 @@
         <xsl:with-param name="target" select="key('ids', @def)"/>
       </xsl:call-template>
     </xsl:attribute>
-    <span class="arrow">&#xB7;</span>
+    <!--<span class="arrow">&#xB7;</span>-->
     <xsl:choose>
       <xsl:when test=". = ''">
         <xsl:value-of select="key('ids', @def)/@term"/>
@@ -915,7 +915,7 @@
         <xsl:apply-templates/>
       </xsl:otherwise>
     </xsl:choose>
-    <span class="arrow">&#xB7;</span>
+    <!--<span class="arrow">&#xB7;</span>-->
   </a>
 </xsl:template>
 
