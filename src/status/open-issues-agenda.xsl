@@ -110,6 +110,7 @@
     <xsl:for-each select="$issue-list">
       <xsl:variable name="issue" select="."/>
       <xsl:if test="$issue?state='open'
+                    and empty($issue?pull_request)
                     and not(f:has-label($issue,
                              ('PRG-required', 'PRG-easy', 'PRG-hard', 'PRG-optional',
                               'Reviewed-required', 'Reviewed-optional', 'Reviewed-closed',
@@ -141,6 +142,10 @@
   <xsl:text>:PROPERTIES:&#10;</xsl:text>
   <xsl:text>:CUSTOM_ID: open-pull-requests&#10;</xsl:text>
   <xsl:text>:END:&#10;&#10;</xsl:text>
+
+  <xsl:text>This section summarizes all of the issues and pull requests that need to be&#10;</xsl:text>
+  <xsl:text>resolved before we can finish. See [[#technical-agenda][Technical Agenda]] below for the focus of this&#10;</xsl:text>
+  <xsl:text>meeting.&#10;&#10;</xsl:text>
 
   <xsl:if test="exists($blocked)">
     <xsl:text>*** Blocked&#10;</xsl:text>
