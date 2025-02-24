@@ -1781,7 +1781,9 @@
         </span>
       </xsl:when>
       <xsl:otherwise>
-          <xsl:apply-templates mode="toc"/>
+          <!-- QT4CG issue 1827 -->
+          <xsl:apply-templates mode="toc" select="node()
+            [not(self::text() and (position()=1 or position()=last()) and not(normalize-space()))] "/>
       </xsl:otherwise>
     </xsl:choose>
   </xsl:template>

@@ -778,13 +778,6 @@
     </xsl:choose>
   </xsl:template>
 
-<!--
-  <xsl:variable name="fname" select="string(.)"/>
-  <xsl:variable name="link" select="translate(if (contains($fname, '#')) then substring-before($fname, '#') else $fname, ':', '-')"/>  
-  <a href="#func-{$link}"><code><xsl:apply-templates/></code></a>
-</xsl:template>
--->
-
   <!-- gitem: glossary list entry -->
   <!-- just pass children through for <dd>/<dt> formatting -->
   <xsl:template match="gitem">
@@ -849,81 +842,55 @@
   <xsl:template match="div1/head">
     <xsl:text>&#10;</xsl:text>
     <h2>
-      <xsl:call-template name="anchor">
-        <xsl:with-param name="conditional" select="0"/>
-        <xsl:with-param name="node" select=".."/>
-      </xsl:call-template>
-      <xsl:apply-templates select=".." mode="divnum"/>
-      <xsl:apply-templates/>
+      <xsl:call-template name="section-head"/>
     </h2>
+  </xsl:template>
+  
+  <xsl:template name="section-head">
+    <xsl:call-template name="anchor">
+      <xsl:with-param name="conditional" select="0"/>
+      <xsl:with-param name="node" select=".."/>
+    </xsl:call-template>
+    <xsl:apply-templates select=".." mode="divnum"/>
+    <a href="#{../@id}" style="text-decoration: none">
+      <xsl:apply-templates/>
+    </a>
   </xsl:template>
 
   <xsl:template match="div2/head">
     <xsl:text>&#10;</xsl:text>
     <h3>
-      <xsl:call-template name="anchor">
-        <xsl:with-param name="conditional" select="0"/>
-        <xsl:with-param name="node" select=".."/>
-      </xsl:call-template>
-      <xsl:apply-templates select=".." mode="divnum"/>
-      <xsl:apply-templates/>
+      <xsl:call-template name="section-head"/>
     </h3>
   </xsl:template>
 
   <xsl:template match="div3/head">
     <xsl:text>&#10;</xsl:text>
     <h4>
-      <xsl:call-template name="anchor">
-        <xsl:with-param name="conditional" select="0"/>
-        <xsl:with-param name="node" select=".."/>
-      </xsl:call-template>
-      <xsl:apply-templates select=".." mode="divnum"/>
-      <xsl:apply-templates/>
+      <xsl:call-template name="section-head"/>
     </h4>
   </xsl:template>
 
   <xsl:template match="div4/head">
     <xsl:text>&#10;</xsl:text>
     <h5>
-      <xsl:call-template name="anchor">
-        <xsl:with-param name="conditional" select="0"/>
-        <xsl:with-param name="node" select=".."/>
-      </xsl:call-template>
-      <xsl:apply-templates select=".." mode="divnum"/>
-      <xsl:apply-templates/>
+      <xsl:call-template name="section-head"/>
     </h5>
   </xsl:template>
 
   <xsl:template match="div5/head">
     <xsl:text>&#10;</xsl:text>
     <h6>
-      <xsl:call-template name="anchor">
-        <xsl:with-param name="conditional" select="0"/>
-        <xsl:with-param name="node" select=".."/>
-      </xsl:call-template>
-      <xsl:apply-templates select=".." mode="divnum"/>
-      <xsl:apply-templates/>
+      <xsl:call-template name="section-head"/>
     </h6>
   </xsl:template>
 
   <xsl:template match="inform-div1/head">
     <xsl:text>&#10;</xsl:text>
     <h2>
-      <xsl:call-template name="anchor">
-        <xsl:with-param name="conditional" select="0"/>
-        <xsl:with-param name="node" select=".."/>
-      </xsl:call-template>
-      <xsl:apply-templates select=".." mode="divnum"/>
-      <xsl:apply-templates/>
+      <xsl:call-template name="section-head"/>
       <xsl:text> (Non-Normative)</xsl:text>
     </h2>
-  </xsl:template>
-  
-  <xsl:template match="div1/head/text() | div2/head/text() | div3/head/text() | div4/head/text() | inform-div1/head/text()">
-    <!-- insert a link to self, to make the ID value visible for the benefit of anyone wanting to create a link -->
-    <a href="#{../../@id}" style="text-decoration: none">
-      <xsl:next-match/>
-    </a>
   </xsl:template>
 
   <xsl:template match="issue/head">
