@@ -27,7 +27,7 @@
     let inner = `${target.innerHTML}`;
     inner = inner.substring(inner.length - 1)
     if (delta) {
-      inner = "Δ" + inner;
+      inner = "★" + inner;
     }
 
     target.innerHTML = inner;
@@ -54,9 +54,11 @@
   window.addEventListener("load", () => {
     document.querySelectorAll(".exptoc").forEach(span => {
       updateDelta(span)
+    });
 
-      span.addEventListener("click", (event) => {
-        let target = event.target;
+    document.querySelectorAll(".toc details summary").forEach(summary => {
+      summary.addEventListener("click", (event) => {
+        let target = event.target.querySelector(".exptoc")
         if (target.classList.contains("collapsed")) {
           target.classList.remove("collapsed");
           target.classList.add("expanded");
