@@ -114,7 +114,7 @@
                     and not(f:has-label($issue,
                              ('PRG-required', 'PRG-easy', 'PRG-hard', 'PRG-optional',
                               'Reviewed-required', 'Reviewed-optional', 'Reviewed-closed',
-                              'Build', 'PR Pending')))">
+                              'Build', 'PR Pending', 'Discussion')))">
         <xsl:sequence select="xs:integer($issue?number)"/>
       </xsl:if>
     </xsl:for-each>
