@@ -10454,6 +10454,8 @@ return $a("A")]]></eg>
                      for simple inline functions taking a single argument. 
                      An example is <code>fn { ../@code }</code>
                </change>
+               <change issue="1800 1845" PR="1817 1853" date="2025-03-04">An inline function may be annotated
+               as a <code>%method</code>, giving it access to its containing map.</change>
             </changes>
 
             <scrap>
@@ -10535,16 +10537,12 @@ return $a("A")]]></eg>
             in <specref ref="id-methods"/>.</p>
 
                <p>
-          The static context for the function body is inherited from the location of the inline function expression, with the exception of the
-          static type of the context value which is initially <xtermref
-                     spec="DM40" ref="dt-absent"/>.
+          The static context for the function body is inherited from the location of the inline function expression.
           </p>
          
                <p>
           The variables in scope for the function body include all variables representing the function parameters, as well as all variables that
-          are in scope for the inline function expression. If the annotation <code>%method</code>
-               is present then an additional system-defined variable <code>$this</code>
-               is added to the static context for the function body, as described in <specref ref="id-methods"/>.</p>
+          are in scope for the inline function expression.</p>
           
           
 
@@ -10556,7 +10554,7 @@ return $a("A")]]></eg>
             
             
 
-               <p>The result of an inline function expression is a single function <phrase diff="add" at="2024-01-01">item</phrase>
+               <p>The result of an inline function expression is a single function item
                   with the following properties (as defined in <xspecref
                      spec="DM40" ref="function-items"/>):</p>
 
@@ -10594,21 +10592,22 @@ return $a("A")]]></eg>
                      <item>
                            <p><term>annotations</term>: <phrase role="xquery">The annotations explicitly
                            included in the inline function expression.</phrase>
-                              <phrase role="xpath">An empty set.</phrase>.</p>
-                        <ednote><edtext>For XPath, add the %method annotation if that PR is approved.</edtext></ednote>
+                              <phrase role="xpath">If the keyword <code>%method</code> is present, then a list containing
+                                 a single annotation whose name is a QName with local name <code>"method"</code>
+                                 and namespace <code>"http://www.w3.org/2012/xquery"</code> and whose
+                                 value is an empty sequence; otherwise an empty set.</phrase>.</p>
+                        
                         </item>
                      <item>
                         <p>
                            <term>body</term>:
-              The <code>InlineFunctionExpr</code>’s <code>FunctionBody</code>.
+              The <code>FunctionBody</code> of the <code>InlineFunctionExpr</code>.
             </p>
                      </item>
                      <item>
                         <p diff="chg" at="2023-03-11">
                            <term>captured context</term>: the static context
-                           is the static context of the inline function expression,
-                           with the exception of the static context value type which is
-                           <xtermref spec="DM40" ref="dt-absent"/>. The dynamic context has an absent
+                           is the static context of the inline function expression. The dynamic context has an absent
                            <termref def="dt-focus"/>, and a set of variable bindings
                            comprising the <termref def="dt-variable-values"
                               >variable values</termref> component
@@ -10653,46 +10652,53 @@ return $incrementors[2](4)]]></eg>
             <div4 id="id-methods">
                <head>Methods</head>
                
+               <changes>
+                  <change issue="1800 1845" PR="1817 1853" date="2025-03-04">An inline function may be annotated
+               as a <code>%method</code>, giving it access to its containing map.</change>
+               </changes>
+               
                <p><termdef id="dt-method" term="method">A <term>method</term> is a
                function item that has the annotation <code>%method</code>.</termdef></p>
             
-               <p>A method contained in a map can refer to the containing map using the
-               special variable <code>$this</code>. For example, given the variable:</p>
+               <p>A method appearing as a value within a map can refer to the containing map as
+                  the <termref def="dt-context-value"/>. For example, given the variable:</p>
                
                <eg>
 let $rectangle := { 'height': 3,
                     'width': 4,
-                    'area': %method fn() { $this?height * $this?width }
+                    'area': %method fn() { ?height × ?width }
                   }
                </eg>
                
                <p>The dynamic function call <code>$rectangle?area()</code> returns <code>12</code>.</p>
                
-               <p>The detailed rules are as follows:</p>
-               
-               <olist>
-                  <item><p>The function item created by an inline function expression
-                  with the annotation <code>%method</code> (referred to as a <termref def="dt-method"/>)
-                  has an additional parameter
-                  named <code>$this</code> (in no namespace), which precedes all user-declared
-                  parameters. The static type of this parameter is <code>map(*)</code>.
-                  In consequence, the variable name <code>$this</code> is in scope within
-                  the body of the method.</p>
-                  </item>
-                  <item><p>When the lookup operator <code>?</code> or <code>??</code>
+               <p>The detailed rule is as follows: When the lookup operator <code>?</code> or <code>??</code>
                   is applied to a map <var>M</var> (see <specref ref="id-lookup"/>), 
                      and selects a key/value pair
                   whose value part is a <termref def="dt-singleton"/> <termref def="dt-method"/> <var>F</var>,
-                  the function item that is returned by the lookup expression is a partial
-                  application of <var>F</var> that binds the implicit parameter <code>$this</code>
-                  to the map <var>M</var>. This function item has no <code>%method</code>
-                  annotation and is therefore not a <termref def="dt-method"/>.</p></item>
+                  the function item <var>F'</var> that is returned by the lookup expression is
+                  derived from <var>F</var> as follows:</p>
+               
+                  <ulist>
+                     <item><p><var>F'</var> has a <term>captured context</term> in which 
+                        the <termref def="dt-focus"/> is a <termref def="dt-singleton-focus"/> 
+                        based on the map <var>M</var>.
+                     </p></item>
+                     <item><p><var>F'</var>
+                     has no <code>%method</code> annotation and is therefore not a <termref def="dt-method"/>.
+                     </p></item>
+                     <item><p><var>F'</var>
+                     has a separate function identity from <var>F</var>. It is <termref def="dt-implementation-dependent"/>
+                     whether repeated evaluations of lookup expressions with the same map and the same
+                     key produce functions having the same function identity.
+                     </p></item>
+                     <item><p>In all other respects <var>F'</var> has the same properties as <var>F</var>.</p></item>
                   
-               </olist>
+               </ulist>
                
                <note>
                   <p>Methods are typically invoked using a dynamic function call such as the call
-                  <code>$rectangle?area()</code> in the example above. In addition, a method selected
+                  <code>$rectangle?area()</code> in the example above. However, a method selected
                      using a lookup expression such as <code>$rectangle?area</code> can
                      be used in the same way as any other function item. For example,
                   it can be passed as an argument to a higher-order function, or it can be partially
@@ -10706,15 +10712,16 @@ let $rectangle := { 'height': 3,
                      <item><p>Methods within a map can be removed or replaced in the same way as
                      any other entries in the map.</p></item>
                   </ulist>
-                  <p>The <code>$this</code> variable in the body of a method is bound to the containing
+                  <p>The context value in the body of a method is bound to the containing
                   map by any lookup expression (using the <code>?</code> or <code>??</code> operators)
                   that selects the method as a singleton item within a key/value pair. It is not
                   bound by other operations that deliver the value, for example a call on
                   <function>map:get</function> or <function>map:for-each</function>.
-                  When <code>$this</code> is bound to a map, the result is not itself a method.
+                  The result of the lookup expression is not itself a method.
                   The means, for example that the expression:</p>
                   <eg>
-let $rectangle1 := { 'x':3, 'y':4, 'area': %method fn() {$this?x * $this?y} }
+
+let $rectangle1 := { 'x':3, 'y':4, 'area': %method fn() {?x × ?y} }
 let $rectangle2 := { 'x':5, 'y':5, 'area': $rectangle1?area }
 return $rectangle2?area()
                   </eg>
@@ -10723,21 +10730,20 @@ return $rectangle2?area()
                   <p>If the same method is to be used in both variables, this can be written:
                   </p>
                   <eg>
-let $area := %method fn() {$this?x * $this?y}                     
+let $area := %method fn() {?x × ?y}
 let $rectangle1 := { 'x':3, 'y':4, 'area': $area }
 let $rectangle2 := { 'x':5, 'y':5, 'area': $area }
 return $rectangle2?area()
                   </eg>
                   <p>which returns 25.</p>
-                  <p>Since a method is a function item with an implicitly declared parameter named
-                     <code>$this</code>, it is also possible to invoke it directly. The method
-                     <code>%method fn() {$this?x * $this?y}</code> is equivalent to the function
-                     item <code>fn($this as map(*)) {$this?x * $this?y}</code>, which means it
-                     may be invoked using a call such as:</p>
-                  <eg>
-let $area := %method fn() {$this?x * $this?y}                     
-return $area( { 'x':3, 'y':4 } )
-                  </eg>
+
+                  <p>An attempt to evaluate a method without binding a context item
+                     will typically result in a dynamic error indicating that the context
+                     item is not bound. Given the declaration above, the expression
+                     <code>$area()</code> raises a type error <errorref class="DY" code="0002"/>
+                     because a unary lookup expression (<code>?x</code> or <code>?y</code>)
+                     requires the context value to be bound.</p>
+
                </note>
                <note>
                   <p>Methods can be useful when there is a need to write inline recursive
@@ -10747,7 +10753,7 @@ let $lib := {
    'product': %method fn($in as xs:double*) {
                         if (empty( $in ))
                         then 1
-                        else head( $in ) * $this?product( tail($in) )
+                        else head( $in ) × ?product( tail($in) )
                       }
 }
 return $lib?product( (1.2, 1.3, 1.4) )
@@ -10799,6 +10805,10 @@ return $lib?product( (1.2, 1.3, 1.4) )
                in <specref ref="id-pipeline-operator"/>.</p>
                
                <p>For example, the expression <code>every(1 to 10, fn { . gt 0 })</code> returns <code>true</code>.</p>
+               
+               <p>A focus function cannot be annotated as a <termref def="dt-method"/> 
+                  (<errorref spec="XP" class="ST" code="0107"/>). (This is because the context value
+               in a method is bound to the containing map, and is therefore not available to be bound to the function’s argument).</p>
                
             </div4>
 
@@ -19614,6 +19624,8 @@ processing with JSON processing.</p>
                   they can be qualified with a type to select only the results that
                   match that type.-->
                </change>
+               <change issue="1800 1845" PR="1817 1853" date="2025-03-04">An inline function may be annotated
+               as a <code>%method</code>, giving it access to its containing map.</change>
             </changes>
 
             <p>&language; provides two lookup operators <code>?</code> and <code>??</code>
@@ -19876,12 +19888,15 @@ processing with JSON processing.</p>
 for $KVP in $V?pairs::<var>KS</var>
 let $value := map:get($KVP, 'value')
 return if ($value instance of %method function(*))
-       then partial-apply($value, {1: $V})
+       then bind-focus($value, $V)
        else $value
                      </eg>
+                     <p>where <code>bind-focus($F, $V)</code> is a function that takes a function
+                     item <code>$F</code> and returns a modified function item whose captured context
+                     has the focus set to <code>$V</code>: for more detail see <specref ref="id-methods"/>.</p>
                      <note><p>The effect of this is that if any of the selected values is a 
                      <termref def="dt-singleton"/> <termref def="dt-method"/>, the selected
-                     function item is partially applied by binding the first argument to
+                     function item is modified by binding the context value to
                      the containing map <var>$V</var>.</p></note>
                      
                      
@@ -20641,8 +20656,7 @@ return $map?[?key ge 2]</eg>
          
          <changes>
             <change issue="234" PR="284" date="2023-01-23">
-               Alternative syntax for conditional expressions is available: <code>if (condition) { X } else { Y }</code>,
-               with the <code>else</code> part being optional.
+               Alternative syntax for conditional expressions is available: <code>if (condition) { X }</code>.
             </change>
          </changes>
          
@@ -22406,59 +22420,7 @@ return string-join($chopped, '; ')
          
          </div3>
          
-         <!--<div3 id="lookup-arrow-expression">
-            <head>Lookup Arrow Expressions</head>
          
-         <changes>
-            <change PR="985" date="2024-02-13">
-               With the lookup arrow expression and the <code>=?></code> operator, a function
-               in a map can be looked up and called with the map as first argument.
-            </change>
-         </changes>
-        
-         
-         <p>The lookup arrow expression simulates the behavior of method invocations in object-oriented
-         languages. It is useful for invoking functions that are contained as entries in maps.</p>
-         
-         <p>For example, the expression</p>
-         
-         <eg>let $rectangle := {
-  "width": 20,
-  "height": 12,
-  "area": fn($this) { $this?width * $this?height }
-} 
-return $rectangle =?> area()</eg>
-         
-         <p>returns the value <code>240</code>.</p>
-         
-         <p>An expression such as <code>M =?> N(A, B, C)</code> is evaluated as follows:</p>
-         
-         <olist>
-            <item><p>The left-hand expression <var>M</var> is evaluated. If the value is an
-               empty sequence, then the result of the expression is an empty
-               sequence. If it is non-empty then it must be a single map: call it <code>$m</code>.</p></item>
-            <item><p>The lookup expression <code>$m?N</code> is evaluated. The result must be a single
-            function item: call it <code>$f</code>.</p></item>
-            <item><p>The dynamic function call <code>$f($m, A, B, C)</code> is evaluated, and the
-            result is returned.</p></item>
-         </olist>
-         
-         <p>Any of the above steps can lead to errors:</p>
-         
-         <olist>
-            <item><p>A type error <errorref class="TY" code="0004"/> is raised if the value of the left hand 
-               expression does not match the type <code>map(*)?</code>.</p></item>
-            <item><p>A type error <errorref class="TY" code="0004"/> is raised if the value of the lookup 
-               expression <code>$m?N</code> does not match the type <code>function(*)</code>, or if the
-               arity of the function is not equal to the number of arguments in the argument list
-            plus one.</p></item>
-            <item><p>An error may occur in evaluating the dynamic function call, for example if the
-            function does not expect a map to be supplied as the first argument.</p></item>
-         </olist>
-         
-          
-         </div3>    -->
-            
             
       </div2>
       
