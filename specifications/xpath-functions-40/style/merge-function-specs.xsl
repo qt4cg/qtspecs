@@ -408,7 +408,7 @@
 	</xsl:template>
 	
 	<xsl:template match="fos:equivalent">
-		<xsl:message terminate="yes">Non-matching fos:equivalent for {../@name}</xsl:message>
+		<xsl:message terminate="yes">On fos:equivalent for {../@name}, @style is missing or invalid</xsl:message>
 	</xsl:template>
 
 	<xsl:template match="fos:example">
