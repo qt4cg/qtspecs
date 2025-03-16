@@ -21532,11 +21532,10 @@ return fold-right(
       </fos:changes>
    </fos:function>
    
-       <fos:function name="chain" prefix="fn">
+   <fos:function name="compose" prefix="fn">
         <fos:signatures>
-            <fos:proto name="chain" return-type="item()*">
-                <fos:arg name="input" type="item()*"/>
-                <fos:arg name="functions" type="fn(*)*"/>
+            <fos:proto name="compose" return-type="item()*">
+                <fos:arg name="functions" type="(fn(item()*) as item()*)*"/>
             </fos:proto>
         </fos:signatures>
         <fos:properties>
@@ -21545,304 +21544,75 @@ return fold-right(
             <fos:property>focus-independent</fos:property>
         </fos:properties>
         <fos:summary>
-           <p>Applies a sequence of functions starting with an initial
-              input.</p>
+           <p>Combines a sequence of arity-1 functions to construct a single arity-1 function.</p>
         </fos:summary>
       <fos:rules>
-         <p>Informally, the function behaves as follows:</p>
-         <olist>
-            <item>
-               <p>If <code>$functions</code> is empty, then <code>$input</code> is returned,
-                  otherwise let <code>$f</code> be the first member of <code>$functions</code>.</p>
-            </item>
-            <item>
-               <p>Let <code>$current-output</code> be the result of <code>fn:apply($f,
-                     $input-array)</code> where <code>$input-array</code> is constructed according
-                  to the following rules. <olist>
-                     <item>
-                        <p>If <code>$f</code> has arity 1, let <code>$input-array</code> be an array
-                           containing <code>$input</code> as a single member.</p>
-                     </item>
-                     <item>
-                        <p>Otherwise (<code>$f</code> has arity not equal to 1) if <code>$input</code> is
-                           not an array then let <code>$input-array</code> be an array containing each
-                           item of <code>$input</code> as a separate member. </p>
-                     </item>
-                     <item>
-                        <p>Otherwise (<code>$f</code> has arity not equal to 1<code> and $input</code> is 
-                           already an array) let <code>$input-array</code> be <code>$input</code> itself.</p>
-                     </item>
-                  </olist>
-               </p>
-            </item>
-            <item>
-               <p>Repeat the process from step 1, passing <code>$current-output</code> as
-                     <code>$input</code> and <code>fn:tail($functions)</code> as
-                     <code>$functions</code>.</p>
-            </item>
-         </olist>
+         <p>Given a sequence of arity-1 functions <var>F1</var>, <var>F2</var>, ..., the <code>compose</code> function 
+            constructs a function whose effect, when given an argument <var>V</var>, is to apply the sequence
+         of functions <code><var>V</var> => <var>F1</var>() => <var>F2</var>() => ...</code>.</p>
+         
+         <p>If <code>$functions</code> is the empty sequence, <code>compose</code> returns the identity function
+         <code>fn:identity#1</code>. If <code>$functions</code> contains a single function <var>F</var>,
+         <code>compose</code> returns <var>F</var>.</p>
          
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-let $apply := fn($x, $f)  {
-  fn:apply($f,
-    if (function-arity($f) eq 1) then [ $x ]
-    else if ($x instance of array(*)) then $x 
-    else array { $x }
-  )
-}
-return fn($input as item()*, $functions as fn(*)*) as item()* {
-  fold-left($functions, $input, $apply)
+fn($input as item()*) as item()* {
+  fold-left($functions, $input, fn($accum, $f) { $f($accum) })
 }                   
       </fos:equivalent>
       <fos:errors>
-         <p>An error <errorref class="AP" code="0001" type="type"/> is raised if the arity of any
-            function <code>$f</code> in <code>$functions</code> is different from the number of
-            members in the array that is passed to <function>fn:apply</function>.</p>
-         <p>An error <errorref class="RG" code="0006" type="type"/> is raised if any item supplied as
-              a function argument cannot be coerced to the required type.</p>
+         <p>A type error occurs if any function in <code>$functions</code> returns a value that is
+         not accepted (after coercion) by the next function in the sequence.</p>
       </fos:errors>
 
       <fos:notes>
-         <olist>
-            <item>
+
+         
                <p>Functions are applied in sequence order, not right-to-left (as might be expected in
                   mathematical composition).</p>
-            </item>
-            <item>
-               <p>It is not a requirement that every function in <code>$functions</code> must have
-                  arity of one. Any function may have any arity. </p>
-            </item>
-            <item>
-               <p>Using <function>fn:chain</function> may result in more readable XPath expressions than
-                  chaining expressions using arrow operators.</p>
-            </item>
-         </olist>
+          
+               <p>The function can be seen as a generalization of the arrow operator <code>=></code>.
+                  Unlike the arrow operator, the chain of functions to be applied can be
+                  established dynamically and does not need to be of fixed length.</p>
       </fos:notes>
-            <fos:examples>
-                <fos:variable name="incr" id="chain-variable-incr"
-                ><![CDATA[fn($x) { op("+")($x, ?) }]]></fos:variable>
-                <fos:variable name="double-all" id="chain-variable-double-all"
-                ><![CDATA[fn($nums) { $nums ! op("*")(., 2) }]]></fos:variable>
-                <fos:variable name="times" id="chain-variable-times"
-                ><![CDATA[fn($y) { op("*")($y,  ?) }]]></fos:variable>
-                <fos:variable name="append-all" id="chain-variable-append-all"
-                ><![CDATA[fn($strings, $add) { $strings ! concat#2(., $add) }]]></fos:variable>
-                <fos:variable name="make-upper-all" id="chain-variable-make-upper-all"
-                ><![CDATA[fn($strings) { $strings ! upper-case(.) }]]></fos:variable>
-                <fos:variable name="count-all" id="chain-variable-count-all"
-                ><![CDATA[fn($ar) { array:for-each($ar, count#1)?* }]]></fos:variable>
-                <fos:variable name="product3" id="chain-variable-product3"
-                ><![CDATA[fn($x, $y, $z) { $x * $y * $z }]]></fos:variable>
-                <fos:variable name="range" id="chain-variable-range"
-                ><![CDATA[fn($n) { 1 to $n }]]></fos:variable>
-                <fos:example>
-                   <fos:test use="chain-variable-incr chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), ($double-all, op("+"), $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>13</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), ($double-all, sum#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>13</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), (op("+"), $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>8</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), (sum#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>8</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ 1, (), 2, 3 ], (array:size#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>7</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((1, 2, 3), (count#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>6</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ 1, 2, 3 ], (count#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>4</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-range chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain(5, ($range, $double-all, sum#1))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>30</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-range chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain(2, ($range, $double-all, op("*")))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>8</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-count-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ (1, 2, 3), () ], ($count-all, op("+")))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>3</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-count-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ (1, 2, 3), (), (5, 6) ], ($count-all, sum#1))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>5</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-count-all chain-variable-product3">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ (1, 2, 3), (), (5, 6) ], ($count-all, $product3))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>0</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test>
-                        <fos:expression>
-                            <eg><![CDATA[
-chain("abra cadabra", (tokenize#2(?, " "), string-join#2(?, "+")))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>"abra+cadabra"</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-append-all chain-variable-make-upper-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain("The cat sat on the mat", (
-  tokenize#2(?, " "), 
-  $append-all(?, "."), 
-  $make-upper-all, 
-  string-join#2(?, " ") 
-))]]></eg>
-                            </fos:expression>
-                        <fos:result>"THE. CAT. SAT. ON. THE. MAT."</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test>
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((
-  chain(
-    ("A    long   message   ", "   long "), 
-    (head#1, normalize-space#1, normalize-unicode#1)
-  ),
-  chain(
-    ("A    long   message   ", "   long "),  
-    (tail#1, normalize-space#1, normalize-unicode#1)
-  )
-  ),
-  contains#2
-)]]></eg>
-                            </fos:expression>
-                        <fos:result>true()</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test>
-                    <fos:expression>
-                       <eg><![CDATA[
-chain((), true#0)
-    ]]></eg>
-                    </fos:expression>
-                    <fos:result>true()</fos:result>                   
-                  </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test>
-                    <fos:expression>
-                      <eg><![CDATA[
-chain(3, (array:append([1], ?), op("+"))) 
-    ]]></eg>
-                    </fos:expression>
-                    <fos:result>4</fos:result>
-                  </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test use="chain-variable-product3">
-                    <fos:expression>
-                      <eg><![CDATA[
-chain((1, 2, 3), ($product3, $product3)) 
-    ]]></eg>
-                    </fos:expression>
-                    <fos:error-result error-code="FOAP0001"/>
-                  </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test use="chain-variable-product3">
-                    <fos:expression>
-                      <eg><![CDATA[
-chain((1, 2, 3, 4), $product3) 
-    ]]></eg>
-                    </fos:expression>
-                    <fos:error-result error-code="FOAP0001"/>
-                  </fos:test>
-                </fos:example>
-            </fos:examples>
+         <fos:examples>
+            <fos:example>
+               <fos:test>
+                  <fos:expression><eg>let $count-tokens := compose(tokenize#1, count#1)
+return $count-tokens("a b c")</eg></fos:expression>
+                  <fos:result>3</fos:result>
+               </fos:test>
+               <fos:test>
+                  <fos:expression><eg>let $is-double-barrelled := 
+        compose(tokenize(?, '-'), count#1, fn{. gt 1})
+return $is-double-barrelled("Bowes-Lyon")</eg></fos:expression>
+                  <fos:result>true()</fos:result>
+               </fos:test>
+               <fos:test>
+                  <fos:expression><eg><![CDATA[let $name-of-parent := compose(fn{..}, name#1)
+return parse-xml("<a><x/></a>")//x => $name-of-parent()]]></eg></fos:expression>
+                  <fos:result>"a"</fos:result>
+               </fos:test>
+               <fos:test>
+                  <fos:expression><eg><![CDATA[let $descendants-at-level := 
+  fn($depth as xs:integer) { 
+     compose((1 to $depth) ! fn{child::*}, name#1, distinct-values#1)
+  }
+return parse-xml("<a><x><y/></x><p/></a>") => $descendants-at-level(2)()]]></eg></fos:expression>
+                  <fos:result>"x", "p"</fos:result>
+               </fos:test>
+               <fos:test>
+                  <fos:expression><eg>let $norm := compose(normalize-unicode#1, normalize-space#1, 
+                     upper-case#1, translate(?, "-", ""))
+return $norm('data-base') eq $norm('DATABASE')</eg></fos:expression>
+                  <fos:result>true()</fos:result>
+               </fos:test>
+            </fos:example>
+ 
+          </fos:examples>
           <fos:changes>
-            <fos:change issue="517" PR="734 1233" date="2022-10-20"><p>New in 4.0</p></fos:change>
+            <fos:change issue="882"><p>New in 4.0</p></fos:change>
           </fos:changes>            
         </fos:function>
 
