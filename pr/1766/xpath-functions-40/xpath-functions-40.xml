@@ -264,8 +264,7 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><langusage><language
                are always strings (single <code nobreak="false">xs:string</code> values). Option values may
                be of any type.</p></item><item><p>The type of the options parameter in the function signature is always
                given as <code nobreak="false">map(*)</code>.</p></item><item><p>Although option names are described above as strings, the actual key may be
-                  any value that compares equal to the required string (using the <code nobreak="false">eq</code> operator
-                  with Unicode codepoint collation; or equivalently, the <code diff="chg" at="2023-01-25" nobreak="false">fn:atomic-equal</code> relation). 
+                  any value that is the <termref def="dt-same-key"/> as the required string. 
                   For example, instances of <code nobreak="false">xs:untypedAtomic</code>
                   or <code nobreak="false">xs:anyURI</code> are equally acceptable.</p><note><p>This means that the implementation of the function can check for the
                presence and value of particular options using the functions <function>map:contains</function>
@@ -11693,48 +11692,32 @@ return $result?output//body
             It calls the <code nobreak="false">$keys</code> function on that item to obtain a sequence of key values,
             and the <code nobreak="false">$value</code> function to obtain an associated value.
             Then, for each key value:</p><ulist><item><p>If the key is not already present in the target map, the processor adds a
-               new key-value pair to the map, with that key and that value. </p></item><item><p>If the key is already present, the processor calls the <code nobreak="false">combine</code>
-               function in the <code nobreak="false">$options</code> argument to combine the existing value for the key with the new value,
-               and replaces the entry with this combined value.</p><p>The key of the combined entry is taken from one of the duplicate entries:
-                  it is <termref def="implementation-defined"/> which one is used. (It is
-                  possible for two keys to be considered duplicates even if they differ:
+               new key-value pair to the map, with that key and that value. </p></item><item><p>If the key is already present, the processor combines the new value for the key
+               with the existing value as determined by the 
+               and <code nobreak="false">duplicates</code> option.</p><p>By default, when two duplicate entries occur:</p><ulist><item><p>A single combined entry will be present in the result.</p></item><item><p>This entry will contain the 
+                     <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref>
+                  of the supplied values.</p></item><item><p>The position of the combined entry in the
+                  <xtermref spec="DM40" ref="dt-entry-order"/> of the result map
+                  will correspond to the position of the first of the duplicates.</p></item><item><p>The key of the combined entry 
+                  will correspond to the key of one of the duplicates: it is
+                  <termref def="implementation-dependent"/> which one is chosen.
+                  (It is possible for two keys to be considered duplicates even if they differ:
                   for example, they may have different type annotations, or they may
-                  be <code nobreak="false">xs:dateTime</code> values with different timezones.)
-               </p><p>The position of the combined entry in the <xtermref spec="DM40" ref="dt-entry-order"/>
-               of the result map is based on the position of the first entry having that key
-               in the input sequence (that is, the order of keys in the result is the order
-               of first appearance in the input.</p></item></ulist><p>The <code nobreak="false">$options</code> argument can be used to control the 
-            and the way in which duplicate keys are handled.
+                  be <code nobreak="false">xs:dateTime</code> values in different timezones.) </p></item></ulist><p>The <code nobreak="false">$options</code> argument can be used to control the 
+            way in which duplicate keys are handled. The allowed options, and their
+            meanings, are the same as for the <function>map:of-pairs</function>
+            function.
             The <termref def="option-parameter-conventions">option parameter conventions</termref> apply.
-         </p><p>The entries that may appear in the <code nobreak="false">$options</code> map are as follows:</p><example role="record"><record returnEmptyOk="no" returnSeq="no" prefix="fn" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no" isOp="no"><arg name="combine" type="(fn($existing-value as item()*, $new-value as item()*) as item()*)?" occur="opt"/></record></example><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Key</th><th rowspan="1" colspan="1">Value</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="2" colspan="1"><p><code nobreak="false">combine?</code></p></td><td class="fos-thick" colspan="2" rowspan="1">A function that is used to combine two different values that are supplied
-                  for the same key. The default is to combine the two values using
-                  <xtermref spec="XP40" ref="dt-sequence-concatenation"/>, retaining their order
-                  in the input sequence.
-               <ulist><item><p><term>Type: </term><code nobreak="false">(fn($existing-value as item()*, $new-value as item()*) as item()*)?</code></p></item><item><p><term>Default: </term><code nobreak="false">fn:op(',')</code></p></item></ulist></td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">User-supplied function</code></td><td rowspan="1" colspan="1">
-                        The function is called for any entry in an input map that has the 
-                        <termref def="dt-same-key"/> as a previous entry. The first argument
-                        is the existing value associated with the key; the second argument
-                        is the value associated with the key in the duplicate input entry,
-                        and the result is the new value to be associated with the key.
-                     </td></tr></tbody></table></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression.</p><eg xml:space="preserve">fold-left($input, {}, fn($map, $item, $pos) {
-  let $v := $value($item, $pos)
-  return fold-left($keys($item, $pos), $map, fn($m, $k) {
-    if (map:contains($m, $k)) then (
-      map:put($m, $k, $combine($m($k), $v))
-    ) else (
-      map:put($m, $k, $v)
-    )
-  })
-})</eg></def></gitem><gitem><label>Notes</label><def><note><p>The default function for both <code nobreak="false">$keys</code> and <code nobreak="false">$value</code> is the identity function.
+         </p></item></ulist></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression.</p><eg xml:space="preserve">( for $item at $pos in $input
+  let $val := $value($item, $pos)
+  for $key in $keys($item, $pos)
+  return map:pair($key, $val)
+) =&gt; map:of-pairs($options)</eg></def></gitem><gitem><label>Error Conditions</label><def><p>An error is raised <errorref spec="FO" class="JS" code="0003"/> if the value of 
+          <code nobreak="false">$options</code> indicates that duplicates are to be rejected, and a duplicate key is encountered.</p><p>An error is raised <errorref spec="FO" class="JS" code="0005"/> if the value of 
+          <code nobreak="false">$options</code> includes an entry whose key is defined 
+          in this specification, and whose value is not a permitted value for that key.</p></def></gitem><gitem><label>Notes</label><def><note><p>The default function for both <code nobreak="false">$keys</code> and <code nobreak="false">$value</code> is the identity function.
             Although it is permitted to default both, this serves little purpose: usually at least one of these arguments
-            will be supplied.</p><p>The default action for combining entries with duplicate keys is to perform a 
-            <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref> 
-            of the corresponding values,
-            equivalent to the <code nobreak="false">duplicates: combine</code> option on <function>map:merge</function>. Other potentially useful
-            functions for combining duplicates include:</p><ulist><item><p><code nobreak="false">fn($a, $b) { $a }</code> Use the first value and discard the remainder</p></item><item><p><code nobreak="false">fn($a, $b) { $b }</code> Use the last value and discard the remainder</p></item><item><p><code nobreak="false">fn:concat(?, ",", ?)</code> Form the string-concatenation of the values, comma-separated</p></item><item><p><code nobreak="false">fn:op('+')</code> Compute the sum of the values</p></item></ulist><p>The <xtermref spec="DM40" ref="dt-entry-order">order of entries</xtermref> in the result reflects
-         the order of the items in <code nobreak="false">$input</code> from which they were derived. In the
-         event that two entries have duplicate keys, the position of the combined entry
-         in the result reflects the position of the first input item with that key.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:build((), string#1)</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{}</eg></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:build(1 to 10, fn { . mod 3 })</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: (3, 6, 9), 1: (1, 4, 7, 10), 2: (2, 5, 8) }</eg><p><emph>(Returns a map with one entry for each distinct value of <code nobreak="false">. mod 3</code>. The
+            will be supplied.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:build((), string#1)</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{}</eg></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:build(1 to 10, fn { . mod 3 })</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: (3, 6, 9), 1: (1, 4, 7, 10), 2: (2, 5, 8) }</eg><p><emph>(Returns a map with one entry for each distinct value of <code nobreak="false">. mod 3</code>. The
                   function to compute the value is the identity function, and duplicates are combined by
                   sequence concatenation.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:build(
   1 to 5,
@@ -11757,7 +11740,7 @@ return $result?output//body
   ("apple", "apricot", "banana", "blueberry", "cherry"), 
   substring(?, 1, 1),
   string-length#1,
-  { "combine": op("+") }
+  { "duplicates": op("+") }
 )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "a": 12, "b": 15, "c": 6 }</eg><p><emph>(Constructs a map where the key is the first character of an input item, and where the corresponding value
                   is the total string-length of the items starting with that character.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:build(
   ('Wang', 'Liu', 'Zhao'),
@@ -11783,7 +11766,7 @@ return map:build($titles/title, fn($title) { $title/ix })
 }</eg></td></tr><tr><td colspan="2" rowspan="1"><p>The following expression creates a map whose keys are employee <code nobreak="false">@ssn</code> values, and whose
                corresponding values are the employee nodes:</p></td></tr><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">map:build(//employee, fn { @ssn })</eg></td></tr><tr><td colspan="2" rowspan="1"><p>The following expression creates a map whose keys are employee <code nobreak="false">@location</code> values, and whose
                corresponding values represent the number of employees at each distinct location. Any employees that
-               lack an <code nobreak="false">@location</code> attribute will be excluded from the result.</p></td></tr><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">map:build(//employee, fn { @location }, fn { 1 }, { "combine": op("+") })</eg></td></tr><tr><td colspan="2" rowspan="1"><p>The following expression creates a map whose keys are employee <code nobreak="false">@location</code> values, and whose
+               lack an <code nobreak="false">@location</code> attribute will be excluded from the result.</p></td></tr><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">map:build(//employee, fn { @location }, fn { 1 }, { "duplicates": op("+") })</eg></td></tr><tr><td colspan="2" rowspan="1"><p>The following expression creates a map whose keys are employee <code nobreak="false">@location</code> values, and whose
                corresponding values contain the employee node for the highest-paid employee at each distinct location:</p></td></tr><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">map:build(
   //employee,
   keys := fn { @location }, 
@@ -11963,96 +11946,49 @@ let $birthdays := {
 return map:keys-where($birthdays, fn($name, $date) {
   starts-with($name, "J") and year-from-date($date) = 1969
 })
-               </eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">"Joel"</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-merge"><head>map:merge</head><changes><change issue="1725">For consistency with the new functions <function>map:build</function>
+               </eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">"Joel"</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-merge"><head>map:merge</head><changes><change issue="1725" PR="1727" date="2025-01-31">For consistency with the new functions <function>map:build</function>
             and <function>map:of-pairs</function>, the handling of duplicates
-            may now be controlled by the <code nobreak="false">combine</code> option as an alternative
-            to the existing <code nobreak="false">duplicates</code> option.</change></changes><glist><gitem><label>Summary</label><def><p>Returns a map that combines the entries from a number of existing maps.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="map" name="merge" return-type="map(*)" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="maps" type="map(*)*"/><arg name="options" type="map(*)?" default="{}"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>The function <function>map:merge</function>
-            <phrase>returns a map</phrase> that
-            is formed by combining the contents of the maps supplied in the <code nobreak="false">$maps</code>
+            may now be controlled by supplying a user-defined callback function as an alternative
+            to the fixed values for the earlier <code nobreak="false">duplicates</code> option.</change></changes><glist><gitem><label>Summary</label><def><p>Returns a map that combines the entries from a number of existing maps.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="map" name="merge" return-type="map(*)" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="maps" type="map(*)*"/><arg name="options" type="map(*)?" default="{}"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>The function <function>map:merge</function>
+            returns a map that is formed by combining the contents of the maps supplied in the <code nobreak="false">$maps</code>
             argument.</p><p>Informally, the supplied maps are combined as follows:</p><olist><item><p>There is one entry in the returned map for each distinct key present in the union
-                  of the input maps, where two keys are distinct if they are not the <phrase><termref def="dt-same-key">same key</termref></phrase>.</p></item><item><p>If there are duplicate keys, that is, if two or more maps contain entries having the
-                  <termref def="dt-same-key">same key</termref>, then the way this is handled is
-                  controlled by the <code nobreak="false">$options</code> argument.</p></item></olist><p>The definitive specification is as follows.</p><olist><item><p>If the second argument is omitted or an empty sequence, the effect is the same as
-                  calling the two-argument function with an empty map as the value of <code nobreak="false">$options</code>.</p></item><item><p>The <code nobreak="false">$options</code> argument can be used to control the way in which duplicate keys are handled.
-               The <termref def="option-parameter-conventions">option parameter conventions</termref> apply.
-            </p></item><item><p>In the event that two or more entries in the input maps have the 
-               <termref def="dt-same-key"/>:</p><olist><item><p>A single entry is created by combining the values of the duplicates,
-                  in a way determined by the supplied <code nobreak="false">$options</code>.</p></item><item><p>The key of the combined entry is one of the duplicate keys: 
-                     which one is chosen is <termref def="implementation-defined"/>.
-                  (Two keys that are deemed duplicates may differ: for example they may have
+                  of the input maps, where two keys are distinct if they are not the <termref def="dt-same-key">same key</termref>. The order of the input maps,
+               and of the entries within these input maps, is retained in the 
+               <xtermref spec="DM40" ref="dt-entry-order"/> of the result map.</p></item><item><p>If there are duplicate keys, that is, if two or more maps contain entries having the
+                  <termref def="dt-same-key">same key</termref>, then the relevant entries are combined in a way
+                   that is controlled by the supplied <code nobreak="false">$options</code>.</p><p>The <code nobreak="false">$options</code> argument takes the same values (with the same meanings)
+               as the <function>map:of-pairs</function> function, except that the default is different:
+               for <code nobreak="false">map:merge</code>, the default for duplicate keys is <code nobreak="false">use-first</code>.</p><note><p>The difference is for backwards compatibility reasons.</p></note><p>With the default options, when duplicate entries occur:</p><olist><item><p>There will be a single entry in the result 
+                     corresponding to a set of duplicate entries in the input.
+                  </p></item><item><p>The value of that entry will be taken from the first
+                  of the duplicates.</p></item><item><p>The position of that entry in the <xtermref spec="DM40" ref="dt-entry-order"/> of the result map will correspond to the
+                  position of the first of the duplicates.</p></item><item><p>The key of the combined entry 
+                  will correspond to the key of one of the duplicates: it is
+                  <termref def="implementation-dependent"/> which one is chosen. (Keys may be 
+                  duplicates even though they differ: for example, they may have
                   different type annotations, or they may be <code nobreak="false">xs:dateTime</code>
-                   values with different timezones.)</p></item><item><p>The position of the combined entry in the <xtermref spec="DM40" ref="dt-entry-order"/>
-                  of the result map corresponds to the position of the first appearance of
-                  the corresponding key value in the input.</p></item></olist></item><item><p>The entries that may appear in the <code nobreak="false">$options</code> map are as follows:</p><example role="record"><record returnEmptyOk="no" returnSeq="no" prefix="fn" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no" isOp="no"><arg name="duplicates" type="xs:string" occur="opt"/><arg name="combine" type="(fn($existing-value as item()*, $new-value as item()*) as item()*)?" occur="opt"/></record></example><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Key</th><th rowspan="1" colspan="1">Value</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="6" colspan="1"><p><code nobreak="false">duplicates?</code></p></td><td class="fos-thick" colspan="2" rowspan="1">Determines the policy for handling duplicate keys: specifically, the action to be
-                        taken if two maps in the input sequence <code nobreak="false">$maps</code> contain entries with key values
-                        <var>K1</var> and <var>K2</var> where <var>K1</var> and <var>K2</var> are the 
-                        <termref def="dt-same-key">same key</termref>. This option and the <code nobreak="false">combine</code>
-                        option are mutually exclusive.
-                     <ulist><item><p><term>Type: </term><code nobreak="false">xs:string</code></p></item><item><p><term>Default: </term><code nobreak="false">use-first</code></p></item></ulist></td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">reject</code></td><td rowspan="1" colspan="1">
-                           Equivalent to specifying <code nobreak="false">"combine": fn(){error(xs:QName("err:FOJS0003"), ...)</code>
-                           (the remaining arguments to <function>fn:error</function> being
-                           <termref def="implementation-defined"/>).
-                        </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">use-first</code></td><td rowspan="1" colspan="1">Equivalent to specifying <code nobreak="false">"combine": fn($a, $b){ $a }</code>.
-                        </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">use-last</code></td><td rowspan="1" colspan="1">Equivalent to specifying <code nobreak="false">"combine": fn($a, $b){ $b }</code>.
-                        </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">use-any</code></td><td rowspan="1" colspan="1">Equivalent to specifying <code nobreak="false">"combine": fn($a, $b){ one-of($a, $b) }</code>
-                           where <code nobreak="false">one-of</code> chooses either <code nobreak="false">$a</code> or <code nobreak="false">$b</code> in
-                           an <termref def="implementation-defined"/> way.
-                        </td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">combine</code></td><td rowspan="1" colspan="1">Equivalent to specifying <code nobreak="false">"combine": fn($a, $b){ $a, $b }</code>.
-                        </td></tr><tr><td rowspan="2" colspan="1"><p><code nobreak="false">combine?</code></p></td><td class="fos-thick" colspan="2" rowspan="1">Supplies a function for handling duplicate keys: specifically, the action to be
-                           taken if two maps in the input sequence <code nobreak="false">$maps</code> contain entries with key values
-                           <var>K1</var> and <var>K2</var> where <var>K1</var> and <var>K2</var> are the 
-                           <termref def="dt-same-key">same key</termref>. This option and the <code nobreak="false">duplicates</code>
-                           option are mutually exclusive.
-                        <ulist><item><p><term>Type: </term><code nobreak="false">(fn($existing-value as item()*, $new-value as item()*) as item()*)?</code></p></item><item><p><term>Default: </term><code nobreak="false">fn($a, $b){ $a }</code></p></item></ulist></td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">User-supplied function</code></td><td rowspan="1" colspan="1">
-                              A function with signature <code nobreak="false">fn(item()*, item()*) as item()*</code>.
-                              The function is called for any entry in an input map that has the 
-                              <termref def="dt-same-key"/> as a previous entry. The first argument
-                              is the existing value associated with the key; the second argument
-                              is the value associated with the key in the duplicate input entry,
-                              and the result is the new value to be associated with the key.
-                           </td></tr></tbody></table></item></olist></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression, except in error cases.</p><eg xml:space="preserve">let $FOJS0003 := QName("http://www.w3.org/2005/xqt-errors", "FOJS0003")
-let $combiner := $options?combine
-  otherwise {
-      "use-first": fn($a, $b) { $a },
-      "use-last":  fn($a, $b) { $b },
-      "combine":   fn($a, $b) { $a, $b },
-      "reject":    fn($a, $b) { fn:error($FOJS0003) },
-      "use-any":   fn($a, $b) { fn:random-number-generator()?permute(($a, $b))[1] }
-    } ($options?duplicates)
-  otherwise        fn($a, $b) { $a }
-  
-return map:of-pairs($maps =!&gt; map:pairs(), { "combine": $combiner });</eg></def></gitem><gitem><label>Error Conditions</label><def><p>An error is raised <errorref spec="FO" class="RG" code="0013"/> if both the <code nobreak="false">combine</code> and <code nobreak="false">duplicates</code>
-            options are present.</p><p>An error is raised <errorref spec="FO" class="JS" code="0003"/> if the value of 
+                  values in different timezones.)</p></item></olist></item></olist></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression.</p><eg xml:space="preserve">map:of-pairs($maps =!&gt; map:pairs(), 
+             $options[exists(?duplicates)]
+               otherwise { "duplicates": "use-first" });</eg></def></gitem><gitem><label>Error Conditions</label><def><p>An error is raised <errorref spec="FO" class="JS" code="0003"/> if the value of 
           <code nobreak="false">$options</code> indicates that duplicates are to be rejected, and a duplicate key is encountered.</p><p>An error is raised <errorref spec="FO" class="JS" code="0005"/> if the value of 
           <code nobreak="false">$options</code> includes an entry whose key is defined 
-          in this specification, and whose value is not a permitted value for that key.</p></def></gitem><gitem><label>Notes</label><def><note><note><p>By way of explanation, the function first reduces the sequence of input maps
-               to a sequence of key-value pairs, retaining order of both the maps and of the
-               entries within each map. It then combines key-value pairs having the
-               <termref def="dt-same-key"/> by applying the <code nobreak="false">$combine</code> function
-               successively to pairs of duplicates. The position in the <xtermref spec="DM40" ref="dt-entry-order"/>
-               of the result map of an entry formed by combining duplicates corresponds to the
-               position of the first occurrence of the key in the input sequence. This is true
-               even whien the option <code nobreak="false">use-last</code> is used: the value of the resulting
-               entry corresponds to the last entry with a given key, but the position of the entry
-               in the result map corresponds to the position of the first entry with that key.
-            </p><p>The use of <function>fn:random-number-generator</function> represents one possible conformant
-         implementation for <code nobreak="false">"duplicates": "use-any"</code>, but it is not the only conformant
-         implementation and is not intended to be a realistic implementation. The purpose of this
-         option is to allow the implementation to use whatever strategy is most efficient; for example,
-         if the input maps are processed in parallel, then specifying <code nobreak="false">"duplicates": "use-any"</code>
-         means that the implementation does not need to keep track of the original order of the sequence of input
-         maps.</p></note><p>If the input is an empty sequence, the result is an empty map.</p><p>If the input is a sequence of length one, the result map is 
-            <phrase>indistinguishable from the supplied map</phrase>.</p><p>There is no requirement that 
+          in this specification, and whose value is not a permitted value for that key.</p></def></gitem><gitem><label>Notes</label><def><note><p>If the input is an empty sequence, the result is an empty map.</p><p>If the input is a sequence of length one, the result map is 
+            indistinguishable from the input map.</p><p>There is no requirement that 
             the supplied input maps should have the same or compatible
             types. The type of a map (for example <code nobreak="false">map(xs:integer, xs:string)</code>) is
             descriptive of the entries it currently contains, but is not a constraint on how the map
-            may be combined with other maps.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Variables</th></tr></thead><tbody><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">let $week := {
+            may be combined with other maps.</p><p>The XSLT 3.0 recommendation included a specification of this function that incorrectly used
+            the option value <code nobreak="false">{'duplicates':'unspecified'}</code> in place of
+            <code nobreak="false">{'duplicates':'use-any'}</code>. XSLT implementations wishing to
+            preserve backwards compatibility <rfc2119>may</rfc2119> choose to retain support
+            for this setting.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Variables</th></tr></thead><tbody><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">let $week := {
   0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag"
 }</eg></td></tr></tbody></table><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:merge(())</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{}</eg><p><emph>(Returns an empty map).</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:merge((
   map:entry(0, "no"),
   map:entry(1, "yes")
-))</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "no", 1: "yes" }</eg><p><emph>(Returns a map with two entries).</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:merge(
+))</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "no", 1: "yes" }</eg><p><emph>(Returns a map with two entries).</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:merge(({ "red": 0 }, { "green": 1}, { "blue": 2 })) 
+                  =&gt; map:keys()</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">"red", "green", "blue"</eg><p><emph>(Note the order of the result.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:merge(
   ($week, { 7: "Unbekannt" })
 )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Unbekannt" }</eg><p><emph>(The value of the existing map is unchanged; the <phrase>returned map 
@@ -12081,33 +12017,92 @@ return map:of-pairs($maps =!&gt; map:pairs(), { "combine": $combiner });</eg></d
                   contains all the entries from <code nobreak="false">$week</code>, with one entry replaced by a
                   new entry. Both input maps contain an entry with the key <code nobreak="false">6</code>; the
                   entry that appears in the result is the <xtermref spec="XP40" ref="dt-sequence-concatenation">sequence concatenation</xtermref> of the entries
-                  in the input maps, retaining order.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:merge(({ "red": 0 }, { "green": 1}, { "blue": 2 })) 
-                  =&gt; map:keys()</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">"red", "green", "blue"</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-of-pairs" diff="add" at="2023-04-03"><head>map:of-pairs</head><changes><change>New in 4.0</change></changes><glist><gitem><label>Summary</label><def><p>Returns a map that combines data from a sequence of 
+                  in the input maps, retaining order.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:merge(
+  ({ "oxygen": 0.22, "hydrogen": 0.68, "nitrogen": 0.1 },
+   { "oxygen": 0.24, "hydrogen": 0.70, "nitrogen": 0.06 }), 
+  { "duplicates": fn($a, $b){ max(($a, $b)) } })
+               </code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "oxygen": 0.24, "hydrogen": 0.70, "nitrogen": 0.1 }</eg><p><emph>(The result map holds, for each distinct key, the maximum of the values
+               for that key in the input.)</emph></p></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-of-pairs" diff="add" at="2023-04-03"><head>map:of-pairs</head><changes><change>New in 4.0</change></changes><glist><gitem><label>Summary</label><def><p>Returns a map that combines data from a sequence of 
             <termref def="dt-key-value-pair-map">key-value pair maps</termref>.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="map" name="of-pairs" return-type="map(*)" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="input" type-ref="key-value-pair" type-ref-occurs="*"/><arg name="options" type="map(*)" default="{}"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>The function <function>map:of-pairs</function>
-            <phrase>returns a map</phrase> that
+            <phrase>returns a map</phrase> which
             is formed by combining <termref def="dt-key-value-pair-map">key-value pair maps</termref> supplied in the 
             <code nobreak="false">$input</code>
             argument.</p><p>The <code nobreak="false">$options</code> argument can be used to control 
             the way in which duplicate keys are handled.
             The <termref def="option-parameter-conventions">option parameter conventions</termref> apply.
-            The handling of duplicates is defined to be the same as in an equivalent call of
-            the <function>map:build</function> function: see the formal equivalent below.
-         </p><p>The entries that may appear in the <code nobreak="false">$options</code> map are as follows:</p><example role="record"><record returnEmptyOk="no" returnSeq="no" prefix="fn" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no" isOp="no"><arg name="combine" type="(fn($existing-value as item()*, $new-value as item()*) as item()*)?" occur="opt"/></record></example><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Key</th><th rowspan="1" colspan="1">Value</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="2" colspan="1"><p><code nobreak="false">combine?</code></p></td><td class="fos-thick" colspan="2" rowspan="1">A function that is used to combine two different values that are supplied
-                  for the same key. The default is to combine the two values using
-                  <xtermref spec="XP40" ref="dt-sequence-concatenation"/>, retaining their order
-                  in the input sequence.
-               <ulist><item><p><term>Type: </term><code nobreak="false">(fn($existing-value as item()*, $new-value as item()*) as item()*)?</code></p></item><item><p><term>Default: </term><code nobreak="false">fn:op(',')</code></p></item></ulist></td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">User-supplied function</code></td><td rowspan="1" colspan="1">
-                        The function is called for any entry in an input map that has the 
-                        <termref def="dt-same-key"/> as a previous entry. The first argument
-                        is the existing value associated with the key; the second argument
-                        is the value associated with the key in the duplicate input entry,
-                        and the result is the new value to be associated with the key.
-                     </td></tr></tbody></table></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression.</p><eg xml:space="preserve">map:build($input, map:get(?, 'key'), map:get(?, 'value'), $combine)</eg></def></gitem><gitem><label>Error Conditions</label><def><p>The function can be made to fail with a dynamic error in the event that
-         duplicate keys are present in the input sequence by supplying a <code nobreak="false">$combine</code>
-         function that invokes the <function>fn:error</function> function.</p></def></gitem><gitem><label>Notes</label><def><note><p>If the input is an empty sequence, the result is an empty map.</p><p>There is no requirement that the supplied key-value pairs should have the same or compatible
+            
+         </p><p>The entries that may appear in the <code nobreak="false">$options</code> map are as follows:</p><example role="record"><record returnEmptyOk="no" returnSeq="no" prefix="fn" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no" isOp="no"><arg name="duplicates" type="(enum( &#34;reject&#34;, &#34;use-first&#34;, &#34;use-last&#34;, &#34;use-any&#34;, &#34;combine&#34;) | fn(item()*, item()*) as item()*)?" occur="opt"/></record></example><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Key</th><th rowspan="1" colspan="1">Value</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="7" colspan="1"><p><code nobreak="false">duplicates?</code></p></td><td class="fos-thick" colspan="2" rowspan="1">Determines the policy for handling duplicate keys: specifically, the action to be
+                  taken if two entries in the input sequence have key values
+                  <var>K1</var> and <var>K2</var> where <var>K1</var> and <var>K2</var> are the 
+                  <termref def="dt-same-key">same key</termref>. 
+               <ulist><item><p><term>Type: </term><code nobreak="false">(enum( "reject", "use-first", "use-last", "use-any", "combine") | fn(item()*, item()*) as item()*)?</code></p></item><item><p><term>Default: </term><code nobreak="false">"combine"</code></p></item></ulist></td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">"reject"</code></td><td rowspan="1" colspan="1">
+                     Equivalent to supplying a function that raises a dynamic error
+                     with error code "FOJS0003". The effect is that duplicate keys
+                     result in an error.
+                  </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">"use-first"</code></td><td rowspan="1" colspan="1">Equivalent to supplying the function <code nobreak="false">fn($a, $b){ $a }</code>.
+                     The effect is that the first of the duplicates is chosen.
+                  </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">"use-last"</code></td><td rowspan="1" colspan="1">Equivalent to supplying the function <code nobreak="false">fn($a, $b){ $b }</code>.
+                     The effect is that the last of the duplicates is chosen.
+                  </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">"use-any"</code></td><td rowspan="1" colspan="1">Equivalent to supplying the function <code nobreak="false">fn($a, $b){ one-of($a, $b) }</code>
+                     where <code nobreak="false">one-of</code> chooses either <code nobreak="false">$a</code> or <code nobreak="false">$b</code> in
+                     an <termref def="implementation-dependent"/> way. The effect is that it is
+                     <termref def="implementation-dependent"/> which of the duplicates is chosen.
+                  </td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">"combine"</code></td><td rowspan="1" colspan="1">Equivalent to supplying the function <code nobreak="false">fn($a, $b){ $a, $b }</code>
+                     (or equivalently, the function <code nobreak="false">op(",")</code>).
+                     The effect is that the result contains the <xtermref spec="XP40" ref="dt-sequence-concatenation"/>
+                     of the values having the same key, retaining order.
+                  </td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">function(*)</code></td><td rowspan="1" colspan="1">
+                     A function with signature <code nobreak="false">fn(item()*, item()*) as item()*</code>.
+                     The function is called for any entry in the input sequence that has the 
+                     <termref def="dt-same-key"/> as a previous entry. The first argument
+                     is the existing value associated with the key; the second argument
+                     is the value associated with the key in the duplicate input entry,
+                     and the result is the new value to be associated with the key. The effect
+                     is cumulative: for example if there are three values <var>X</var>, <var>Y</var>,
+                     and <var>Z</var> associated with the same key, and the supplied function is
+                     <var>F</var>, then the result is an entry whose value is 
+                     <code nobreak="false"><var>X</var> =&gt; <var>F</var>(<var>Y</var>) =&gt; <var>F</var>(<var>Z</var>)</code>.
+                  </td></tr></tbody></table></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression, except in error cases.</p><eg xml:space="preserve">let $one-of := fn($a, $b) {
+   (: select either $a or $b at implementation option :)
+   if (environment-variable("X")) then $a else $b
+}
+let $duplicates := $options ? duplicates
+let $combine as function(item()*, item()*) as item()* :=
+  if ($duplicates instance of xs:string)
+  then 
+      { "reject":    fn($a, $b){ error(xs:QName("err:FOJS0003")) },
+        "use-first": fn($a, $b){ $a },
+        "use-last":  fn($a, $b){ $b },
+        "use-any":   fn($a, $b){ $one-of($a, $b) },
+        "combine":   fn($a, $b){ $a, $b }
+      } ? $duplicates
+  else if ($duplicates instance of function(*))    
+  then $duplicates
+  else fn($a, $b) { $a, $b }
+return fold-left( $input, {},
+         fn ( $out, $next ) {
+           let $newVal :=
+             if (map:contains( $out, $next?key ))
+             then $combine( $out?($next?key), $next?value )
+             else $next?value
+           return map:put( $result, $next?key, $newVal )
+         })</eg></def></gitem><gitem><label>Error Conditions</label><def><p>An error is raised <errorref spec="FO" class="JS" code="0003"/> if the value of 
+          <code nobreak="false">$options</code> indicates that duplicates are to be rejected, and a duplicate key is encountered.</p></def></gitem><gitem><label>Notes</label><def><note><p>In the formal equivalent shown above:</p><ulist><item><p>The call on <code nobreak="false">error()</code> is indicative; the implementation
+            is free to raise the error in its own way.</p></item><item><p>The function <code nobreak="false">$one-of($a, $b)</code> is intended to
+            illustrate that either <code nobreak="false">$a</code> or <code nobreak="false">$b</code> is returned,
+            at the discretion of the implementation. A function body is provided
+            for completeness, but it is not intended as a realistic implementation.</p></item></ulist><p>If the input is an empty sequence, the result is an empty map.</p><p>There is no requirement that the supplied key-value pairs should have the same or compatible
             types. The type of a map (for example <code nobreak="false">map(xs:integer, xs:string)</code>) is
             descriptive of the entries it currently contains, but is not a constraint on how the map
-            may be combined with other maps.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Variables</th></tr></thead><tbody><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">let $week := {
+            may be combined with other maps.</p><p>When duplicate keys are encountered, the effect is that:</p><ulist><item><p>In the <xtermref spec="DM40" ref="dt-entry-order"/> 
+               of the result map, the position of the entry containing the result
+               of combining a set of entries with duplicate keys corresponds to 
+               the position of the first of the duplicates in the input sequence.</p></item><item><p>The key of the combined entry 
+                  will correspond to the key of one of the duplicates: it is
+                  <termref def="implementation-dependent"/> which one is chosen.
+               (Keys may be duplicates even though they differ: 
+            for example they may have different type annotations, or they might be
+            <code nobreak="false">xs:dateTime</code> values in different timezones.)</p></item></ulist></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Variables</th></tr></thead><tbody><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">let $week := {
   0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag"
 }</eg></td></tr></tbody></table><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:of-pairs(())</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{}</eg><p><emph>(Returns an empty map).</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:of-pairs(map:pairs($week))</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{
@@ -12127,8 +12122,8 @@ return map:of-pairs($maps =!&gt; map:pairs(), { "combine": $combiner });</eg></d
   { "key": 7, "value": "Unbekannt" }
 ))</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Unbekannt" }</eg><p><emph>(The value of the existing map is unchanged; the returned map 
-                  contains all the entries from <code nobreak="false">$week</code>, supplemented with an additional
-                  entry.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs((
+                  contains all the entries from <code nobreak="false">$week</code>, supplemented 
+                  with an additional entry.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs((
   map:pairs($week),
   { "key": 6, "value": "Sonnabend" }
 ))</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
@@ -12137,18 +12132,22 @@ return map:of-pairs($maps =!&gt; map:pairs(), { "combine": $combiner });</eg></d
                   new entry. Both input maps contain an entry with the key <code nobreak="false">6</code>; the
                   one used in the result combines the two supplied values into a single sequence.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs(
   (map:pairs($week), { "key": 6, "value": "Sonnabend" }),
-  fn($old, $new) { $new }
+  { "duplicates": "use-last" }
 )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Sonnabend" }</eg><p><emph>(The value of the existing map is unchanged; the returned map
                   contains all the entries from <code nobreak="false">$week</code>, with one entry replaced by a
                   new entry. Both input maps contain an entry with the key <code nobreak="false">6</code>; the
-                  supplied <code nobreak="false">$combine</code> function ensures that the one used in the result 
+                  supplied <code nobreak="false">$duplicates</code> option ensures that the one used in the result 
                   is the one that comes last in the input sequence.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs(
   (map:pairs($week), { "key": 6, "value": "Sonnabend" }),
-  fn($old, $new) { `{ $old }|{ $new }` }
+  { "duplicates": concat(?, '|', ?) }
 )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag|Sonnabend" }</eg><p><emph>(In the result map, the value for key <code nobreak="false">6</code> is obtained by concatenating the values
-                  from the two input maps, with a separator character.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs((map:pair("red": 0), map:pair("green": 1), map:pair("blue": 2 )) 
+                  from the two input maps, with a separator character.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs(
+   (  map:pairs({ "England": 2, "Germany": 1 }),
+      map:pairs({ "France": 2, "Germany": 2 })
+      map:pairs({ "England": 0, "France": 1 }) ), 
+   { "duplicates": op("+") })</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "England": 2, "Germany": 3, "France": 3 }</eg><p><emph>(The values for each distinct key are summed.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs((map:pair("red": 0), map:pair("green": 1), map:pair("blue": 2 )) 
         =&gt; map:keys()</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">"red", "green", "blue"</eg><p><emph>(The keys are returned in the order supplied.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "red": 0, "green": 1, "blue": 2 }
                   =&gt; map:pairs() =&gt; sort(keys := fn{ ?key }) =&gt; map:of-pairs()) 
         =&gt; map:keys()</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">"blue", "green", "red"</eg><p><emph>(Takes any map and produces a map with the same entries, but sorted by key.)</emph></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:of-pairs((map:pair("red": 0), map:pair("green": 1), map:pair("blue": 2 )) 
@@ -12177,17 +12176,25 @@ map:of-pairs((
          that is a map with two entries, one (with key <code nobreak="false">"key"</code>) holding the key,
          and the other (with key <code nobreak="false">"value"</code>) holding the value.</p></def></gitem><gitem><label>Formal Equivalent</label><def><p>The effect of the function is equivalent to the result of the following XPath expression.</p><eg xml:space="preserve">map:for-each($map, map:pair#2)</eg></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">map:pairs(
   { 1: "Y", 2: "N" }
-)</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">({ "key": 1, "value": "Y" }, { "key": 2, "value": "N" })</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-put"><head>map:put</head><changes><change issue="1651" PR="1703" date="2025-01-14">Enhanced to allow for ordered maps.</change></changes><glist><gitem><label>Summary</label><def><p>Returns a map containing all the contents of the supplied map, but with an additional entry, which replaces
-         any existing entry for the same key.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="map" name="put" return-type="map(*)" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="map" type="map(*)"/><arg name="key" type="xs:anyAtomicType"/><arg name="value" type="item()*"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>The function <function>map:put</function> returns <phrase>a <termref def="dt-map">map</termref> that</phrase> contains all entries from the supplied <code nobreak="false">$map</code>,
-            with the exception of any entry whose key is the <termref def="dt-same-key">same key</termref> as <code nobreak="false">$key</code>, together with a new
-         entry whose key is <code nobreak="false">$key</code> and whose associated value is <code nobreak="false">$value</code>.</p><p>The <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref> 
-            of the entries in the returned map is as follows:
-            if <code nobreak="false">$map</code> contains an entry whose key is <code nobreak="false">$key</code>,
-                  then the new value replaces the old value and the position of the entry is not changed;
-                  otherwise, the new entry is added after all existing entries.</p></def></gitem><gitem><label>Formal Equivalent</label><def><p>The function is defined as follows, making use of primitive constructors and accessors defined
+)</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">({ "key": 1, "value": "Y" }, { "key": 2, "value": "N" })</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-put"><head>map:put</head><changes><change issue="1651" PR="1703" date="2025-01-14">Enhanced to allow for ordered maps.</change><change issue="1725">It is no longer guaranteed that the new key replaces the existing key.</change></changes><glist><gitem><label>Summary</label><def><p>Returns a map containing all the contents of the supplied map, but with an additional entry, which replaces
+         any existing entry for the same key.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="map" name="put" return-type="map(*)" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="map" type="map(*)"/><arg name="key" type="xs:anyAtomicType"/><arg name="value" type="item()*"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>If <code nobreak="false">$map</code> contains an entry whose key is the <termref def="dt-same-key">same key</termref> as <code nobreak="false">$key</code>, the function returns
+         a map in which that entry is replaced (at the same relative position)
+         with a new entry whose value is <code nobreak="false">$value</code>. It is 
+         <termref def="implementation-dependent"/> whether the key in the new entry
+         takes its original value or is replaced by the supplied <code nobreak="false">$key</code>.
+         All other entries in the map are unchanged, and retain their relative order.</p><p>Otherwise, when <code nobreak="false">$map</code> contains no such entry, the function
+         returns a map containing all entries from the supplied <code nobreak="false">$map</code>
+         (retaining their relative position) followed by a new entry whose key
+         is <code nobreak="false">$key</code> and whose associated value is <code nobreak="false">$value</code>.</p></def></gitem><gitem><label>Formal Equivalent</label><def><p>The function is defined as follows, making use of primitive constructors and accessors defined
 		in <bibref ref="xpath-datamodel-40"/>.</p><eg xml:space="preserve">dm:map-put($map, $key, $value)</eg></def></gitem><gitem><label>Notes</label><def><note><p>There is no requirement that the type of <code nobreak="false">$key</code> and <code nobreak="false">$value</code> be consistent with the types
          of any existing keys and values in the supplied map.</p><p>It is possible to force the new entry to go at the end of the sequence by calling
-         <code nobreak="false">map:remove</code> before calling <code nobreak="false">map:put</code>.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Variables</th></tr></thead><tbody><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">let $week := {
+         <code nobreak="false">map:remove</code> before calling <code nobreak="false">map:put</code>.</p><p>It can happen that the supplied <code nobreak="false">$key</code> is the <termref def="dt-same-key"/>
+            as some existing key present in <code nobreak="false">$map</code>, but nevertheless 
+            differs from the existing key in some way:
+         for example, it might have a different type annotation, or it might be an <code nobreak="false">xs:dateTime</code>
+         value in a different timezone. In this situation it is 
+         <termref def="implementation-dependent"/> whether the key that appears in the result map
+         is the supplied <code nobreak="false">$key</code> or the existing key.</p></note></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Variables</th></tr></thead><tbody><tr><td colspan="2" rowspan="1"><eg xml:space="preserve">let $week := {
   0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
   4: "Donnerstag", 5: "Freitag", 6: "Samstag"
 }</eg></td></tr></tbody></table><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">map:put($week, 6, "Sonnabend")</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
@@ -14544,8 +14551,7 @@ ISBN 0 521 77752 6.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="C
                if the supplied sequence contains values inappropriate to this function.</p></error><error class="RG" code="0008" label="The two arguments to fn:dateTime have inconsistent timezones." type="dynamic"><p>Raised by <function>fn:dateTime</function> if the two arguments both have timezones and the timezones are different.</p></error><error class="RG" code="0009" label="Error in resolving a relative URI against a base URI in fn:resolve-uri." type="dynamic"><p>A catch-all error for <function>fn:resolve-uri</function>, recognizing that the implementation can choose between a variety
                of algorithms and that some of these may fail for a variety of reasons.</p></error><error class="RG" code="0010" label="Invalid date/time." type="dynamic"><p>Raised when the input to <function>fn:parse-ietf-date</function> does not match the prescribed
                   grammar, or when it represents an invalid date/time such as 31 February.</p></error><error class="RG" code="0011" label="Invalid radix." type="dynamic"><p>Raised when the radix supplied to <function>fn:parse-integer</function> is not in the range 2 to 36.</p></error><error class="RG" code="0012" label="Invalid digits." type="dynamic"><p>Raised when the digits in the string supplied to <function>fn:parse-integer</function> are not in the range appropriate
-                  to the chosen radix.</p></error><error class="RG" code="0013" label="Inconsistent options." type="dynamic"><p>Raised if an inconsistent set of options is supplied
-                  in an <termref def="options">option map</termref>.</p></error><error class="RX" code="0001" label="Invalid regular expression flags." type="static"><p>Raised by regular expression functions such as <function>fn:matches</function> and <function>fn:replace</function> if the
+                  to the chosen radix.</p></error><error class="RX" code="0001" label="Invalid regular expression flags." type="static"><p>Raised by regular expression functions such as <function>fn:matches</function> and <function>fn:replace</function> if the
                regular expression flags contain a character other than <code nobreak="false">i</code>, <code nobreak="false">m</code>, <code nobreak="false">q</code>, <code nobreak="false">s</code>, or <code nobreak="false">x</code>.</p></error><error class="RX" code="0002" label="Invalid regular expression." type="dynamic"><p>Raised by regular expression functions such as <function>fn:matches</function> and <function>fn:replace</function> if the
                   regular expression is syntactically invalid.</p></error><error class="RX" code="0003" label="Regular expression matches zero-length string." type="dynamic"><p>For functions such as <function>fn:replace</function> and <function>fn:tokenize</function>, raises an error if
                the supplied regular expression is capable of matching a zero length string.</p></error><error class="RX" code="0004" label="Invalid replacement string." type="dynamic"><p>Raised by <function>fn:replace</function> to report errors in the replacement string.</p></error><error class="RX" code="0005" label="Incompatible arguments for fn:replace." type="dynamic"><p>Raised by <function>fn:replace</function> if both the <code nobreak="false">$replacement</code> 
@@ -14986,4 +14992,7 @@ ISBN 0 521 77752 6.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="C
                  special coercion rules for <code nobreak="false">xs:string</code> parameters no longer apply.
                  For example, it is no
               longer possible to supply an instance of <code nobreak="false">xs:anyURI</code> or (when XPath 1.0 compatibility
-              mode is in force) an instance of <code nobreak="false">xs:boolean</code> or <code nobreak="false">xs:duration</code>.</p></item></olist><p>For compatibility issues regarding earlier versions, see the 3.1 version of this specification.</p></inform-div1></back></spec>
+              mode is in force) an instance of <code nobreak="false">xs:boolean</code> or <code nobreak="false">xs:duration</code>.</p></item><item diff="add" at="issue1725"><p>When <function>fn:put</function> replaces an entry in a map with a new value for an
+              existing key, in the case where the existing key and the new key differ (for example,
+              if they have different type annotations), it is no longer guaranteed that the new
+              entry includes the new key rather than the existing key.</p></item></olist><p>For compatibility issues regarding earlier versions, see the 3.1 version of this specification.</p></inform-div1></back></spec>
