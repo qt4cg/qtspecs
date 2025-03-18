@@ -14956,7 +14956,7 @@ filter($input, fn($item, $pos) { $pos gt 1 })
          <p>The function returns the value of <code>(1 to $count) ! $input</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         fold-left(1 to $count, (), fn($result, $next) { $result, $input })
+         for-each(1 to $count, fn($item, $pos) { $input })
       </fos:equivalent>
       <fos:notes>
          <p>If <code>$input</code> is the empty sequence, the empty sequence is returned.</p>
@@ -20925,10 +20925,8 @@ return map:of-pairs($ann)
             of the result of these calls, preserving order.
          </p>
       </fos:rules>
-      <fos:equivalent style="xpath-expression">
-fold-left($input, (), fn($result, $next, $pos) {
-  $result, $action($next, $pos)
-})         
+      <fos:equivalent style="dm-primitive">
+dm:iterate-sequence($input, $action)  
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -20992,11 +20990,8 @@ fold-left($input, (), fn($result, $next, $pos) {
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-fold-left($input, (), fn($result, $next, $pos) {
-  if ($predicate($next, $pos))
-  then ($result, $next)
-  else $result
-})                   
+for-each($input, 
+         fn($item, $pos) { if ($predicate($item, $pos)) {$item} })                            
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
@@ -21059,7 +21054,7 @@ return filter(
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="zero" type="item()*"/>
-            <fos:arg name="action" type="fn(item()*, item(), xs:integer) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -21075,40 +21070,24 @@ return filter(
       <fos:rules>
          <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
          <p>If <code>$input</code> contains a single item <code>$item1</code>, the function calls 
-            <code>$action($zero, $item1, 1)</code>.</p>
+            <code>$action($zero, $item1)</code>.</p>
          <p>If <code>$input</code> contains a second item <code>$item2</code>, the function then calls 
-            <code>$action($zero1, $item2, 2)</code>, where <code>$zero1</code> is the result after
+            <code>$action($zero1, $item2)</code>, where <code>$zero1</code> is the result after
             processing the first item.</p>
          <p>This continues in the same way until the end of the <code>$input</code> sequence; the final result is
          the result of the last call on <code>$action</code>.</p>
 
       </fos:rules>
       <fos:equivalent style="xquery-function">
-declare %private function fold-left-2(
+declare function fold-left(
   $input  as item()*,
   $zero   as item()*,
   $action as function(item()*, item()) as item()*
 ) as item()* {
-  if (empty($input))
+  if (empty($input)) 
   then $zero
-  else fold-left-2(tail($input), $action($zero, head($input)), $action)
+  else fold-left(tail($input), $action($zero, head($input)), $action)
 };
-
-declare function fold-left(
-  $input  as item()*,
-  $zero   as item()*,
-  $action as function(item()*, item(), xs:integer) as item()*
-) as item()* {
-  let $numbered-input := for-each($input, fn($item, $pos) { 
-    { 'item': $item, 'position': $pos }
-  })
-  return fold-left-2($numbered-input, fn($zero, $pair) {
-    $action($zero, $pair?item, $pair?position)
-  })
-};
-
-(: Note: a practical implementation can optimize for the case where the
-   supplied $action function has arity 2 :)
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
@@ -21121,13 +21100,16 @@ declare function fold-left(
          <p>This operation is often referred to in the functional programming literature as
             “folding” or “reducing” a sequence. It typically takes a function that operates on a pair of
             values, and applies it repeatedly, with an accumulated result as the first argument, and
-            the next item in the sequence as the second argument. Optionally the <code>$action</code>
-            function may take a third argument, which is set to the 1-based position of the current
-            item in the input sequence. The accumulated result is
+            the next item in the sequence as the second argument. The accumulated result is
             initially set to the value of the <code>$zero</code> argument, which is conventionally a
             value (such as zero in the case of addition, one in the case of multiplication, or a
             zero-length string in the case of string concatenation) that causes the function to
             return the value of the other argument unchanged.</p>
+         <p>Unlike other functions that apply a user-supplied callback function to successive
+         items in a sequence, this function does not supply the current position to the callback function
+         as an optional argument. If positional information is required, this can be achieved by
+         first forming the sequence <code>$input ! {'position': position(), 'item': .}</code>
+         and then applying the <function>fn:fold-left</function> function to this sequence.</p>
          
       </fos:notes>
       <fos:examples>
@@ -21218,7 +21200,7 @@ declare function fold-left(
                <fos:result>{ 1: 2, 2: 4, 3: 6, 4: 8, 5: 10 }</fos:result>
             </fos:test>
          </fos:example>
-         <fos:example>
+         <!--<fos:example>
             <fos:test>
                <fos:expression><eg>
 let $input := (11 to 21, 21 to 31)
@@ -21231,23 +21213,15 @@ return fold-left($input, (),
 </eg></fos:expression>
                <fos:result>11, 12</fos:result>
             </fos:test>
-         </fos:example>
+         </fos:example>-->
       </fos:examples>
-      <fos:changes>
-         <fos:change issue="516" PR="828" date="2023-11-14">
-            <p>The <code>$predicate</code> callback function accepts an optional position argument.</p>
-         </fos:change>
-         <fos:change issue="1171" PR="1182" date="2024-05-07">
-            <p>The <code>$predicate</code> callback function may return an empty sequence (meaning <code>false</code>).</p>
-         </fos:change>
-      </fos:changes>
    </fos:function>
    <fos:function name="fold-right" prefix="fn">
       <fos:signatures>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
             <fos:arg name="zero" type="item()*"/>
-            <fos:arg name="action" type="fn(item(), item()*, xs:integer) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="fn(item(), item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -21263,42 +21237,26 @@ return fold-left($input, (),
       </fos:summary>
       <fos:rules>
          <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
-         <p>Let <code>$itemN</code> be the last item in <code>$input</code>, and let <code>$N</code>
-            be its 1-based ordinal position in <code>$input</code> (that is, the size of <code>$input</code>).
-            The function starts by calling <code>$action($itemN, $zero, $N)</code>.</p>
-         <p>If there is a previous item, <code>$itemN-1</code>, at position <code>$N - 1</code>,
-            the function then calls <code>$action($itemN-1, $zeroN, $N - 1)</code>, where <code>$zeroN</code> is the result
-            of the previous call.</p>
+         <p>Let <var>I/n</var> be the last item in <code>$input</code>, and let <var>Z/n</var> be <code>$zero</code>.
+            The function starts by calling <code>$action(<var>I/n</var>, $zero)</code>, producing
+         a result <var>Z/n-1</var>.</p>
+         <p>If there is a previous item, <var>I/n-1</var>,
+            the function then calls <code>$action(<var>I/n-1</var>, <var>Z/n-1</var>)</code>, producing
+            the result <var>Z/n-2</var>.</p>
          <p>This continues in the same way until the start of the <code>$input</code> sequence is reached; the final result is
-         the result of the last call on <code>$action</code>.</p>
+         the value <var>Z/0</var>.</p>
          
       </fos:rules>
       <fos:equivalent style="xquery-function">
-declare %private function fold-right-2(
+declare function fold-right(
   $input  as item()*,
   $zero   as item()*,
   $action as function(item(), item()*) as item()*
 ) as item()* {
   if (empty($input))
   then $zero
-  else $action(head($input), fold-right-2(tail($input), $zero, $action)
+  else $action(head($input), fold-right(tail($input), $zero, $action))
 };
-
-declare function fold-right (
-  $input  as item()*,
-  $zero   as item()*,
-  $action as function(item()*, item(), xs:integer) as item()*
-) as item()* {
-  let $numbered-input := for-each($input, fn($item, $pos) {
-    { 'item': $item, 'position': $pos }
-  })
-  return fold-right-2($numbered-input, fn($zero, $pair) {
-    $action($pair?item, $zero, $pair?position)
-  })   
-};
-
-(: Note: a practical implementation can optimize for the case where the
-   supplied $action function has arity 2 :)
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
@@ -21320,9 +21278,13 @@ declare function fold-right (
          <p>In cases where the function performs an associative operation on its two arguments (such
             as addition or multiplication), <function>fn:fold-right</function> produces the same result as
                <function>fn:fold-left</function>.</p>
-         <p>The value of the third argument of <code>$action</code> corresponds to the position
-            of the item in the input sequence. Thus, in contrast to <function>fn:fold-left</function>,
-            it is initally set to the number of items in the input sequence.</p>
+         
+         
+         <p>Unlike other functions that apply a user-supplied callback function to successive
+         items in a sequence, this function does not supply the current position to the callback function
+         as an optional argument. If positional information is required, this can be achieved by
+         first forming the sequence <code>$input ! {'position': position(), 'item': .}</code>
+         and then applying the <function>fn:fold-right</function> function to this sequence.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -21356,7 +21318,7 @@ declare function fold-right (
                <fos:result>"$f(1, $f(2, $f(3, $f(4, $f(5, $zero)))))"</fos:result>
             </fos:test>
          </fos:example>
-         <fos:example>
+         <!--<fos:example>
             <fos:test>
                <fos:expression><eg>
 let $input := (11 to 21, 21 to 31)
@@ -21371,7 +21333,7 @@ return fold-right(
 </eg></fos:expression>
                <fos:result>12, 11</fos:result>
             </fos:test>
-         </fos:example>
+         </fos:example>-->
       </fos:examples>
       <fos:changes>
          <fos:change issue="516" PR="828" date="2023-11-14">
@@ -24793,11 +24755,14 @@ map:for-each($map, fn($key, $value) {
          
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-( for $item at $pos in $input
-  let $val := $value($item, $pos)
-  for $key in $keys($item, $pos)
-  return map:pair($key, $val)
-) => map:of-pairs($options)      
+for-each($input, 
+         fn($item, $pos) {
+           for-each($keys($item, $pos),
+                    fn($k) {
+                      map:pair($k, $value($item, $pos))
+                    }
+        })
+=> map:of-pairs($options)
       </fos:equivalent>
       <fos:errors>
          
@@ -28347,7 +28312,7 @@ return document {
       </fos:rules>
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
 if ($position = (1 to array:size($array)))
-then array:members($array)[$position] => map:get('value') 
+then items-at(array:members($array), $position) => map:get('value'))
 else $fallback($position)
       </fos:equivalent>
       <fos:errors>
@@ -28764,8 +28729,8 @@ array:index-of(
       </fos:rules>
       
       <fos:equivalent style="xpath-expression">
-array:fold-left($array, (), fn($indices, $member, $pos) {
-   $indices, if ($predicate($member, $pos)) { $pos }
+dm:iterate-array($array, fn($member, $pos) {
+   if ($predicate($member, $pos)) { $pos }
 })   
       </fos:equivalent>
       
@@ -29031,7 +28996,7 @@ $array
       <fos:equivalent style="xpath-expression" covers-error-cases="false"><![CDATA[
 $array 
 => array:members() 
-=> insert-before($position, map:entry('value', $member )) 
+=> insert-before($position, array:member($member)) 
 => array:of-members()
        ]]></fos:equivalent>
       <fos:errors>
@@ -29321,9 +29286,11 @@ $array
          integer position.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-array:fold-left($array, [], fn($zero, $next, $pos) {
-  array:append($zero, $action($next, $pos))
-})
+array:of-members(
+  for-each(array:members($array), 
+           fn($member, $pos) {
+             array:member( $action($member, $pos) )
+           }))
       </fos:equivalent>
       <fos:examples>
          <fos:example>
@@ -29387,11 +29354,11 @@ array:fold-left($array, [], fn($zero, $next, $pos) {
          array that satisfy the supplied predicate.</p>
       </fos:rules>
       <fos:equivalent style="xquery-expression">
-array:fold-left($array, [], fn($result, $next, $pos) {
-  if ($predicate($next, $pos))
-  then array:append($result, $next)
-  else $result
-})   
+array:of-members(
+  filter(array:members($array),
+         fn($item, $pos) {
+           $predicate(map:get($item, 'value'), $pos
+         }))   
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error occurs if the supplied
@@ -29445,7 +29412,7 @@ return array:filter(
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
             <fos:arg name="zero" type="item()*" usage="navigation"/>
-            <fos:arg name="action" type="fn(item()*, item()*, xs:integer) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="fn(item()*, item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -29466,7 +29433,7 @@ return array:filter(
 fold-left(
   array:members($array),
   $zero,
-  fn($result, $member, $pos) { $action($result, map:get($member, 'value'), $pos) }
+  fn($result, $member) { $action($result, map:get($member, 'value')) }
 )
        ]]></fos:equivalent>
       <fos:notes>
@@ -29474,8 +29441,7 @@ fold-left(
          <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$zero => $action($m)</code>.</p>
          <p>If the supplied array contains two members <code>$m</code> and <code>$n</code>, the function returns 
             <code>$zero => $action($m) => $action($n)</code>; and similarly for an input array with more than two members.</p>
-         <p>The value of the third argument of <code>$action</code> corresponds to the position
-            of the member in the input array. It is initally set to <code>1</code>.</p>
+         
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -29506,26 +29472,12 @@ fold-left(
                <fos:result>[[[[], 1], 2], 3]</fos:result>
             </fos:test>
          </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>
-let $input := array { 11 to 21, 21 to 31 }
-let $target := 21
-return array:fold-left($input, (),
-  fn($result, $curr, $pos) {
-    $result, if ($curr = $target) { $pos }
-  }
-)
-</eg></fos:expression>
-               <fos:result>11, 12</fos:result>
-            </fos:test>
-         </fos:example>
       </fos:examples>
-      <fos:changes>
+      <!--<fos:changes>
          <fos:change issue="516" PR="828" date="2023-11-14">
             <p>The <code>$action</code> callback function now accepts an optional position argument.</p>
          </fos:change>
-      </fos:changes>
+      </fos:changes>-->
    </fos:function>
 
    <fos:function name="fold-right" prefix="array">
@@ -29533,7 +29485,7 @@ return array:fold-left($input, (),
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
             <fos:arg name="zero" type="item()*" usage="navigation"/>
-            <fos:arg name="action" type="fn(item()*, item()*, xs:integer) as item()*" usage="inspection"/>
+            <fos:arg name="action" type="fn(item()*, item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -29554,7 +29506,7 @@ return array:fold-left($input, (),
 fold-right(
   array:members($array),
   $zero,
-  fn($member, $result, $pos) { $action(map:get($member, 'value'), $result, $pos) }
+  fn($member, $result) { $action(map:get($member, 'value'), $result) }
 )
        ]]></fos:equivalent>
       <fos:notes>
@@ -29562,9 +29514,6 @@ fold-right(
          <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$action($m, $zero)</code>.</p>
          <p>If the supplied array contains two members <code>$m</code> and <code>$n</code>, the function returns 
             <code>$action($m, $action($n, $zero))</code>; and similarly for an input array with more than two members.</p>
-         <p>The value of the third argument of <code>$action</code> corresponds to the position
-            of the member in the input array. Thus, in contrast to <function>array:fold-left</function>,
-            it is initally set to the number of members in the input array.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -29593,20 +29542,6 @@ fold-right(
   fn($x, $y) { [ $x, $y ] }
 )</eg></fos:expression>
                <fos:result>[ 1, [ 2, [ 3, [] ] ] ]</fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>
-let $input := array { 11 to 21, 21 to 31 }
-let $target := 21
-return array:fold-right(
-  $input, (),
-  action := fn($curr, $result, $pos) {
-    $result, if ($curr = $target) { $pos }
-  }
-)</eg></fos:expression>
-               <fos:result>12, 11</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -29643,9 +29578,13 @@ return array:fold-right(
       </fos:rules>
       <fos:equivalent style="xpath-expression"><![CDATA[
 array:of-members(
-  for $pos in 1 to min((array:size($array1), array:size($array2)))
-  return map:entry('value', $action($array1($pos), $array2($pos), $pos))
-)
+  for-each-pair(array:members($array1),
+                array:members($array2),
+                fn($v1, $v2, $pos) {
+                  array:member( $action(map:get($v1, 'value'),
+                                        map:get($v2, 'value'),
+                                        $pos))
+                }))
        ]]></fos:equivalent>
       <fos:notes>
          <p>If the arrays have different size, excess members in the longer array are ignored.</p>
@@ -29715,9 +29654,11 @@ array:for-each-pair(
             in the input sequence, and the resulting sequence becomes one member of the returned array.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-fold-left($input, [], fn($array, $next, $pos) {
-   array:append($array, $action($next, $pos))
-})   
+array:of-members(
+   for-each($input, 
+            fn($item, $pos) {
+               array:member($action($item, $pos))
+            }))
       </fos:equivalent>
       <fos:notes>
          <p>The single-argument function <code>array:build($input)</code> is equivalent to the XPath
@@ -29789,7 +29730,7 @@ array:build(
          
       </fos:rules>
       <fos:equivalent style="dm-primitive">
-            dm:iterate-array($array, map:entry('value', ?))
+            dm:iterate-array($array, array:member#1)
       </fos:equivalent>     
       <fos:notes>
          <p>This function is the inverse of <function>array:of-members</function>.</p>   
@@ -29845,8 +29786,7 @@ return deep-equal(
             Each returned array encapsulates the value of one member of <code>$array</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-array:for-each($array, fn($member) { [] => array:append($member) })
-=> array:items()         
+dm:iterate-array($array, fn($member) { array:append([], $member) })        
       </fos:equivalent> 
       <fos:notes>
          <p>The function call <code>array:split($array)</code> produces the same result as the
@@ -30028,7 +29968,7 @@ $array
   $collations,
   for $key in ($keys otherwise data#1)
   return fn($member as record(value)) as xs:anyAtomicType* {
-    $key($member?value)
+    $key(map:get($member, 'value'))
   },
   $orders
 )
@@ -30177,7 +30117,7 @@ declare function array:flatten(
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-         for-each(array:members($array), map:get(?, 'value'))
+         dm:iterate-array($array, fn($member, $pos) { $member } )
       </fos:equivalent>
       <fos:notes>
          <p>Unlike <function>array:flatten</function>, the function does not apply recursively
@@ -31323,9 +31263,7 @@ tail(fold-left(
       
       
       <fos:equivalent style="xpath-expression">
-fold-left($input, true(), fn($result, $item, $pos) {
-   $result and $predicate($item, $pos)
-})
+count(filter($input, $predicate)) = count($input)
       </fos:equivalent>
       <fos:errors>
          <p>An error is raised if the <code>$predicate</code> function raises an error. In particular,
@@ -31813,9 +31751,10 @@ fn($item) {
 
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-fold-left($input, (), fn($indices, $item, $pos) {
-   $indices, if ($predicate($item, $pos)) { $pos }
-})
+for-each($input,
+         fn($item, $pos) {
+           if ($predicate($item, $pos)) { $pos }
+         })
       </fos:equivalent>
 
       <fos:examples>
@@ -32166,9 +32105,7 @@ return $item
             in the input sequence such that <code>$predicate($item, $pos)</code> returns true.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-fold-left($input, false(), fn($result, $item, $pos) {
-   $result or $predicate($item, $pos)
-})
+exists(filter($input, $predicate))         
       </fos:equivalent>
       <fos:errors>
          <p>An error is raised if the <code>$predicate</code> function raises an error. In particular,
@@ -33506,12 +33443,16 @@ path with an explicit <code>file:</code> scheme.</p>
             function returns <code>false</code> or <code>()</code>, the item <var>J</var> is added to the current partition.</p>
   
       </fos:rules>
-      <fos:equivalent style="xpath-expression">
-fold-left($input, (), fn($partitions, $next, $pos) {
-  if (empty($partitions) or $split-when(foot($partitions)?*, $next, $pos))
-  then ($partitions, [ $next ])
-  else (trunk($partitions), array { foot($partitions)?*, $next })
-})           
+      <fos:equivalent style="xpath-expression">t
+for-each($input, fn($item, $pos) { 
+                   map{ 'item': $item, 'pos': $pos }
+                 })
+=> fold-left((), 
+         fn($partitions, $pair) {
+            if (empty($partitions) or $split-when(foot($partitions)?*, $pair?item, $pair?pos))
+            then ($partitions, [ $pair?item ])
+            else (trunk($partitions), array { foot($partitions)?*, $pair?item })
+         })           
       </fos:equivalent>
       <fos:notes>
          <p>The function enables a variety of positional grouping problems to be solved. For example:</p>
