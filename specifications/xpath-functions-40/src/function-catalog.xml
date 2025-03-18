@@ -13603,6 +13603,24 @@ else QName("", $value)</eg>
                >option parameter conventions</termref> apply. The options available are as follows:</p>
          
          <fos:options>
+            <fos:option key="origin">
+               <fos:meaning>A node, which must be an ancestor of <code>$node</code>. If present,
+                  the returned path will be a relative path that selects <code>$node</code>
+                  starting from the supplied origin node, rather than from the root of the
+                  containing tree.
+               </fos:meaning>
+               <fos:type>node()?</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="lexical">
+               <fos:meaning>If true, the names of elements in the path are represented by the
+                  result of a call on the <function>name</function> function applied to each element. The
+                  result in this case does not contain sufficient information to identify the
+                  namespace URI of the element.
+               </fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+            </fos:option>
             <fos:option key="namespaces">
                <fos:meaning>A map from namespace prefixes to namespace URIs, such as might be returned
                   by the function <function>fn:in-scope-namespaces</function>. If a prefix is available
@@ -13620,17 +13638,24 @@ else QName("", $value)</eg>
             </fos:option>
          </fos:options>
          
+         <p>Let <var>R</var> be the node supplied in the <code>origin</code> option,
+         or the root node of the tree containing <code>$node</code> otherwise.</p>
+         
          <p>If <code>$node</code> is a document node, the function returns the string
                <code>"/"</code>.</p>
          
          <p>Otherwise, the function returns a string that consists of a sequence of steps, one
-            for each ancestor-or-self of <code>$node</code> other than the root node.</p>
+            for each ancestor-or-self of <code>$node</code> that is not an ancestor-or-self 
+            of <var>R</var>.</p>
          
-         <p>If the root node is not a document node then this string is preceded by
+         <p>If <var>R</var> is not a document node and the <code>origin</code> option
+            is absent or empty, then this string is preceded by
             a string notionally representing a call to the <code>fn:root</code> function, 
             expressed as follows:</p>
          
          <ulist>
+            <item><p>If the <code>lexical</code> option is present with the value <code>true</code>,
+            then the string <code>"fn:root()"</code>.</p></item>
             <item><p>If the <code>namespaces</code> option is present and defines a mapping from a 
                non empty prefix <var>P</var> 
             to the namespace URI <code>http://www.w3.org/2005/xpath-functions</code>, then
@@ -13641,47 +13666,73 @@ else QName("", $value)</eg>
             <item><p>Otherwise, <code>"Q{http://www.w3.org/2005/xpath-functions}root()"</code>.</p></item>
          </ulist>
             
-         <p>Each step consists of the character <code>"/"</code>
-            followed by a string whose form depends on the kind of node selected by that step, as
-            follows:</p>
-
+         <p>Each step is the concatenation of:</p>
+         
          <olist>
+            <item><p>The character <code>"/"</code>, which is omitted for the first step
+            if the <code>origin</code> option is present;</p></item>
+            <item><p>A string whose form depends on the kind of node selected by that step, as
+            follows:</p>
+            <olist>
             <item>
-               <p>For an element node, then by default
-                        <code>Q{<var>uri</var>}<var>local</var>[<var>position</var>]</code>,
-                  where <var>uri</var> is the namespace URI of the node name or the
-                  empty string if the node is in no namespace, <var>local</var> is
-                  the local part of the node name, and <var>position</var> is an
-                  integer representing the one-based position of the selected node among its like-named
-                  siblings.</p>
-               <p>The suffix <code>[<var>position</var>]</code> is omitted if the <code>indexes</code>
-               option is present with the value <code>false</code>.</p>
-               <p>If the <code>namespaces</code> option is present, and if it includes a mapping
-               from a namespace prefix to the namespace URI of the element, or to the empty string
-               if the element is in no namespace, then:</p>
-               <ulist>
-                  <item><p>If there is more than one such prefix, then one of them is chosen arbitrarily.</p></item>
-                  <item><p>If the namespace prefix is the zero-length string, then the <code>Q{<var>uri</var>}</code> part of the step is
-                  replaced by the empty string.</p></item>
-                  <item><p>If the prefix is an NCName <var>P</var>, then the <code>Q{<var>uri</var>}</code> part  of the step is
-                  replaced by <code><var>P</var>:</code>.</p></item>
-               </ulist>
+               <p>For an element node, the concatenation of:</p>
+               <olist>
+                  <item><p>A representation of the element name, chosen as follows:</p>
+                     <olist>
+                        <item><p>If the <code>lexical</code> option is present with the value
+                        <code>true</code>, then the result of applying the <function>name</function>
+                        function to the element node.</p></item>
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in a namespace <var>U</var> and the <code>namespaces</code> option
+                           includes a mapping from a prefix <var>P</var> to the namespace <var>U</var>,
+                           then the string <code><var>P</var>:<var>L</var></code>, where <var>L</var>
+                           is the local part of the element name.
+                           If there is more than one such prefix, then one of them is chosen arbitrarily.</p>
+                        </item>  
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in a namespace <var>U</var> and the <code>namespaces</code> option
+                           includes a mapping from the zero-length string to the namespace <var>U</var>,
+                           then the local part of the element name.</p>
+                        </item> 
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in no namespace and the <code>namespaces</code> option
+                           includes no mapping from the zero-length string to any namespace,
+                           then the local part of the element name.</p>
+                        </item>
+                        <item><p>Otherwise, the string <code>Q{<var>U</var>}<var>L</var></code>,
+                        where <var>U</var> is the namespace URI of the element name or the
+                        empty string if the element is in no namespace, and <var>L</var> is
+                        the local part of the element name.</p></item>
+                     </olist>
+                  </item>
+                  <item><p>Unless the <code>indexes</code> option is present
+                     with the value <code>false</code>,
+                     a string in the form <code>[<var>position</var>]</code> where <var>position</var> is an
+                        integer representing the one-based position of the selected node among its like-named
+                        siblings.</p>
+                  </item>
+               </olist>
             </item>
             <item>
-               <p>For an attribute node:</p>
+               <p>For an attribute node, the concatenation of:</p>
                <olist>
+                  <item><p>The character <code>"@"</code></p></item>
+                  <item><p>If the <code>lexical</code> option is present with the value
+                        <code>true</code>, then the result of applying the <function>name</function>
+                        function to the attribute node.</p></item>
                   <item>
-                     <p>If the node is in no namespace, <code>@<emph>local</emph></code>, where
-                              <code><emph>local</emph></code> is the local part of the node name.</p>
+                     <p>Otherwise, if the attribute node is in no namespace, the local part of the attribute name.</p>
                   </item>
+                  <item><p>Otherwise, if the <code>namespaces</code> option is present, and if it includes a mapping
+                        from a non-empty namespace prefix <var>P</var> to the namespace URI of the attribute, then
+                        a string in the form <code><var>P</var>:<var>L</var></code>, where <var>L</var>
+                           is the local part of the attribute name.
+                           If there is more than one such prefix, then one of them is chosen arbitrarily.</p></item>
                   <item>
-                     <p>Otherwise, by default <code>@Q{<emph>uri</emph>}<emph>local</emph></code>, where
-                              <code><emph>uri</emph></code> is the namespace URI of the node name,
-                        and <code><emph>local</emph></code> is the local part of the node name.</p>
-                     <p>If the <code>namespaces</code> option is present , and if it includes a mapping
-                        from a non-empty namespace prefix to the namespace URI of the attribute, then
-                        the <code>Q{<var>uri</var>}</code> part of the step is replaced with a namespace
-                        prefix in the same way as for element nodes, described above.</p>
+                     <p>Otherwise, the string <code>Q{<var>U</var>}<var>L</var></code>,
+                        where <var>U</var> is the namespace URI of the attribute name, and <var>L</var> is
+                        the local part of the attribute name.</p>
+
                   </item>
                </olist>
             </item>
@@ -13710,6 +13761,7 @@ else QName("", $value)</eg>
                option is present with the value <code>false</code>.</p>
             </item>
             <item>
+               
                <p>For a namespace node:</p>
                <olist>
                   <item>
@@ -13728,7 +13780,12 @@ else QName("", $value)</eg>
                   </item>
                </olist>
             </item>
-         </olist>
+            </olist>
+            </item>
+            </olist>
+ 
+            
+         
       </fos:rules>
       <fos:errors>
          <p>The following errors may be raised when <code>$node</code> is omitted:</p>
@@ -13742,17 +13799,22 @@ else QName("", $value)</eg>
             <item>
                <p>If the context value is not a single node, type error <xerrorref spec="XP" class="TY"
                      code="0004" type="type"/>.</p>
-            </item>
-         </ulist>
+            </item></ulist>
+            
+               <p>If the value of the <code>origin</code> option is a node that is not an ancestor
+                  of <code>$node</code> (or in the absence of <code>$node</code>, the context value), 
+                  dynamic error <errorref spec="FO" class="PA" code="0001" type="dynamic"/>.</p>
+         
       </fos:errors>
       
       <fos:notes>
          <p>Using the <code>namespaces</code> option to shorten the generated path is often convenient,
          but the resulting path may be unusable if the input tree contains multiple bindings for the same prefix.</p>
          
-         <p>A map returned by <code>fn:in-scope-namespaces</code> will never contain an entry that maps any prefix
-         to the zero-length URI. Such an entry can, however, be added manually, and can be used to control how
-         no-namespace names are represented in the output (including the option of giving them a non-empty prefix).</p>
+         <p>Similarly, using the <code>lexical</code> option is convenient if there is no need for precise
+         namespace information: it is especially suitable when the containing node tree declares no namespaces.</p>
+         
+         
       </fos:notes>
       
       <fos:examples>
@@ -13813,6 +13875,16 @@ Himmlische, dein Heiligtum.
 )</eg></fos:expression>
                <fos:result>'/Q{http://example.com/one}p[1]/text()[2]'</fos:result>
             </fos:test>
+            <fos:test use="v-path-e" spec="XQuery">
+               <fos:expression><eg>path($e/*:p/*:br[2], 
+     {'lexical': true()})</eg></fos:expression>
+               <fos:result>'/p[1]/br[2]'</fos:result>
+            </fos:test>
+            <fos:test use="v-path-e" spec="XQuery">
+               <fos:expression><eg>path($e/*:p/*:br[2], 
+     {'lexical': true(), 'origin': $e/*:p})</eg></fos:expression>
+               <fos:result>'br[2]'</fos:result>
+            </fos:test>
          </fos:example>
          <fos:variable name="emp" id="v-path-emp" as="element()"><![CDATA[
   <employee xml:id="ID21256">
@@ -13833,6 +13905,10 @@ Himmlische, dein Heiligtum.
             <fos:test use="v-path-emp" spec="XQuery">
                <fos:expression><eg>path($emp/empnr)</eg></fos:expression>
                <fos:result>'Q{http://www.w3.org/2005/xpath-functions}root()/Q{}empnr[1]'</fos:result>
+            </fos:test>
+            <fos:test use="v-path-emp" spec="XQuery">
+               <fos:expression><eg>path($emp/empnr, {'lexical':true()})</eg></fos:expression>
+               <fos:result>'fn:root()/empnr[1]'</fos:result>
             </fos:test>
             <fos:test use="v-path-emp" spec="XQuery">
                <fos:expression><eg>path($emp/empnr, 
