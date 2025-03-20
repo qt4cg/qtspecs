@@ -7021,6 +7021,12 @@ declare record Particle (
                   The coercion rules now allow conversion in either direction between <code>xs:hexBinary</code>
                   and <code>xs:base64Binary</code>.
                </change>
+               <change issue="1318" PR="1501">
+                  The coercion rules now apply recursively to the members of an array and the entries in a map.
+               </change>
+               <change issue="1862">
+                  The coercion rules now reorder the entries in a map when the required type is a record type.
+               </change>
             </changes>
 
                <p diff="chg" at="2022-11-17">
@@ -7146,15 +7152,31 @@ declare record Particle (
                      
                      <olist>
                         <item><p>If <var>J</var> matches (is an instance of) one of the alternatives
-                           in <var>R</var>, then:</p>
+                           in <var>R</var>, then <var>J</var> is coerced to the first alternative in 
+                           <var>R</var> that <var>J</var> matches.</p>
+                           
+                           <note>
+                              <p>There are two situations where coercing an item to a type that
+                              it already matches does not simply return the item unchanged:</p>
+                              
+                              <ulist>
+                                 <item><p>When the required type is a typed function type
+                                      (see <specref ref="id-function-test"/>),
+                                    then function coercion is applied to coerce <var>J</var> to that
+                                    function type, as described in <specref ref="id-function-coercion"/>.</p></item>
+                                 <item><p>When the required type is a record type and the supplied
+                                 value is a map, then coercion may change the <xtermref spec="DM40" ref="dt-entry-order"/>
+                                 of the entries in the map.</p></item>
+                              </ulist>
+                           </note>
                         
-                           <olist>
+                           <!--<olist>
                               <item><p>If the first alternative in <var>R</var> that <var>J</var>
                               matches is a typed function type (see <specref ref="id-function-test"/>),
                               then function coercion is applied to coerce <var>J</var> to that
                               function type, as described in <specref ref="id-function-coercion"/>.</p></item>
                               <item><p>Otherwise, <var>J</var> is used as is.</p></item>
-                           </olist>
+                           </olist>-->
                         
                         </item>
 
@@ -7357,6 +7379,7 @@ declare record Particle (
                            <errorref class="TY" code="0004"/>.</p></item>
                         <item><p>The corresponding value is converted to the required
                            map value type by applying the coercion rules recursively.</p></item>
+                        <item><p>The order of entries in the map remains unchanged.</p></item>
                      </olist>
 
                      <note><p>For example, if the required type is
@@ -7376,16 +7399,23 @@ declare record Particle (
                         to a new map as follows:</p>
                      <olist>
                         <item><p>The keys in the supplied map are unchanged.</p></item>
-                        <item><p>In any map entry whose key is an <code>xs:string</code> equal to the
-                        name of one of the field declarations in <var>R</var>, the corresponding
+                        <item><p>In any map entry whose key is equal to the
+                        name of one of the field declarations in <var>R</var> (under the rules
+                           of the <function>atomic-equal</function> function), the corresponding
                            value is converted to the required type defined by that field declaration, 
                            by applying the coercion rules recursively 
                            (but with XPath 1.0 compatibility mode treated as false).</p></item>
+                        <item><p>The order of entries in the map is changed: entries whose keys correspond
+                        to the names of field declarations in <var>R</var> appear first, in the order
+                        of the corresponding field declarations, and (if the record type is extensible)
+                        other entries then follow retaining their relative order in <var>J</var>.</p></item>
                      </olist>
 
                      <note><p>For example, if the required type is
-                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is <code>{ "longitude": 0, "latitude": 53.2 }</code>,
+                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is 
+                        <code>{ "latitude": 53.2, "longitude": 0 }</code>,
                         then the map is converted to <code>{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.</p></note>
+
                   </item>
 
                   <item>
@@ -8123,6 +8153,8 @@ return $f(12.3)]]></eg>
                   <p>Suppose the required type is <code>(record(x as xs:decimal, y as xs:decimal, *) | record(size as enum("S", "M", "L", "XL"), *))</code>.</p>
                   
                   <table role="medium">
+                     <col width="40%"/>
+                     <col width="60%"/>
                      <thead>
                         <tr>
                            <th align="left">Supplied Value</th>
