@@ -16018,6 +16018,9 @@ return if ($i le count($S))
                   The <elcode>xsl:matching-substring</elcode> and <elcode>xsl:non-matching-substring</elcode>
                   elements within <elcode>xsl:analyze-string</elcode> may now take a <code nobreak="false">select</code> attribute
                   in place of a contained sequence constructor.
+               </change><change PR="1856">
+                  The rules have been adjusted to allow for new capabilities in regular expressions, such as
+                  zero-width assertions.
                </change></changes><e:element-syntax xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="analyze-string">
       <e:in-category name="instruction"/>
       <e:attribute name="select" required="yes">
@@ -16096,7 +16099,9 @@ return if ($i le count($S))
                forwards-compatible behavior.</p><p diff="add" at="2023-05-10">For the <elcode>xsl:matching-substring</elcode> and
                <elcode>xsl:non-matching-substring</elcode> elements, the <code nobreak="false">select</code> attribute and the contained sequence
                constructor are mutually exclusive <errorref spec="XT" class="SE" code="3185"/>.</p><p>This instruction is designed to process all the non-overlapping substrings of the
-               input string that match the regular expression supplied.</p><p>
+               input string that match the regular expression supplied: that is,
+            the <xtermref spec="FO40" ref="dt-disjoint-matching-segments"/> that result from
+            processing the input string using the supplied regular expression and the supplied flags.</p><p>
                <error spec="XT" type="dynamic" class="DE" code="1140"><p>It is a <termref def="dt-dynamic-error"> dynamic error</termref> if the <termref def="dt-effective-value"/>
                      of the <code nobreak="false">regex</code>
                      attribute <error.extra>of the <elcode>xsl:analyze-string</elcode>
@@ -16112,82 +16117,44 @@ return if ($i le count($S))
                         <bibref ref="xpath-functions-40"/>. If the value of the attribute is known
                      statically (for example, if the attribute does not contain any <termref def="dt-expression">expressions</termref> enclosed in curly brackets) then
                      the processor <rfc2119>may</rfc2119> raise the error as a <termref def="dt-static-error">static error</termref>. </p></error>
-            </p><p>To explain the behavior of the instruction it is useful to consider
-               an input string of length <var>N</var> characters as having <var>N+1</var>
-               inter-character positions, including one just before the first character and one just
-               after the last. Each of these positions is a possible position for testing whether
-               the regular expression matches. These positions are numbered from zero to
-                  <code nobreak="false">N</code>.</p><note><p>The term <term>character</term>, here as elsewhere in this specification, means a
-                  Unicode codepoint. When strings are held in decomposed form, the multiple
-                  codepoints representing a composite character are considered to be multiple
-                  characters. A codepoint greater than 65535 is considered as one character, not as
-                  a surrogate pair.</p></note><p>The processor starts by setting the current position to position
-               zero, and the current non-matching substring to a zero-length string. It then does
-               the following repeatedly:</p><olist><item><p>Test whether the regular expression matches at the current position.</p></item><item><p>If there is a match:</p><olist><item><p>If the current non-matching substring has length greater than zero,
-                           evaluate the <elcode>xsl:non-matching-substring</elcode> 
-                           <phrase diff="add" at="2023-05-10"><code nobreak="false">select</code> expression or </phrase>
-                           sequence constructor with the current non-matching substring as the context
-                           item.</p></item><item><p>Reset the current non-matching substring to a zero-length string.</p></item><item><p>Evaluate the <elcode>xsl:matching-substring</elcode> 
-                           <phrase diff="add" at="2023-05-10"><code nobreak="false">select</code> expression or </phrase>
-                           sequence constructor with the matching substring as the context item.</p></item><item><p>Do the appropriate one of the following:</p><olist><item><p>If the matching substring is non-zero length, set the current
-                                 position to coincide with the end of the matching substring, exit,
-                                 and repeat.</p></item><item><p>If the matching substring is zero length and the current position
-                                 is at the end of the input string, exit.</p></item><item><p>If the matching substring is zero length and the current position
-                                 is not at the end of the input string, add the character that
-                                 immediately follows the current position to the current
-                                 non-matching substring, set the current position to the position
-                                 immediately after this character, exit, and repeat.</p></item></olist></item></olist></item><item><p>If there is no match:</p><olist><item><p>If the current position is the last position (that is, just after the
-                           last character):</p><olist><item><p>If the current non-matching substring has length greater than zero,
-                                 evaluate the <elcode>xsl:non-matching-substring</elcode> 
-                                 <phrase diff="add" at="2023-05-10"><code nobreak="false">select</code> expression or </phrase>
-                                 sequence constructor with the current non-matching substring as the context
-                                 item.</p></item><item><p>Exit.</p></item></olist></item><item><p>Otherwise, add the character at the current position to the current
-                           non-matching substring, increment the current position, and repeat.</p></item></olist></item></olist><p>When the matcher is looking for a match at a particular
-                  starting position and there are  several alternatives within the regular
-               expression that match at this position in the input string, then the match that is
-               chosen is the first alternative that matches. For example, if the input string is
-                  <code nobreak="false">The quick brown fox jumps</code> and the regular expression is
-                  <code nobreak="false">jump|jumps</code>, then the match that is chosen is <code nobreak="false">jump</code>. </p><p>The input string is thus partitioned into a sequence of substrings, some of which
-               match the regular expression, others which do not match it. Each non-matching substring will contain at least one character, but a matching
-                  substring may be zero-length.  This sequence of substrings is processed
-               using the contained
-                     <elcode>xsl:matching-substring</elcode> and
-                     <elcode>xsl:non-matching-substring</elcode> elements. A matching
-               substring is processed using the <elcode>xsl:matching-substring</elcode> element, a
-               non-matching substring using the <elcode>xsl:non-matching-substring</elcode> element.
-               Each of these elements has 
+            </p><p>Conceptually, the processor uses the <function>fn:analyze-string</function>
+            instruction to construct an <code nobreak="false">fn:analyze-string-result</code> element
+            containing a sequence of <code nobreak="false">fn:match</code> and <code nobreak="false">fn:non-match</code>
+            children. It then processes this sequence of children: for each <code nobreak="false">fn:match</code>
+            child, it evaluates the <elcode>xsl:matching-substring</elcode> element, and
+            for each <code nobreak="false">fn:non-match</code> child, it evaluates the <elcode>xsl:non-matching-substring</elcode>
+            element.</p><p>Each of these elements has 
                <phrase diff="add" at="2023-05-10">either a <code nobreak="false">select</code> attribute or </phrase>
                a contained <termref def="dt-sequence-constructor"/>. 
                If the element is absent, the effect is the same as if it were present with
-               empty content. In processing each substring, the contents of the substring will be
+               empty content. In processing each matching or non-matching <xtermref spec="FO40" ref="dt-segment"/>, 
+                  the string-value of the segment will be
                the <termref def="dt-context-item">context item</termref> (as a value of type
-                  <code nobreak="false">xs:string</code>); the position of the substring within the sequence of
-               matching and non-matching substrings will be the <termref def="dt-context-position">context position</termref>; and the number of matching and non-matching
-               substrings will be the <termref def="dt-context-size">context size</termref>.</p></div2><div2 id="func-regex-group"><head>fn:regex-group</head><glist><gitem><label>Summary</label><def><p>Returns the string captured by a parenthesized subexpression of the regular expression
+                  <code nobreak="false">xs:string</code>); the position of the segment within the sequence of
+               matching and non-matching segments will be the <termref def="dt-context-position">context position</termref>; and the number of matching and non-matching
+               segments will be the <termref def="dt-context-size">context size</termref>.</p></div2><div2 id="func-regex-group"><head>fn:regex-group</head><glist><gitem><label>Summary</label><def><p>Returns the string captured by a capturing subexpression of the regular expression
             used during evaluation of the <elcode>xsl:analyze-string</elcode> instruction.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="regex-group" return-type="xs:string" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="number" type="xs:integer"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <xtermref spec="FO40" ref="dt-deterministic">deterministic</xtermref>, <xtermref spec="FO40" ref="dt-context-dependent">context-dependent</xtermref>,  and <xtermref spec="FO40" ref="dt-focus-independent">focus-independent</xtermref>. </p></def></gitem><gitem><label>Rules</label><def><p>
-            <termdef id="dt-current-captured-substrings" term="current captured substrings">While
+            <termdef id="dt-current-captured-substrings" term="current captured groups">While
                the <elcode>xsl:matching-substring</elcode> instruction is active, a set of
-                  <term>current captured substrings</term> is available, corresponding to the
-               parenthesized subexpressions of the regular expression.</termdef> These captured
-            substrings are accessible using the function <function>regex-group</function>. This
+                  <term>current captured groups</term> is available, corresponding to the
+               capturing subexpressions of the regular expression.</termdef> These captured
+            groups are accessible using the function <function>regex-group</function>. This
             function takes an integer argument to identify the group, and returns a string
-            representing the captured substring.</p><p>The <var>N</var>th captured substring (where <var>N</var> &gt; 0) is the string matched
+            representing the captured substring.</p><p>The <var>N</var>th captured group (where <var>N</var> &gt; 0) is the string matched
             by the subexpression contained by the <var>N</var>th left parenthesis in the regex,
-               excluding any non-capturing groups, which are written as
-                  <code nobreak="false">(?:xxx)</code>. The zeroth captured substring is the string that
+               excluding any non-capturing parenthesized expressions. The zeroth captured substring is the string that
             matches the entire regex. This means that the value of <code nobreak="false">regex-group(0)</code> is
-            initially the same as the value of <code nobreak="false">.</code> (dot).</p><p>The function returns the zero-length string if there is no captured substring with the
-            relevant number. This can occur for a number of reasons:</p><olist><item><p>The number is negative.</p></item><item><p>The regular expression does not contain a parenthesized subexpression with the
-                  given number.</p></item><item><p>The parenthesized subexpression exists, and did not match any part of the input
-                  string.</p></item><item><p>The parenthesized subexpression exists, and matched a zero-length substring of
-                  the input string.</p></item></olist><p>The set of captured substrings is a context variable with dynamic scope. It is initially
+            initially the same as the value of <code nobreak="false">.</code> (dot).</p><p>The function returns the zero-length string if there is no captured group with the
+            relevant number. This can occur for a number of reasons:</p><olist><item><p>The number is negative.</p></item><item><p>The regular expression does not contain a capturing subexpression with the
+                  given number.</p></item><item><p>The capturing subexpression exists, and did not match any part of the input
+                  string.</p></item><item><p>The capturing subexpression exists, and matched a zero-length substring of
+                  the input string.</p></item></olist><p>The set of captured groups is a context variable with dynamic scope. It is initially
             an empty sequence. During the evaluation of an <elcode>xsl:matching-substring</elcode>
             instruction it is set to the sequence of matched substrings for that regex match. During
             the evaluation of an <elcode>xsl:non-matching-substring</elcode> instruction or a
                <termref def="dt-pattern">pattern</termref> or a <termref def="dt-stylesheet-function">stylesheet function</termref> it is set to an empty
             sequence. On completion of an instruction that changes the value, the variable reverts
-            to its previous value.</p><p>The value of the <termref def="dt-current-captured-substrings">current captured
-               substrings</termref> is unaffected through calls of
+            to its previous value.</p><p>The value of the <termref def="dt-current-captured-substrings"/> is unaffected through calls of
                <elcode>xsl:apply-templates</elcode>, <elcode>xsl:call-template</elcode>,
                <elcode>xsl:apply-imports</elcode> or <elcode>xsl:next-match</elcode>, or by
             expansion of named <termref def="dt-attribute-set">attribute sets</termref>.</p></def></gitem></glist></div2><div2 id="regex-examples"><head>Examples of Regular Expression Matching</head><example><head>Replacing Characters by Elements</head><p>Problem: replace all newline characters in the <code nobreak="false">abstract</code> element by
