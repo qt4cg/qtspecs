@@ -13603,6 +13603,24 @@ else QName("", $value)</eg>
                >option parameter conventions</termref> apply. The options available are as follows:</p>
          
          <fos:options>
+            <fos:option key="origin">
+               <fos:meaning>A node, which must be an ancestor of <code>$node</code>. If present,
+                  the returned path will be a relative path that selects <code>$node</code>
+                  starting from the supplied origin node, rather than from the root of the
+                  containing tree.
+               </fos:meaning>
+               <fos:type>node()?</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="lexical">
+               <fos:meaning>If true, the names of elements in the path are represented by the
+                  result of a call on the <function>name</function> function applied to each element. The
+                  result in this case does not contain sufficient information to identify the
+                  namespace URI of the element.
+               </fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+            </fos:option>
             <fos:option key="namespaces">
                <fos:meaning>A map from namespace prefixes to namespace URIs, such as might be returned
                   by the function <function>fn:in-scope-namespaces</function>. If a prefix is available
@@ -13620,17 +13638,24 @@ else QName("", $value)</eg>
             </fos:option>
          </fos:options>
          
+         <p>Let <var>R</var> be the node supplied in the <code>origin</code> option,
+         or the root node of the tree containing <code>$node</code> otherwise.</p>
+         
          <p>If <code>$node</code> is a document node, the function returns the string
                <code>"/"</code>.</p>
          
          <p>Otherwise, the function returns a string that consists of a sequence of steps, one
-            for each ancestor-or-self of <code>$node</code> other than the root node.</p>
+            for each ancestor-or-self of <code>$node</code> that is not an ancestor-or-self 
+            of <var>R</var>.</p>
          
-         <p>If the root node is not a document node then this string is preceded by
+         <p>If <var>R</var> is not a document node and the <code>origin</code> option
+            is absent or empty, then this string is preceded by
             a string notionally representing a call to the <code>fn:root</code> function, 
             expressed as follows:</p>
          
          <ulist>
+            <item><p>If the <code>lexical</code> option is present with the value <code>true</code>,
+            then the string <code>"fn:root()"</code>.</p></item>
             <item><p>If the <code>namespaces</code> option is present and defines a mapping from a 
                non empty prefix <var>P</var> 
             to the namespace URI <code>http://www.w3.org/2005/xpath-functions</code>, then
@@ -13641,47 +13666,73 @@ else QName("", $value)</eg>
             <item><p>Otherwise, <code>"Q{http://www.w3.org/2005/xpath-functions}root()"</code>.</p></item>
          </ulist>
             
-         <p>Each step consists of the character <code>"/"</code>
-            followed by a string whose form depends on the kind of node selected by that step, as
-            follows:</p>
-
+         <p>Each step is the concatenation of:</p>
+         
          <olist>
+            <item><p>The character <code>"/"</code>, which is omitted for the first step
+            if the <code>origin</code> option is present;</p></item>
+            <item><p>A string whose form depends on the kind of node selected by that step, as
+            follows:</p>
+            <olist>
             <item>
-               <p>For an element node, then by default
-                        <code>Q{<var>uri</var>}<var>local</var>[<var>position</var>]</code>,
-                  where <var>uri</var> is the namespace URI of the node name or the
-                  empty string if the node is in no namespace, <var>local</var> is
-                  the local part of the node name, and <var>position</var> is an
-                  integer representing the one-based position of the selected node among its like-named
-                  siblings.</p>
-               <p>The suffix <code>[<var>position</var>]</code> is omitted if the <code>indexes</code>
-               option is present with the value <code>false</code>.</p>
-               <p>If the <code>namespaces</code> option is present, and if it includes a mapping
-               from a namespace prefix to the namespace URI of the element, or to the empty string
-               if the element is in no namespace, then:</p>
-               <ulist>
-                  <item><p>If there is more than one such prefix, then one of them is chosen arbitrarily.</p></item>
-                  <item><p>If the namespace prefix is the zero-length string, then the <code>Q{<var>uri</var>}</code> part of the step is
-                  replaced by the empty string.</p></item>
-                  <item><p>If the prefix is an NCName <var>P</var>, then the <code>Q{<var>uri</var>}</code> part  of the step is
-                  replaced by <code><var>P</var>:</code>.</p></item>
-               </ulist>
+               <p>For an element node, the concatenation of:</p>
+               <olist>
+                  <item><p>A representation of the element name, chosen as follows:</p>
+                     <olist>
+                        <item><p>If the <code>lexical</code> option is present with the value
+                        <code>true</code>, then the result of applying the <function>name</function>
+                        function to the element node.</p></item>
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in a namespace <var>U</var> and the <code>namespaces</code> option
+                           includes a mapping from a prefix <var>P</var> to the namespace <var>U</var>,
+                           then the string <code><var>P</var>:<var>L</var></code>, where <var>L</var>
+                           is the local part of the element name.
+                           If there is more than one such prefix, then one of them is chosen arbitrarily.</p>
+                        </item>  
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in a namespace <var>U</var> and the <code>namespaces</code> option
+                           includes a mapping from the zero-length string to the namespace <var>U</var>,
+                           then the local part of the element name.</p>
+                        </item> 
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in no namespace and the <code>namespaces</code> option
+                           includes no mapping from the zero-length string to any namespace,
+                           then the local part of the element name.</p>
+                        </item>
+                        <item><p>Otherwise, the string <code>Q{<var>U</var>}<var>L</var></code>,
+                        where <var>U</var> is the namespace URI of the element name or the
+                        empty string if the element is in no namespace, and <var>L</var> is
+                        the local part of the element name.</p></item>
+                     </olist>
+                  </item>
+                  <item><p>Unless the <code>indexes</code> option is present
+                     with the value <code>false</code>,
+                     a string in the form <code>[<var>position</var>]</code> where <var>position</var> is an
+                        integer representing the one-based position of the selected node among its like-named
+                        siblings.</p>
+                  </item>
+               </olist>
             </item>
             <item>
-               <p>For an attribute node:</p>
+               <p>For an attribute node, the concatenation of:</p>
                <olist>
+                  <item><p>The character <code>"@"</code></p></item>
+                  <item><p>If the <code>lexical</code> option is present with the value
+                        <code>true</code>, then the result of applying the <function>name</function>
+                        function to the attribute node.</p></item>
                   <item>
-                     <p>If the node is in no namespace, <code>@<emph>local</emph></code>, where
-                              <code><emph>local</emph></code> is the local part of the node name.</p>
+                     <p>Otherwise, if the attribute node is in no namespace, the local part of the attribute name.</p>
                   </item>
+                  <item><p>Otherwise, if the <code>namespaces</code> option is present, and if it includes a mapping
+                        from a non-empty namespace prefix <var>P</var> to the namespace URI of the attribute, then
+                        a string in the form <code><var>P</var>:<var>L</var></code>, where <var>L</var>
+                           is the local part of the attribute name.
+                           If there is more than one such prefix, then one of them is chosen arbitrarily.</p></item>
                   <item>
-                     <p>Otherwise, by default <code>@Q{<emph>uri</emph>}<emph>local</emph></code>, where
-                              <code><emph>uri</emph></code> is the namespace URI of the node name,
-                        and <code><emph>local</emph></code> is the local part of the node name.</p>
-                     <p>If the <code>namespaces</code> option is present , and if it includes a mapping
-                        from a non-empty namespace prefix to the namespace URI of the attribute, then
-                        the <code>Q{<var>uri</var>}</code> part of the step is replaced with a namespace
-                        prefix in the same way as for element nodes, described above.</p>
+                     <p>Otherwise, the string <code>Q{<var>U</var>}<var>L</var></code>,
+                        where <var>U</var> is the namespace URI of the attribute name, and <var>L</var> is
+                        the local part of the attribute name.</p>
+
                   </item>
                </olist>
             </item>
@@ -13710,6 +13761,7 @@ else QName("", $value)</eg>
                option is present with the value <code>false</code>.</p>
             </item>
             <item>
+               
                <p>For a namespace node:</p>
                <olist>
                   <item>
@@ -13728,7 +13780,12 @@ else QName("", $value)</eg>
                   </item>
                </olist>
             </item>
-         </olist>
+            </olist>
+            </item>
+            </olist>
+ 
+            
+         
       </fos:rules>
       <fos:errors>
          <p>The following errors may be raised when <code>$node</code> is omitted:</p>
@@ -13742,17 +13799,22 @@ else QName("", $value)</eg>
             <item>
                <p>If the context value is not a single node, type error <xerrorref spec="XP" class="TY"
                      code="0004" type="type"/>.</p>
-            </item>
-         </ulist>
+            </item></ulist>
+            
+               <p>If the value of the <code>origin</code> option is a node that is not an ancestor
+                  of <code>$node</code> (or in the absence of <code>$node</code>, the context value), 
+                  dynamic error <errorref spec="FO" class="PA" code="0001" type="dynamic"/>.</p>
+         
       </fos:errors>
       
       <fos:notes>
          <p>Using the <code>namespaces</code> option to shorten the generated path is often convenient,
          but the resulting path may be unusable if the input tree contains multiple bindings for the same prefix.</p>
          
-         <p>A map returned by <code>fn:in-scope-namespaces</code> will never contain an entry that maps any prefix
-         to the zero-length URI. Such an entry can, however, be added manually, and can be used to control how
-         no-namespace names are represented in the output (including the option of giving them a non-empty prefix).</p>
+         <p>Similarly, using the <code>lexical</code> option is convenient if there is no need for precise
+         namespace information: it is especially suitable when the containing node tree declares no namespaces.</p>
+         
+         
       </fos:notes>
       
       <fos:examples>
@@ -13813,6 +13875,16 @@ Himmlische, dein Heiligtum.
 )</eg></fos:expression>
                <fos:result>'/Q{http://example.com/one}p[1]/text()[2]'</fos:result>
             </fos:test>
+            <fos:test use="v-path-e" spec="XQuery">
+               <fos:expression><eg>path($e/*:p/*:br[2], 
+     {'lexical': true()})</eg></fos:expression>
+               <fos:result>'/p[1]/br[2]'</fos:result>
+            </fos:test>
+            <fos:test use="v-path-e" spec="XQuery">
+               <fos:expression><eg>path($e/*:p/*:br[2], 
+     {'lexical': true(), 'origin': $e/*:p})</eg></fos:expression>
+               <fos:result>'br[2]'</fos:result>
+            </fos:test>
          </fos:example>
          <fos:variable name="emp" id="v-path-emp" as="element()"><![CDATA[
   <employee xml:id="ID21256">
@@ -13835,6 +13907,10 @@ Himmlische, dein Heiligtum.
                <fos:result>'Q{http://www.w3.org/2005/xpath-functions}root()/Q{}empnr[1]'</fos:result>
             </fos:test>
             <fos:test use="v-path-emp" spec="XQuery">
+               <fos:expression><eg>path($emp/empnr, {'lexical':true()})</eg></fos:expression>
+               <fos:result>'fn:root()/empnr[1]'</fos:result>
+            </fos:test>
+            <fos:test use="v-path-emp" spec="XQuery">
                <fos:expression><eg>path($emp/empnr, 
      { 'namespaces': { 'fn': 'http://www.w3.org/2005/xpath-functions', 
                        '': '' }
@@ -13844,7 +13920,7 @@ Himmlische, dein Heiligtum.
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="332" date="2024-11-29">
+         <fos:change issue="332 1660" PR="1620 1886" date="2024-11-29">
             <p>Options are added to customize the form of the output.</p>
          </fos:change>
       </fos:changes>
@@ -21243,7 +21319,7 @@ return filter(
       <fos:signatures>
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="zero" type="item()*"/>
+            <fos:arg name="init" type="item()*"/>
             <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -21258,12 +21334,12 @@ return filter(
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
-         <p>If <code>$input</code> contains a single item <code>$item1</code>, the function calls 
-            <code>$action($zero, $item1)</code>.</p>
-         <p>If <code>$input</code> contains a second item <code>$item2</code>, the function then calls 
-            <code>$action($zero1, $item2)</code>, where <code>$zero1</code> is the result after
-            processing the first item.</p>
+         <p>If <code>$input</code> is empty, the function returns <code>$init</code>.</p>
+         <p>If <code>$input</code> contains at least one item, the function calls 
+            <code>$action($init, $input[1])</code>, returning a value <var>A1</var>.</p>
+         <p>If <code>$input</code> contains a second item, the function then calls 
+            <code>$action(<var>A1</var>, $input[2])</code>, returning <var>A2</var>; to process the <var>n</var>th
+         item it calls <code>$action(<var>A/n-1</var>, $input[<var>N</var>])</code>.</p>
          <p>This continues in the same way until the end of the <code>$input</code> sequence; the final result is
          the result of the last call on <code>$action</code>.</p>
 
@@ -21271,18 +21347,18 @@ return filter(
       <fos:equivalent style="xquery-function">
 declare function fold-left(
   $input  as item()*,
-  $zero   as item()*,
+  $init   as item()*,
   $action as function(item()*, item()) as item()*
 ) as item()* {
   if (empty($input)) 
-  then $zero
-  else fold-left(tail($input), $action($zero, head($input)), $action)
+  then $init
+  else fold-left(tail($input), $action($init, head($input)), $action)
 };
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
-            the first argument is either the value of <code>$zero</code> or the result of a previous
+            the first argument is either the value of <code>$init</code> or the result of a previous
             application of <code>$action</code>, and the second 
             is any single item from the sequence <code>$input</code>.</p>
       </fos:errors>
@@ -21291,7 +21367,7 @@ declare function fold-left(
             “folding” or “reducing” a sequence. It typically takes a function that operates on a pair of
             values, and applies it repeatedly, with an accumulated result as the first argument, and
             the next item in the sequence as the second argument. The accumulated result is
-            initially set to the value of the <code>$zero</code> argument, which is conventionally a
+            initially set to the value of the <code>$init</code> argument, which is conventionally a
             value (such as zero in the case of addition, one in the case of multiplication, or a
             zero-length string in the case of string concatenation) that causes the function to
             return the value of the other argument unchanged.</p>
@@ -21374,10 +21450,10 @@ declare function fold-left(
             <fos:test>
                <fos:expression><eg>fold-left(
   1 to 5,
-  "$zero",
+  "$z",
   concat("$f(", ?, ", ", ?, ")")
 )</eg></fos:expression>
-               <fos:result>"$f($f($f($f($f($zero, 1), 2), 3), 4), 5)"</fos:result>
+               <fos:result>"$f($f($f($f($f($z, 1), 2), 3), 4), 5)"</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -21410,7 +21486,7 @@ return fold-left($input, (),
       <fos:signatures>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="zero" type="item()*"/>
+            <fos:arg name="init" type="item()*"/>
             <fos:arg name="action" type="fn(item(), item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -21426,33 +21502,33 @@ return fold-left($input, (),
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
-         <p>Let <var>I/n</var> be the last item in <code>$input</code>, and let <var>Z/n</var> be <code>$zero</code>.
-            The function starts by calling <code>$action(<var>I/n</var>, $zero)</code>, producing
-         a result <var>Z/n-1</var>.</p>
+         <p>If <code>$input</code> is empty, the function returns <code>$init</code>.</p>
+         <p>Let <var>I/n</var> be the last item in <code>$input</code>, and let <var>A/n</var> be <code>$init</code>.
+            The function starts by calling <code>$action(<var>I/n</var>, $init)</code>, producing
+         a result <var>A/n-1</var>.</p>
          <p>If there is a previous item, <var>I/n-1</var>,
-            the function then calls <code>$action(<var>I/n-1</var>, <var>Z/n-1</var>)</code>, producing
-            the result <var>Z/n-2</var>.</p>
+            the function then calls <code>$action(<var>I/n-1</var>, <var>A/n-1</var>)</code>, producing
+            the result <var>A/n-2</var>.</p>
          <p>This continues in the same way until the start of the <code>$input</code> sequence is reached; the final result is
-         the value <var>Z/0</var>.</p>
+         the value <var>A/0</var>.</p>
          
       </fos:rules>
       <fos:equivalent style="xquery-function">
 declare function fold-right(
   $input  as item()*,
-  $zero   as item()*,
+  $init   as item()*,
   $action as function(item(), item()*) as item()*
 ) as item()* {
   if (empty($input))
-  then $zero
-  else $action(head($input), fold-right(tail($input), $zero, $action))
+  then $init
+  else $action(head($input), fold-right(tail($input), $init, $action))
 };
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
             the first argument is any item in the sequence <code>$input</code>, and the second is either
-            the value of <code>$zero</code> or the result of a previous application of
+            the value of <code>$init</code> or the result of a previous application of
             <code>$action</code>.</p>
 
       </fos:errors>
@@ -21461,7 +21537,7 @@ declare function fold-right(
             “folding” or “reducing” a sequence. It takes a function that operates on a pair of
             values, and applies it repeatedly, with the next item in the sequence as the first
             argument, and the result of processing the remainder of the sequence as the second
-            argument. The accumulated result is initially set to the value of the <code>$zero</code>
+            argument. The accumulated result is initially set to the value of the <code>$init</code>
             argument, which is conventionally a value (such as zero in the case of addition, one in
             the case of multiplication, or a zero-length string in the case of string concatenation)
             that causes the function to return the value of the other argument unchanged.</p>
@@ -21502,10 +21578,10 @@ declare function fold-right(
             <fos:test>
                <fos:expression><eg>fold-right(
   1 to 5,
-  "$zero",
+  "$z",
   concat("$f(", ?, ", ", ?, ")")
 )</eg></fos:expression>
-               <fos:result>"$f(1, $f(2, $f(3, $f(4, $f(5, $zero)))))"</fos:result>
+               <fos:result>"$f(1, $f(2, $f(3, $f(4, $f(5, $z)))))"</fos:result>
             </fos:test>
          </fos:example>
          <!--<fos:example>
@@ -29601,7 +29677,7 @@ return array:filter(
       <fos:signatures>
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="zero" type="item()*" usage="navigation"/>
+            <fos:arg name="init" type="item()*" usage="navigation"/>
             <fos:arg name="action" type="fn(item()*, item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -29622,15 +29698,15 @@ return array:filter(
       <fos:equivalent style="xpath-expression"><![CDATA[
 fold-left(
   array:members($array),
-  $zero,
+  $init,
   fn($result, $member) { $action($result, map:get($member, 'value')) }
 )
        ]]></fos:equivalent>
       <fos:notes>
-         <p>If the supplied array is empty, the function returns <code>$zero</code>.</p>
-         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$zero => $action($m)</code>.</p>
+         <p>If the supplied array is empty, the function returns <code>$init</code>.</p>
+         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$init => $action($m)</code>.</p>
          <p>If the supplied array contains two members <code>$m</code> and <code>$n</code>, the function returns 
-            <code>$zero => $action($m) => $action($n)</code>; and similarly for an input array with more than two members.</p>
+            <code>$init => $action($m) => $action($n)</code>; and similarly for an input array with more than two members.</p>
          
       </fos:notes>
       <fos:examples>
@@ -29674,7 +29750,7 @@ fold-left(
       <fos:signatures>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="zero" type="item()*" usage="navigation"/>
+            <fos:arg name="init" type="item()*" usage="navigation"/>
             <fos:arg name="action" type="fn(item()*, item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -29695,15 +29771,15 @@ fold-left(
       <fos:equivalent style="xpath-expression"><![CDATA[
 fold-right(
   array:members($array),
-  $zero,
+  $init,
   fn($member, $result) { $action(map:get($member, 'value'), $result) }
 )
        ]]></fos:equivalent>
       <fos:notes>
-         <p>If the supplied array is empty, the function returns <code>$zero</code>.</p>
-         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$action($m, $zero)</code>.</p>
+         <p>If the supplied array is empty, the function returns <code>$init</code>.</p>
+         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$action($m, $init)</code>.</p>
          <p>If the supplied array contains two members <code>$m</code> and <code>$n</code>, the function returns 
-            <code>$action($m, $action($n, $zero))</code>; and similarly for an input array with more than two members.</p>
+            <code>$action($m, $action($n, $init))</code>; and similarly for an input array with more than two members.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -33722,7 +33798,7 @@ for-each($input, fn($item, $pos) {
        <fos:signatures>
          <fos:proto name="scan-left" return-type="array(*)*">
             <fos:arg name="input" type="item()*" usage ="navigation"/>           
-            <fos:arg name="accum" type="item()*"/>           
+            <fos:arg name="init" type="item()*"/>           
             <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>   
          </fos:proto>
        </fos:signatures>
@@ -33740,11 +33816,11 @@ for-each($input, fn($item, $pos) {
             <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>, where <var>N</var> is the number of 
          items in <code>$input</code>. For values of <code>$n</code> in the range 0 to <var>N</var>,
             the value of the single member of array <code>$n+1</code> in the result sequence is the value of the expression
-            <code>fold-left( subsequence($input, 1, $n), $accum, $action )</code>.</p>
+            <code>fold-left( subsequence($input, 1, $n), $init, $action )</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 (0 to count($input)) 
-  ! [fold-left( subsequence($input, 1, .), $accum, $action )]
+  ! [fold-left( subsequence($input, 1, .), $init, $action )]
       </fos:equivalent>
       <fos:notes>
          <p>A practical implementation is likely to compute each array in the result sequence based on the value
@@ -33785,7 +33861,7 @@ for-each($input, fn($item, $pos) {
        <fos:signatures>
          <fos:proto name="scan-right" return-type="array(*)*">
             <fos:arg name="input" type="item()*" usage ="navigation"/>           
-            <fos:arg name="accum" type="item()*"/>           
+            <fos:arg name="init" type="item()*"/>           
             <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>   
          </fos:proto>
        </fos:signatures>
@@ -33803,11 +33879,11 @@ for-each($input, fn($item, $pos) {
             <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>, where <var>N</var> is the number of 
          items in <code>$input</code>. For values of <code>$n</code> in the range 0 to <var>N</var>,
             the value of the single member of array <code>$n+1</code> in the result sequence is the value of the expression
-            <code>fold-right( subsequence($input, count($input)-$n+1), $accum, $action )</code>.</p>
+            <code>fold-right( subsequence($input, count($input)-$n+1), $init, $action )</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 (0 to count($input)) 
-  ! [fold-right( subsequence($input, count($input)-.+1), $accum, $action )]
+  ! [fold-right( subsequence($input, count($input)-.+1), $init, $action )]
       </fos:equivalent>
       <fos:notes>
          <p>A practical implementation is likely to compute each array in the result sequence based on the value
