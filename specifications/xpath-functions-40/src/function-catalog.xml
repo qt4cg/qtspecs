@@ -7211,9 +7211,8 @@ Tak, tak, tak! - da kommen sie.
          <fos:proto name="replace" return-type="xs:string">
             <fos:arg name="value" type="xs:string?"/>
             <fos:arg name="pattern" type="xs:string"/>
-            <fos:arg name="replacement" type="xs:string?" default="()"/>
+            <fos:arg name="replacement" type="(xs:string | fn(xs:untypedAtomic, xs:untypedAtomic*) as item()?)?" default="()"/>
             <fos:arg name="flags" type="xs:string?" default="''"/>
-            <fos:arg name="action" type="(fn(xs:untypedAtomic, xs:untypedAtomic*) as item()?)?" default="()" diff="add" at="A"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -7235,29 +7234,33 @@ Tak, tak, tak! - da kommen sie.
          <p>The string <code>$value</code> is matched against the regular expression <code>$pattern</code>,
             using the supplied <code>$flags</code>, to obtain a set of <termref def="dt-disjoint-matching-segments"/>.
             A replacement string <var>R</var> for each 
-            of these segments (say <var>M</var>) is determined by the values of the
-            <code>$replacement</code> and/or <code>$action</code> arguments, by applying the first
+            of these segments (say <var>M</var>) is determined by the value of the
+            <code>$replacement</code> argument, by applying the first
          of the following rules that applies:</p>
          <ulist>
-            <item><p>If the <code>$action</code> argument is present and is not an empty sequence,
-               <var>R</var> is obtained by calling the <code>$action</code> function.</p>
-               <p>The first argument to the <code>$action</code> function is the string to be replaced,
+            <item>
+               <p>If <code>$replacement</code> is absent or empty, <var>R</var> is a zero-length
+                  string.</p>
+            </item>           
+            
+            <item><p>If <code>$replacement</code> is a function item <var>F</var>, then
+               <var>R</var> is obtained by calling <var>F</var>, and then applying the
+               function <function>fn:string</function> to the result.</p>
+               <p>The first argument to <var>F</var> is the string to be replaced,
                   provided as <code>xs:untypedAtomic</code>.</p>
-               <p>The second argument to the <code>$action</code> function provides the captured
+               <p>The second argument to <var>F</var> provides the captured
                   groups as an <code>xs:untypedAtomic</code> sequence.
                   The <code>Nth</code> item in this sequence is the string value of the segment captured by 
                   the <code>Nth</code> capturing subexpression. If the
                   <code>Nth</code> capturing subexpression was not matched, the <code>Nth</code> item
                   will be the zero-length string.</p>
                <p>Note that the rules for function coercion mean that the function actually
-                  supplied for the <code>$action</code> parameter may be an arity-1 function: the
+                  supplied for <var>F</var> may be an arity-1 function: the
                   second argument does not need to be declared if it is not used.</p>
-               <p>The replacement string <var>R</var> is obtained by applying the <function>fn:string</function>
-                  to the result of the function call.</p>
             </item>
-            <item><p>If <code>$replacement</code> is absent or empty, <var>R</var> is a zero-length
-            string.</p></item>
-            <item><p>If the <code>q</code> flag is present, <var>R</var> is the value
+            
+            <item><p>If <code>$replacement</code> is a string and the 
+               <code>q</code> flag is present, <var>R</var> is the value
             of <code>$replacement</code>.</p></item>           
             <item>
                <p>Otherwise, the value of <code>$replacement</code> is processed as follows.</p>
@@ -7405,29 +7408,21 @@ Tak, tak, tak! - da kommen sie.
             <fos:test>
                <fos:expression>replace("darted", "^(.*?)d(.*)$", "$1c$2")</fos:expression>
                <fos:result>"carted"</fos:result>
-               <fos:postamble>The first <code>d</code> is replaced.</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>replace("abracadabra", "bra", action := fn { "*" })</eg></fos:expression>
-               <fos:result>"a*cada*"</fos:result>
+               <fos:postamble>Only the first <code>d</code> is replaced.</fos:postamble>
             </fos:test>
             <fos:test diff="add" at="A">
-               <fos:expression><eg>replace(
-  "abracadabra",
-  "bra",
-  action := upper-case#1
-)</eg></fos:expression>
+               <fos:expression><eg>replace("abracadabra", "bra", upper-case#1)</eg></fos:expression>
                <fos:result>"aBRAcadaBRA"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><eg>replace("Chapter 9", "[0-9]+", action := fn { . + 1 })</eg></fos:expression>
+               <fos:expression><eg>replace("Chapter 9", "[0-9]+", fn { . + 1 })</eg></fos:expression>
                <fos:result>"Chapter 10"</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression><eg>replace(
   "LHR to LAX",
   "\b[A-Z]{3}\b",
-  action := { 'LAX': 'Los Angeles', 'LHR': 'London' }
+  { 'LAX': 'Los Angeles', 'LHR': 'London' }
 )</eg></fos:expression>
                <fos:result>"London to Los Angeles"</fos:result>
             </fos:test>
@@ -7435,7 +7430,7 @@ Tak, tak, tak! - da kommen sie.
                <fos:expression><eg>replace(
   "57°43′30″",
   "([0-9]+)°([0-9]+)′([0-9]+)″",
-  action := fn($s, $groups) {
+  fn($s, $groups) {
     string($groups[1] + $groups[2] ÷ 60 + $groups[3] ÷ 3600) || '°'
   }
 )</eg></fos:expression>
@@ -7444,7 +7439,8 @@ Tak, tak, tak! - da kommen sie.
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change date="2023-07-18"><p>The <code>$action</code> argument is new in 4.0.</p></fos:change>
+         <fos:change issue="1876"><p>The <code>$replacement</code> argument can now be a function
+            that computes the replacement strings.</p></fos:change>
          <fos:change PR="1856"><p>It is now permitted for the regular expression to match a zero-length string.</p></fos:change>
       </fos:changes>
    </fos:function>
