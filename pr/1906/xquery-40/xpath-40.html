@@ -8667,6 +8667,16 @@ declare record Particle (
                   and <code>xs:base64Binary</code>.
                <i>&nbsp;&nbsp;[Issues <a href="https://github.com/qt4cg/qtspecs/issues/130">130</a>&nbsp;<a href="https://github.com/qt4cg/qtspecs/issues/480">480</a>&nbsp;PR <a href="https://github.com/qt4cg/qtspecs/pull/815">815</a>&nbsp;7 November 2023]</i></p>
                      </li>
+                     <li>
+                        <p>
+                  The coercion rules now apply recursively to the members of an array and the entries in a map.
+               <i>&nbsp;&nbsp;[Issue <a href="https://github.com/qt4cg/qtspecs/issues/1318">1318</a>&nbsp;PR <a href="https://github.com/qt4cg/qtspecs/pull/1501">1501</a>]</i></p>
+                     </li>
+                     <li>
+                        <p>
+                  The coercion rules now reorder the entries in a map when the required type is a record type.
+               <i>&nbsp;&nbsp;[Issue <a href="https://github.com/qt4cg/qtspecs/issues/1862">1862</a>&nbsp;]</i></p>
+                     </li>
                   </ol>
                </div>
                <p>
@@ -8803,18 +8813,26 @@ declare record Particle (
                         <ol class="enumla">
                            <li>
                               <p>If <var>J</var> matches (is an instance of) one of the alternatives
-                           in <var>R</var>, then:</p>
-                              <ol class="enumlr">
-                                 <li>
-                                    <p>If the first alternative in <var>R</var> that <var>J</var>
-                              matches is a typed function type (see <a href="#id-function-test"><b>3.2.8.1 Function Types</b></a>),
-                              then function coercion is applied to coerce <var>J</var> to that
-                              function type, as described in <a href="#id-function-coercion"><b>3.4.4 Function Coercion</b></a>.</p>
-                                 </li>
-                                 <li>
-                                    <p>Otherwise, <var>J</var> is used as is.</p>
-                                 </li>
-                              </ol>
+                           in <var>R</var>, then <var>J</var> is coerced to the first alternative in 
+                           <var>R</var> that <var>J</var> matches.</p>
+                              <div class="note">
+                                 <p class="prefix"><b>Note:</b></p>
+                                 <p>There are two situations where coercing an item to a type that
+                              it already matches does not simply return the item unchanged:</p>
+                                 <ul>
+                                    <li>
+                                       <p>When the required type is a typed function type
+                                      (see <a href="#id-function-test"><b>3.2.8.1 Function Types</b></a>),
+                                    then function coercion is applied to coerce <var>J</var> to that
+                                    function type, as described in <a href="#id-function-coercion"><b>3.4.4 Function Coercion</b></a>.</p>
+                                    </li>
+                                    <li>
+                                       <p>When the required type is a record type and the supplied
+                                 value is a map, then coercion may change the <a href="https://qt4cg.org/specifications/xpath-datamodel-40/#dt-entry-order">entry order</a><sup><small>DM</small></sup>
+                                 of the entries in the map.</p>
+                                    </li>
+                                 </ul>
+                              </div>
                            </li>
                            <li>
                               <p>Otherwise, the item coercion rules (the rules in this section)
@@ -9093,6 +9111,9 @@ declare record Particle (
                               <p>The corresponding value is converted to the required
                            map value type by applying the coercion rules recursively.</p>
                            </li>
+                           <li>
+                              <p>The order of entries in the map remains unchanged.</p>
+                           </li>
                         </ol>
                         <div class="note">
                            <p class="prefix"><b>Note:</b></p>
@@ -9118,17 +9139,25 @@ declare record Particle (
                               <p>The keys in the supplied map are unchanged.</p>
                            </li>
                            <li>
-                              <p>In any map entry whose key is an <code>xs:string</code> equal to the
-                        name of one of the field declarations in <var>R</var>, the corresponding
+                              <p>In any map entry whose key is equal to the
+                        name of one of the field declarations in <var>R</var> (under the rules
+                           of the <a href="https://qt4cg.org/specifications/xpath-functions-40/Overview.html#func-atomic-equal"><code>atomic-equal</code></a> function), the corresponding
                            value is converted to the required type defined by that field declaration, 
                            by applying the coercion rules recursively 
                            (but with XPath 1.0 compatibility mode treated as false).</p>
+                           </li>
+                           <li>
+                              <p>The order of entries in the map is changed: entries whose keys correspond
+                        to the names of field declarations in <var>R</var> appear first, in the order
+                        of the corresponding field declarations, and (if the record type is extensible)
+                        other entries then follow retaining their relative order in <var>J</var>.</p>
                            </li>
                         </ol>
                         <div class="note">
                            <p class="prefix"><b>Note:</b></p>
                            <p>For example, if the required type is
-                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is <code>{ "longitude": 0, "latitude": 53.2 }</code>,
+                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is 
+                        <code>{ "latitude": 53.2, "longitude": 0 }</code>,
                         then the map is converted to <code>{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.</p>
                         </div>
                      </li>
@@ -9927,6 +9956,8 @@ return local:filter(1 to 10, $f)</pre>
                      <div class="exampleHeader"><a id="eg-coercion-to-choice"></a>Example: Coercion to a choice type</div>
                      <p>Suppose the required type is <code>(record(x as xs:decimal, y as xs:decimal, *) | record(size as enum("S", "M", "L", "XL"), *))</code>.</p>
                      <table class="medium">
+                        <col style="width:40%" span="1">
+                        <col style="width:60%" span="1">
                         <thead>
                            <tr>
                               <th style="text-align:left">Supplied Value</th>
@@ -11073,7 +11104,7 @@ At evaluation time, the value of a variable reference is the value to which the 
             <div class="div2">
                
                <h3><a id="id-postfix-expression"></a>4.3 <a href="#id-postfix-expression" style="text-decoration: none">Postfix Expressions</a></h3>
-               <a id="d3e16014"></a><table class="scrap">
+               <a id="d3e16036"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-PostfixExpr"></a><code><a href="#prod-xpath40-PostfixExpr">PostfixExpr</a></code></td>
@@ -11796,7 +11827,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                            </ul>
                            <div class="example">
                               
-                              <div class="exampleHeader"><a id="d3e17196"></a>Example: A System Function</div>
+                              <div class="exampleHeader"><a id="d3e17218"></a>Example: A System Function</div>
                               <p>The following function call uses the function 
                                   <a href="https://qt4cg.org/specifications/xpath-functions-40/#func-base-uri">Section 2.1.5 fn:base-uri</a><sup><small>FO</small></sup>.  Use of <code>SC</code> and <code>DC</code> and errors raised by this function are all defined in 
                                   <a href="#xpath-functions-40">[XQuery and XPath Functions and Operators 4.0]</a>.</p>
@@ -12109,7 +12140,7 @@ At evaluation time, the value of a variable reference is the value to which the 
                            </ol>
                            <div class="example">
                               
-                              <div class="exampleHeader"><a id="d3e17641"></a>Example: Derived Types and Nonlocal Variable Bindings</div>
+                              <div class="exampleHeader"><a id="d3e17663"></a>Example: Derived Types and Nonlocal Variable Bindings</div>
                               <p>
                               <code>$incr</code> is a nonlocal variable that is available within the function because its variable binding has been added to the variable values of the function..  Even though the parameter and return type of this function are both <code>xs:decimal</code>,
                                   the more specific type <code>xs:integer</code> is preserved in both cases.</p>
@@ -12123,7 +12154,7 @@ return $f(5)</pre>
                            <p>&nbsp;</p>
                            <div class="example">
                               
-                              <div class="exampleHeader"><a id="d3e17656"></a>Example: Using the Context Value in an Anonymous Function</div>
+                              <div class="exampleHeader"><a id="d3e17678"></a>Example: Using the Context Value in an Anonymous Function</div>
                               <p>The following example will raise a <a title="type error" class="termref" href="#dt-type-error">type error</a>
                               [<a href="#ERRXPDY0002" title="err:XPDY0002">err:XPDY0002</a>]:</p>
                               <div class="exampleInner">
@@ -12323,7 +12354,7 @@ return $vat(doc('wares.xml')/shop/article)</pre>
                         </ul>
                         <div class="example">
                            
-                           <div class="exampleHeader"><a id="d3e17876"></a>Example: Partial Application of a System Function</div>
+                           <div class="exampleHeader"><a id="d3e17898"></a>Example: Partial Application of a System Function</div>
                            <p>The following partial function application creates a function 
                            item that computes the sum of squares of a sequence.</p>
                            <div class="exampleInner">
@@ -12441,7 +12472,7 @@ return $sum-of-squares(1 to 3)</pre>
                         </ul>
                         <div class="example">
                            
-                           <div class="exampleHeader"><a id="d3e18005"></a>Example: Partial Application of an Anonymous Function</div>
+                           <div class="exampleHeader"><a id="d3e18027"></a>Example: Partial Application of an Anonymous Function</div>
                            <p>In the following example, <code>$f</code> is an anonymous function, and <code>$paf</code> is a partially applied function created from <code>$f</code>.</p>
                            <div class="exampleInner">
                               <pre>
@@ -12459,7 +12490,7 @@ return $paf(1 to 5)</pre>
                   a partial function application that returns a function, but the function it returns is neither a map nor an array.</p>
                   <div class="example">
                      
-                     <div class="exampleHeader"><a id="d3e18064"></a>Example: Partial Application of a Map</div>
+                     <div class="exampleHeader"><a id="d3e18086"></a>Example: Partial Application of a Map</div>
                      <p>The following partial function application converts a map to an equivalent function that is not a map.</p>
                      <div class="exampleInner">
                         <pre>let $a := { "A": 1, "B": 2 }(?)
@@ -12575,7 +12606,7 @@ return $a("A")</pre>
                   </div>
                   <div class="example">
                      
-                     <div class="exampleHeader"><a id="d3e18213"></a>Example: A Context-Dependent Named Function Reference</div>
+                     <div class="exampleHeader"><a id="d3e18235"></a>Example: A Context-Dependent Named Function Reference</div>
                      <p>Consider:</p>
                      <div class="exampleInner">
                         <pre>let $f := &lt;foo/&gt;/fn:name#0 return &lt;bar/&gt;/$f()</pre>
@@ -13496,7 +13527,7 @@ return if (every $r in $R satisfies $r instance of node())
                <div class="div3">
                   
                   <h4><a id="id-steps"></a>4.6.4 <a href="#id-steps" style="text-decoration: none">Steps</a></h4>
-                  <a id="d3e19604"></a><table class="scrap">
+                  <a id="d3e19626"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="doc-xpath40-StepExpr"></a><code><a href="#prod-xpath40-StepExpr">StepExpr</a></code></td>
@@ -17922,7 +17953,7 @@ item, and can appear as an item in a sequence.</p>
                   in the input.</p>
                      <div class="example">
                         
-                        <div class="exampleHeader"><a id="d3e27223"></a>Example: Constructing a fixed map</div>
+                        <div class="exampleHeader"><a id="d3e27245"></a>Example: Constructing a fixed map</div>
                         <p>The following expression constructs a map with seven entries:</p>
                         <div class="exampleInner"><a id="map-weekdays"></a><pre>
 {
@@ -17939,7 +17970,7 @@ item, and can appear as an item in a sequence.</p>
                      <p>&nbsp;</p>
                      <div class="example">
                         
-                        <div class="exampleHeader"><a id="d3e27228"></a>Example: Constructing nested maps</div>
+                        <div class="exampleHeader"><a id="d3e27250"></a>Example: Constructing nested maps</div>
                         <p>Maps can nest, and can contain any XDM value. Here is an example of a nested map with values that can be string values, numeric values, or arrays:</p>
                         <div class="exampleInner"><a id="map-book"></a><pre>
 
@@ -19505,7 +19536,7 @@ declare function recursive-content($item as item()) as record(key, value)* {
                      <p>&nbsp;</p>
                      <div class="example">
                         
-                        <div class="exampleHeader"><a id="d3e29450"></a>Example: Comparison with JSONPath</div>
+                        <div class="exampleHeader"><a id="d3e29472"></a>Example: Comparison with JSONPath</div>
                         <p>This example provides XPath equivalents to some examples given in the
                   JSONPath specification. [TODO: add a reference].</p>
                         <p>The examples query the result of parsing the following JSON value, representing
@@ -20998,7 +21029,7 @@ raised [<a href="#ERRXPDY0050" title="err:XPDY0050">err:XPDY0050</a>].</p>
                      </li>
                   </ol>
                </div>
-               <a id="d3e31868"></a><table class="scrap">
+               <a id="d3e31890"></a><table class="scrap">
                   <tbody>
                      <tr style="vertical-align:baseline;">
                         <td><a id="doc-xpath40-PipelineExpr"></a><code><a href="#prod-xpath40-PipelineExpr">PipelineExpr</a></code></td>
@@ -23241,7 +23272,7 @@ return string-join($chopped, '; ')</pre>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.3.1 <a href="#terminal-symbols" style="text-decoration: none">Terminal Symbols</a></h4>
-                  <a id="d3e36155"></a><table class="scrap">
+                  <a id="d3e36177"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-IntegerLiteral"></a><code>IntegerLiteral</code></td>
@@ -23492,7 +23523,7 @@ return string-join($chopped, '; ')</pre>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e36389"></a><table class="scrap">
+                  <a id="d3e36411"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xpath40-Digits"></a><code>Digits</code></td>
@@ -27708,6 +27739,12 @@ the ways in which warnings are handled, are <a title="implementation defined" cl
                   <p>See <a href="#node-types"><b>3.2.7 Node Types</b></a></p>
                </li>
                <li>
+                  <p>
+                  The coercion rules now reorder the entries in a map when the required type is a record type.
+               </p>
+                  <p>See <a href="#id-coercion-rules"><b>3.4 Coercion Rules</b></a></p>
+               </li>
+               <li>
                   <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/28">28&nbsp;</a></p>
                   <p>
                Multiple <code>for</code> and <code>let</code> clauses can be combined
@@ -28062,6 +28099,13 @@ the ways in which warnings are handled, are <a title="implementation defined" cl
       such as <code>","</code> as a separator. The notation is borrowed from Invisible XML.</p>
                   <p>See <a href="#id-grammar"><b>A.1 EBNF</b></a></p>
                   <p>See <a href="#EBNFNotation"><b>A.1.1 Notation</b></a></p>
+               </li>
+               <li>
+                  <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/1501">1501&nbsp;</a></p>
+                  <p>
+                  The coercion rules now apply recursively to the members of an array and the entries in a map.
+               </p>
+                  <p>See <a href="#id-coercion-rules"><b>3.4 Coercion Rules</b></a></p>
                </li>
                <li>
                   <p>PR <a href="https://github.com/qt4cg/qtspecs/pull/1686">1686&nbsp;</a></p>
