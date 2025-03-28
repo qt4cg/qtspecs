@@ -8199,9 +8199,9 @@ return <table>
          </div2>
          
          <div2 id="xml-to-json-mappings">
-            <head>Converting Elements to Maps</head>
+            <head>Converting elements to maps</head>
             <changes>
-               <change issue="528" PR="1575" date="2024-11-19">
+               <change issue="528 1797" PR="1575 1906" date="2024-11-19">
                   A new function <function>fn:elements-to-maps</function> is provided for converting XDM trees
                   to maps suitable for serialization as JSON. Unlike the <function>fn:xml-to-json</function> function
                   retained from 3.1, this can handle arbitrary XML as input.
@@ -8214,8 +8214,8 @@ return <table>
             <ulist>
                <item><p>It should be possible to represent any XML element as a map suitable for JSON serialization.</p></item>
                <item><p>The resulting JSON should be intuitive and easy to use.</p></item>
-               <item><p>The JSON should be consistent and stable: small changes in the input should not result
-               in large changes in the output.</p></item>
+               <item><p>The JSON should be consistent and stable: small variations in the input should not result
+               in large variations in the output.</p></item>
             </ulist>
             
             <p>Achieving all three objectives requires design compromises. It also requires sacrificing some other
@@ -8238,11 +8238,12 @@ return <table>
             <ulist>
                <item><p>The function makes use of schema information where available, so it considers
                not just the structure of an individual element instance, but the rules governing the element type.</p></item>
-               <item><p>It is possible to request <code>uniform</code> layout for all elements sharing the same name,
-               so the decision is based on the structure of all elements with a given name, not just an individual
-               element.</p></item>
-               <item><p>It is possible to override the choice made by the system, and explicitly specify a layout
-               to be used for elements having a given name.</p></item>
+               <item><p>It is possible to analyze a corpus of XML documents to develop a conversion plan, which can then
+               be applied consistently to individual input documents, whether or not these documents were present in the corpus. The
+               conversion plan can be serialized and subsequently reused, so that it can be applied to input documents that
+               might not have existed at the time the conversion plan was formulated.</p></item>
+               <item><p>It is possible to override the choices made by the system, and explicitly specify a the format
+               to be used for elements or attributes having a given name.</p></item>
             </ulist>
             
             
@@ -8309,39 +8310,38 @@ return <table>
              
                <p>This specification defines a
                number of named mappings, called <term>layouts</term>, and allows the layout for a particular
-               element to be selected in four different ways:</p>
+               element to be selected in a number of different ways:</p>
                
                <ulist>
-                  <item><p>The layout to be used for a specific element name can be explicitly selected in the options
-                  to the <function>fn:elements-to-maps</function> function.</p></item>
-                  <item><p>In the absence of an explicit selection, if the data has been schema-validated, the layout is 
+                  <item><p>The layout to be used for a specific elements can be explicitly selected by
+                     supplying a conversion plan as input
+                     to the <function>fn:elements-to-maps</function> function.</p></item>
+                  <item><p>It is possible to construct a conversion plan by analyzing a corpus of documents
+                  using the <function>fn:elements-to-maps-conversion-plan</function> function.</p></item>
+                  <item><p>It is also possible to construct a conversion plan manually, or to modify
+                  the conversion plan produced by the <function>fn:elements-to-maps-conversion-plan</function> function
+                     before use.</p></item>
+                  <item><p>In the absence of an explicit conversion plan, if the data has been schema-validated, the layout is 
                      inferred from the content model for the element type as defined in the schema.</p></item>
                   <item>
                      <p>When the data is untyped and no specific layout has been selected, 
                      a default layout is chosen based on the properties of the individual element instance.</p>
-                  </item>
-                  <item>                    
-                     <p>If the <code>uniform</code> option is set to <code>true</code>, then the same layout
-                     will be used for all elements with a given name. This means that all elements need to be
-                     examined before any element is converted.</p>
-                  </item>              
+                  </item>             
                </ulist>
                
-               <p>It is possible to disable some of the layouts so they will never be chosen by the automatic rules,
-               but only when explicitly selected.</p>
                
                <p>The advantage of using schema information is that it gives a consistent representation for all
                elements of a particular type, even if they vary in content: for example if an element type allows optional
                attributes, the JSON representation will be consistent between those elements that have attributes and those
-               without. In the absence of a schema, consistency can be achieved either by using the <code>uniform</code>
-               option, or by selecting a layout explicitly in the <code>layouts</code> option.</p>
+               without. In the absence of a schema, consistency can be achieved by supplying a conversion plan that
+               applies uniformly to multiple documents.</p>
                
                <p>The different layouts available are defined in the following sections. For each layout
                there is a table showing:</p>
                
                <ulist>
                   <item><p><term>Layout name</term>: the name to be used to select this layout in
-                  the <code>$options</code> parameter of the <function>fn:elements-to-maps</function> function.</p></item>
+                  a conversion plan supplied to the <function>fn:elements-to-maps</function> function.</p></item>
                   <item><p><term>Usage</term>: the situations for which this layout is designed.</p></item>
                   <item><p><term>Example input</term>: an example of a typical element for which this layout is appropriate,
                      shown as serialized XML.</p></item>
@@ -8365,9 +8365,14 @@ return <table>
                <p>The rules for selecting the layout for a particular element are given later, 
                   in <specref ref="id-selecting-element-layout"/>.</p>
                
-               <p>Note that it is possible to use any layout for any element. Use of an inappropriate layout
-               may result in information being discarded; but in some cases, discarding information may be the 
-               desired outcome.</p>
+               <p>Note that it is possible to use any layout for any element. If an inappropriate layout
+               is chosen for a particular element (for example, <code>empty</code> layout for an element
+                  that is not empty), then in general the conversion falls back to using <code>xml</code> layout, which
+                  outputs the element as a string containing serialized XML. This ensures that no information
+                  is lost, and might act as an indication that the conversion plan needs to be revised.
+                  This will never happen when converting a document that was used as input to the
+                  conversion plan. There is an exception to this rule: if a layout is chosen that does not
+                  allow attributes, then any attribute that is present on the element is discarded.</p>
                
                <note><p>Acknowledgements for this categorization: see <bibref ref="Goessner"/>. Although
                Goessner's categories have been used, the actual mappings vary from his proposal.</p></note>
@@ -8394,20 +8399,7 @@ return <table>
                            <th>Example output</th>
                            <td><eg>{ "hr": "" }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with {variety} <code>empty</code>, 
-                              or a simple type with
-                              {variety} <code>list</code> and <code>maxLength="0"</code>, or a type 
-                              derived from <code>xs:string</code>
-                              with an <code>enumeration</code> or <code>length</code> or <code>maxLength</code>
-                              facet that restricts it to be zero-length; and the type does not allow 
-                              any attributes.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>empty( * | text() | @* )</code></p></td>
-                        </tr>-->
+
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The content is represented by the zero-length <code>xs:string</code>
@@ -8425,7 +8417,10 @@ return <table>
                         </tr>
                         <tr>
                            <th>Notes</th>
-                           <td><p>If any child nodes or attributes are present, they are discarded. (This can happen
+                           <td><p>Attributes are discarded, along with child comment nodes, 
+                              processing instructions, and whitespace-only text nodes.</p>
+                              <p>If any other child nodes are present, the converter falls
+                              back to using <code>xml</code> layout. (This can happen
                            when this layout is explicitly selected for elements that are not actually empty.)</p></td>
                         </tr>
                      </tbody>
@@ -8452,19 +8447,7 @@ return <table>
                            <th>Example output</th>
                            <td><eg>{ "hr": { "@class": "ccc", "@id": "zzz" } }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with {variety} <code>empty</code>, or a simple type with
-                              {variety} <code>list</code> and <code>maxLength="0"</code>, 
-                              or a type derived from <code>xs:string</code>
-                              with an <code>enumeration</code> or <code>length</code> or <code>maxLength</code>
-                              facet that restricts it to be zero-length; 
-                              and the type allows attributes to appear.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>exists(@*) and empty(*|text())</code></p></td>
-                        </tr>-->
+                        
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The content is represented by a map containing one entry for each
@@ -8483,7 +8466,10 @@ return <table>
                         </tr>
                         <tr>
                            <th>Notes</th>
-                           <td><p>If any child nodes are present in the element, they are discarded.
+                           <td><p>Child comment nodes, processing instructions, and whitespace-only text
+                           nodes are discarded.</p>
+                              <p>If any other child nodes are present in the element, the converter falls
+                              back to using <code>xml</code> layout.
                               (This can happen
                               when this layout is explicitly selected for elements that are not actually empty.)</p></td>
                         </tr>
@@ -8511,18 +8497,11 @@ return <table>
                            <th>Example output</th>
                            <td><eg>{ "date": "2023-05-30" }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a simple type.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>empty( * | @* )</code></p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The element is atomized and the resulting atomized value is handled
-                              as described in <specref ref="element-and-attribute-content"/>.</p>
+                              as described in <specref ref="element-and-attribute-content"/>.
+                              If atomization fails, the element is treated as if it were untyped.</p>
                               
                               <note>
                                  <p>If the element is untyped, the atomized value will always 
@@ -8538,13 +8517,11 @@ return <table>
                         </tr>
                         <tr>
                            <th>Notes</th>
-                           <td><p>If any attributes are present, they are discarded. If the element has a type
-                           annotation that is a complex type with element-only content, atomization will fail and
-                           the string value is used in its place. In the case of mixed content, 
-                           atomization produces essentially the same result as the string value, which
-                           means that the internal structure is lost.</p>
-                           <p>Comments and processing instructions in the content are discarded. Whitespace is
-                           retained.</p></td>
+                           <td><p>Attributes are discarded, along with child comment nodes and processing instructions;
+                              whitespace is retained.</p>
+                              <p>If any child elements are present, the converter falls
+                              back to using <code>xml</code> layout.</p>
+                           </td>
                         </tr>
                      </tbody>
                   </table>
@@ -8570,14 +8547,6 @@ return <table>
                            <th>Example output</th>
                            <td><eg>{ "price": { "@currency": "USD", "#content": 23.50 } }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with simple content.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>empty(*)</code></p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The element is represented by a map containing one entry for each
@@ -8603,11 +8572,10 @@ return <table>
                         </tr>
                         <tr>
                            <th>Notes</th>
-                           <td><p>In the case of mixed content, 
-                           atomization produces essentially the same result as the string value, which
-                           means that the internal structure is lost.</p>
-                              <p>Comments and processing instructions in the content are discarded. Whitespace is
-                                 retained.</p></td>
+                           <td><p>Child comment nodes and processing instructions are discarded;
+                              whitespace is retained.</p>
+                              <p>If any child elements are present, the converter falls
+                              back to using <code>xml</code> layout.</p></td>
                         </tr>
                      </tbody>
                   </table>
@@ -8624,8 +8592,10 @@ return <table>
                         <tr>
                            <th>Usage</th>
                            <td><p>Intended for XML elements that act as wrappers for a list of child elements,
-                              all having the same element name. 
-                              The name of the child elements is not retained in the output.</p></td>
+                              all having the same element name; neither the element itself nor any of its
+                              children should have any attributes. The expected child element name may
+                              be present in the conversion plan.
+                              The names of the child elements are not retained in the output.</p></td>
                         </tr>
                         <tr>
                            <th>Example input (1)</th>
@@ -8655,29 +8625,9 @@ return <table>
     { "year": "2023", "month": "05", "day": "30" }
   ] }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with element-only content, containing a single
-                              element particle, whose <code>maxOccurs</code> value is greater than one (including
-                              <code>maxOccurs="unbounded"</code>); attributes are not allowed either on 
-                              the outer element or on the inner elements.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>count(*) gt 1 and all-equal(*!node-name()) and 
-                              empty(text()[normalize-space()]) and empty(@*) and empty(*/@*)</code></p>
-                           <p>That is, there are at least two child elements; all child elements have the same name; 
-                           there are no text node children other than whitespace-only text nodes; and there
-                           are no attributes either on the outer element or on the inner elements.</p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
-                           <td><p>If the element has element children with names that are not all equal, or
-                              if it has non-whitespace text node children, then it is output
-                              as if <code>mixed</code> layout were chosen (see <specref ref="id-mixed-layout"/>). 
-                              This is fallback behavior for use
-                              when this layout is chosen inappropriately.</p>
-                              <p>In other cases, the content is represented by an array,
+                           <td><p>The content is represented by an array,
                                  whose members correspond one-to-one with the children of the element.
                                  Each child element is converted to a map as if it were a top-level element:
                                  the resulting map contains a single key-value pair. The key part is discarded,
@@ -8695,24 +8645,17 @@ return <table>
                         </tr>
                         <tr>
                            <th>Notes</th>
-                           <td><p>Comments and processing instructions in the content are discarded.</p></td>
+                           <td><p>Attributes are discarded for both the element itself, and its children.
+                              Comments, processing instructions, and whitespace text nodes in the content are discarded.
+                           If the conversion plan names the expected child element, then the converter
+                           falls back to <code>xml</code> layout if there is a child element whose name
+                           differs from this expected name. Fallback also occurs if there are non-whitespace
+                           text node children.</p></td>
                         </tr>
                      </tbody>
                   </table>
                   
-                  <!--<example>
-                     <head>Conversion of a list of elements with complex content</head>
-                     <p>Consider the following XML:</p>
-                     <eg><![CDATA[<items>
-  <item nr="n1"><p>One</p></item>
-  <item nr="n2"><p>Two</p></item>
-</items>]]></eg>
-                     <p>When this is converted using list layout and serialized as JSON, the result is:</p>
-                     <eg><![CDATA[{"items":[
-   {"@nr":"n1", "p":"One"},
-   {"@nr":"n2", "p":"Two"}
-]}   ]]></eg>
-                  </example>-->
+ 
                </div4>
                <div4 id="id-list-plus-layout">
                   <head>Layout: List with Attributes</head>
@@ -8727,6 +8670,7 @@ return <table>
                            <th>Usage</th>
                            <td><p>Intended for XML elements that act as wrappers for a list of child elements,
                               all having the same element name. The wrapper element may have attributes,
+                              but the children should not.
                               and the name of the child elements is retained in the output.</p></td>
                         </tr>
                         <tr>
@@ -8759,27 +8703,10 @@ return <table>
     { "year": "2023", "month": "05", "day": "30" }
   ] } }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with element-only content, containing a single
-                              element particle, whose <code>maxOccurs</code> value is greater than one (including
-                              <code>maxOccurs="unbounded"</code>).</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>count(*) gt 1 and all-equal(*!node-name()) and empty(text()[normalize-space()])]</code></p>
-                              <p>That is, there are at least two child elements; all child elements have the same name; and
-                                 there are no text node children other than whitespace-only text nodes.</p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
-                           <td><p>If the element has element children with names that are not all equal, or
-                              if it has non-whitespace text node children, then it is output
-                              as if <code>mixed</code> layout were chosen (see <specref ref="id-mixed-layout"/>. 
-                              This is fallback behavior for use
-                              when this layout is chosen inappropriately.</p>
-                              <p>In other cases,
-                                 the content is represented by a map containing one entry for each
+                           <td>
+                              <p>The content is represented by a map containing one entry for each
                                  attribute in the XML element, plus a property named after the 
                                  child elements (the <term>content property</term>), whose value is an array 
                                  containing the results of formatting the content in the same way as the 
@@ -8803,23 +8730,17 @@ return <table>
                         </tr>
                         <tr>
                            <th>Notes</th>
-                           <td><p>Comments and processing instructions in the content are discarded.</p></td>
+                           <td><p>Any attributes on the element's children are discarded.
+                              Comments, processing instructions, and whitespace text nodes in the content are discarded.
+                           If the conversion plan names the expected child element, then the converter
+                           falls back to <code>xml</code> layout if there is a child element whose name
+                           differs from this expected name. Fallback also occurs if there are non-whitespace
+                           text node children.</p>
+                           </td>
                         </tr>
                      </tbody>
                   </table>
- <!--                 <example>
-                     <head>Conversion of a list of elements with complex content</head>
-                     <p>Consider the following XML:</p>
-                     <eg><![CDATA[<items format="bullets">
-  <item nr="1"><p>One</p></item>
-  <item nr="2"><p>Two</p></item>
-</items>]]></eg>
-                     <p>When this is converted using list layout, the result is:</p>
-                     <eg><![CDATA["items": {"@format":"bullets", "item": [
-   {"@nr":"1, "p":"One"},
-   {"@nr":"2, "p":"Two"}
-]   ]]></eg>
-                  </example>-->
+ 
                </div4>
                <div4 id="id-record-layout">
                   <head>Layout: Record</head>
@@ -8874,25 +8795,6 @@ return <table>
               }
 }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with element-only content, and either:</p>
-                              <olist>
-                                 <item><p>The content model contains
-                                 a single term, whose compositor is <term>all</term> 
-                                    (that is, the element is validated against a complex type 
-                                    defined using <code>xs:all</code>); or</p></item>
-                              <item><p>The content model allows at most one child element (it may allow a choice
-                                 of child elements but must not allow multiple children).</p></item>
-                              </olist>
-                           </td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>exists(*) and all-different(*!node-name()) and empty(text()[normalize-space()])]</code></p>
-                              <p>That is, there is at least one child element; all child elements have different names; and
-                                 there are no text node children other than whitespace-only text nodes.</p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>If the element has non-whitespace text node children, then it is output
@@ -8928,7 +8830,10 @@ return <table>
                            <td><p>Although this layout is intended primarily for elements whose children are unordered
                               and uniquely named, it is also viable to use it in cases where elements can repeat, so
                               long as order relative to other elements is not significant.</p>
-                              <p>Comments and processing instructions in the content are discarded.</p></td>
+                              <p>Comments, processing instructions, and whitespace text nodes in the content are discarded.</p>
+                              <p>If any non-whitespace text nodes are present, the converter falls
+                              back to using <code>xml</code> layout.</p>
+                           </td>
                         </tr>
                      </tbody>
                   </table>
@@ -8965,16 +8870,6 @@ return <table>
       { "p": "Dolor sit amet" }
    ] }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type with element-only content that does not meet
-                              the criteria for the <code>list</code> or <code>record</code> layout.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>empty(text()[normalize-space()])</code></p>
-                           <p>That is, the element has no text node children other than whitespace nodes.</p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The mapping rules are identical to the rules for the <code>mixed</code> layout (see 
@@ -8991,7 +8886,9 @@ return <table>
                         <tr>
                            <th>Notes</th>
                            <td><p>Because whitespace text nodes are stripped, this layout should not normally be used
-                              with mixed content.</p></td>
+                              with mixed content.</p>
+                           <p>If any non-whitespace text nodes are present, the converter falls
+                              back to using <code>xml</code> layout.</p></td>
                         </tr>
                      </tbody>
                   </table>
@@ -9024,15 +8921,6 @@ return <table>
      "mess!"
    ] }</eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>The element has a complex type that does not satisfy the criteria for any other
-                              layout to be used.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p><code>exists(*)</code></p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The content is represented by an XDM array containing one entry for each
@@ -9076,6 +8964,12 @@ return <table>
                            In JSON the value <code>xs:QName("fn:null")</code> 
                               is serialized as <code>null</code>.</p></td>
                         </tr>
+                        
+                        <tr>
+                           <th>Notes</th>
+                           <td><p>All children are retained, including comments, processing instructions, and
+                           text nodes, whether or not they are whitespace-only.</p></td>
+                        </tr>
 
                      </tbody>
                   </table>
@@ -9095,7 +8989,9 @@ return <table>
                            <th>Usage</th>
                            <td><p>This layout is useful when the input contains a mix of
                               structured data and marked-up textual content. It allows the
-                              textual content to be output as serialized XML.</p></td>
+                              textual content to be output as serialized XML. It is also used
+                           as a fallback representation when the selected element layout is
+                           inappropriate for a particular element.</p></td>
                         </tr>
                         <tr>
                            <th>Example input</th>
@@ -9105,16 +9001,6 @@ return <table>
                            <th>Example output</th>
                            <td><eg><![CDATA[{ "p": "<p>That was <i>awesome</i></p>" }]]></eg></td>
                         </tr>
-                        <!--<tr>
-                           <th>XSD conditions</th>
-                           <td><p>Not applicable. Serialized XML layout will only be used if 
-                           explicitly selected in the options parameter.</p></td>
-                        </tr>
-                        <tr>
-                           <th>Match predicate</th>
-                           <td><p>Not applicable. Serialized XML layout will only be used if
-                              explicitly selected in the options parameter.</p></td>
-                        </tr>-->
                         <tr>
                            <th>Mapping rules</th>
                            <td><p>The element node is serialized as if by the <function>fn:serialize</function>
@@ -9142,19 +9028,357 @@ return <table>
                </div4>
             </div3>
             
+            <div3 id="id-creating-a-conversion-plan">
+               <head>Creating a conversion plan</head>
+               
+               <p>It is possible to create a conversion plan by analyzing a collection of sample input documents.
+               The function <function>fn:elements-to-maps-conversion-plan</function> is supplied with a collection
+               of nodes (which will normally be element or document nodes), and it examines all the elements within
+               the trees rooted at these nodes, looking for commonalities among like-named elements.</p>
+               
+               <p>The output of this function (the conversion plan) holds information about how elements and attributes
+                  (identified by name) should be converted.</p>
+               
+               <p>For elements, the information is primarily a mapping from element names
+               (<code>xs:QName</code> instances) to layout names. In some cases additional information beyond
+               the layout name is also included. The conversion plan is represented as an XDM map, whose structure
+               is defined in this specification. A conversion plan can be constructed directly, or the plan
+               produced by calling <function>fn:elements-to-maps-conversion-plan</function> can be modified
+               before use. The plan can be serialized using the JSON output method and reloaded so that the same
+               plan is used whenever a query or stylesheet is executed.</p>
+               
+               <p>The <function>fn:elements-to-maps-conversion-plan</function> function selects a layout for a given
+               element name <var>N</var> by applying the following rules:</p>
+               
+               <olist>
+                  <item><p>Let <code>$EE</code> be
+                  the set of all elements named <var>N</var>, specifically
+                  <code>$input/descendant-or-self::*[node-name(.) eq <var>N</var>]</code>.</p>
+                  </item>
+                  
+                  <item>
+                     <p>If <code>empty($EE/(* | text())</code> (that is, if there 
+                        are no child elements or text nodes) then:</p>
+                     <olist>
+                        <item><p>If <code>empty($EE/@*)</code> (that is, if there 
+                           are no attributes),
+                           then the layout is <code>empty</code>: see <specref ref="id-empty-layout"/>.</p></item>
+                        <item><p>Otherwise, the layout is <code>empty-plus</code>: see <specref ref="id-empty-plus-layout"/>.</p></item>
+                     </olist> 
+                  </item>
+                  <item>
+                     <p>If <code>empty($EE/*)</code> (that is, if there are no child elements) then:</p>
+                     <olist>
+                        <item><p>If <code>empty($EE/@*)</code> (that is, if there 
+                           are no attributes)
+                           then the layout is <code>simple</code>: see <specref ref="id-simple-layout"/>.</p></item>
+                        <item><p>Otherwise, <code>simple-plus</code>: see <specref ref="id-simple-plus-layout"/>.</p></item>
+                        <item><p>The plan also includes the property <code>type</code>. If all the elements
+                        in <code>$EE</code> are castable as <code>xs:boolean</code>, then the type is <code>boolean</code>;
+                        otherwise, if all the elements in <code>$EE</code> as castable as <code>xs:numeric</code>,
+                        then the type is <code>numeric</code>; otherwise, the type is <code>string</code>.</p></item>
+                     </olist>
+                  </item>
+                  <item>
+                     <p>If <code>empty($EE/text()[normalize-space()])</code> (that is, there are no text node
+                     children other than whitespace), then:</p>
+                     <olist>
+                        <item>
+                           <p>If <code>all-equal($EE/*/node-name()) and exists($EE/*[2])</code>
+                           (that is, if all child elements have the same name, and at least one element has multiple child
+                           elements), then:</p>
+                           <olist>
+                              <item><p>If <code>empty($EE/@*)</code> (that is, if there 
+                                 are no attributes)
+                                 then <code>list</code>: see <specref ref="id-list-layout"/>.</p></item>
+                              <item><p>Otherwise, <code>list-plus</code>: see <specref ref="id-list-plus-layout"/>.</p></item>
+                           </olist>
+                        </item>
+                        <item>
+                           <p>If <code>every $e in $EE satisfies all-different($e/*/node-name())</code>
+                           (that is, the child elements are uniquely named among their siblings),
+                           then <code>record</code>: see <specref ref="id-record-layout"/>.</p>
+                        </item>
+                        <item>
+                           <p>Otherwise, <code>sequence</code>: see <specref ref="id-sequence-layout"/>.</p>
+                        </item>
+                     </olist>
+                  </item>
+                  <item>
+                     <p>Otherwise, <code>mixed</code>: see <specref ref="id-mixed-layout"/>.</p>
+                  </item>
+
+               </olist>
+               
+               <p>For elements with simple content (more specifically, elements where the chosen layout is
+               <code>simple</code> or <code>simple-plus</code>) the conversion plan also includes an entry indicating
+               whether the content should be represented as a boolean, a number, or a string. If every instance of
+               the element name has content that is castable to <code>xs:boolean</code>, the plan indicates
+               <code>"type": "boolean"</code>. If every instance of
+               the element name has content that is castable to <code>xs:numeric</code>, the plan indicates
+               <code>"type": "numeric"</code>. In other cases, the plan indicates <code>"type": "string"</code>; however,
+               this may be omitted because it is the default.</p>
+               
+               <p>For attributes, the conversion plan identifies whether attributes (with a given name)
+               should be represented as booleans, numbers, or strings. For every distinct attribute name present
+               in the input, an entry is output associating the attribute name with one of the types
+               <code>boolean</code>, <code>numeric</code>, or <code>string</code>. An entry with type <code>boolean</code>
+               is output for an attribute name if all the attributes with that name are castable as <code>xs:boolean</code>.
+               Similarly, an entry with type <code>numeric</code> is output for an attribute name if all the 
+               attributes with that name are castable as <code>xs:numeric</code>. In other case, the attributes are
+               treated as being of type <code>string</code>. Entries with type
+               <code>string</code> may be omitted, since that is the default.</p>
+               
+               <p>The plan that is produced can then be customized by the user if required. For example:</p>
+               
+               <ulist>
+                  <item><p>If <code>simple</code> layout is chosen for a particular element name, but
+                  it is known that some documents might be encountered in which that element
+                  has attributes, then <code>simple</code> might be changed to <code>simple-plus</code>.</p></item>
+                  <item><p>If <code>record</code> layout is chosen for a particular element name, but
+                  it is known that some documents might be encountered in which child elements
+                  can be repeated, then <code>record</code> might be changed to <code>sequence</code>.</p></item>
+                  <item><p>If the plan determines that phone numbers should be represented as numbers,
+                  it might be modified to treat them as strings.</p></item>
+               </ulist>
+               
+               <p>The conversion plan is a map of type <code>map(xs:string, record(*))</code>.
+                  The key is an element or attribute name, representing element names in the form <code>Q{uri}local</code>,
+                  and attributes in the form <code>@Q{uri}local</code>notation: in both cases the <code>Q{uri}</code>
+                  part <rfc2119>must</rfc2119> be omitted for a name in no namespace. Strings
+                  are used as keys in preference to <code>xs:QName</code> instances to allow the plan to be serialized
+                  in JSON format.</p>
+               
+               <p>The corresponding value for an element will always be an instance of type:</p>
+               
+               <eg>
+record(layout as enum("empty", "empty-plus", "simple", "simple-plus", "list", 
+                      "list-plus", "record", "sequence", "mixed", "xml"), 
+       type? as enum("boolean", "numeric", "string"),
+       child? as xs:string,
+       *)</eg> 
+               
+               <p>The <code>type</code> entry is allowed only if the layout is <code>simple</code>
+               or <code>simple-plus</code>, and <rfc2119>may</rfc2119> be omitted if the type is <code>string</code>.</p>
+               
+               <p>The <code>child</code> entry is present only if the layout is <code>list</code>
+               or <code>list-plus</code>; its value is the expected element name of the child element of the list, 
+               expressed again using <code>Q{uri}local</code> notation following the same rules.</p>
+               
+               <p>The record type is extensible, so additional <termref def="implementation-defined"/>
+               entries <rfc2119>may</rfc2119> be present.</p>
+               
+               <p>For an entry representing an attribute, the value will always be an instance of type:</p>
+               
+               <eg>
+record(type? as enum("boolean", "numeric", "string"),
+       *)</eg>
+               
+               <p>The entry <rfc2119>may</rfc2119> be omitted if the type is <code>string</code>.</p>
+               
+               <p>A small example might be (in its JSON serialization):</p>
+               
+               <eg>
+{ "bookList": { "layout": "list", "child": "book" },
+  "book": { "layout": "record" },
+  "author: { "layout": "simple", "type": "string" }
+  "title: { "layout": "simple", "type": "string" }
+  "price: { "layout": "simple", "type": "numeric" }
+  "hardback: { "layout": "simple", "type": "boolean" }
+  "@out-of-print: { "type": "boolean" }
+}  
+               </eg>
+               
+               
+            </div3>
             
+            <div3 id="id-schema-based-conversion">
+               <head>Schema-based conversion</head>
+               
+               <p>As an alternative to constructing a conversion plan by analyzing a corpus of specimen documents,
+               conversion may be controlled using type annotations derived from schema validation.</p>
+               
+               <p>If the function <function>elements-to-maps</function> encounters an element whose name is
+               not present in the conversion plan (including the case where no plan is supplied), and if the
+               element has a type annotation <var>T</var> other than <code>xs:anyType</code> or <code>xs:untyped</code>, then
+               the following rules apply:</p>
+               
+               <note><p>This section uses the notation <code>{prop}</code> to refer to properties
+                     of schema components, as defined in <bibref ref="xmlschema11-1"/>. The schema component model
+                     from XSD 1.1 is used; when XSD 1.0 is used for validation, some properties
+                     such as <code>{open content}</code> will inevitably be absent.</p></note>
+               
+               
+               
+                     
+               <olist>
+                  <item>
+                     <p>Let <code>zeroLength(ST)</code> be true for a simple type <code>ST</code>
+                     if any of the following conditions is true:</p>
+                     <olist>
+                        <item>
+                           <p><code>ST.{variety} = list</code>, and <code>ST.{facets}</code> includes
+                           a <code>length</code> or <code>maxLength</code> facet whose value is 0 (zero).</p>
+                        </item>
+                        <item>
+                           <p><code>ST.{variety} = atomic</code>, and <code>ST.{facets}</code> includes
+                           a <code>length</code> or <code>maxLength</code> facet whose value is 0 (zero).</p>
+                        </item>
+                        <item>
+                           <p><code>ST.{variety} = atomic</code>, and <code>ST.{facets}</code> includes
+                           an <code>enumeration</code> facet constraining the value to be zero-length.</p>
+                        </item>
+                        <item>
+                           <p><code>ST.{variety} = atomic</code>, and <code>ST.{facets}</code> includes
+                           a <code>pattern</code> facet with the value <code>""</code> (a zero-length string).</p>
+                        </item>
+                     </olist>
+                  </item>
+                  <item>
+                     <p>If <var>T</var> is a simple type:</p>
+                     <olist>
+                        <item>
+                           <p>If <code>zeroLength(T)</code>, then the selected layout is <code>empty</code> 
+                              (see <specref ref="id-empty-layout"/>).</p>
+                        </item>
+                        <item>
+                           <p>Otherwise, 
+                              the selected layout is <code>simple</code> (see <specref ref="id-simple-layout"/>),
+                              and the selected type is <code>boolean</code> if <var>T</var> is derived from
+                              <code>xs:boolean</code>; <code>numeric</code> if <var>T</var> is derived from
+                              <code>xs:decimal</code>, <code>xs:double</code>, or <code>xs:float</code>;
+                              or <code>string</code> otherwise.</p>
+                        </item>
+                        <!--<item>
+                           <p>Otherwise, <code>mixed</code>: see <specref ref="id-mixed-layout"/>.</p>
+                        </item>-->
+                     </olist>
+                  </item>
+                  <item>
+                     <p>Otherwise (if <var>T</var> is a complex type):</p>
+                     <olist>
+                        <item>
+                           <p>Let <code>$noAttributes</code> be true if 
+                           <code>T.{attribute uses}</code> is empty and <code>T.{attribute wildcard}</code>
+                           is absent.</p>
+                        </item>
+                        <item>
+                           <p>If <code>T.{content type}.{variety} = empty</code>, then:</p>
+                           <olist>
+                              <item><p>If <code>$noAttributes</code> and if <code>empty</code> layout is not disabled,
+                                 then the selected layout is <code>empty</code> (see <specref ref="id-empty-layout"/>).</p></item>
+                              <item><p>Otherwise, the selected layout is <code>empty-plus</code> (see <specref ref="id-empty-plus-layout"/>).</p></item>
+                           </olist>
+                        </item>
+                        <item>
+                           <p>If <code>T.{content type}.{variety} = simple</code> 
+                              (a complex type with simple content), then:</p>
+                           <olist>
+                              <item><p>Let <code>ST</code> be <code>T.{content type}.{simple type definition}</code>
+                              (the corresponding simple type).</p>
+                              </item>
+                              <item>
+                                 <p>If <code>zeroLength(ST)</code>, then:</p>
+                                 <olist>
+                                    <item><p>If <code>$noAttributes</code>, the selected layout is <code>empty</code> 
+                                       (see <specref ref="id-empty-layout"/>).</p></item>
+                                    <item><p>Otherwise, the selected layout is <code>empty-plus</code> 
+                                       (see <specref ref="id-empty-plus-layout"/>).</p></item>
+                                 </olist>
+                              </item>
+                              <item>
+                                 <p>Otherwise:</p>
+                                 <olist>
+                                    <item><p>If <code>$noAttributes</code>, the selected layout is 
+                                       <code>simple</code> (see <specref ref="id-simple-layout"/>).</p></item>
+                                    <item><p>Otherwise the selected layout is <code>simple-plus</code> 
+                                       (see <specref ref="id-simple-plus-layout"/>).</p></item>
+                                    <item><p>In both cases the selected type is one of <code>boolean</code>
+                                    <code>numeric</code>, or <code>string</code>, chosen in the same way
+                                    as for elements having a simple type.</p></item>
+                                 </olist>
+                              </item>
+                           </olist>
+                        </item>
+                        <item>
+                           <p>If <code>T.{content type}.{variety} = element-only</code> (a complex type with
+                           an element-only content model):</p>
+                           <olist>
+                              <item><p>Let <code>$noWildcards</code> be true if <code>T.{content type}.{open content}</code>
+                              is absent, and <code>T.{content type}.{particle}</code>, expanded recursively, contains
+                              no wildcard term.</p></item>
+                              <item><p>Let <code>$childCardinalities</code> be a set of (<code>xs:QName</code>, 
+                                 <code>xs:double</code>) pairs
+                              representing the expanded names of the element declaration terms within 
+                                 <code>T.{content type}.{particle}</code>,
+                              expanded recursively, and for each one, the maximum number of occurrences of elements
+                              with that name, computed
+                              using the value of the <code>{maxOccurs}</code> property of the particles at each level, taking the value
+                              <code>unbounded</code> as positive infinity.</p></item>
+                              <item>
+                                 <p>If <code>$noWildcards</code> is true, and if <code>$childCardinalities</code>
+                                    contains a single entry, and that entry has a cardinality greater than one, then:</p>
+                                 <olist>
+                                    <item><p>If <code>$noAttributes</code> then 
+                                       the selected layout is <code>list</code> (see <specref ref="id-list-layout"/>).</p></item>
+                                    <item><p>Otherwise, the selected layout is <code>list-plus</code> 
+                                       (see <specref ref="id-list-plus-layout"/>).</p></item>
+                                 </olist>
+                              </item>
+                              <item>
+                                 <p>If <code>$noWildcards</code> is true, and if every entry in <code>$childCardinalities</code>
+                                    has a cardinality of one, then the selected layout is
+                                    <code>record</code> (see <specref ref="id-record-layout"/>).</p>
+                              </item>
+                              <item>
+                                 <p>Otherwise, the selected layout is <code>sequence</code> (see <specref ref="id-sequence-layout"/>).</p>
+                              </item>
+                           </olist>
+                        </item>
+                        <item>
+                           <p>Otherwise (that is, when <code>T.{content type}.{variety} = mixed</code>, the
+                              selected layout is <code>mixed</code> (see <specref ref="id-mixed-layout"/>).</p>
+                        </item>
+                     </olist>
+                  </item>
+               </olist>
+               
+               <p>For attribute nodes, the selected type is <code>boolean</code> if the type annotation is derived from
+                  <code>xs:boolean</code>; <code>numeric</code> if the type annotation is derived from
+                  <code>xs:decimal</code>, <code>xs:double</code>, or <code>xs:float</code>;
+                  and <code>string</code> otherwise.</p>
+               
+               
+            </div3>
+               
+               
             
             <div3 id="id-selecting-element-layout">
-               <head>Selecting an Element Layout</head>
+               <head>Selecting an element layout</head>
                <p>The various layouts available for elements are described in <specref ref="id-element-layouts"/>.
-               This section defines the rules for selecting an element layout for a given element <code>$E</code>.
+               This section defines the rules for selecting an element layout for a given element <var>E</var>.
                The rules are applied in order.</p>
                
                <olist>
-                  <item><p>If an explicit layout is given for the element name of <code>$E</code> in the
-                  options argument of the <function>fn:elements-to-maps</function> function call, then that layout is used.</p></item>
+                  <item><p>If an explicit layout is given for the element name of <var>E</var> in the
+                  conversion plan supplied to the <function>fn:elements-to-maps</function> function call, 
+                  then that layout is used. If the layout is unsuitable for the element instance, then
+                  the general approach is to fall back to a different layout (as opposed to raising an error
+                  or dropping data): but the rules are defined on a case-by-case basis.</p></item>
                   
-                  <item><p>Let <code>$elements</code> be the value of the first argument to the
+                  <item><p>Otherwise (when no explicit layout is given for <var>E</var>), if the
+                  type annotation of the element is something other than <code>xs:untyped</code>
+                  or <code>xs:anyType</code>, then a schema-determined layout is used as defined
+                  in <specref ref="id-schema-based-conversion"/>.</p></item>
+                  
+                  <item><p>If the above rules do not provide a layout for <var>E</var>, then
+                  a conversion plan for <var>E</var> is determined by applying the rules in 
+                  <specref ref="id-creating-a-conversion-plan"/>, with an input that contains
+                  the single element <var>E</var> and no others.</p></item>
+               </olist>
+            </div3>
+                  
+                  <!--<item><p>Let <code>$elements</code> be the value of the first argument to the
                   <function>fn:elements-to-maps</function> function call.</p></item>
                   
                   <item><p>A layout is said to be disabled if its name is listed in the <code>disable-layouts</code>
@@ -9358,7 +9582,7 @@ return <table>
                      </olist>
                   </item>
                </olist>
-            </div3>
+            </div3>-->
             
              <div3 id="element-and-attribute-names">
                <head>Element and Attribute Names</head>
@@ -9418,10 +9642,28 @@ return <table>
             
             <div3 id="element-and-attribute-content">
                <head>Element and Attribute Content</head>
-               <p>If an input node is untyped, the atomized content of elements, attributes,
-               and text nodes is always of type <code>xs:untypedAtomic</code>, and it is represented
-               as such in the corresponding map entries in the result.</p>
-               <p>Where the content is schema-validated, however:</p>
+               <p>The conversion plan may indicate that element content is to be output
+               as type <code>string</code>, <code>numeric</code>, or <code>boolean</code>: the default
+               is <code>string</code>. In the case of untyped elements and attributes, the value is
+               output as an instance of a string, numeric, or boolean type, according to this
+               prescription. Specifically:</p>
+               
+               <ulist>
+                  <item><p>If the prescribed type is <code>boolean</code> and the value is castable
+                  as <code>xs:boolean</code>, then it is output as an instance of <code>xs:boolean</code>.</p></item>
+                  <item><p>If the prescribed type is <code>numeric</code> and the value is castable
+                  as <code>xs:numeric</code>, then it is output as an instance of <code>xs:integer</code>,
+                  <code>xs:decimal</code>, or <code>xs:double</code> depending on the lexical form of the
+                  value, following the same rules as for XPath numeric literals. For example, <code>"-1"</code>
+                  becomes an <code>xs:integer</code>, <code>12.00</code> becomes an <code>xs:decimal</code>,
+                  and <code>1e-3</code> becomes an <code>xs:double</code>. The special <code>xs:double</code>
+                  values <code>NaN</code> and <code>INF</code> (which cannot be used as numeric literals)
+                  are also recognized.</p></item>
+                  <item><p>In all other cases the value is output as an instance of <code>xs:untypedAtomic</code>,
+                     retaining its original lexical form.</p></item>
+               </ulist>
+               
+               <p>Where the element or attribute is schema-validated, however:</p>
                <olist>
                   <item><p>Let <var>AV</var> be the typed value of the node (that is, the result
                   of atomization).</p></item>
@@ -9443,7 +9685,7 @@ return <table>
                </olist>
                
                <note><p>Atomic items in the result of the <function>fn:elements-to-maps</function> function
-                  may be of any atomic type. The type information is lost if the result is 
+                  may thus be of any atomic type. The type information is lost if the result is 
                   subsequently serialized as JSON.</p></note>
             </div3>
             
@@ -9476,27 +9718,24 @@ return <table>
                   
                   <item><p><emph>Comments and processing instructions: </emph> Comments and processing instructions
                      are lost except when they appear as children of elements that are mapped using the
-                     <code>mixed</code> or <code>xml</code> layouts.</p></item>
+                     <code>sequence</code>, <code>mixed</code> or <code>xml</code> layouts.</p></item>
                   
-                  <item><p><emph>Text nodes: </emph> Text nodes, both whitespace and non-whitespace,
-                  are lost except when they appear as children of elements that are mapped using the
-                     <code>simple</code>, <code>simple-plus</code>, <code>mixed</code>, or 
-                     <code>xml</code> layouts, or when they appear as grandchildren of elements that are
-                  mapped using the <code>list</code> or <code>list-plus</code> layouts.</p></item>
+                  <item><p><emph>Text nodes: </emph>Whitespace text nodes are discarded with they
+                     appear as children of elements that are mapped using the <code>empty</code>,
+                     <code>empty-plus</code>, <code>list</code>, <code>list-plus</code>, <code>record</code>,
+                     or <code>sequence</code> layouts. Non-whitespace text nodes are never discarded. 
+                     </p>
+                  </item>
                   
                   <item><p><emph>Additional node properties: </emph> The values of the <code>is-id</code>,
                      <code>is-idref</code>, and <code>is-nilled</code> properties of a node are lost.</p></item>
                   
                   <item><p><emph>Type annotations: </emph> The values of type annotations on elements are lost.
-                  Type annotations on atomized values of nodes, however, are retained.</p></item>
-                  
-                  <item><p><emph>Element and attribute nodes: </emph> The entire content of element and attribute nodes
-                     is lost if their parent element is mapped using a layout unsuited to that kind of content,
-                     for example if the layout <code>empty</code> or <code>simple</code> is selected for an element that
-                     has attributes or element children.</p></item>
+                  Type annotations on atomized values of schema-validated nodes, however, are retained.</p></item>
+                 
                   
                   <item><p><emph>Element order: </emph> The order of child elements is lost when
-                  <code>record</code> layout is used.</p></item>
+                  <code>record</code> layout is used and the element has multiple children with the same name.</p></item>
                </ulist>
             </div3>
             
