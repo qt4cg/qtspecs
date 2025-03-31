@@ -718,6 +718,9 @@
                         else ()"/>
   <xsl:variable name="FO40uri" select="'https://qt4cg.org/specifications/xpath-functions-40/'"/>
   <xsl:variable name="XT40uri" select="'https://qt4cg.org/specifications/xslt-40/'"/>
+  <!--<xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/expath-binary-40/'"/>-->
+  <xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/EXPath/binary-40/'"/>
+                                         
 
   <!-- Function: name of a function -->
   <!-- format as HTML <code> for monospaced presentation -->
@@ -744,6 +747,7 @@
         <xsl:when test="$prefix = 'map'">func-map-</xsl:when>
         <xsl:when test="$prefix = 'math'">func-math-</xsl:when>
         <xsl:when test="$prefix = 'op'">func-</xsl:when>
+        <xsl:when test="$prefix = 'bin'">func-bin-</xsl:when>
         <xsl:otherwise>
           <xsl:message select="'Unexpected function prefix: ' || $prefix || ':'"/>
           <xsl:sequence select="'func-'"/>
@@ -754,7 +758,8 @@
     <xsl:variable name="targets" select="key('divids', $id-prefix || $name, $database)"/>
     <xsl:variable name="target"
                   select="($targets[ancestor::document-summary/@uri = $FO40uri],
-                           $targets[ancestor::document-summary/@uri = $XT40uri])[1]"/>
+                           $targets[ancestor::document-summary/@uri = $XT40uri],
+                           $targets[ancestor::document-summary/@uri = $BIN40uri])[1]"/>
     <xsl:variable name="target-uri" select="$target/ancestor::document-summary/@uri/string()"/>
 
     <xsl:choose>
