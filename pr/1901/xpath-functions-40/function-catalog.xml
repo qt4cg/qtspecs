@@ -7211,9 +7211,8 @@ Tak, tak, tak! - da kommen sie.
          <fos:proto name="replace" return-type="xs:string">
             <fos:arg name="value" type="xs:string?"/>
             <fos:arg name="pattern" type="xs:string"/>
-            <fos:arg name="replacement" type="xs:string?" default="()"/>
+            <fos:arg name="replacement" type="(xs:string | fn(xs:untypedAtomic, xs:untypedAtomic*) as item()?)?" default="()"/>
             <fos:arg name="flags" type="xs:string?" default="''"/>
-            <fos:arg name="action" type="(fn(xs:untypedAtomic, xs:untypedAtomic*) as item()?)?" default="()" diff="add" at="A"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -7235,29 +7234,33 @@ Tak, tak, tak! - da kommen sie.
          <p>The string <code>$value</code> is matched against the regular expression <code>$pattern</code>,
             using the supplied <code>$flags</code>, to obtain a set of <termref def="dt-disjoint-matching-segments"/>.
             A replacement string <var>R</var> for each 
-            of these segments (say <var>M</var>) is determined by the values of the
-            <code>$replacement</code> and/or <code>$action</code> arguments, by applying the first
+            of these segments (say <var>M</var>) is determined by the value of the
+            <code>$replacement</code> argument, by applying the first
          of the following rules that applies:</p>
          <ulist>
-            <item><p>If the <code>$action</code> argument is present and is not an empty sequence,
-               <var>R</var> is obtained by calling the <code>$action</code> function.</p>
-               <p>The first argument to the <code>$action</code> function is the string to be replaced,
+            <item>
+               <p>If <code>$replacement</code> is absent or empty, <var>R</var> is a zero-length
+                  string.</p>
+            </item>           
+            
+            <item><p>If <code>$replacement</code> is a function item <var>F</var>, then
+               <var>R</var> is obtained by calling <var>F</var>, and then applying the
+               function <function>fn:string</function> to the result.</p>
+               <p>The first argument to <var>F</var> is the string to be replaced,
                   provided as <code>xs:untypedAtomic</code>.</p>
-               <p>The second argument to the <code>$action</code> function provides the captured
+               <p>The second argument to <var>F</var> provides the captured
                   groups as an <code>xs:untypedAtomic</code> sequence.
                   The <code>Nth</code> item in this sequence is the string value of the segment captured by 
                   the <code>Nth</code> capturing subexpression. If the
                   <code>Nth</code> capturing subexpression was not matched, the <code>Nth</code> item
                   will be the zero-length string.</p>
                <p>Note that the rules for function coercion mean that the function actually
-                  supplied for the <code>$action</code> parameter may be an arity-1 function: the
+                  supplied for <var>F</var> may be an arity-1 function: the
                   second argument does not need to be declared if it is not used.</p>
-               <p>The replacement string <var>R</var> is obtained by applying the <function>fn:string</function>
-                  to the result of the function call.</p>
             </item>
-            <item><p>If <code>$replacement</code> is absent or empty, <var>R</var> is a zero-length
-            string.</p></item>
-            <item><p>If the <code>q</code> flag is present, <var>R</var> is the value
+            
+            <item><p>If <code>$replacement</code> is a string and the 
+               <code>q</code> flag is present, <var>R</var> is the value
             of <code>$replacement</code>.</p></item>           
             <item>
                <p>Otherwise, the value of <code>$replacement</code> is processed as follows.</p>
@@ -7362,6 +7365,11 @@ Tak, tak, tak! - da kommen sie.
                <code>$input</code>, then the match that is chosen is the one matched by the first
             alternative. For example:</p>
          <eg xml:space="preserve"> replace("abcd", "(ab)|(a)", "[1=$1][2=$2]") returns "[1=ab][2=]cd"</eg>
+         <p>The rules for <termref def="dt-disjoint-matching-segments"/> allow a zero-length matching
+            segment to immediately follow a non-zero-length matching segment (they are not considered to
+            overlap). This means, for example, that the regular expression <code>.*</code>
+         will typically produce two matches: one matching segment containing all the characters in the 
+         input string, and a second zero-length matching seqment at the end position of the string.</p>
 
       </fos:notes>
       <fos:examples>
@@ -7405,29 +7413,21 @@ Tak, tak, tak! - da kommen sie.
             <fos:test>
                <fos:expression>replace("darted", "^(.*?)d(.*)$", "$1c$2")</fos:expression>
                <fos:result>"carted"</fos:result>
-               <fos:postamble>The first <code>d</code> is replaced.</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>replace("abracadabra", "bra", action := fn { "*" })</eg></fos:expression>
-               <fos:result>"a*cada*"</fos:result>
+               <fos:postamble>Only the first <code>d</code> is replaced.</fos:postamble>
             </fos:test>
             <fos:test diff="add" at="A">
-               <fos:expression><eg>replace(
-  "abracadabra",
-  "bra",
-  action := upper-case#1
-)</eg></fos:expression>
+               <fos:expression><eg>replace("abracadabra", "bra", upper-case#1)</eg></fos:expression>
                <fos:result>"aBRAcadaBRA"</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression><eg>replace("Chapter 9", "[0-9]+", action := fn { . + 1 })</eg></fos:expression>
+               <fos:expression><eg>replace("Chapter 9", "[0-9]+", fn { . + 1 })</eg></fos:expression>
                <fos:result>"Chapter 10"</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression><eg>replace(
   "LHR to LAX",
   "\b[A-Z]{3}\b",
-  action := { 'LAX': 'Los Angeles', 'LHR': 'London' }
+  { 'LAX': 'Los Angeles', 'LHR': 'London' }
 )</eg></fos:expression>
                <fos:result>"London to Los Angeles"</fos:result>
             </fos:test>
@@ -7435,7 +7435,7 @@ Tak, tak, tak! - da kommen sie.
                <fos:expression><eg>replace(
   "57°43′30″",
   "([0-9]+)°([0-9]+)′([0-9]+)″",
-  action := fn($s, $groups) {
+  fn($s, $groups) {
     string($groups[1] + $groups[2] ÷ 60 + $groups[3] ÷ 3600) || '°'
   }
 )</eg></fos:expression>
@@ -7444,7 +7444,8 @@ Tak, tak, tak! - da kommen sie.
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change date="2023-07-18"><p>The <code>$action</code> argument is new in 4.0.</p></fos:change>
+         <fos:change issue="1876"><p>The <code>$replacement</code> argument can now be a function
+            that computes the replacement strings.</p></fos:change>
          <fos:change PR="1856"><p>It is now permitted for the regular expression to match a zero-length string.</p></fos:change>
       </fos:changes>
    </fos:function>
@@ -7678,7 +7679,7 @@ Tak, tak, tak! - da kommen sie.
             For each such segment it constructs an <code>fn:match</code> child, whose string value is
             the string value of the segment. Before, between, or after these <code>fn:match</code>
             elements, as required to ensure that the string value of the <code>fn:analyze-string-result</code>
-            element is the the same as <code>$value</code>, it inserts <code>fn:non-match</code> elements.
+            element is the same as <code>$value</code>, it inserts <code>fn:non-match</code> elements.
             The content of an <code>fn:non-match</code> element is always a single (non-empty) text node,
             and two <code>fn:non-match</code> elements never appear as adjacent siblings.</p>  
             
@@ -7771,6 +7772,11 @@ Tak, tak, tak! - da kommen sie.
          to be atomized, which is potentially useful (the atomized value will be the original input string),
          and the capability has therefore been retained for compatibility with the 3.0 version of this
          specification.</p>
+         <p>The rules for <termref def="dt-disjoint-matching-segments"/> allow a zero-length matching
+            segment to immediately follow a non-zero-length matching segment (they are not considered to
+            overlap). This means, for example, that the regular expression <code>.*</code>
+         will typically produce two matches: one matching segment containing all the characters in the 
+         input string, and a second zero-length matching seqment at the end position of the string.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -13603,6 +13609,24 @@ else QName("", $value)</eg>
                >option parameter conventions</termref> apply. The options available are as follows:</p>
          
          <fos:options>
+            <fos:option key="origin">
+               <fos:meaning>A node, which must be an ancestor of <code>$node</code>. If present,
+                  the returned path will be a relative path that selects <code>$node</code>
+                  starting from the supplied origin node, rather than from the root of the
+                  containing tree.
+               </fos:meaning>
+               <fos:type>node()?</fos:type>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="lexical">
+               <fos:meaning>If true, the names of elements in the path are represented by the
+                  result of a call on the <function>name</function> function applied to each element. The
+                  result in this case does not contain sufficient information to identify the
+                  namespace URI of the element.
+               </fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+            </fos:option>
             <fos:option key="namespaces">
                <fos:meaning>A map from namespace prefixes to namespace URIs, such as might be returned
                   by the function <function>fn:in-scope-namespaces</function>. If a prefix is available
@@ -13620,17 +13644,24 @@ else QName("", $value)</eg>
             </fos:option>
          </fos:options>
          
+         <p>Let <var>R</var> be the node supplied in the <code>origin</code> option,
+         or the root node of the tree containing <code>$node</code> otherwise.</p>
+         
          <p>If <code>$node</code> is a document node, the function returns the string
                <code>"/"</code>.</p>
          
          <p>Otherwise, the function returns a string that consists of a sequence of steps, one
-            for each ancestor-or-self of <code>$node</code> other than the root node.</p>
+            for each ancestor-or-self of <code>$node</code> that is not an ancestor-or-self 
+            of <var>R</var>.</p>
          
-         <p>If the root node is not a document node then this string is preceded by
+         <p>If <var>R</var> is not a document node and the <code>origin</code> option
+            is absent or empty, then this string is preceded by
             a string notionally representing a call to the <code>fn:root</code> function, 
             expressed as follows:</p>
          
          <ulist>
+            <item><p>If the <code>lexical</code> option is present with the value <code>true</code>,
+            then the string <code>"fn:root()"</code>.</p></item>
             <item><p>If the <code>namespaces</code> option is present and defines a mapping from a 
                non empty prefix <var>P</var> 
             to the namespace URI <code>http://www.w3.org/2005/xpath-functions</code>, then
@@ -13641,47 +13672,73 @@ else QName("", $value)</eg>
             <item><p>Otherwise, <code>"Q{http://www.w3.org/2005/xpath-functions}root()"</code>.</p></item>
          </ulist>
             
-         <p>Each step consists of the character <code>"/"</code>
-            followed by a string whose form depends on the kind of node selected by that step, as
-            follows:</p>
-
+         <p>Each step is the concatenation of:</p>
+         
          <olist>
+            <item><p>The character <code>"/"</code>, which is omitted for the first step
+            if the <code>origin</code> option is present;</p></item>
+            <item><p>A string whose form depends on the kind of node selected by that step, as
+            follows:</p>
+            <olist>
             <item>
-               <p>For an element node, then by default
-                        <code>Q{<var>uri</var>}<var>local</var>[<var>position</var>]</code>,
-                  where <var>uri</var> is the namespace URI of the node name or the
-                  empty string if the node is in no namespace, <var>local</var> is
-                  the local part of the node name, and <var>position</var> is an
-                  integer representing the one-based position of the selected node among its like-named
-                  siblings.</p>
-               <p>The suffix <code>[<var>position</var>]</code> is omitted if the <code>indexes</code>
-               option is present with the value <code>false</code>.</p>
-               <p>If the <code>namespaces</code> option is present, and if it includes a mapping
-               from a namespace prefix to the namespace URI of the element, or to the empty string
-               if the element is in no namespace, then:</p>
-               <ulist>
-                  <item><p>If there is more than one such prefix, then one of them is chosen arbitrarily.</p></item>
-                  <item><p>If the namespace prefix is the zero-length string, then the <code>Q{<var>uri</var>}</code> part of the step is
-                  replaced by the empty string.</p></item>
-                  <item><p>If the prefix is an NCName <var>P</var>, then the <code>Q{<var>uri</var>}</code> part  of the step is
-                  replaced by <code><var>P</var>:</code>.</p></item>
-               </ulist>
+               <p>For an element node, the concatenation of:</p>
+               <olist>
+                  <item><p>A representation of the element name, chosen as follows:</p>
+                     <olist>
+                        <item><p>If the <code>lexical</code> option is present with the value
+                        <code>true</code>, then the result of applying the <function>name</function>
+                        function to the element node.</p></item>
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in a namespace <var>U</var> and the <code>namespaces</code> option
+                           includes a mapping from a prefix <var>P</var> to the namespace <var>U</var>,
+                           then the string <code><var>P</var>:<var>L</var></code>, where <var>L</var>
+                           is the local part of the element name.
+                           If there is more than one such prefix, then one of them is chosen arbitrarily.</p>
+                        </item>  
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in a namespace <var>U</var> and the <code>namespaces</code> option
+                           includes a mapping from the zero-length string to the namespace <var>U</var>,
+                           then the local part of the element name.</p>
+                        </item> 
+                        <item><p>Otherwise, if the <code>namespaces</code> option is present
+                           and the element is in no namespace and the <code>namespaces</code> option
+                           includes no mapping from the zero-length string to any namespace,
+                           then the local part of the element name.</p>
+                        </item>
+                        <item><p>Otherwise, the string <code>Q{<var>U</var>}<var>L</var></code>,
+                        where <var>U</var> is the namespace URI of the element name or the
+                        empty string if the element is in no namespace, and <var>L</var> is
+                        the local part of the element name.</p></item>
+                     </olist>
+                  </item>
+                  <item><p>Unless the <code>indexes</code> option is present
+                     with the value <code>false</code>,
+                     a string in the form <code>[<var>position</var>]</code> where <var>position</var> is an
+                        integer representing the one-based position of the selected node among its like-named
+                        siblings.</p>
+                  </item>
+               </olist>
             </item>
             <item>
-               <p>For an attribute node:</p>
+               <p>For an attribute node, the concatenation of:</p>
                <olist>
+                  <item><p>The character <code>"@"</code></p></item>
+                  <item><p>If the <code>lexical</code> option is present with the value
+                        <code>true</code>, then the result of applying the <function>name</function>
+                        function to the attribute node.</p></item>
                   <item>
-                     <p>If the node is in no namespace, <code>@<emph>local</emph></code>, where
-                              <code><emph>local</emph></code> is the local part of the node name.</p>
+                     <p>Otherwise, if the attribute node is in no namespace, the local part of the attribute name.</p>
                   </item>
+                  <item><p>Otherwise, if the <code>namespaces</code> option is present, and if it includes a mapping
+                        from a non-empty namespace prefix <var>P</var> to the namespace URI of the attribute, then
+                        a string in the form <code><var>P</var>:<var>L</var></code>, where <var>L</var>
+                           is the local part of the attribute name.
+                           If there is more than one such prefix, then one of them is chosen arbitrarily.</p></item>
                   <item>
-                     <p>Otherwise, by default <code>@Q{<emph>uri</emph>}<emph>local</emph></code>, where
-                              <code><emph>uri</emph></code> is the namespace URI of the node name,
-                        and <code><emph>local</emph></code> is the local part of the node name.</p>
-                     <p>If the <code>namespaces</code> option is present , and if it includes a mapping
-                        from a non-empty namespace prefix to the namespace URI of the attribute, then
-                        the <code>Q{<var>uri</var>}</code> part of the step is replaced with a namespace
-                        prefix in the same way as for element nodes, described above.</p>
+                     <p>Otherwise, the string <code>Q{<var>U</var>}<var>L</var></code>,
+                        where <var>U</var> is the namespace URI of the attribute name, and <var>L</var> is
+                        the local part of the attribute name.</p>
+
                   </item>
                </olist>
             </item>
@@ -13710,6 +13767,7 @@ else QName("", $value)</eg>
                option is present with the value <code>false</code>.</p>
             </item>
             <item>
+               
                <p>For a namespace node:</p>
                <olist>
                   <item>
@@ -13728,7 +13786,12 @@ else QName("", $value)</eg>
                   </item>
                </olist>
             </item>
-         </olist>
+            </olist>
+            </item>
+            </olist>
+ 
+            
+         
       </fos:rules>
       <fos:errors>
          <p>The following errors may be raised when <code>$node</code> is omitted:</p>
@@ -13742,17 +13805,22 @@ else QName("", $value)</eg>
             <item>
                <p>If the context value is not a single node, type error <xerrorref spec="XP" class="TY"
                      code="0004" type="type"/>.</p>
-            </item>
-         </ulist>
+            </item></ulist>
+            
+               <p>If the value of the <code>origin</code> option is a node that is not an ancestor
+                  of <code>$node</code> (or in the absence of <code>$node</code>, the context value), 
+                  dynamic error <errorref spec="FO" class="PA" code="0001" type="dynamic"/>.</p>
+         
       </fos:errors>
       
       <fos:notes>
          <p>Using the <code>namespaces</code> option to shorten the generated path is often convenient,
          but the resulting path may be unusable if the input tree contains multiple bindings for the same prefix.</p>
          
-         <p>A map returned by <code>fn:in-scope-namespaces</code> will never contain an entry that maps any prefix
-         to the zero-length URI. Such an entry can, however, be added manually, and can be used to control how
-         no-namespace names are represented in the output (including the option of giving them a non-empty prefix).</p>
+         <p>Similarly, using the <code>lexical</code> option is convenient if there is no need for precise
+         namespace information: it is especially suitable when the containing node tree declares no namespaces.</p>
+         
+         
       </fos:notes>
       
       <fos:examples>
@@ -13813,6 +13881,16 @@ Himmlische, dein Heiligtum.
 )</eg></fos:expression>
                <fos:result>'/Q{http://example.com/one}p[1]/text()[2]'</fos:result>
             </fos:test>
+            <fos:test use="v-path-e" spec="XQuery">
+               <fos:expression><eg>path($e/*:p/*:br[2], 
+     {'lexical': true()})</eg></fos:expression>
+               <fos:result>'/p[1]/br[2]'</fos:result>
+            </fos:test>
+            <fos:test use="v-path-e" spec="XQuery">
+               <fos:expression><eg>path($e/*:p/*:br[2], 
+     {'lexical': true(), 'origin': $e/*:p})</eg></fos:expression>
+               <fos:result>'br[2]'</fos:result>
+            </fos:test>
          </fos:example>
          <fos:variable name="emp" id="v-path-emp" as="element()"><![CDATA[
   <employee xml:id="ID21256">
@@ -13835,6 +13913,10 @@ Himmlische, dein Heiligtum.
                <fos:result>'Q{http://www.w3.org/2005/xpath-functions}root()/Q{}empnr[1]'</fos:result>
             </fos:test>
             <fos:test use="v-path-emp" spec="XQuery">
+               <fos:expression><eg>path($emp/empnr, {'lexical':true()})</eg></fos:expression>
+               <fos:result>'fn:root()/empnr[1]'</fos:result>
+            </fos:test>
+            <fos:test use="v-path-emp" spec="XQuery">
                <fos:expression><eg>path($emp/empnr, 
      { 'namespaces': { 'fn': 'http://www.w3.org/2005/xpath-functions', 
                        '': '' }
@@ -13844,7 +13926,7 @@ Himmlische, dein Heiligtum.
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="332" date="2024-11-29">
+         <fos:change issue="332 1660" PR="1620 1886" date="2024-11-29">
             <p>Options are added to customize the form of the output.</p>
          </fos:change>
       </fos:changes>
@@ -16532,7 +16614,9 @@ declare function equal-strings(
 }]]></eg>
          <p>The rules for deciding whether two items <code>$i1</code> and <code>$i2</code> are deep-equal
             are as follows.</p>
-         <p>The two items are first compared using the function supplied in the <code>items-equal</code>
+         <p>Labels (see <xspecref spec="DM40" ref="id-LabeledItems"/>) are ignored. Specifically, if
+         <code>$i1</code> or <code>$i2</code> is a labeled item then it is replaced by its subject.</p>
+         <p>The two items are next compared using the function supplied in the <code>items-equal</code>
             option. If this returns <code>true</code> then the items are deep-equal. If it returns
             <code>false</code> then the items are not deep-equal. If it returns an empty sequence
             (which is always the case if the option is not explicitly specified)
@@ -18357,6 +18441,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
       <fos:signatures>
          <fos:proto name="doc" return-type="document-node()?">
             <fos:arg name="source" type="xs:string?"/>
+            <fos:arg name="options" type="map(*)?" default="{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -18378,14 +18463,158 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             /> provides a mapping from this string to a document node, the
             function returns that document node.</p>
          <p>The URI may include a fragment identifier.</p>
+         
+         <p>The <code>$options</code> argument, if present and non-empty, defines the detailed behavior of the
+         function. The <termref def="option-parameter-conventions"/> apply. The options available
+         are as follows:</p>
+         
+         <fos:options>
+            <fos:option key="dtd-validation">
+               <fos:meaning>Determines whether DTD validation takes place.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The input is parsed using a validating XML parser.
+                  The input must contain a <code>DOCTYPE</code> declaration to identify
+                  the DTD to be used for validation. The DTD may be internal or external.
+                  </fos:value>
+                  <fos:value value="false">DTD validation does not take place. However, if a
+                     <code>DOCTYPE</code> declaration is present, then it is read, for example
+                     to perform entity expansion.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="allow-external-entities">
+               <fos:meaning>Determines whether references to external entities
+                  (including a DTD entity) are permitted.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>true()</fos:default>
+               <fos:values>
+                  <fos:value value="true">References to external entities are permitted, and are resolved
+                  relative to the base URI.
+                  </fos:value>
+                  <fos:value value="false">References to external entities (including an external DTD)
+                     are not permitted, and result in the call on <code>parse-xml</code> failing
+                     with a dynamic error if present.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="entity-expansion-limit">
+               <fos:meaning>Places a limit on the maximum number of entity references that may be expanded,
+                  or on the size of the expanded entities.
+               The limit applies both to internal and external entities, but not to built-in entity references,
+               nor to character references.</fos:meaning>
+               <fos:type>xs:integer?</fos:type>
+               <fos:default>()</fos:default>
+               <fos:values>
+                  <fos:value value="()">The limit (if any) is <termref def="implementation-dependent"/>.</fos:value>
+                  <fos:value value="integer">The processor should impose a limit on the number of
+                     entity references that are expanded, or on the size of the expanded entities,
+                     depending on the options available in the underlying XML parser; the limit should be 
+                     commensurate with the value requested, but the precise effect may be . 
+                     <termref def="implementation-dependent"/>. If the XML parser does not offer the ability to impose
+                     a limit, or if the value is zero, then entity expansion should if possible be disabled entirely, 
+                     leading to a dynamic error if the input contains any entity references. A negative value should
+                     be interpreted as placing no limits on entity expansion.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="stable">
+               <fos:meaning>Determines whether two calls on the <function>doc</function> function,
+               with the same URI, the same options, and the same context, are guaranteed to return
+               the same document node. The default value is <code>true</code>, but this may be overridden
+               by implementation-defined configuration options.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>true</fos:default>
+               <fos:values>
+                  <fos:value value="true">Given the same explicit and implicit arguments, multiple
+                     calls return the same document node: that is, the function is <termref def="dt-deterministic"/>.
+                  </fos:value>
+                  <fos:value value="false">Multiple calls with the same explicit and implicit arguments
+                     may return the same document node or different document nodes at the discretion of
+                     the implementation.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="strip-space">
+               <fos:meaning>Determines whether whitespace-only text nodes are removed
+                  from the resulting document. The default is defined by the host language
+                  or by the implementation. (Note: in XSLT, the <code>xsl:strip-space</code>
+                  and <code>xsl:preserve-space</code> declarations provide detailed control
+                  based on the parent element name.)</fos:meaning>
+               <fos:type>xs:boolean?</fos:type>
+               <fos:default>()</fos:default>
+               <fos:values>
+                  <fos:value value="true">All whitespace-only text nodes are stripped,
+                  unless either (a) they are within the scope of the attribute <code>xml:space="preserve"</code>,
+                  or (b) XSD validation identifies that the parent element has a simple type or a complex
+                  type with simple content.
+                  </fos:value>
+                  <fos:value value="false">All whitespace-only text nodes are preserved,
+                  unless either (a) DTD validation marks them as ignorable, or (b) XSD validation recognizes
+                  the containing element as having element-only or empty content.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="xinclude">
+               <fos:meaning>Determines whether any <code>xi:include</code> elements in the input
+                  are to be processed using an XInclude processor.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">Any <code>xi:include</code> elements are expanded. If there are
+                     <code>xi:include</code> elements and no XInclude processor is available then 
+                     a dynamic error is raised.
+                  </fos:value>
+                  <fos:value value="false">Any <code>xi:include</code> elements are handled as
+                     ordinary elements without expansion.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="xsd-validation">
+               <fos:meaning>Determines whether XSD validation takes place, using the
+                  schema definitions present in the static context.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>"skip"</fos:default>
+               <fos:values>
+                  <fos:value value="strict">Strict XSD validation takes place</fos:value>
+                  <fos:value value="lax">Lax XSD validation takes place</fos:value>
+                  <fos:value value="skip">No XSD validation takes place</fos:value>
+                  <fos:value value="type Q{uri}local">XSD validation takes place against the
+                  schema-defined type, present in the static context, that has the given URI
+                  and local name.</fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="xsi-schema-location">
+               <fos:meaning>When XSD validation takes place, determines whether
+                  schema components referenced using <code>xsi:schemaLocation</code> or <code>xsi:noNamespaceSchemaLocation</code>
+                  attributes within the source document are to be used. The option is ignored
+                  if XSD validation does not take place.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="true">XSD validation uses the schema components referenced 
+                  using <code>xsi:schemaLocation</code> or <code>xsi:noNamespaceSchemaLocation</code>
+                  attributes in addition to the schema components present in the static context;
+                  these components must be compatible as described in <xspecref spec="DM40" ref="schema-consistency"/>.</fos:value>
+                  <fos:value value="false">Any <code>xsi:schemaLocation</code> and <code>xsi:noNamespaceSchemaLocation</code>
+                  attributes in the document are ignored.</fos:value>
+                 
+               </fos:values>
+            </fos:option>
+         </fos:options>
+         
          <p>By default, this function is <termref def="dt-deterministic"
             >deterministic</termref>. Two
             calls on this function return the same document node if the same URI Reference (after
             resolution to an absolute URI Reference) is supplied to both calls. Thus, the following
             expression (if it does not raise an error) will always return <code>true</code>:</p>
          <eg xml:space="preserve">doc("foo.xml") is doc("foo.xml")</eg>
+         
+         
          <note diff="add" at="issue898"><p>This equivalence applies only because the two calls on
-            the <function>fn:doc</function> function have the same dynamic context. 
+            the <function>fn:doc</function> function have the same options and the same 
+            static and dynamic context, to the extent this is relevant. 
             If two calls on <function>fn:doc</function>
            have different dynamic contexts, then the mapping from URIs to document
          nodes in the two contexts may differ, which means that different document nodes may be returned
@@ -18402,7 +18631,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                class="DC" code="0003"/>.</p>
 
          <note>
-            <p>If <code>$source</code> is read from a source document, it is generally appropriate to
+            <p>If the <code>$source</code> URI is obtained from a source document, it is generally appropriate to
                resolve it relative to the base URI property of the relevant node in the source
                document. This can be achieved by calling the <function>fn:resolve-uri</function> function,
                and passing the resulting absolute URI as an argument to the <function>fn:doc</function>
@@ -18490,7 +18719,7 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                documents</term> provides no mapping for the absolutized URI.</p>
          <p>A dynamic error is raised <errorref class="DC" code="0002"
             /> if the resource cannot be
-            retrieved or cannot be parsed successfully as XML.</p>
+            retrieved or cannot be parsed successfully as XML using the selected options.</p>
          <p>A dynamic error is raised <errorref class="DC" code="0003"
             /> if the implementation is
             not able to guarantee that the result of the function will be deterministic, and the
@@ -18503,12 +18732,19 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             in particular the rule does not apply if the dynamic context for the two calls requires
             different processing of the documents (such as schema validation or whitespace stripping).</p>
          </fos:change>
+         <fos:change issue="1021" PR="1910" date="2025-04-06">
+            <p>An <code>$options</code> parameter is added. Note that the rules for the <code>$options</code> parameter
+            control aspects of processing that were implementation-defined in earlier versions of this
+            specification. An implementation may provide configuration options designed to retain backwards-compatible
+            behavior when no explicit options are supplied.</p>
+         </fos:change>
       </fos:changes>
    </fos:function>
    <fos:function name="doc-available" prefix="fn">
       <fos:signatures>
          <fos:proto name="doc-available" return-type="xs:boolean">
             <fos:arg name="source" type="xs:string?"/>
+            <fos:arg name="options" type="map(*)" default="{}"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -18517,24 +18753,37 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>The function returns <code>true</code> if and only if the function call <code>fn:doc($source)</code>
+         <p>The function returns <code>true</code> if and only if the function call <code>fn:doc($source, $options)</code>
             would return a document node.</p>
       </fos:summary>
       <fos:rules>
          <p>If <code>$source</code> is an empty sequence, this function returns <code>false</code>.</p>
-         <p>If a call on <code>fn:doc($source)</code> would return a document node, this function
+         <p>If a call on <code>fn:doc($source, $options)</code> would return a document node, this function
             returns <code>true</code>.</p>
          <p>In all other cases this function returns <code>false</code>. <phrase>This
          includes the case where <phrase>an invalid URI is supplied, and also the case where </phrase>
             a valid relative URI reference is supplied, and cannot be resolved,
          for example because the static base URI is absent.</phrase></p>
-         <p>If this function returns <code>true</code>, then calling <code>fn:doc($source)</code>
-            within the same <termref
-               def="execution-scope"
-               /> must return a document node. However,
-            if nondeterministic processing has been selected for the <function>fn:doc</function> function,
-            this guarantee is lost.</p>
+         
+         <p>The recognized values for <code>$options</code> are the same as for the <function>fn:doc</function>
+         function. The <termref def="option-parameter-conventions"/> apply. Note that if the <code>stable</code>
+         option is set to <code>true</code>, then a result of <code>true</code> from this function guarantees
+         that a call on <function>fn:doc</function> with the same explicit and implicit arguments will succeed, whereas a
+         result of <code>false</code> from this function guarantees that the corresponding call on <function>fn:doc</function>
+         will fail. Conversely, if the <code>stable</code> option is set to <code>false</code>, then the result of this
+         function provides no guarantees regarding the outcome of a call on <function>fn:doc</function> with 
+         the same explicit and implicit arguments.</p>
+         
+         
       </fos:rules>
+      <fos:changes>
+         <fos:change issue="1021" PR="1910" date="2025-04-06">
+            <p>An <code>$options</code> parameter is added. Note that the rules for the <code>$options</code> parameter
+            control aspects of processing that were implementation-defined in earlier versions of this
+            specification. An implementation may provide configuration options designed to retain backwards-compatible
+            behavior when no explicit options are supplied.</p>
+         </fos:change>
+      </fos:changes>
    </fos:function>
    <fos:function name="collection" prefix="fn">
       <fos:signatures>
@@ -20987,19 +21236,39 @@ return function-arity($initial)</eg></fos:expression>
 	      and <code>fn:function-identity($f2)</code> are codepoint-equal if and only if <code>$f1</code>
 	      and <code>$f2</code> have the same function identity. Apart from this property, the
 	      result is <termref def="implementation-dependent"/>.</p>
+	     <p>Any label attached to a function item is ignored (see <xspecref spec="DM40" ref="id-LabeledItems"/>).
+	     Specifically, if <var>L</var> is a labeled item then <code>fn:function-identity(<var>L</var>)</code> returns
+	     the function identity of the subject of <var>L</var>.</p>
+	     <p>In the case of maps and arrays, the result follows the following rule:
+	        If <code>$X</code> are both maps or arrays then <code>fn:function-identity($X)</code>
+	        <rfc2119>must not</rfc2119> be codepoint-equal to <code>fn:function-identity($Y)</code> unless
+	        <code>$X</code> and <code>$Y</code> are indistinguishable, that is unless every operator or function applied
+	        to <code>$X</code> returns the same result as for <code>$Y</code>. Even in this case, however, the
+	        result of the comparison <code>fn:function-identity($X) eq fn:function-identity($Y)</code>
+	        is <termref def="implementation-dependent"/>.</p>
       </fos:rules>
 	  <fos:notes>
 	     <p>This function enables applications to test whether two expressions or variables
-	        reference the same function. This may be useful, for example, to allow caching
+	        reference the same function item. This may be useful, for example, to allow caching
 	        of function results to avoid repeated evaluation. The results of previous function
 	        invocations might be held in a map whose key is the function identity.</p>
-		<p>The function identity, by definition, is generated upon the creation of a function. 
-		   It is not meaningful to store or compare the result 
+		<p>The function identity, by definition, is generated upon the creation of a function item.
+		   Specific expressions that create function items have their own rules for the identity
+		   of the returned functions: for example, it is guaranteed that evaluation of a function
+		   reference to a system function with no captured context (such as <code>fn:abs#1</code>)
+		   will always return the same function item.</p>
+		   <p>It is not meaningful to store or compare the result of calling <function>fn:function-identity</function> 
 		   across different <termref def="execution-scope">execution scopes</termref>, because the string used 
 		   to represent the function identity will generally vary from one execution scope to another.</p>
 	     <p>The result of an expression such as <code>function-identity(abs#1) eq function-identity(abs(?))</code>
 	     may be either <code>true</code> or <code>false</code>, because it is <termref def="implementation-dependent"/> 
-	        whether <code>abs#1</code> and <code>abs(?)</code> return the same function.</p>
+	        whether <code>abs#1</code> and <code>abs(?)</code> return the same function item.</p>
+	     <p>Similarly, <code>function-identity({1:()}) eq function-identity(map:entry(1, ()))</code>
+	     may be either <code>true</code> or <code>false</code>.</p>
+	     <p>Labels on function items are ignored because they typically represent information about how the
+	     function item was retrieved, rather than about the item itself. For example, a function item held in a map
+	     might be retrieved using a variety of lookup expressions, which may return the same function item but with
+	     different labels.</p>
 	  </fos:notes>
       <fos:examples>
          <fos:example>
@@ -21009,6 +21278,14 @@ return function-arity($initial)</eg></fos:expression>
             </fos:test>
             <fos:test>
                <fos:expression>function-identity(abs#1) eq function-identity(round#1)</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>function-identity({1:0}) eq function-identity({1:1})</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>function-identity([0]) eq function-identity([1]})</fos:expression>
                <fos:result>false()</fos:result>
             </fos:test>
          </fos:example>
@@ -21043,7 +21320,7 @@ return function-arity($initial)</eg></fos:expression>
             the result of the function is an empty sequence.</p>
          <p>For each annotation, a map is returned, with a single entry. The
             key of the map entry is the name of the annotation as an <code>xs:QName</code>.
-            The value of the entry is the the value of the annotation as a sequence of atomic items.
+            The value of the entry is the value of the annotation as a sequence of atomic items.
             If the annotation has no values, the associated value is an empty sequence.</p>
       </fos:rules>
       <fos:notes>
@@ -21243,7 +21520,7 @@ return filter(
       <fos:signatures>
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="zero" type="item()*"/>
+            <fos:arg name="init" type="item()*"/>
             <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -21258,12 +21535,12 @@ return filter(
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
-         <p>If <code>$input</code> contains a single item <code>$item1</code>, the function calls 
-            <code>$action($zero, $item1)</code>.</p>
-         <p>If <code>$input</code> contains a second item <code>$item2</code>, the function then calls 
-            <code>$action($zero1, $item2)</code>, where <code>$zero1</code> is the result after
-            processing the first item.</p>
+         <p>If <code>$input</code> is empty, the function returns <code>$init</code>.</p>
+         <p>If <code>$input</code> contains at least one item, the function calls 
+            <code>$action($init, $input[1])</code>, returning a value <var>A1</var>.</p>
+         <p>If <code>$input</code> contains a second item, the function then calls 
+            <code>$action(<var>A1</var>, $input[2])</code>, returning <var>A2</var>; to process the <var>n</var>th
+         item it calls <code>$action(<var>A/n-1</var>, $input[<var>N</var>])</code>.</p>
          <p>This continues in the same way until the end of the <code>$input</code> sequence; the final result is
          the result of the last call on <code>$action</code>.</p>
 
@@ -21271,18 +21548,18 @@ return filter(
       <fos:equivalent style="xquery-function">
 declare function fold-left(
   $input  as item()*,
-  $zero   as item()*,
+  $init   as item()*,
   $action as function(item()*, item()) as item()*
 ) as item()* {
   if (empty($input)) 
-  then $zero
-  else fold-left(tail($input), $action($zero, head($input)), $action)
+  then $init
+  else fold-left(tail($input), $action($init, head($input)), $action)
 };
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
-            the first argument is either the value of <code>$zero</code> or the result of a previous
+            the first argument is either the value of <code>$init</code> or the result of a previous
             application of <code>$action</code>, and the second 
             is any single item from the sequence <code>$input</code>.</p>
       </fos:errors>
@@ -21291,7 +21568,7 @@ declare function fold-left(
             “folding” or “reducing” a sequence. It typically takes a function that operates on a pair of
             values, and applies it repeatedly, with an accumulated result as the first argument, and
             the next item in the sequence as the second argument. The accumulated result is
-            initially set to the value of the <code>$zero</code> argument, which is conventionally a
+            initially set to the value of the <code>$init</code> argument, which is conventionally a
             value (such as zero in the case of addition, one in the case of multiplication, or a
             zero-length string in the case of string concatenation) that causes the function to
             return the value of the other argument unchanged.</p>
@@ -21374,10 +21651,10 @@ declare function fold-left(
             <fos:test>
                <fos:expression><eg>fold-left(
   1 to 5,
-  "$zero",
+  "$z",
   concat("$f(", ?, ", ", ?, ")")
 )</eg></fos:expression>
-               <fos:result>"$f($f($f($f($f($zero, 1), 2), 3), 4), 5)"</fos:result>
+               <fos:result>"$f($f($f($f($f($z, 1), 2), 3), 4), 5)"</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -21410,7 +21687,7 @@ return fold-left($input, (),
       <fos:signatures>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="zero" type="item()*"/>
+            <fos:arg name="init" type="item()*"/>
             <fos:arg name="action" type="fn(item(), item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -21426,33 +21703,33 @@ return fold-left($input, (),
             repeatedly to each item in turn, together with an accumulated result value.</p>
       </fos:summary>
       <fos:rules>
-         <p>If <code>$input</code> is empty, the function returns <code>$zero</code>.</p>
-         <p>Let <var>I/n</var> be the last item in <code>$input</code>, and let <var>Z/n</var> be <code>$zero</code>.
-            The function starts by calling <code>$action(<var>I/n</var>, $zero)</code>, producing
-         a result <var>Z/n-1</var>.</p>
+         <p>If <code>$input</code> is empty, the function returns <code>$init</code>.</p>
+         <p>Let <var>I/n</var> be the last item in <code>$input</code>, and let <var>A/n</var> be <code>$init</code>.
+            The function starts by calling <code>$action(<var>I/n</var>, $init)</code>, producing
+         a result <var>A/n-1</var>.</p>
          <p>If there is a previous item, <var>I/n-1</var>,
-            the function then calls <code>$action(<var>I/n-1</var>, <var>Z/n-1</var>)</code>, producing
-            the result <var>Z/n-2</var>.</p>
+            the function then calls <code>$action(<var>I/n-1</var>, <var>A/n-1</var>)</code>, producing
+            the result <var>A/n-2</var>.</p>
          <p>This continues in the same way until the start of the <code>$input</code> sequence is reached; the final result is
-         the value <var>Z/0</var>.</p>
+         the value <var>A/0</var>.</p>
          
       </fos:rules>
       <fos:equivalent style="xquery-function">
 declare function fold-right(
   $input  as item()*,
-  $zero   as item()*,
+  $init   as item()*,
   $action as function(item(), item()*) as item()*
 ) as item()* {
   if (empty($input))
-  then $zero
-  else $action(head($input), fold-right(tail($input), $zero, $action))
+  then $init
+  else $action(head($input), fold-right(tail($input), $init, $action))
 };
       </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error
             occurs if the supplied function <code>$action</code> cannot be applied to two arguments, where
             the first argument is any item in the sequence <code>$input</code>, and the second is either
-            the value of <code>$zero</code> or the result of a previous application of
+            the value of <code>$init</code> or the result of a previous application of
             <code>$action</code>.</p>
 
       </fos:errors>
@@ -21461,7 +21738,7 @@ declare function fold-right(
             “folding” or “reducing” a sequence. It takes a function that operates on a pair of
             values, and applies it repeatedly, with the next item in the sequence as the first
             argument, and the result of processing the remainder of the sequence as the second
-            argument. The accumulated result is initially set to the value of the <code>$zero</code>
+            argument. The accumulated result is initially set to the value of the <code>$init</code>
             argument, which is conventionally a value (such as zero in the case of addition, one in
             the case of multiplication, or a zero-length string in the case of string concatenation)
             that causes the function to return the value of the other argument unchanged.</p>
@@ -21502,10 +21779,10 @@ declare function fold-right(
             <fos:test>
                <fos:expression><eg>fold-right(
   1 to 5,
-  "$zero",
+  "$z",
   concat("$f(", ?, ", ", ?, ")")
 )</eg></fos:expression>
-               <fos:result>"$f(1, $f(2, $f(3, $f(4, $f(5, $zero)))))"</fos:result>
+               <fos:result>"$f(1, $f(2, $f(3, $f(4, $f(5, $z)))))"</fos:result>
             </fos:test>
          </fos:example>
          <!--<fos:example>
@@ -29616,7 +29893,7 @@ return array:filter(
       <fos:signatures>
          <fos:proto name="fold-left" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="zero" type="item()*" usage="navigation"/>
+            <fos:arg name="init" type="item()*" usage="navigation"/>
             <fos:arg name="action" type="fn(item()*, item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -29637,15 +29914,15 @@ return array:filter(
       <fos:equivalent style="xpath-expression"><![CDATA[
 fold-left(
   array:members($array),
-  $zero,
+  $init,
   fn($result, $member) { $action($result, map:get($member, 'value')) }
 )
        ]]></fos:equivalent>
       <fos:notes>
-         <p>If the supplied array is empty, the function returns <code>$zero</code>.</p>
-         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$zero => $action($m)</code>.</p>
+         <p>If the supplied array is empty, the function returns <code>$init</code>.</p>
+         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$init => $action($m)</code>.</p>
          <p>If the supplied array contains two members <code>$m</code> and <code>$n</code>, the function returns 
-            <code>$zero => $action($m) => $action($n)</code>; and similarly for an input array with more than two members.</p>
+            <code>$init => $action($m) => $action($n)</code>; and similarly for an input array with more than two members.</p>
          
       </fos:notes>
       <fos:examples>
@@ -29689,7 +29966,7 @@ fold-left(
       <fos:signatures>
          <fos:proto name="fold-right" return-type="item()*">
             <fos:arg name="array" type="array(*)" usage="inspection"/>
-            <fos:arg name="zero" type="item()*" usage="navigation"/>
+            <fos:arg name="init" type="item()*" usage="navigation"/>
             <fos:arg name="action" type="fn(item()*, item()*) as item()*" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
@@ -29710,15 +29987,15 @@ fold-left(
       <fos:equivalent style="xpath-expression"><![CDATA[
 fold-right(
   array:members($array),
-  $zero,
+  $init,
   fn($member, $result) { $action(map:get($member, 'value'), $result) }
 )
        ]]></fos:equivalent>
       <fos:notes>
-         <p>If the supplied array is empty, the function returns <code>$zero</code>.</p>
-         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$action($m, $zero)</code>.</p>
+         <p>If the supplied array is empty, the function returns <code>$init</code>.</p>
+         <p>If the supplied array contains a single member <code>$m</code>, the function returns <code>$action($m, $init)</code>.</p>
          <p>If the supplied array contains two members <code>$m</code> and <code>$n</code>, the function returns 
-            <code>$action($m, $action($n, $zero))</code>; and similarly for an input array with more than two members.</p>
+            <code>$action($m, $action($n, $init))</code>; and similarly for an input array with more than two members.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -33737,7 +34014,7 @@ for-each($input, fn($item, $pos) {
        <fos:signatures>
          <fos:proto name="scan-left" return-type="array(*)*">
             <fos:arg name="input" type="item()*" usage ="navigation"/>           
-            <fos:arg name="accum" type="item()*"/>           
+            <fos:arg name="init" type="item()*"/>           
             <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>   
          </fos:proto>
        </fos:signatures>
@@ -33755,11 +34032,11 @@ for-each($input, fn($item, $pos) {
             <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>, where <var>N</var> is the number of 
          items in <code>$input</code>. For values of <code>$n</code> in the range 0 to <var>N</var>,
             the value of the single member of array <code>$n+1</code> in the result sequence is the value of the expression
-            <code>fold-left( subsequence($input, 1, $n), $accum, $action )</code>.</p>
+            <code>fold-left( subsequence($input, 1, $n), $init, $action )</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 (0 to count($input)) 
-  ! [fold-left( subsequence($input, 1, .), $accum, $action )]
+  ! [fold-left( subsequence($input, 1, .), $init, $action )]
       </fos:equivalent>
       <fos:notes>
          <p>A practical implementation is likely to compute each array in the result sequence based on the value
@@ -33800,7 +34077,7 @@ for-each($input, fn($item, $pos) {
        <fos:signatures>
          <fos:proto name="scan-right" return-type="array(*)*">
             <fos:arg name="input" type="item()*" usage ="navigation"/>           
-            <fos:arg name="accum" type="item()*"/>           
+            <fos:arg name="init" type="item()*"/>           
             <fos:arg name="action" type="fn(item()*, item()) as item()*" usage="inspection"/>   
          </fos:proto>
        </fos:signatures>
@@ -33818,11 +34095,11 @@ for-each($input, fn($item, $pos) {
             <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>, where <var>N</var> is the number of 
          items in <code>$input</code>. For values of <code>$n</code> in the range 0 to <var>N</var>,
             the value of the single member of array <code>$n+1</code> in the result sequence is the value of the expression
-            <code>fold-right( subsequence($input, count($input)-$n+1), $accum, $action )</code>.</p>
+            <code>fold-right( subsequence($input, count($input)-$n+1), $init, $action )</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 (0 to count($input)) 
-  ! [fold-right( subsequence($input, count($input)-.+1), $accum, $action )]
+  ! [fold-right( subsequence($input, count($input)-.+1), $init, $action )]
       </fos:equivalent>
       <fos:notes>
          <p>A practical implementation is likely to compute each array in the result sequence based on the value
