@@ -6338,7 +6338,24 @@ declare record Particle (
                               <p><code>processing-instruction('pi') ⊆ processing-instruction()</code></p>
                            </example>
                         </item>
-                        <item>
+                        
+                     </olist>
+               </div5>
+               <div5 id="id-item-subtype-documents">
+                  <head>Subtyping Nodes: Document Nodes</head>
+                  <changes>
+                     <change issue="1624">The rules for subtyping of document node types have been refined.</change>
+                  </changes>
+                  
+                  <p>Given item types <var>A</var> and <var>B</var>, <code><var>A</var> ⊆ <var>B</var></code> 
+                     is true if any of the following rules apply.</p>
+                  
+                  <p>These rules apply after expanding <code>document-node(<var>N</var>)</code>, where <var>N</var>
+                  is a <nt def="NameTestUnion">NameTestUnion</nt>, to the equivalent 
+                     <code>document-node(element(<var>N</var>))</code>.</p>
+                  
+                  <olist>
+                     <item>
                            <p><var>A</var> is <code>document-node(<var>E</var>)</code> for any <var>E</var>,
                               and <var>B</var> is <code>document-node()</code>.</p>
                            <example>
@@ -6348,8 +6365,7 @@ declare record Particle (
                            </example>
                         </item>
                         <item>
-                           <p>All the following are true, after expanding <code>document-node(<var>NameTestUnion</var>)</code>
-                              to <code>document-node(element(<var>NameTestUnion)</var>)</code>:</p>
+                           <p>All the following are true:</p>
                            <olist>
                               <item><p><var>A</var> is <code>document-node(<var>A/e</var>)</code></p></item>
                               <item><p><var>B</var> is <code>document-node(<var>B/e</var>)</code></p></item>
@@ -6361,7 +6377,25 @@ declare record Particle (
                               <p><code>document-node(title) ⊆ document-node(*)</code>.</p>
                            </example>
                         </item>
-                     </olist>
+                     
+                        <item>
+                           <p><var>A</var> is <code>document-node(element(<var>A/1</var>|<var>A/2</var>|..., <var>T</var>))</code> 
+                              (where <var>T</var> may be absent),
+                           and for each <var>A/n</var>, <code>document-node(element(<var>A/n</var>, <var>T</var>)) ⊆ <var>B</var></code>.</p>
+                           <example>
+                              <head>Examples:</head>
+                              <ulist>
+                                 <item><p><code>document-node(a|b) ⊆ document-node(a) | document-node(b)</code></p></item>
+                                 <item><p><code>document-node(a|b) ⊆ document-node(a|b|c)</code></p></item> 
+                              </ulist>
+                           </example>
+
+                        </item>
+                     
+                  </olist>
+                  
+                  
+                  
                </div5>
                <div5 id="id-item-subtype-elements">
                   <head>Subtyping Nodes: Elements</head>
@@ -7021,6 +7055,12 @@ declare record Particle (
                   The coercion rules now allow conversion in either direction between <code>xs:hexBinary</code>
                   and <code>xs:base64Binary</code>.
                </change>
+               <change issue="1318" PR="1501">
+                  The coercion rules now apply recursively to the members of an array and the entries in a map.
+               </change>
+               <change issue="1862">
+                  The coercion rules now reorder the entries in a map when the required type is a record type.
+               </change>
             </changes>
 
                <p diff="chg" at="2022-11-17">
@@ -7146,15 +7186,31 @@ declare record Particle (
                      
                      <olist>
                         <item><p>If <var>J</var> matches (is an instance of) one of the alternatives
-                           in <var>R</var>, then:</p>
+                           in <var>R</var>, then <var>J</var> is coerced to the first alternative in 
+                           <var>R</var> that <var>J</var> matches.</p>
+                           
+                           <note>
+                              <p>There are two situations where coercing an item to a type that
+                              it already matches does not simply return the item unchanged:</p>
+                              
+                              <ulist>
+                                 <item><p>When the required type is a typed function type
+                                      (see <specref ref="id-function-test"/>),
+                                    then function coercion is applied to coerce <var>J</var> to that
+                                    function type, as described in <specref ref="id-function-coercion"/>.</p></item>
+                                 <item><p>When the required type is a record type and the supplied
+                                 value is a map, then coercion may change the <xtermref spec="DM40" ref="dt-entry-order"/>
+                                 of the entries in the map.</p></item>
+                              </ulist>
+                           </note>
                         
-                           <olist>
+                           <!--<olist>
                               <item><p>If the first alternative in <var>R</var> that <var>J</var>
                               matches is a typed function type (see <specref ref="id-function-test"/>),
                               then function coercion is applied to coerce <var>J</var> to that
                               function type, as described in <specref ref="id-function-coercion"/>.</p></item>
                               <item><p>Otherwise, <var>J</var> is used as is.</p></item>
-                           </olist>
+                           </olist>-->
                         
                         </item>
 
@@ -7357,6 +7413,7 @@ declare record Particle (
                            <errorref class="TY" code="0004"/>.</p></item>
                         <item><p>The corresponding value is converted to the required
                            map value type by applying the coercion rules recursively.</p></item>
+                        <item><p>The order of entries in the map remains unchanged.</p></item>
                      </olist>
 
                      <note><p>For example, if the required type is
@@ -7376,16 +7433,23 @@ declare record Particle (
                         to a new map as follows:</p>
                      <olist>
                         <item><p>The keys in the supplied map are unchanged.</p></item>
-                        <item><p>In any map entry whose key is an <code>xs:string</code> equal to the
-                        name of one of the field declarations in <var>R</var>, the corresponding
+                        <item><p>In any map entry whose key is equal to the
+                        name of one of the field declarations in <var>R</var> (under the rules
+                           of the <function>atomic-equal</function> function), the corresponding
                            value is converted to the required type defined by that field declaration, 
                            by applying the coercion rules recursively 
                            (but with XPath 1.0 compatibility mode treated as false).</p></item>
+                        <item><p>The order of entries in the map is changed: entries whose keys correspond
+                        to the names of field declarations in <var>R</var> appear first, in the order
+                        of the corresponding field declarations, and (if the record type is extensible)
+                        other entries then follow retaining their relative order in <var>J</var>.</p></item>
                      </olist>
 
                      <note><p>For example, if the required type is
-                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is <code>{ "longitude": 0, "latitude": 53.2 }</code>,
+                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is 
+                        <code>{ "latitude": 53.2, "longitude": 0 }</code>,
                         then the map is converted to <code>{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.</p></note>
+
                   </item>
 
                   <item>
@@ -8123,6 +8187,8 @@ return $f(12.3)]]></eg>
                   <p>Suppose the required type is <code>(record(x as xs:decimal, y as xs:decimal, *) | record(size as enum("S", "M", "L", "XL"), *))</code>.</p>
                   
                   <table role="medium">
+                     <col width="40%"/>
+                     <col width="60%"/>
                      <thead>
                         <tr>
                            <th align="left">Supplied Value</th>
@@ -21138,15 +21204,15 @@ and raises a <termref
          <head>Try/Catch Expressions</head>
          
          <changes>
-            <change issue="32" date="2023-05-23">
-               <code>$err:map</code> contains entries for all values that are bound to the
-                  single variables.
-            </change>
             <change issue="32" PR="493" date="2023-05-16">
-               A new variable <code>err:map</code> is available, capturing all error information in one place.
+               A new variable <code>$err:map</code> is available, capturing all error information in one place.
             </change>
             <change issue="689" date="2024-10-01">
                <code>$err:stack-trace</code> provides information about the current state of execution.
+            </change>
+            <change issue="501" date="2025-04-04">
+               A <code>finally</code> clause can be supplied, which will always be evaluated after the
+               the expressions of the try/catch clauses.
             </change>
          </changes>
            
@@ -21196,7 +21262,6 @@ query using the <code>fn:error()</code> function.</p>
                 <code>catch</code> clause whose ErrorList is
                 <code>err:*</code> or <code>*:FOER0000</code> or
                 <code>*</code>.</p>
-
 
          <p>Within the scope of the <code>catch</code> clause, a
             number of variables are implicitly declared, giving
@@ -21327,6 +21392,25 @@ query using the <code>fn:error()</code> function.</p>
                   the detection of some errors. </p>
          </note>
 
+         <p>If a concluding <code>finally</code> clause exists, its expression will be evaluated
+            after the expressions of the <code>try</code> clause and a possibly evaluated
+            <code>catch</code> clause. If it raises an error, this error is returned instead of
+            a result or an error that resulted from a <code>try</code> or <code>catch</code>
+            expression. If it raises no error, it must yield an empty sequence;
+            otherwise, a <termref def="dt-dynamic-error">dynamic error</termref>
+            is raised <errorref class="DY" code="0153"/>.</p>
+
+         <note>
+            <p>A <code>finally</code> clause can be used to ensure that an expression will always be
+               evaluated, no matter if the <code>try</code> expression is successful or if it fails.
+               For example, <function>fn:message</function> can be called in the <code>finally</code>
+               clause to ensure that an expression has been evaluated even if an error is raised.</p>
+         </note>
+
+         <note>
+            <p>If <code>try</code> and <code>finally</code> clauses are specified,
+            <code>catch</code> clauses can be omitted.</p>
+         </note>
 
          <p>Here are some examples of try/catch expressions.</p>
 
@@ -21414,6 +21498,20 @@ local:thrice(try { "oops" } catch * { 3 } )
   1 + <empty/>
 } catch * {
   serialize($err:map, {'method':'adaptive'})
+}]]></eg>
+            </item>
+
+            <item>
+               <p><function>fn:message</function> will always be called, no matter if the division succeeds:</p>
+
+               <eg role="parse-test"><![CDATA[
+for $i in 0 to 2
+return try {
+  1 div $i
+} catch err:FOAR0001 {
+  'division error'
+} finally {
+  message('1 was divided by ' || $i)
 }]]></eg>
             </item>
 
