@@ -475,6 +475,8 @@
       </fos:field>
    </fos:record-type>
    
+ 
+   
    <fos:function name="node-name" prefix="fn">
       <fos:signatures>
          <fos:proto name="node-name" return-type="xs:QName?">
@@ -26739,9 +26741,9 @@ return json-to-xml($json, $options)]]></eg>
       </fos:changes>
    </fos:function>
    
-   <fos:function name="element-to-map-conversion-plan" prefix="fn">
+   <fos:function name="element-to-map-plan" prefix="fn">
       <fos:signatures>
-         <fos:proto name="element-to-map-conversion-plan" return-type="map(xs:string, record(*))">
+         <fos:proto name="element-to-map-plan" return-type="map(xs:string, record(*))">
             <fos:arg name="input" type="(document-node() | element(*)) *"/>
          </fos:proto>
       </fos:signatures>
@@ -26764,6 +26766,51 @@ return json-to-xml($json, $options)]]></eg>
          <p>The rules followed by the function, and the detailed format of the conversion plan, are described
          in <specref ref="id-creating-a-conversion-plan"/>.</p>
       </fos:rules>
+      <fos:equivalent style="xpath-expression">
+let $data-type := fn($nodes as node()*) {
+  if (every($nodes ! (. castable as xs:boolean))) then "boolean"
+  else if (every($nodes ! (. castable as xs:numeric))) then "numeric"
+  else ()
+}
+let $name := fn($node as node()) {
+  if (namespace-uri($node)) 
+  then expanded-QName(node-name($node))
+  else local-name($node)
+}  
+return (
+  for $ee in $input/descendant-or-self::*
+  group by $n := $name($ee)
+  return { $n :
+           if (empty($ee/(*|text())))
+             then { 'layout' : if (empty($ee/@*)) 
+                               then 'empty' 
+                               else 'empty-plus' } 
+           else if (empty($ee/*)) 
+             then map:merge((
+                    if (empty($ee/@*)) 
+                      then {'layout': 'simple'}
+                      else {'layout': 'simple-plus'},
+                    $data-type($ee) ! { 'type': . }
+                 ))
+           else if (empty($ee/text()[normalize-space()])) 
+             then if (all-equal($ee/*/node-name()) and exists($ee/*[2]))
+                    then { 'layout': if (empty($ee/@*)) 
+                                     then 'list' 
+                                     else 'list-plus',
+                           'child': $name(head($ee/*))
+                         }
+                    else { 'layout' : if (every($ee ! all-different(*/node-name())))
+                                      then 'record'
+                                      else 'sequence'
+                         }             
+           else {'layout': 'mixed'}
+        },
+  for $a in $input//@*
+  group by $n := $name($a)
+  let $t := $data-type($a)
+  return $t ! { `@{$n}`: { 'type': $t } }
+) => map:merge()        
+      </fos:equivalent>
       <fos:notes>
          <p>The conversion plan is organized by element and attribute name, so its effectiveness depends on the 
          <code>$input</code> collection being homogenous in its structure, and representative of the documents
@@ -26789,7 +26836,7 @@ return json-to-xml($json, $options)]]></eg>
          <fos:example>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
-element-to-map-conversion-plan(<a><b>3</b><b>4</b></a>)
+element-to-map-plan(<a><b>3</b><b>4</b></a>)
                ]]></eg></fos:expression>
                <fos:result><eg>
 { 'a': { 'layout': 'list', 'child': 'b' },
@@ -26799,7 +26846,7 @@ element-to-map-conversion-plan(<a><b>3</b><b>4</b></a>)
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
-element-to-map-conversion-plan((<a x="2">red</a>, <a x="3">blue</a>))
+element-to-map-plan((<a x="2">red</a>, <a x="3">blue</a>))
                ]]></eg></fos:expression>
                <fos:result><eg>
 { 'a': { 'layout': 'simple-plus' },
@@ -26809,7 +26856,7 @@ element-to-map-conversion-plan((<a x="2">red</a>, <a x="3">blue</a>))
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
-element-to-map-conversion-plan(
+element-to-map-plan(
    <a xmlns="http://example.ns">H<sub>2</sub>SO<sub>4</sub></a>
 )
                ]]></eg></fos:expression>
@@ -26821,7 +26868,7 @@ element-to-map-conversion-plan(
             </fos:test>   
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
-element-to-map-conversion-plan((<a><b/><b/></a>, <a><b/><c/></a>))
+element-to-map-plan((<a><b/><b/></a>, <a><b/><c/></a>))
                ]]></eg></fos:expression>
                <fos:result><eg>
 { 'a': { 'layout': 'sequence' },
@@ -26872,14 +26919,14 @@ element-to-map-conversion-plan((<a><b/><b/></a>, <a><b/><c/></a>))
             <fos:option key="plan">
                <fos:meaning>A conversion plan, supplied as a map whose keys represent element
                   and attribute names. The plan might be generated using the function
-                  <function>element-to-map-conversion-plan</function>, or it might be constructed
+                  <function>element-to-map-plan</function>, or it might be constructed
                   in some other way. The format of the plan is described in <specref ref="id-creating-a-conversion-plan"/>.
                </fos:meaning>
-               <fos:type>map(xs:string, record(*))</fos:type>
+               <fos:type>map(xs:string, record(layout?, child?, type?, *))</fos:type>
                <fos:default>{}</fos:default>
             </fos:option>
             <fos:option key="attribute-marker">
-               <fos:meaning>A string that is prefixed to any key value in the output that represents
+               <fos:meaning>A string that is prepended to any key value in the output that represents
                an XDM attribute node in the input. The string may be empty. If, after applying the requested
                prefix (or no prefix) there is a conflict between the names of attributes and child elements,
                then the requested prefix (or lack thereof) is ignored and the default prefix <code>"@"</code>
@@ -26921,7 +26968,7 @@ element-to-map-conversion-plan((<a><b/><b/></a>, <a><b/><c/></a>))
          corresponding value represents the attributes and children of the element. This key-value pair will be added 
          to the content representing its parent element, in a way that depends on the parent element's layout.</p>
          
-         <p>The representation of other kinds of node depends on the layout chosen for its parent element.</p>
+         <p>The representation of a node of any other kind depends on the layout chosen for its parent element.</p>
          
          
       </fos:rules>
@@ -26960,11 +27007,6 @@ element-to-map-conversion-plan((<a><b/><b/></a>, <a><b/><c/></a>))
   "last": "Smith" 
 } }</eg></fos:result>
             </fos:test>
-    "first": "Jane",
-    "last": "Smith" 
-  } 
-}</eg></fos:result>
-            </fos:test>
            <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[element-to-map(
     <name xmlns="http://example.ns">
@@ -26984,7 +27026,25 @@ element-to-map-conversion-plan((<a><b/><b/></a>, <a><b/><c/></a>))
   } 
 }</eg></fos:result>
             </fos:test>            
- 
+ <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[element-to-map(
+    <name xmlns="http://example.ns">
+      <first>Jane</first>
+      <middle>Elizabeth</middle>
+      <middle>Mary</middle>
+      <last>Smith</last>
+    </name>, 
+    { 'plan': {'name': { 'layout': 'record' },
+               'middle': { 'layout': 'deep-skip' },
+      'name-format' : 'local'
+    }
+  )]]></eg></fos:expression>
+               <fos:result><eg>{ "name": { 
+    "first": "Jane",
+    "last": "Smith" 
+  } 
+}</eg></fos:result>
+            </fos:test> 
          </fos:example>
       </fos:examples>
       <fos:changes>
