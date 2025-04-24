@@ -6704,9 +6704,9 @@ return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A mor
       $A?values() - returns the items in $A, as a sequence
       $A?add($k) - returns a new atomic set containing an additional item
       $A?remove($k) - returns a new atomic set in which the given item is absent
-      $A?union($B) - returns a new atomic set holding the union of $A and $B
-      $A?intersect($B) - returns a new atomic set holding the intersection of $A and $B
-      $A?except($B) - returns a new atomic set holding the difference of $A and $B
+      $A?union($B) - returns a new atomic set containing the union of $A and $B
+      $A?intersect($B) - returns a new atomic set containing the intersection of $A and $B
+      $A?except($B) - returns a new atomic set containing the difference of $A and $B
    &lt;/xsl:note&gt;
    
    &lt;xsl:record-type name="set:atomic-set" 
@@ -6734,60 +6734,60 @@ return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A mor
                  as="%method fn($value as set:atomic-set) as set:atomic-set"/&gt; 
    &lt;/xsl:record-type&gt;
    
+   &lt;xsl:variable name="DATA" select="'_data'" visibility="private"/&gt;
+   
+   &lt;xsl:note&gt;
+      The private function set:replaceData processes the internal map
+      by applying a supplied function, and returns a new atomic set
+      with the resulting internal map 
+   &lt;/xsl:note&gt;
+   
+   &lt;xsl:function name="set:replaceData" 
+                 visibility="private" 
+                 as="map(xs:anyAtomicType, xs:boolean)"&gt;
+      &lt;xsl:param name="input" as="set:atomic-set"/&gt;
+      &lt;xsl:param name="update" as="fn(map(*)) as map(*)"/&gt;
+      &lt;xsl:sequence select="map:put($input, $DATA, $update($input?$DATA))"/&gt;
+   &lt;/xsl:function&gt;   
+   
    &lt;xsl:function name="set:build" as="set:atomic-set" visibility="public"&gt;
       &lt;xsl:param name="values" as="xs:anyAtomicType*" default="()"/&gt;
-      &lt;xsl:map&gt;
-         &lt;xsl:map-entry name="_data"
-               select="map:build($values, 
-                                 values:=true#0, 
-                                 {'duplicates': 'use-first'})"/&gt;
-         &lt;xsl:map-entry name="size"
-               select="%method fn() as xs:integer {
-                          map:size(?_data)
-                       }"/&gt;
-         &lt;xsl:map-entry name="empty"
-               select="%method fn() as xs:boolean {
-                          map:empty(?_data)
-                       }"/&gt;
-         &lt;xsl:map-entry name="contains"
-               select="%method fn($value as xs:anyAtomicType) as xs:boolean {
-                          map:contains(?_data, $value)
-                       }"/&gt;
-         &lt;xsl:map-entry name="contains-all"
-               select="%method fn($other as set:atomic-set) as xs:boolean {
-                          every($value, map:contains(?_data, ?))
-                       }"/&gt;
-         &lt;xsl:map-entry name="values"
-               select="%method fn() as xs:anyAtomicType* {
-                          keys(?_data)
-                       }"/&gt;
-         &lt;xsl:map-entry name="add"
-               select="%method fn($value as xs:anyAtomicType) as xs:anyAtomicType* {
-                          . =&gt; map:put("_data",
-                                       map:put(?_data, $value, true()))
-                       }"/&gt;
-         &lt;xsl:map-entry name="remove"
-               select="%method fn($value as xs:anyAtomicType) as xs:anyAtomicType* {
-                          . =&gt; map:put("_data",
-                                       map:remove(?_data, $value, true()))
-                       }"/&gt;
-         &lt;xsl:map-entry name="union"
-               select="%method fn($other as set:atomic-set) as set:atomic-set {
-                          . =&gt; map:put("_data",
-                                       map:merge((?_data, $other?_data),
-                                                 {'duplicates': 'use-first'}))
-                       }"/&gt;
-         &lt;xsl:map-entry name="intersect"
-               select="%method fn($other as set:atomic-set) as set:atomic-set {
-                          . =&gt; map:put("_data", 
-                                       map:filter(?_data, $other?contains)) 
-                       }"/&gt;
-         &lt;xsl:map-entry name="except"
-               select="%method fn($other as set:atomic-set) as set:atomic-set {
-                          . =&gt; map:put("_data", 
-                                       map:remove(?_data, $other?values())) 
-                       }"/&gt;
-      &lt;/xsl:map&gt;
+      &lt;xsl:record as="set:atomic-set"
+         _data=
+            "map:build($values, values:=true#0, {'duplicates': 'use-first'})"
+         size=
+            "%method fn() as xs:integer 
+                     { map:size(?$DATA) }"
+         empty=
+            "%method fn() as xs:boolean 
+                     { map:empty(?$DATA) }"
+         contains=
+            "%method fn($value as xs:anyAtomicType) as xs:boolean 
+                     { map:contains(?$DATA, $value) }"
+         contains-all=
+            "%method fn($other as set:atomic-set) as xs:boolean 
+                     { every($value, map:contains(?$DATA, ?)) }"
+         values=
+            "%method fn() as xs:anyAtomicType* 
+                     { keys(?$DATA) }"
+         add=
+            "%method fn($value as xs:anyAtomicType) as xs:anyAtomicType*
+                     { set:replaceData(., map:put(?, $value, true())) }"
+         remove=
+            "%method fn($value as xs:anyAtomicType) as xs:anyAtomicType* 
+                     { set:replaceData(., map:remove(?, $value)) }"
+         union=
+            "%method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., fn($this) {map:merge(($this, $other?$DATA),
+                                                    {'duplicates': 'use-first'})})
+                     }"
+         intersect=
+            "%method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:filter(?, $other?contains)) }"
+         except=
+            "%method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:remove(?, $other?values())) }"/&gt;
+      
    &lt;/xsl:function&gt;
    
    
