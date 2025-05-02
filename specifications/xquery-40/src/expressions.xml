@@ -9729,6 +9729,11 @@ At evaluation time, the value of a variable reference is the value to which the 
          
          <div4 id="id-eval-dynamic-function-call">
                <head>Evaluating Dynamic Function Calls</head>
+            
+            <changes>
+               <change issue="1240">A dynamic function call can now be applied to a sequence of functions, and in particular
+               to an empty sequence. This makes it easier to chain a sequence of calls.</change>
+            </changes>
            
             
             <p>This section applies to dynamic function calls whose arguments do not include
@@ -9746,21 +9751,38 @@ At evaluation time, the value of a variable reference is the value to which the 
 
 
                <olist>
-
+                  
                   <item>
                      <p>
-                          The <termref def="dt-function-item"/> <var>FI</var> to be called
-                          is obtained by evaluating the base expression of the function call.
-                              If this yields a sequence consisting of a single function item
-                              whose arity matches the number of arguments in the <code>ArgumentList</code>,
-                              let <var>FI</var> denote that function item.
-                              Otherwise, a type error is raised
+                          The base expression of the function call is evaluated.
+                          If this is not of type <code>function(*)*</code> (a sequence
+                        of zero or more function items) then a type error is raised <errorref class="TY" code="0004"/>.
+                     </p>
+                 </item>
+                  
+                  <item>
+                     <p>The result of the dynamic function call is the <termref def="dt-sequence-concatenation"/>
+                        of the results of applying each function item individually, retaining order. That is, the
+                        result of <code><var>F</var>(<var>X</var>, <var>Y</var>, ...)</code> is 
+                        <code>for $FI in <var>F</var> return <var>$FI</var>(<var>X</var>, <var>Y</var>, ...)</code>.
+                        The result of a dynamic function call applied to a single function item <var>FI</var> is defined
+                        by the rules that follow.
+                     </p>
+                  </item>
+                  <item>
+                     <p>
+                              <errorref
+                                 class="TY" code="0004"/>.
+                              If the arity of <var>FI</var> does not match the number of arguments in the <code>ArgumentList</code>,
+                              a type error is raised
                               <errorref
                                  class="TY" code="0004"/>.
                             </p>
-                     <note diff="add" at="A"><p>Keyword arguments are not allowed in a dynamic function call.</p></note>
+                     
                        
                   </item>
+
+                  
 
                   <item>
                      <p>
@@ -9910,7 +9932,35 @@ At evaluation time, the value of a variable reference is the value to which the 
                                     </p>
                                     </item>
                                  </olist>
-                                 <example>
+                                 
+
+                              </item>
+
+                              <item>
+                                 <p>                                  
+                                  If the implementation of <var>FI</var> is
+                                  not an &language; expression
+                                  (for example, if <var>FI</var> is
+                                  a <termref
+                                       def="dt-system-function">system function</termref>
+                                    <phrase role="xquery">or an <termref def="dt-external-function"
+                                          >external function</termref>
+                                    </phrase>), 
+                                    the <phrase diff="chg" at="2023-03-11">body</phrase> of the function is
+                                       evaluated, and the result is converted
+                                       to the declared return type, in the same way as for a 
+                                       static function call (see <specref ref="id-function-calls"/>).</p>
+                                 
+                                 <p>Errors may be raised in the same way.</p>
+                                    
+                                
+                                 
+                              </item>
+
+                           
+               </olist>
+            
+            <example>
                                     <head>Derived Types and Nonlocal Variable Bindings</head>
                                     <p>
                                        <code>$incr</code> is a nonlocal variable that is available within the function because its variable binding has been added to the variable values of the function..  Even though the parameter and return type of this function are both <code>xs:decimal</code>,
@@ -9944,32 +9994,34 @@ let $vat := function { @vat + @price }
 return $vat(doc('wares.xml')/shop/article)
 ]]></eg>
                                  </example>
-
-                              </item>
-
-                              <item>
-                                 <p>                                  
-                                  If the implementation of <var>FI</var> is
-                                  not an &language; expression
-                                  (for example, <var>FI</var> is
-                                  a <termref
-                                       def="dt-system-function">system function</termref>
-                                    <phrase role="xquery">or an <termref def="dt-external-function"
-                                          >external function</termref>,
-                                    </phrase>
-                                    the <phrase diff="chg" at="2023-03-11">body</phrase> of the function is
-                                       evaluated, and the result is converted
-                                       to the declared return type, in the same way as for a 
-                                       static function call (see <specref ref="id-function-calls"/>).</p>
-                                 
-                                 <p>Errors may be raised in the same way.</p>
-                                    
-                                
-                                 
-                              </item>
-
-                           
-               </olist>
+            
+            <example>
+               <head>Chaining method calls</head>
+               
+               <p>Methods are described in <specref ref="id-methods"/>, and are commonly used in 
+                  dynamic function calls such as <code>$rectangle?area()</code>. In this example <code>$rectangle</code>
+               is typically a map, and <code>area</code> is the key of one of the entries in the map, the value
+               of the entry being a <termref def="dt-method"/>. The lookup expression
+                  <code>$rectangle?area</code> returns a function item whose captured context includes the containing
+               map, and the dynamic function call then evaluates the body of this method, which is
+               able to access the containing map as the context item.</p>
+               
+               <p>Such calls can be chained. For example if <code>$rectangle?resize(2)</code> returns a rectangle that
+               is twice the size of the original, then <code>$rectangle?resize(2)?area()</code> returns the area of the
+               enlarged rectangle.</p>
+               
+               <p>This kind of chaining extends to the case where a method returns zero or more maps. For example, suppose
+               that rectangles are nested, and that <code>$rectangle?contents()</code> delivers a sequence of zero or more 
+               rectangles. Then the expression <code>$rectangle?area() - sum($rectangle?contents()?area())</code> returns
+               the difference between the area of the containing rectangle and the total area of the contained
+               rectangles. This works because the dynamic function call <code>$rectangle?contents()?area()</code>
+               applies the function <code>area</code> to each of the function items in the sequence returned
+               by the expression <code>$rectangle?contents()</code>.</p>
+               
+               
+            </example>
+            
+               <note diff="add" at="A"><p>Keyword arguments are not allowed in a dynamic function call.</p></note>
             </div4>
             </div3>
 
@@ -9986,11 +10038,15 @@ return $vat(doc('wares.xml')/shop/article)
                <p>The rules for partial function application in static function calls and dynamic function
                calls have a great deal in common, but they are stated separately below for clarity.</p>
                
-               <p>In each case, the result of a partial function application is a 
-                  <termref def="dt-function-item"/>, whose
+               <p>Partial function application delivers
+                  <termref def="dt-function-item">function items</termref>, whose
                   arity is equal to the number of placeholders in the call.</p>
                
-               <p>More specifically, the result of the partial function application is 
+               <p>A static partial function application always delivers one <termref def="dt-function-item"/>.
+               A dynamic partial function application delivers one <termref def="dt-function-item"/> for each
+               <termref def="dt-function-item"/> in the input.</p>
+               
+               <p>More specifically, each function item in the result of the partial function application is 
                   a <termref
                   def="dt-partially-applied-function"
                   >partially applied function</termref>.
@@ -10014,19 +10070,6 @@ return $vat(doc('wares.xml')/shop/article)
                         arguments.</p>
                   </item>
                   
-                  <!--<item><p>If <var>FD</var> is <termref def="dt-variadic"/>, and
-                     the function call has no keyword arguments, then the static function call
-                  <code><var>F</var>(<var>ARGS</var>)</code> is transformed into the dynamic
-                  call <code><var>F</var>#<var>N</var>(<var>ARGS</var>)</code>, where <var>N</var>
-                  is the number of supplied arguments.</p>
-                  <note><p>For example, <code>fn:concat('[', ?, ']')</code> is transformed
-                  into the expression <code>fn:concat#3('[', ?, ']')</code>. For the meaning
-                     of a named function reference applied to a variadic function, 
-                     see <specref ref="id-named-function-ref"/>.</p></note></item>-->
-                  
-                  <!--<item><p>If <var>FD</var> is <termref def="dt-variadic"/>, and
-                     the function call does have keyword arguments, then a static error
-                     is raised <errorref class="ST" code="0017"/>. </p></item>-->
                   
                   
                   <item>
@@ -10165,10 +10208,24 @@ return $sum-of-squares(1 to 3)]]></eg>
 
                <olist>
                   <item>
-                     <p>The <termref def="dt-function-item"/> <var>FI</var> to be partially applied is 
-                        determined in the same way as for a 
-                        dynamic function call without placeholders, as described in <specref ref="id-dynamic-function-invocation"/>.
-                        For this purpose an <code>ArgumentPlaceholder</code> contributes to the count of
+                     <p>
+                          The base expression of the function call is evaluated.
+                          If this is not of type <code>function(*)*</code> (a sequence
+                        of zero or more function items) then a type error is raised.
+                     </p>
+                 </item>
+                  
+                  <item>
+                     <p>The result of the dynamic function call is the <termref def="dt-sequence-concatenation"/>
+                        of the results of partial applying each function item, retaining order. That is, the
+                        result of <code><var>F</var>(<var>X</var>, <var>Y</var>, ...)</code> is 
+                        <code>for $FI in <var>F</var> return <var>$FI</var>(<var>X</var>, <var>Y</var>, ...)</code>.
+                        The result of a dynamic function call applied to a single function item <var>FI</var> is defined
+                        by the rules that follow.
+                     </p>
+                  </item>
+                  <item>
+                     <p>An <code>ArgumentPlaceholder</code> contributes to the count of
                         arguments.</p>
                   </item>
                   
