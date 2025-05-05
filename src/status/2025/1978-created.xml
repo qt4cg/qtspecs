@@ -1,0 +1,132 @@
+<item>
+   <title>Issue #1978 created</title>
+   <pubDate>2025-05-04T00:55:54Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/1978</link>
+   <guid>https://qt4cg.org/@qt4cg/2025/#created-1978</guid>
+   <description>&lt;div&gt;&lt;p&gt;Function `map:build` does not allow expressing the dependency of a value on its key. Some simple types of maps cannot be built.&lt;/p&gt;&lt;div class="markup"&gt;&lt;h2&gt;The Problem&lt;/h2&gt;
+&lt;p&gt;Function &lt;a href="https://qt4cg.org/specifications/xpath-functions-40/Overview.html#func-map-build"&gt;&lt;strong&gt;&lt;code&gt;map:build&lt;/code&gt;&lt;/strong&gt;&lt;/a&gt;, does not allow to explicitly define the functional dependency of a value on its key.&lt;/p&gt;
+&lt;p&gt;As result, it is unusable for creating even such simple maps as the following:&lt;/p&gt;
+&lt;p&gt;The input is:&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;("apple", "apricot", "banana", "blueberry", "cherry")&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;$keys&lt;/code&gt; function is:
+&lt;code&gt;$keys := fn($x){characters($x)}&lt;/code&gt;
+That is, every  character, in every input string, is a key.&lt;/p&gt;
+&lt;p&gt;We need the values to be: if an input string contains the key two or more times, then each such string, else the empty sequence.&lt;/p&gt;
+&lt;p&gt;The expected map  to be produced is:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;{
+  "a":  "banana",
+  "b": "blueberry",
+  "c": (),
+  "e": "blueberry",
+  "h": (),
+  "i": (),
+  "l": (), (: Lowercase L :)
+  "n", "banana",
+  "o", (),
+  "p": "apple",
+  "r": ("cherry", "blueberry"),
+  "t": (),
+  "y": ()
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h2&gt;Solution&lt;/h2&gt;
+&lt;p&gt;We provide a new definition of &lt;strong&gt;&lt;code&gt;map:build&lt;/code&gt;&lt;/strong&gt; - this can be a complete replacement of the current function, or could be added as a new overload.
+I am in the process of writing a PR, and your feedback would be appreciated.&lt;/p&gt;
+&lt;p&gt;The definition is simple:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $mapBuild := fn(
+$input	as item()*,	
+$keys	as (fn($item as item(), $position as xs:integer) as xs:anyAtomicType*),
+$value	as (fn($key as xs:anyAtomicType, $input as item()*) as item()*)
+) as map(*)
+{
+  let $allKeys := distinct-values(for-each($input, $keys))
+   return
+     $allKeys ! map:pair(., $value(., $input)) =&amp;gt; map:of-pairs()
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;As can be seen from executing the code below, the redefined function can be successfully used to build the "problematic" map above, and also all currently provided examples in the FO Spec for the function &lt;code&gt;map:build&lt;/code&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;let $mapBuild := fn(
+$input	as item()*,	
+$keys	as (fn($item as item(), $position as xs:integer) as xs:anyAtomicType*),
+$value	as (fn($key as xs:anyAtomicType, $input as item()*) as item()*)
+) as map(*)
+{
+  let $allKeys := distinct-values(for-each($input, $keys))
+   return
+     $allKeys ! map:pair(., $value(., $input)) =&amp;gt; map:of-pairs()
+}
+ return
+   let $input := ("apple", "apricot", "banana", "blueberry", "cherry"),
+       $employees :=
+         &amp;lt;employees&amp;gt;
+           &amp;lt;employee name="Jim Nelson" location="New York" ssn="1234567890" salary="123456"/&amp;gt;
+           &amp;lt;employee name="Ann West" location="New York" ssn="0987654321" salary="99999"/&amp;gt;
+           &amp;lt;employee name="Peter Smith" location="Seattle" ssn="123454321" salary="155223"/&amp;gt;
+           &amp;lt;employee name="Karen Johnson" location="Seattle" ssn="5432198760" salary="175000"/&amp;gt;
+           &amp;lt;employee name="Jonh Lagarde" location="Boston" ssn="9999999999" salary="145000"/&amp;gt;
+           &amp;lt;employee name="Samantha Weird" location="Boston" ssn="1111111111" salary="153000"/&amp;gt;
+         &amp;lt;/employees&amp;gt;
+    return
+(    
+     $mapBuild(
+       $input,
+       fn($string, $pos) {distinct-values(characters($string))},
+       fn($key, $input)
+       {
+         filter($input, fn($string, $pos){$key = duplicate-values(characters($string))}) 
+       }
+     ),
+     $mapBuild((), string#1, string#1),
+     $mapBuild(1 to 10, fn {. mod 3}, fn($key, $input){filter($input, fn{$key = . mod 3})}),
+     $mapBuild(1 to 5, identity#1, format-integer(?, "w")),
+     $mapBuild(("January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"),
+               substring(?, 1, 1), fn($key, $input){filter($input, fn{$key = substring(., 1, 1)})}
+              ),
+     $mapBuild(
+        ("apple", "apricot", "banana", "blueberry", "cherry"),
+        substring(?, 1, 1), fn($key, $input){sum($input[$key eq substring(., 1, 1)] ! string-length(.))}
+     ),
+     $mapBuild(
+       ('Wang', 'Liu', 'Zhao'),
+       fn($name, $pos) { $name },
+       fn($key, $input){index-of($input, $key)}
+     ),  
+     let $titles := 
+       &amp;lt;titles&amp;gt;
+        &amp;lt;title&amp;gt;A Beginner’s Guide to &amp;lt;ix&amp;gt;Java&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;
+        &amp;lt;title&amp;gt;Learning &amp;lt;ix&amp;gt;XML&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;
+        &amp;lt;title&amp;gt;Using &amp;lt;ix&amp;gt;XML&amp;lt;/ix&amp;gt; with &amp;lt;ix&amp;gt;Java&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;
+      &amp;lt;/titles&amp;gt;
+     return
+       $mapBuild($titles/title, 
+                 fn($title){$title/ix}, 
+                 fn($key, $input){filter($input, fn($elem){$key = $elem/ix})}
+               ),
+      $mapBuild(
+        $employees//employee, fn{@ssn}, fn($key, $input){filter($input, fn($elem){$key = $elem/@ssn})}
+      ),
+      $mapBuild(
+        $employees//employee, fn{@location}, fn($key, $input) {count(filter($input, fn($elem){$key = $elem/@location}))}
+      ),
+      $mapBuild(
+        $employees//employee, fn{@location}, fn($key, $input) {max((filter($input, fn($elem){$key = $elem/@location}))/xs:decimal(@salary))}
+      )
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;All results (executed with BaseX) are the expected, correct ones:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xq"&gt;{"a":"banana","p":"apple","l":(),"e":"blueberry","r":("blueberry","cherry"),"i":(),"c":(),"o":(),"t":(),"b":"blueberry","n":"banana","u":(),"y":(),"h":()}
+{}
+{1:(1,4,7,10),2:(2,5,8),0:(3,6,9)}
+{1:"one",2:"two",3:"three",4:"four",5:"five"}
+{"J":("January","June","July"),"F":"February","M":("March","May"),"A":("April","August"),"S":"September","O":"October","N":"November","D":"December"}
+{"a":12,"b":15,"c":6}
+{"Wang":1,"Liu":2,"Zhao":3}
+{"Java":(&amp;lt;title&amp;gt;A Beginner’s Guide to &amp;lt;ix&amp;gt;Java&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;,&amp;lt;title&amp;gt;Using &amp;lt;ix&amp;gt;XML&amp;lt;/ix&amp;gt; with &amp;lt;ix&amp;gt;Java&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;),"XML":(&amp;lt;title&amp;gt;Learning &amp;lt;ix&amp;gt;XML&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;,&amp;lt;title&amp;gt;Using &amp;lt;ix&amp;gt;XML&amp;lt;/ix&amp;gt; with &amp;lt;ix&amp;gt;Java&amp;lt;/ix&amp;gt;&amp;lt;/title&amp;gt;)}
+{"1234567890":&amp;lt;employee name="Jim Nelson" location="New York" ssn="1234567890" salary="123456"/&amp;gt;,"0987654321":&amp;lt;employee name="Ann West" location="New York" ssn="0987654321" salary="99999"/&amp;gt;,"123454321":&amp;lt;employee name="Peter Smith" location="Seattle" ssn="123454321" salary="155223"/&amp;gt;,"5432198760":&amp;lt;employee name="Karen Johnson" location="Seattle" ssn="5432198760" salary="175000"/&amp;gt;,"9999999999":&amp;lt;employee name="Jonh Lagarde" location="Boston" ssn="9999999999" salary="145000"/&amp;gt;,"1111111111":&amp;lt;employee name="Samantha Weird" location="Boston" ssn="1111111111" salary="153000"/&amp;gt;}
+{"New York":2,"Seattle":2,"Boston":2}
+{"New York":123456,"Seattle":175000,"Boston":153000}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;img src="https://github.com/user-attachments/assets/716658e3-8fac-4cc4-96fb-d6981037c4df" alt="Image"/&gt;&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>

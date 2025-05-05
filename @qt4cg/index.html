@@ -1,6 +1,978 @@
 <!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses</title></head><body><main><article><h1>@qt4cg statuses</h1><p>This page displays recent status
             updates
             about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2025/">2025</a>, <a href="2024/">2024</a>, <a href="2023/">2023</a>, <a href="2022/">2022</a>, <a href="2021/">2021</a>, <a href="2020/">2020</a></p><div class="toots">
+<div class="toot" id="created-1979"><h2>Issue #1979 created<span class="toot-id"> #created-1979</span></h2><div class="pubdate">04 May at 09:36:58 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1979">https://github.com/qt4cg/qtspecs/issues/1979</a></div><details><summary>Records: Type Safety</summary><div class="markup"><p>One cognitive challenge with records is to internalize that records are not independent types, but only map constraints. As a consequence, no type safety guarantees exist when records are accessed and updated:</p>
+<ul>
+<li>A lookup of a non-existing key raises no error.</li>
+<li>A record update may result in a map that does not match the original record definition.</li>
+</ul>
+<p>This makes it hard and often impossible/illegal for processors to output helpful error messages.</p>
+<p>There are reasons why we don’t want to make records too strict: an extensible record may include keys that are not defined in the record type:</p>
+<pre><code class="language-xquery">(: must not raise an error :)
+declare record local:r(a, *);
+let $r as local:r := { 'a': 1, 'b': 2 }
+return $r?b
+</code></pre>
+<p>However, for <strong>non-extensible</strong> records, I think we should <strong>allow</strong> processors to perform stricter checks when unknown keys are looked up, or when the result of an update would conflict with the original record type:</p>
+<pre><code class="language-xquery">declare record local:r(a as xs:integer);
+(: unknown key :)
+local:r(1)?b,
+(: invalid value type :)
+map:put(local:r(1), 'a', 'string')
+</code></pre>
+<p>As records are no independent types, it will be difficult to <strong>enforce</strong> errors in all cases: It would require implementations to always know that a currently processed map has once been validated against a specific record type. But in many cases, implementations may be able to preserve record types for maps that have been coerced to a record, or created with a record declaration, and propagate them to updated maps. For example, we already do so when we can statically infer that the resulting map of a <code>map:put</code> call will match the original record type.</p>
+</div></details></div>
+<div class="toot" id="created-1978"><h2>Issue #1978 created<span class="toot-id"> #created-1978</span></h2><div class="pubdate">04 May at 00:55:54 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1978">https://github.com/qt4cg/qtspecs/issues/1978</a></div><details><summary>Function `map:build` does not allow expressing the dependency of a value on its key. Some simple types of maps cannot be built.</summary><div class="markup"><h2>The Problem</h2>
+<p>Function <a href="https://qt4cg.org/specifications/xpath-functions-40/Overview.html#func-map-build"><strong><code>map:build</code></strong></a>, does not allow to explicitly define the functional dependency of a value on its key.</p>
+<p>As result, it is unusable for creating even such simple maps as the following:</p>
+<p>The input is:</p>
+<p><code>("apple", "apricot", "banana", "blueberry", "cherry")</code></p>
+<p>The <code>$keys</code> function is:
+<code>$keys := fn($x){characters($x)}</code>
+That is, every  character, in every input string, is a key.</p>
+<p>We need the values to be: if an input string contains the key two or more times, then each such string, else the empty sequence.</p>
+<p>The expected map  to be produced is:</p>
+<pre><code class="language-xq">{
+  "a":  "banana",
+  "b": "blueberry",
+  "c": (),
+  "e": "blueberry",
+  "h": (),
+  "i": (),
+  "l": (), (: Lowercase L :)
+  "n", "banana",
+  "o", (),
+  "p": "apple",
+  "r": ("cherry", "blueberry"),
+  "t": (),
+  "y": ()
+}
+</code></pre>
+<h2>Solution</h2>
+<p>We provide a new definition of <strong><code>map:build</code></strong> - this can be a complete replacement of the current function, or could be added as a new overload.
+I am in the process of writing a PR, and your feedback would be appreciated.</p>
+<p>The definition is simple:</p>
+<pre><code class="language-xq">let $mapBuild := fn(
+$input	as item()*,	
+$keys	as (fn($item as item(), $position as xs:integer) as xs:anyAtomicType*),
+$value	as (fn($key as xs:anyAtomicType, $input as item()*) as item()*)
+) as map(*)
+{
+  let $allKeys := distinct-values(for-each($input, $keys))
+   return
+     $allKeys ! map:pair(., $value(., $input)) =&gt; map:of-pairs()
+}
+</code></pre>
+<p>As can be seen from executing the code below, the redefined function can be successfully used to build the "problematic" map above, and also all currently provided examples in the FO Spec for the function <code>map:build</code>.</p>
+<pre><code class="language-xq">let $mapBuild := fn(
+$input	as item()*,	
+$keys	as (fn($item as item(), $position as xs:integer) as xs:anyAtomicType*),
+$value	as (fn($key as xs:anyAtomicType, $input as item()*) as item()*)
+) as map(*)
+{
+  let $allKeys := distinct-values(for-each($input, $keys))
+   return
+     $allKeys ! map:pair(., $value(., $input)) =&gt; map:of-pairs()
+}
+ return
+   let $input := ("apple", "apricot", "banana", "blueberry", "cherry"),
+       $employees :=
+         &lt;employees&gt;
+           &lt;employee name="Jim Nelson" location="New York" ssn="1234567890" salary="123456"/&gt;
+           &lt;employee name="Ann West" location="New York" ssn="0987654321" salary="99999"/&gt;
+           &lt;employee name="Peter Smith" location="Seattle" ssn="123454321" salary="155223"/&gt;
+           &lt;employee name="Karen Johnson" location="Seattle" ssn="5432198760" salary="175000"/&gt;
+           &lt;employee name="Jonh Lagarde" location="Boston" ssn="9999999999" salary="145000"/&gt;
+           &lt;employee name="Samantha Weird" location="Boston" ssn="1111111111" salary="153000"/&gt;
+         &lt;/employees&gt;
+    return
+(    
+     $mapBuild(
+       $input,
+       fn($string, $pos) {distinct-values(characters($string))},
+       fn($key, $input)
+       {
+         filter($input, fn($string, $pos){$key = duplicate-values(characters($string))}) 
+       }
+     ),
+     $mapBuild((), string#1, string#1),
+     $mapBuild(1 to 10, fn {. mod 3}, fn($key, $input){filter($input, fn{$key = . mod 3})}),
+     $mapBuild(1 to 5, identity#1, format-integer(?, "w")),
+     $mapBuild(("January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"),
+               substring(?, 1, 1), fn($key, $input){filter($input, fn{$key = substring(., 1, 1)})}
+              ),
+     $mapBuild(
+        ("apple", "apricot", "banana", "blueberry", "cherry"),
+        substring(?, 1, 1), fn($key, $input){sum($input[$key eq substring(., 1, 1)] ! string-length(.))}
+     ),
+     $mapBuild(
+       ('Wang', 'Liu', 'Zhao'),
+       fn($name, $pos) { $name },
+       fn($key, $input){index-of($input, $key)}
+     ),  
+     let $titles := 
+       &lt;titles&gt;
+        &lt;title&gt;A Beginner’s Guide to &lt;ix&gt;Java&lt;/ix&gt;&lt;/title&gt;
+        &lt;title&gt;Learning &lt;ix&gt;XML&lt;/ix&gt;&lt;/title&gt;
+        &lt;title&gt;Using &lt;ix&gt;XML&lt;/ix&gt; with &lt;ix&gt;Java&lt;/ix&gt;&lt;/title&gt;
+      &lt;/titles&gt;
+     return
+       $mapBuild($titles/title, 
+                 fn($title){$title/ix}, 
+                 fn($key, $input){filter($input, fn($elem){$key = $elem/ix})}
+               ),
+      $mapBuild(
+        $employees//employee, fn{@ssn}, fn($key, $input){filter($input, fn($elem){$key = $elem/@ssn})}
+      ),
+      $mapBuild(
+        $employees//employee, fn{@location}, fn($key, $input) {count(filter($input, fn($elem){$key = $elem/@location}))}
+      ),
+      $mapBuild(
+        $employees//employee, fn{@location}, fn($key, $input) {max((filter($input, fn($elem){$key = $elem/@location}))/xs:decimal(@salary))}
+      )
+)
+</code></pre>
+<p>All results (executed with BaseX) are the expected, correct ones:</p>
+<pre><code class="language-xq">{"a":"banana","p":"apple","l":(),"e":"blueberry","r":("blueberry","cherry"),"i":(),"c":(),"o":(),"t":(),"b":"blueberry","n":"banana","u":(),"y":(),"h":()}
+{}
+{1:(1,4,7,10),2:(2,5,8),0:(3,6,9)}
+{1:"one",2:"two",3:"three",4:"four",5:"five"}
+{"J":("January","June","July"),"F":"February","M":("March","May"),"A":("April","August"),"S":"September","O":"October","N":"November","D":"December"}
+{"a":12,"b":15,"c":6}
+{"Wang":1,"Liu":2,"Zhao":3}
+{"Java":(&lt;title&gt;A Beginner’s Guide to &lt;ix&gt;Java&lt;/ix&gt;&lt;/title&gt;,&lt;title&gt;Using &lt;ix&gt;XML&lt;/ix&gt; with &lt;ix&gt;Java&lt;/ix&gt;&lt;/title&gt;),"XML":(&lt;title&gt;Learning &lt;ix&gt;XML&lt;/ix&gt;&lt;/title&gt;,&lt;title&gt;Using &lt;ix&gt;XML&lt;/ix&gt; with &lt;ix&gt;Java&lt;/ix&gt;&lt;/title&gt;)}
+{"1234567890":&lt;employee name="Jim Nelson" location="New York" ssn="1234567890" salary="123456"/&gt;,"0987654321":&lt;employee name="Ann West" location="New York" ssn="0987654321" salary="99999"/&gt;,"123454321":&lt;employee name="Peter Smith" location="Seattle" ssn="123454321" salary="155223"/&gt;,"5432198760":&lt;employee name="Karen Johnson" location="Seattle" ssn="5432198760" salary="175000"/&gt;,"9999999999":&lt;employee name="Jonh Lagarde" location="Boston" ssn="9999999999" salary="145000"/&gt;,"1111111111":&lt;employee name="Samantha Weird" location="Boston" ssn="1111111111" salary="153000"/&gt;}
+{"New York":2,"Seattle":2,"Boston":2}
+{"New York":123456,"Seattle":175000,"Boston":153000}
+</code></pre>
+<p><img src="https://github.com/user-attachments/assets/716658e3-8fac-4cc4-96fb-d6981037c4df" alt="Image"></p>
+</div></details></div>
+<div class="toot" id="created-1977"><h2>Pull request #1977 created<span class="toot-id"> #created-1977</span></h2><div class="pubdate">02 May at 15:59:18 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1977">https://github.com/qt4cg/qtspecs/pull/1977</a></div><details><summary>1889 Tidy up handling of HTML serialization version, default to HTML5</summary><div class="markup"><p>Does some general tidying up of the serialization text, but the main substantive changes are (a) to make HTML5 the default version, and (b) to make support for earlier versions effectively optional.</p>
+<p>Please review carefully. Marking as editorial because I'm not sure any test cases need to change, but I might be wrong.</p>
+<p>Fix #1889</p>
+</div></details></div>
+<div class="toot" id="created-1976"><h2>Pull request #1976 created<span class="toot-id"> #created-1976</span></h2><div class="pubdate">02 May at 11:56:39 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1976">https://github.com/qt4cg/qtspecs/pull/1976</a></div><details><summary>1661 Introduce QName literals</summary><div class="markup"><p>Fix #1661</p>
+<p>See also #747</p>
+<p>As discussed in the issue, I wasn't happy with the idea of changing the coercion rules to allow strings to be provided where a QName is expected, because of the need to keep the namespace context around at run-time, and because of potential confusion about exactly what namespace context is used.</p>
+<p>Instead I have gone back to the idea of introducing QName literals, using the simple syntax #EQName.</p>
+<p>Examples:</p>
+<pre><code>error(#err:XPTY0004)
+node-name($node) = #xml:space
+format-number($num, #de)
+load-xquery-module($module)?variables?(#myvar)
+transform({'initial-template':#xsl:initial-template})
+{'last': 'Kay', 'first': 'Michael', 'suffix':#fn:null}
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-1975"><h2>Pull request #1975 created<span class="toot-id"> #created-1975</span></h2><div class="pubdate">02 May at 10:28:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1975">https://github.com/qt4cg/qtspecs/pull/1975</a></div><details><summary>1240 Allow operand of dynamic function call to be a sequence</summary><div class="markup"><p>Fix #1240
+Fix #1972</p>
+<p>This PR enables use of expressions such as <code>$rectangle?area() - sum($rectangle?contents()?area())</code> which would previously have failed with a type error.</p>
+</div></details></div>
+<div class="toot" id="created-1974"><h2>Pull request #1974 created<span class="toot-id"> #created-1974</span></h2><div class="pubdate">02 May at 09:13:16 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1974">https://github.com/qt4cg/qtspecs/pull/1974</a></div><details><summary>1973 Cross-reference from type analysis to definition of disjointedness</summary><div class="markup"><p>Fix #1973</p>
+</div></details></div>
+<div class="toot" id="created-1973"><h2>Issue #1973 created<span class="toot-id"> #created-1973</span></h2><div class="pubdate">02 May at 08:41:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1973">https://github.com/qt4cg/qtspecs/issues/1973</a></div><details><summary>Substantitively disjoint types</summary><div class="markup"><p>Section §2.3.3.1 Static Analysis Phase mentions</p>
+<blockquote>
+<p>A processor may raise a type error during static analysis if the inferred static type of an expression has no overlap (intersection) with the required type, and cannot be converted to the required type using the [coercion rules].</p>
+</blockquote>
+<p>This should cross-refer to the more precisely defined concept of types being "substantively disjoint" - see §3.4.3.</p>
+</div></details></div>
+<div class="toot" id="created-1972"><h2>Issue #1972 created<span class="toot-id"> #created-1972</span></h2><div class="pubdate">02 May at 08:24:18 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1972">https://github.com/qt4cg/qtspecs/issues/1972</a></div><details><summary>Dynamic function call applied to empty sequence</summary><div class="markup"><p>A note in F+O under map:get states</p>
+<blockquote>
+<p><code>map:get(map:get(map:get($map, 'employee'), 'name'), 'first')</code> can be written as <code>$map('employee')('name')('first')</code>.</p>
+</blockquote>
+<p>That's technically correct: both these expressions will fail in the same way if <code>$map</code> does not contain an entry for the key <code>employee</code>. Unlike the lookup expression <code>$map?employee?name?first</code> which returns an empty sequence in this situation.</p>
+<p>The rules for dynamic function calls (xpath, §4.5.3.1) state that <code>$F($X)</code> raises a type error if <code>$F</code> is an empty sequence.</p>
+<p>I think it would be more useful if both map:get() and dynamic function calls were changed to have "empty if empty" semantics.</p>
+<p>This is related to #1240 which goes further by allowing <code>$F</code> to be a sequence of function items.</p>
+</div></details></div>
+<div class="toot" id="created-1971"><h2>Pull request #1971 created<span class="toot-id"> #created-1971</span></h2><div class="pubdate">01 May at 22:11:45 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1971">https://github.com/qt4cg/qtspecs/pull/1971</a></div><details><summary>1951 Clarifications on serialization parameters</summary><div class="markup"><p>Fix #1951</p>
+</div></details></div>
+<div class="toot" id="created-1970"><h2>Issue #1970 created<span class="toot-id"> #created-1970</span></h2><div class="pubdate">30 Apr at 09:08:15 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1970">https://github.com/qt4cg/qtspecs/issues/1970</a></div><details><summary>Editorial notes</summary><div class="markup"><h3>XQFO</h3>
+<ul>
+<li><code>fn:fold-right</code> has an obsolete change section saying that “The $action callback function accepts an optional position argument.”</li>
+<li>“then [the] operation will fail”</li>
+<li>…</li>
+</ul>
+<p>(everyone: feel free to add notes, I’ll create a PR sometime later)</p>
+</div></details></div>
+<div class="toot" id="created-1969"><h2>Pull request #1969 created<span class="toot-id"> #created-1969</span></h2><div class="pubdate">30 Apr at 08:53:36 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1969">https://github.com/qt4cg/qtspecs/pull/1969</a></div><details><summary>1952 Change option name xsi-schema-location</summary><div class="markup"><p>Change to use-xsi-schema-location (because the value is a boolean, not a location)</p>
+<p>Fix #1952</p>
+</div></details></div>
+<div class="toot" id="created-1968"><h2>Pull request #1968 created<span class="toot-id"> #created-1968</span></h2><div class="pubdate">30 Apr at 08:47:25 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1968">https://github.com/qt4cg/qtspecs/pull/1968</a></div><details><summary>1967 r/binary-resource/unparsed-binary/</summary><div class="markup"><p>Fix #1967</p>
+</div></details></div>
+<div class="toot" id="created-1967"><h2>Issue #1967 created<span class="toot-id"> #created-1967</span></h2><div class="pubdate">30 Apr at 08:27:48 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1967">https://github.com/qt4cg/qtspecs/issues/1967</a></div><details><summary>Example for fn:unparsed-binary uses obsolete function name</summary><div class="markup"><p>One of the examples for the new function fn:unparsed-binary uses the obsolete function name fn:binary-resource</p>
+</div></details></div>
+<div class="toot" id="closed-1568"><h2>Issue #1568 closed<span class="toot-id"> #closed-1568</span></h2><div class="pubdate">30 Apr at 07:34:02 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1568">https://github.com/qt4cg/qtspecs/issues/1568</a></div><p>Define a Unicode case-insensitive collation</p></div>
+<div class="toot" id="closed-1966"><h2>Issue #1966 closed<span class="toot-id"> #closed-1966</span></h2><div class="pubdate">30 Apr at 07:34:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1966">https://github.com/qt4cg/qtspecs/pull/1966</a></div><p>1568b Add unicode case-blind collation</p></div>
+<div class="toot" id="closed-1945"><h2>Issue #1945 closed<span class="toot-id"> #closed-1945</span></h2><div class="pubdate">30 Apr at 06:11:07 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1945">https://github.com/qt4cg/qtspecs/pull/1945</a></div><p>1568 unicode case blind collation</p></div>
+<div class="toot" id="created-1966"><h2>Pull request #1966 created<span class="toot-id"> #created-1966</span></h2><div class="pubdate">30 Apr at 06:08:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1966">https://github.com/qt4cg/qtspecs/pull/1966</a></div><details><summary>1568b Add unicode case-blind collation</summary><div class="markup"><p>Replaces #1945 which was approved by the CG, but had pull conflicts because of incidental editorial changes</p>
+<p>Fix #1568</p>
+</div></details></div>
+<div class="toot" id="created-1965"><h2>Issue #1965 created<span class="toot-id"> #created-1965</span></h2><div class="pubdate">30 Apr at 01:13:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1965">https://github.com/qt4cg/qtspecs/issues/1965</a></div><details><summary>The Generator record - ready for a PR</summary><div class="markup"><p>This is a continuation of the original issue <strong>https://github.com/qt4cg/qtspecs/issues/716</strong>, created almost 2 years ago, and having accumulated a lot of very useful discussion.</p>
+<p>Now, when we have methods that are fields of records, it became practical to produce the record type entirely in code, and <strong>this is the base for the planned PR.</strong></p>
+<h2>1. What it contains</h2>
+<ul>
+<li>The standard record fields as originally published:</li>
+</ul>
+<pre><code class="language-xq">     initialized as xs:boolean,
+     endReached as xs:boolean,
+     getCurrent as %method fn() as item()*,
+     moveNext as %method fn(*)
+</code></pre>
+<ul>
+<li>The following 34 methods - this will form the signatures and formal definitions of the methods inside the documentation:</li>
+</ul>
+<pre><code class="language-xq">toArray := %method fn()
+take := %method fn($n as xs:integer)
+takeWhile := %method fn($pred as function(item()*) as xs:boolean)
+skip := %method fn($n as xs:nonNegativeInteger)
+skipWhile := %method fn($pred as function(item()*) as xs:boolean)
+some := %method fn()
+someWhere := %method fn($pred)
+subrange := %method fn($m as xs:positiveInteger, $n as xs:integer)
+chunk := %method fn($size as xs:positiveInteger)
+head := %method fn()
+tail := %method fn()
+at := %method fn($ind as xs:nonNegativeInteger)
+for-each := %method fn($fun as function(*))
+for-each-pair := %method fn($gen2 as f:generator, $fun as function(*))
+zip := %method fn($gen2 as f:generator)
+concat := %method fn($gen2 as f:generator)
+append := %method fn($value as item()*)
+prepend := %method fn($value as item()*)
+insertAt := %method fn($pos as xs:positiveInteger, $value as item()*)
+removeAt := %method fn($pos as xs:nonNegativeInteger)
+replace := %method fn($funIsMatching as function(item()*) as xs:boolean, $replacement as item()*)
+reverse := %method fn()
+filter := %method fn($pred as function(item()*) as xs:boolean)
+fold-left := %method fn($init as item()*, $action as fn(*))
+fold-right := %method fn($init as item()*, $action as fn(*))
+fold-lazy := %method fn($init as item()*, $action as fn(*), $shortCircuitProvider as function(*))
+scan-left := %method fn($init as item()*, $action as fn(*))
+scan-right := %method fn($init as item()*, $action as fn(*))
+makeGenerator := %method fn($provider as function(*))
+makeGeneratorFromArray := %method fn($input as array(*))
+makeGeneratorFromSequence := %method fn($input as item()*)
+toSequence := %method fn()
+emptyGenerator := %method fn()
+</code></pre>
+<ul>
+<li>90 tests/examples - with calls to all the methods  - in normal and edge cases</li>
+</ul>
+<h2>2. Where to get the executable (with BaseX) code?</h2>
+<p>For everyone's convenience, you will find the complete executable code at the end of this issue/initial-comment.
+Alternatively, the code is available here: https://github.com/dnovatchev/Articles/blob/main/Generators/Code/generator.xpath</p>
+<p>The latter will always contain the latest, up-to-date code.
+And, of course, please execute the code with BaseX, as I have done many times:</p>
+<p><img src="https://github.com/user-attachments/assets/e8d671d1-fda8-418e-a5c8-bb75e81d7a5a" alt="Image"></p>
+<h2>3. What this gives us:</h2>
+<ol>
+<li>Working with huge collections, that would otherwise be restricted by the available memory.</li>
+<li>Deferred execution.</li>
+<li>Handling collections containing unknown or infinite number of members</li>
+</ol>
+<ul>
+<li>A (next) member is produced only on request. <strong>No time is spent on producing all members of the collection</strong>.</li>
+<li>A (next) member is produced only on request. <strong>No memory is consumed to store all members of the collection</strong>.</li>
+</ul>
+<ol start="4">
+<li>Lazy evaluation - due to the above and also using the <strong><em>fold-lazy</em></strong> method (also described in <strong><em><a href="https://medium.com/@dimitrenovatchev/laziness-in-xpath-the-trouble-with-fn-fold-right-cbb1cc654d1c?sk=872244cf80bfcb52d67bcb8b359478ff">this article</a></em></strong>)</li>
+<li>Implementation of the original idea about Kollection - https://github.com/qt4cg/qtspecs/issues/910 .</li>
+</ol>
+<h2>4. What assistance is needed</h2>
+<p>I will greatly appreciate any recommendations on how to proceed with the actual PR:</p>
+<ul>
+<li>Can this be a single PR ?</li>
+<li>If this is too-big for a single PR, then how to proceed, like splitting it to pieces?</li>
+<li>Any observations and comments on the code itself.</li>
+</ul>
+<h2>5. References:</h2>
+<ol>
+<li>The original issue: <strong><em>Generators in XPath</em></strong>: https://github.com/qt4cg/qtspecs/issues/716</li>
+<li>This article: <strong><em><a href="https://medium.com/@dimitrenovatchev/generators-in-xpath-987a609cfbd5?sk=6334d48f9565f78eba90b212e461243b">Generators in XPath</a></em></strong></li>
+<li>The article defining fold-lazy : <strong><em><a href="https://medium.com/@dimitrenovatchev/laziness-in-xpath-the-trouble-with-fn-fold-right-cbb1cc654d1c?sk=872244cf80bfcb52d67bcb8b359478ff">"Laziness in XPath. The trouble with fn:fold-right"</a></em></strong></li>
+</ol>
+<h2>6. Complete, executable definition of the <strong><em>generator</em></strong> record</h2>
+<pre><code class="language-xq">declare namespace f = "http://www.w3.org/2005/xpath-functions-2025";
+declare record f:generator 
+   ( initialized as xs:boolean,
+     endReached as xs:boolean,
+     getCurrent as %method fn() as item()*,
+     moveNext as %method fn(*) (: as f:generator, :),
+     toArray := %method fn()
+     {
+       while-do( [., []],
+                function( $inArr) 
+                { $inArr(1)?initialized and not($inArr(1)?endReached) },                 
+                function($inArr) 
+                { array{$inArr(1)?moveNext(), 
+                        array:append($inArr(2), $inArr(1)?getCurrent())
+                       } 
+                 }         
+       ) (2)
+     },
+     
+     take := %method fn($n as xs:integer) 
+     {
+      let $gen := if(not(?initialized)) then ?moveNext()
+                    else .
+       return
+         if($gen?endReached or $n le 0) then $gen?emptyGenerator()
+          else
+            let $current := $gen?getCurrent(),
+                $newResultGen := map:put(., "getCurrent", %method fn(){$current}),
+                $nextGen := $gen?moveNext()
+             return
+               if($nextGen?endReached) then $newResultGen
+                 else
+                   let
+                       $newResultGen2 :=  map:put($newResultGen, "moveNext", %method fn() {$nextGen?take($n -1)}) 
+                     return
+                       $newResultGen2
+      },
+      
+      takeWhile := %method fn($pred as function(item()*) as xs:boolean)
+      {
+        let $gen := if(not(?initialized)) then ?moveNext()
+                      else .
+         return
+           if($gen?endReached) then $gen?emptyGenerator()
+            else      
+              let $current := $gen?getCurrent()
+                return
+                  if(not($pred($current))) then $gen?emptyGenerator()
+                  else
+                    let $newResultGen := map:put(., "getCurrent", %method fn(){$current}),
+                        $nextGen := ?moveNext()
+                     return
+                        if($nextGen?endReached) then $newResultGen
+                        else
+                          let $newResultGen2 :=  map:put($newResultGen, "moveNext", %method fn() {$nextGen?takeWhile($pred)}) 
+                           return $newResultGen2  
+      },
+     
+     skipStrict := %method fn($n as xs:nonNegativeInteger, $issueErrorOnEmpty as xs:boolean) 
+     {
+            if($n eq 0) then .
+              else if(?endReached) 
+                     then if($issueErrorOnEmpty)
+                           then error((), "Input Generator too-short") 
+                           else ?emptyGenerator()
+              else 
+                let $gen := if(not(?initialized)) then ?moveNext()
+                             else .
+                  return
+                    if(not($gen?endReached)) then $gen?moveNext()?skipStrict($n -1, $issueErrorOnEmpty)
+                      else $gen?emptyGenerator()                 
+
+     },
+     skip := %method fn($n as xs:nonNegativeInteger) 
+     {
+       ?skipStrict($n, false())
+     },
+     
+     skipWhile := %method fn($pred as function(item()*) as xs:boolean)
+     {
+        let $gen := if(not(?initialized)) then ?moveNext()
+                      else .
+         return
+           if($gen?endReached) then $gen?emptyGenerator()
+            else
+              let $current := $gen?getCurrent()
+               return
+                 if(not($pred($current))) then $gen
+                  else $gen?moveNext()?skipWhile($pred)                    
+     },
+     
+     some := %method fn()
+     {
+       ?initialized and not(?endReached)
+     },
+     
+     someWhere := %method fn($pred)
+     {
+       ?filter($pred)?some()
+     },
+     
+     subrange := %method fn($m as xs:positiveInteger, $n as xs:integer)
+     {
+       ?skip($m - 1)?take($n - $m + 1)
+     },
+     
+     chunk := %method fn($size as xs:positiveInteger)
+     {
+        let $gen := if(not(?initialized)) then ?moveNext()
+                      else .
+         return
+           if($gen?endReached) then $gen?emptyGenerator()
+           else
+             let $thisChunk := $gen?take($size)?toArray(),
+                 $cutGen := $gen?skip($size),
+                 $resultGen := $gen =&gt; map:put("getCurrent", %method fn(){$thisChunk})
+                                    =&gt; map:put("moveNext", %method fn(){$cutGen?chunk($size)})
+              return $resultGen
+     },
+     
+     head := %method fn() {?take(1)?getCurrent()},
+     tail := %method fn() {?skip(1)},
+     
+     at := %method fn($ind as xs:nonNegativeInteger) {?subrange($ind, $ind)?getCurrent()},
+           
+     for-each := %method fn($fun as function(*))
+     {
+      let $gen := if(not(?initialized)) then ?moveNext()
+                    else .        
+       return
+         if(?endReached) then ?emptyGenerator()
+          else
+           let $current := $fun(?getCurrent()),
+                $newResultGen := map:put(., "getCurrent", %method fn(){$current}),
+                $nextGen := ?moveNext()
+            return
+              if($nextGen?endReached) then $newResultGen
+                else
+                  let $newResultGen2 :=  map:put($newResultGen, "moveNext", %method fn() {$nextGen?for-each($fun)}) 
+                     return
+                       $newResultGen2                    
+      },
+      
+      for-each-pair := %method fn($gen2 as f:generator, $fun as function(*))
+      {
+        let $gen := if(not(?initialized)) then ?moveNext()
+                    else .,
+            $gen2 := if(not($gen2?initialized)) then $gen2?moveNext()
+                    else $gen2
+         return
+            if(?endReached or $gen2?endReached) then ?emptyGenerator() 
+             else  
+               let $current := $fun(?getCurrent(), $gen2?getCurrent()),
+                   $newResultGen := map:put(., "getCurrent", %method fn(){$current}),
+                   $nextGen1 := ?moveNext(),
+                   $nextGen2 := $gen2?moveNext()
+                return
+                   if($nextGen1?endReached or $nextGen2?endReached) then $newResultGen
+                     else
+                       let $newResultGen2 := map:put($newResultGen, "moveNext", %method fn(){$nextGen1?for-each-pair($nextGen2, $fun)})
+                         return
+                           $newResultGen2                        
+      },
+      
+      zip := %method fn($gen2 as f:generator)
+      {
+        ?for-each-pair($gen2, fn($x1, $x2){[$x1, $x2]})
+      },
+
+      concat := %method fn($gen2 as f:generator)
+      {
+        let $gen := if(not(?initialized)) then ?moveNext()
+                    else .,
+            $gen2 := if(not($gen2?initialized)) then $gen2?moveNext()
+                    else $gen2,
+            $resultGen := if($gen?endReached) then $gen2
+                            else if($gen2?endReached) then $gen
+                            else
+                              $gen  =&gt; map:put(  "moveNext", 
+                                                %method fn()
+                                                 {
+                                                 let $nextGen := $gen?moveNext()
+                                                   return 
+                                                     $nextGen?concat($gen2)
+                                                 }
+                                              )                                   
+        return 
+           $resultGen            
+      },
+
+      append := %method fn($value as item()*)
+      {
+        let $gen := if(not(?initialized)) then ?moveNext()
+                    else .,
+            $genSingle := $gen =&gt; map:put("getCurrent", %method fn(){$value})
+                               =&gt; map:put("moveNext", %method fn(){?emptyGenerator()})
+                               =&gt; map:put("endReached", false())
+         return
+           $gen?concat($genSingle)                    
+      },
+      
+      prepend := %method fn($value as item()*)
+      {
+                let $gen := if(not(?initialized)) then ?moveNext()
+                    else .,
+                    $genSingle := $gen =&gt; map:put("getCurrent", %method fn(){$value})
+                                       =&gt; map:put("moveNext", %method fn(){?emptyGenerator()})
+         return
+           $genSingle?concat($gen)  
+      },
+      
+      insertAt := %method fn($pos as xs:positiveInteger, $value as item()*)
+      {
+        let $genTail := ?skipStrict($pos - 1, true())
+         return
+            if($pos gt 1)
+              then ?take($pos - 1)?append($value)?concat($genTail)
+              else $genTail?prepend($value)               
+      },
+      
+      removeAt := %method fn($pos as xs:nonNegativeInteger)
+      {
+        let $genTail := ?skipStrict($pos, true())
+          return
+            if($pos gt 1)
+              then ?take($pos - 1)?concat($genTail)
+              else $genTail
+      },
+    
+      replace := %method fn($funIsMatching as function(item()*) as xs:boolean, $replacement as item()*)
+      {
+        if(?endReached) then .
+          else
+            let $current := ?getCurrent()
+              return
+                if($funIsMatching($current))
+                  then let $nextGen := ?moveNext()
+                     return
+                       . =&gt; map:put("getCurrent", %method fn() {$replacement})
+                         =&gt; map:put("moveNext", %method fn() { $nextGen } 
+                                  )
+                  else (: $current is not the match for replacement :)
+                    let $nextGen := ?moveNext()
+                      return . =&gt; map:put("moveNext", 
+                                           %method fn()
+                                           {
+                                             let $intendedReplace := function($z) {$z?replace($funIsMatching, $replacement)}
+                                              return
+                                                if($nextGen?endReached) then $nextGen
+                                                else $intendedReplace($nextGen)
+                                           }
+                                        )
+      },
+      
+      reverse := %method fn()
+      {
+        if(?endReached) then ?emptyGenerator()
+          else
+           let $current := ?getCurrent()
+             return
+               ?tail()?reverse()?append($current)
+      },
+
+      filter := %method fn($pred as function(item()*) as xs:boolean)
+      {
+             if(?initialized and ?endReached) then ?emptyGenerator()
+              else
+                let $getNextGoodGen := function($gen as map(*), 
+                                             $pred as function(item()*) as xs:boolean)
+                   {
+                      if($gen?endReached) then $gen?emptyGenerator()
+                      else
+                        let $mapResult := 
+                              while-do(
+                                       $gen,
+                                       function($x) { not($x?endReached) and not($pred($x?getCurrent()))},
+                                       function($x) { $x?moveNext() }
+                                       )   
+                        return 
+                          if($mapResult?endReached) then $gen?emptyGenerator()
+                           else $mapResult                  
+                   },
+                   
+                   $gen := if(?initialized) then . 
+                             else ?moveNext(),
+                   $nextGoodGen := $getNextGoodGen($gen, $pred)
+                return
+                  if($nextGoodGen?endReached) then $gen?emptyGenerator()
+                  else
+                    $nextGoodGen =&gt; map:put("moveNext", 
+                                            %method fn() 
+                                              {
+                                                let $nextGoodGen := $getNextGoodGen(?inputGen?moveNext(), $pred)
+                                                  return
+                                                    if($nextGoodGen?endReached) then $nextGoodGen?emptyGenerator()
+                                                    else
+                                                      map:put(map:put($nextGoodGen, "moveNext", %method fn() {$nextGoodGen?moveNext()?filter($pred)}),
+                                                                      "inputGen", $nextGoodGen
+                                                              )
+                                               }
+                                           )
+                                   =&gt;
+                                     map:put("inputGen", $nextGoodGen)
+        },     
+        fold-left := %method fn($init as item()*, $action as fn(*))
+        {
+          if(?endReached) then $init
+            else ?tail()?fold-left($action($init, ?getCurrent()), $action)
+        },
+        
+        fold-right := %method fn($init as item()*, $action as fn(*))
+        {
+          if(?endReached) then $init
+            else $action(?head(), ?tail()?fold-right($init, $action))
+        },
+        
+        fold-lazy := %method fn($init as item()*, $action as fn(*), $shortCircuitProvider as function(*))
+        {
+          if(?endReached) then $init
+          else
+           let $current := ?getCurrent()
+             return
+               if(function-arity($shortCircuitProvider($current, $init)) eq 0)
+                 then $shortCircuitProvider($current, $init)()
+                 else $action($current, ?moveNext()?fold-lazy($init, $action, $shortCircuitProvider))
+        },
+        
+        scan-left := %method fn($init as item()*, $action as fn(*))
+        {
+          let $resultGen := ?emptyGenerator() 
+                                =&gt; map:put("endReached", false())
+                                =&gt; map:put("getCurrent", %method fn(){$init})
+           return
+             if(?endReached) 
+               then $resultGen =&gt; map:put("moveNext", %method fn(){?emptyGenerator()})
+               else
+                 let $resultGen := $resultGen =&gt; map:put("getCurrent", %method fn(){$init}),
+                     $partialFoldResult := $action($init, ?getCurrent())
+                   return
+                     let $nextGen := ?moveNext()
+                      return
+                        $resultGen =&gt; map:put("moveNext", %method fn()
+                                              { 
+                                                  $nextGen?scan-left($partialFoldResult, $action)
+                                               }
+                                              )            
+        },
+      
+        scan-right := %method fn($init as item()*, $action as fn(*))
+        {
+          ?reverse()?scan-left($init, $action)?reverse()                         
+        },
+        
+        makeGenerator := %method fn($provider as function(*))
+        {
+         let $gen := if(not(?initialized)) then ?moveNext()
+                    else .,
+              $nextDataItemGetter := $provider(0),
+              $nextGen := if(not($nextDataItemGetter instance of function(*))) then $gen?emptyGenerator()  
+                           else $gen?emptyGenerator()
+                            =&gt; map:put("numDataItems", 1)
+                            =&gt; map:put("current", $nextDataItemGetter())
+                            =&gt; map:put("endReached", false())
+                            =&gt; map:put("getCurrent", %method fn() {?current})
+                            =&gt; map:put("moveNext",  
+                                       %method fn() 
+                                        {
+                                          let $nextDataItemGetter := $provider(?numDataItems)
+                                            return
+                                              if(not($nextDataItemGetter instance of function(*))) then ?emptyGenerator()
+                                              else
+                                                . =&gt; map:put("current", $nextDataItemGetter())
+                                                  =&gt; map:put("numDataItems", ?numDataItems + 1)
+                                        }
+                                       )
+           return $nextGen                                                  
+        },
+        
+        makeGeneratorFromArray := %method fn($input as array(*))
+        {
+          let $size := array:size($input),
+              $arrayProvider := fn($ind as xs:integer)
+                                {
+                                  if($ind +1 gt $size) then -1
+                                   else fn(){$input($ind + 1)}
+                                }
+           return ?makeGenerator($arrayProvider)
+        },
+        
+        makeGeneratorFromSequence := %method fn($input as item()*)
+        {
+          let $size := count($input),
+              $seqProvider := fn($ind as xs:integer)
+                                {
+                                  if($ind +1 gt $size) then -1
+                                   else fn(){$input[$ind + 1]}
+                                }
+           return ?makeGenerator($seqProvider)
+        },
+        
+        toSequence := %method fn() {?toArray() =&gt; array:items()},     
+        
+        emptyGenerator := %method fn() 
+        {
+          . =&gt; map:put("initialized", true()) =&gt; map:put("endReached", true())
+            =&gt; map:put("getCurrent", %method fn() {error((),"getCurrent() called on an emptyGenerator")})
+            =&gt; map:put("moveNext", %method fn() {error((),"moveNext() called on an emptyGenerator")})
+        },      
+     *
+   );
+
+let $gen2ToInf := f:generator(initialized := true(), endReached := false(), 
+                              getCurrent := %method fn(){?last +1},
+                              moveNext := %method fn()
+                              {
+                                if(not(?initialized))
+                                  then map:put(., "inittialized", true())
+                                  else map:put(., "last", ?last + 1)
+                              },
+                              options := {"last" : 1}
+                             ),
+    $double := fn($n) {2*$n},
+    $sum2 := fn($m, $n) {$m + $n},
+    $product := fn($m, $n) {$m * $n}
+  return    
+  (
+    "$gen2ToInf?take(3)?toArray()",
+    $gen2ToInf?take(3)?toArray(),
+    "================",    
+    "$gen2ToInf?take(3)?skip(2)?getCurrent()",
+    $gen2ToInf?take(3)?skip(2)?getCurrent(),
+    (: $gen2ToInf?take(3)?moveNext()?moveNext()?moveNext()?getCurrent(), :)
+    "================",
+    "$gen2ToInf?getCurrent()",
+    $gen2ToInf?getCurrent(),
+    "$gen2ToInf?moveNext()?getCurrent()",
+    $gen2ToInf?moveNext()?getCurrent(),
+    "================",
+    "$gen2ToInf?take(5) instance of f:generator",
+    $gen2ToInf?take(5) instance of f:generator,
+    "==&gt;  $gen2ToInf?skip(7) instance of f:generator",
+    $gen2ToInf?skip(7) instance of f:generator,  
+    "================",
+    "$gen2ToInf?subrange(4, 6)?getCurrent()",
+    $gen2ToInf?subrange(4, 6)?getCurrent(), 
+    "$gen2ToInf?subrange(4, 6)?moveNext()?getCurrent()",
+    $gen2ToInf?subrange(4, 6)?moveNext()?getCurrent(),
+    "$gen2ToInf?subrange(4, 6)?moveNext()?moveNext()?getCurrent()",
+    $gen2ToInf?subrange(4, 6)?moveNext()?moveNext()?getCurrent(),
+    (: $gen2ToInf?subrange(4, 6)?moveNext()?moveNext()?moveNext()?getCurrent() :) (: Must raise error:)    
+    "================",    
+    "$gen2ToInf?subrange(4, 6)?head()",
+    $gen2ToInf?subrange(4, 6)?head(),  
+    "$gen2ToInf?subrange(4, 6)?tail()?head()",
+    $gen2ToInf?subrange(4, 6)?tail()?head(),
+    "$gen2ToInf?subrange(4, 6)?toArray()",
+    $gen2ToInf?subrange(4, 6)?toArray(),
+    "$gen2ToInf?head()",
+    $gen2ToInf?head(),
+    "==&gt;  $gen2ToInf?tail()?head()",
+    $gen2ToInf?tail()?head(),
+    "================", 
+    "$gen2ToInf?subrange(4, 6)?tail()?toArray()",
+    $gen2ToInf?subrange(4, 6)?tail()?toArray(),
+    "================",
+    "$gen2ToInf?at(5)",
+    $gen2ToInf?at(5), 
+    "================",
+    "$gen2ToInf?subrange(1, 5)?toArray()",
+    $gen2ToInf?subrange(1, 5)?toArray(),
+    "$gen2ToInf?subrange(1, 5)?for-each($double)?toArray()",
+    $gen2ToInf?subrange(1, 5)?for-each($double)?toArray(),
+    "$gen2ToInf?take(5)?for-each($double)?toArray()",
+    $gen2ToInf?take(5)?for-each($double)?toArray(),
+    "==&gt;  $gen2ToInf?for-each($double)?take(5)?toArray()",
+    $gen2ToInf?for-each($double)?take(5)?toArray(),
+    "================",
+    "$gen2ToInf?subrange(1, 5)?toArray()",
+    $gen2ToInf?subrange(1, 5)?toArray(),
+    "$gen2ToInf?subrange(6, 10)?toArray()",
+    $gen2ToInf?subrange(6, 10)?toArray(),
+    "$gen2ToInf?subrange(1, 5)?for-each-pair($gen2ToInf?subrange(6, 10), $sum2)?toArray()",
+    $gen2ToInf?subrange(1, 5)?for-each-pair($gen2ToInf?subrange(6, 10), $sum2)?toArray(), 
+    "==&gt;  $gen2ToInf?for-each-pair($gen2ToInf, $sum2)?take(5)?toArray()",
+    $gen2ToInf?for-each-pair($gen2ToInf, $sum2)?take(5)?toArray(),
+    "================",
+    "==&gt;  $gen2ToInf?filter(fn($n){$n mod 2 eq 1})?getCurrent()",
+    $gen2ToInf?filter(fn($n){$n mod 2 eq 1})?getCurrent(),
+    "$gen2ToInf?filter(fn($n){$n mod 2 eq 1})?moveNext()?getCurrent()",
+    $gen2ToInf?filter(fn($n){$n mod 2 eq 1})?moveNext()?getCurrent(),
+    "================", 
+    "$gen2ToInf?filter(fn($n){$n mod 2 eq 1})?take(10)?toArray()",
+    $gen2ToInf?filter(fn($n){$n mod 2 eq 1})?take(10)?toArray(),  
+    "================", 
+    "$gen2ToInf?filter(fn($n){$n mod 2 eq 1})?take(10)?toSequence()",
+    $gen2ToInf?filter(fn($n){$n mod 2 eq 1})?take(10)?toSequence(),
+    "================", 
+    "$gen2ToInf?takeWhile(fn($n){$n &lt; 11})?toArray()",
+    $gen2ToInf?takeWhile(fn($n){$n &lt; 11})?toArray(), 
+    "$gen2ToInf?takeWhile(fn($n){$n &lt; 2})?toArray()",
+    $gen2ToInf?takeWhile(fn($n){$n &lt; 2})?toArray(), 
+    "================", 
+    "$gen2ToInf?skipWhile(fn($n){$n &lt; 11})?take(5)?toArray()",
+    $gen2ToInf?skipWhile(fn($n){$n &lt; 11})?take(5)?toArray(),
+    "==&gt; $gen2ToInf?skipWhile(fn($n){$n &lt; 2})",
+    $gen2ToInf?skipWhile(fn($n){$n &lt; 2}),
+    "
+     ==&gt; $gen2ToInf?skipWhile(fn($n){$n &lt; 2})?skip(1)",
+    $gen2ToInf?skipWhile(fn($n){$n &lt; 2})?skip(1),
+(:    $gen2ToInf?skipWhile(fn($x) {$x ge 2}) :) (: ?skip(1) :)
+    "================", 
+    "$gen2ToInf?some()",
+     $gen2ToInf?some(),
+     "let $empty := $gen2ToInf?emptyGenerator()
+      return $empty?some()",
+     let $empty := $gen2ToInf?emptyGenerator()
+      return $empty?some(),
+    "================",
+    "$gen2ToInf?take(5)?filter(fn($n){$n ge 7})?some()",
+     $gen2ToInf?take(5)?filter(fn($n){$n ge 7})?some(),  
+     "$gen2ToInf?take(5)?someWhere(fn($n){$n ge 7})",
+     $gen2ToInf?take(5)?someWhere(fn($n){$n ge 7}), 
+     "$gen2ToInf?take(5)?someWhere(fn($n){$n ge 6})",
+     $gen2ToInf?take(5)?someWhere(fn($n){$n ge 6}),
+     "$gen2ToInf?someWhere(fn($n){$n ge 100})",
+     $gen2ToInf?someWhere(fn($n){$n ge 100}),
+     "================",
+     "$gen2ToInf?take(10)?take(11)?toArray()",
+     $gen2ToInf?take(10)?take(11)?toArray(),
+     "$gen2ToInf?take(10)?skip(10)?toArray()",
+     $gen2ToInf?take(10)?skip(10)?toArray(),
+     "$gen2ToInf?take(10)?skip(9)?toArray()",     
+     $gen2ToInf?take(10)?skip(9)?toArray(),
+     "$gen2ToInf?take(10)?subrange(3, 12)?toArray()",
+     $gen2ToInf?take(10)?subrange(3, 12)?toArray(),
+     "$gen2ToInf?take(10)?subrange(5, 3)?toArray()",
+     $gen2ToInf?take(10)?subrange(5, 3)?toArray(),
+     "================",
+     "$gen2ToInf?take(100)?chunk(20)?getCurrent()",
+      $gen2ToInf?take(100)?chunk(20)?getCurrent(),
+      "==&gt;  $gen2ToInf?chunk(20)?take(5)?toArray()",
+      $gen2ToInf?chunk(20)?take(5)?toArray(),
+     "================",
+     "$gen2ToInf?take(100)?chunk(20)?moveNext()?getCurrent()",
+      $gen2ToInf?take(100)?chunk(20)?moveNext()?getCurrent(),
+     "$gen2ToInf?take(100)?chunk(20)?moveNext()?moveNext()?getCurrent()", 
+      $gen2ToInf?take(100)?chunk(20)?moveNext()?moveNext()?getCurrent(),
+     "$gen2ToInf?take(100)?chunk(20)?skip(1)?getCurrent()",      
+      $gen2ToInf?take(100)?chunk(20)?skip(1)?getCurrent(),
+     "================",      
+     "$gen2ToInf?take(100)?chunk(20)?for-each(fn($genX){$genX})?toArray()",      
+      $gen2ToInf?take(100)?chunk(20)?for-each(fn($genX){$genX})?toArray(),
+     "================",  
+     "$gen2ToInf?take(10)?chunk(4)?toArray()",
+      $gen2ToInf?take(10)?chunk(4)?toArray(),
+      "$gen2ToInf?take(10)?chunk(4)?for-each(fn($arr){array:size($arr)})?toArray()",
+      $gen2ToInf?take(10)?chunk(4)?for-each(fn($arr){array:size($arr)})?toArray(),
+     "================", 
+     "$gen2ToInf?subrange(10, 15)?concat($gen2ToInf?subrange(1, 9))?toArray()",
+     $gen2ToInf?subrange(10, 15)?concat($gen2ToInf?subrange(1, 9))?toArray(),
+     "================", 
+     "$gen2ToInf?subrange(1, 5)?append(101)?toArray()",
+     $gen2ToInf?subrange(1, 5)?append(101)?toArray(),
+     "$gen2ToInf?subrange(1, 5)?prepend(101)?toArray()",
+     $gen2ToInf?subrange(1, 5)?prepend(101)?toArray(),
+     "==&gt;  $gen2ToInf?append(101)",
+     $gen2ToInf?append(101),
+     "$gen2ToInf?prepend(101)?take(5)?toArray()",
+     $gen2ToInf?prepend(101)?take(5)?toArray(),
+     "================", 
+     "$gen2ToInf?subrange(1, 5)?zip($gen2ToInf?subrange(6, 10))?toArray()",
+     $gen2ToInf?subrange(1, 5)?zip($gen2ToInf?subrange(6, 10))?toArray(),
+     "$gen2ToInf?subrange(1, 5)?zip($gen2ToInf?subrange(10, 20))?toArray()",
+     $gen2ToInf?subrange(1, 5)?zip($gen2ToInf?subrange(10, 20))?toArray(),
+     "==&gt;  $gen2ToInf?zip($gen2ToInf?skip(5))?take(10)?toArray()",
+     $gen2ToInf?zip($gen2ToInf?skip(5))?take(10)?toArray(),
+     "================", 
+     "$gen2ToInf?makeGenerator(fn($numGenerated as xs:integer)
+                                 {if($numGenerated le 9) then fn() {$numGenerated + 1} else -1} 
+                             )?toArray()",
+     $gen2ToInf?makeGenerator(fn($numGenerated as xs:integer)
+                                 {if($numGenerated le 9) then fn() {$numGenerated + 1} else -1} 
+                             )?toArray(),
+     "================", 
+     "$gen2ToInf?makeGeneratorFromArray([1, 4, 9, 16, 25])?toArray()",
+      $gen2ToInf?makeGeneratorFromArray([1, 4, 9, 16, 25])?toArray(),
+      "$gen2ToInf?makeGeneratorFromSequence((1, 8, 27, 64, 125))?toArray()",
+      $gen2ToInf?makeGeneratorFromSequence((1, 8, 27, 64, 125))?toArray(), 
+     "================", 
+     "$gen2ToInf?take(10)?insertAt(3, ""XYZ"")?toArray()",
+      $gen2ToInf?take(10)?insertAt(3, "XYZ")?toArray(),
+      "$gen2ToInf?take(10)?insertAt(1, ""ABC"")?toArray()",
+      $gen2ToInf?take(10)?insertAt(1, "ABC")?toArray(),
+      "$gen2ToInf?take(10)?insertAt(11, ""PQR"")?toArray()",
+      $gen2ToInf?take(10)?insertAt(11, "PQR")?toArray(),
+      "==&gt;  $gen2ToInf?insertAt(3, ""XYZ"")?take(10)?toArray()", 
+      $gen2ToInf?insertAt(3, "XYZ")?take(10)?toArray(),
+     (: , $gen2ToInf?take(10)?insertAt(12, "GHI")?toArray() :)  (:  Must raise error "Input Generator too-short." :) 
+     "================", 
+     "$gen2ToInf?take(10)?removeAt(3)?toArray()",
+      $gen2ToInf?take(10)?removeAt(3)?toArray(),
+      "$gen2ToInf?take(10)?removeAt(1)?toArray()",
+      $gen2ToInf?take(10)?removeAt(1)?toArray(),
+      "$gen2ToInf?take(10)?removeAt(10)?toArray()",
+      $gen2ToInf?take(10)?removeAt(10)?toArray(),
+      "==&gt;  $gen2ToInf?removeAt(3)?take(10)?toArray()",
+      $gen2ToInf?removeAt(3)?take(10)?toArray(),
+      (: , $gen2ToInf?take(10)?removeAt(11)?toArray() :)        (:  Must raise error "Input Generator too-short." :) 
+     "================",
+     "$gen2ToInf?take(10)?replace(fn($x){$x gt 4}, ""Replacement"")?toArray()",
+      $gen2ToInf?take(10)?replace(fn($x){$x gt 4}, "Replacement")?toArray(),
+      "$gen2ToInf?take(10)?replace(fn($x){$x lt 3}, ""Replacement"")?toArray()",
+      $gen2ToInf?take(10)?replace(fn($x){$x lt 3}, "Replacement")?toArray(),
+      "$gen2ToInf?take(10)?replace(fn($x){$x gt 10}, ""Replacement"")?toArray()",
+      $gen2ToInf?take(10)?replace(fn($x){$x gt 10}, "Replacement")?toArray(),
+      "$gen2ToInf?take(10)?replace(fn($x){$x gt 11}, ""Replacement"")?toArray()",
+      $gen2ToInf?take(10)?replace(fn($x){$x gt 11}, "Replacement")?toArray(),
+      "$gen2ToInf?take(10)?replace(fn($x){$x lt 2}, ""Replacement"")?toArray()",
+      $gen2ToInf?take(10)?replace(fn($x){$x lt 2}, "Replacement")?toArray(),
+      "==&gt; $gen2ToInf?replace(fn($x){$x gt 4}, ""Replacement"")?take(10)?toArray()",
+      $gen2ToInf?replace(fn($x){$x gt 4}, "Replacement")?take(10)?toArray(),
+      "$gen2ToInf?replace(fn($x){$x lt 3}, ""Replacement"")?take(10)?toArray()",
+      $gen2ToInf?replace(fn($x){$x lt 3}, "Replacement")?take(10)?toArray(),
+    (:  
+      Will result in endless loop:
+      
+      , "==&gt;  ==&gt;  ==&gt;  $gen2ToInf?replace(fn($x){$x lt 2}, ""Replacement"")?take(10)?toArray() &lt;==  &lt;==  &lt;==",
+      $gen2ToInf?replace2(fn($x){$x lt 2}, "Replacement")?take(10)?toArray() 
+    :)
+    "================",
+    "$gen2ToInf?emptyGenerator()?reverse()?toArray()",
+    $gen2ToInf?emptyGenerator()?reverse()?toArray(),
+    "$gen2ToInf?emptyGenerator()?append(2)?reverse()?toArray()",
+    $gen2ToInf?emptyGenerator()?append(2)?reverse()?toArray(),
+    "$gen2ToInf?take(10)?reverse()?toArray()",
+    $gen2ToInf?take(10)?reverse()?toArray(),
+    "================",
+    "$gen2ToInf?take(5)?fold-left(0, fn($x, $y){$x + $y})",
+    $gen2ToInf?take(5)?fold-left(0, fn($x, $y){$x + $y}),
+    "================",
+    "$gen2ToInf?take(5)?fold-right(0, fn($x, $y){$x + $y})",
+    $gen2ToInf?take(5)?fold-right(0, fn($x, $y){$x + $y}),
+    "================",
+    "$gen2ToInf?emptyGenerator()?scan-left(0, fn($x, $y){$x + $y})?toArray()",
+    $gen2ToInf?emptyGenerator()?scan-left(0, fn($x, $y){$x + $y})?toArray(),
+    "$gen2ToInf?take(5)?scan-left(0, fn($x, $y){$x + $y})?toArray()",
+    $gen2ToInf?take(5)?scan-left(0, fn($x, $y){$x + $y})?toArray(),
+    "================",
+    "$gen2ToInf?makeGeneratorFromSequence((1 to 10))?scan-right(0, fn($x, $y){$x + $y})?toArray()",
+    $gen2ToInf?makeGeneratorFromSequence((1 to 10))?scan-right(0, fn($x, $y){$x + $y})?toArray(),
+    "================",
+    let $multShortCircuitProvider := fn($x, $y)
+        {
+          if($x eq 0) then fn(){0}
+            else fn($z) {$x * $z}
+        },
+        $gen-5ToInf := $gen2ToInf?for-each(fn($n){$n -7})
+     return
+     (
+       "let $multShortCircuitProvider := fn($x, $y)
+        {
+          if($x eq 0) then fn(){0}
+            else fn($z) {$x * $z}
+        },
+            $gen-5ToInf := $gen2ToInf?for-each(fn($n){$n -7})
+          return
+            $gen2ToInf?take(5)?fold-lazy(1, $product, $multShortCircuitProvider),
+            $gen-5ToInf?fold-lazy(1, $product, $multShortCircuitProvider)",
+       $gen2ToInf?take(5)?fold-lazy(1, $product, $multShortCircuitProvider),
+       $gen-5ToInf?fold-lazy(1, $product, $multShortCircuitProvider)
+     )
+   )
+</code></pre>
+</div></details></div>
+<div class="toot" id="closed-1954"><h2>Issue #1954 closed<span class="toot-id"> #closed-1954</span></h2><div class="pubdate">29 Apr at 20:43:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1954">https://github.com/qt4cg/qtspecs/issues/1954</a></div><p>Private fields in records</p></div>
+<div class="toot" id="created-1964"><h2>Pull request #1964 created<span class="toot-id"> #created-1964</span></h2><div class="pubdate">29 Apr at 20:39:37 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1964">https://github.com/qt4cg/qtspecs/pull/1964</a></div><details><summary>1957 xsl output allows mixed content</summary><div class="markup"><p>Change to schema-for-xslt40</p>
+<p>Fix #1957 (xsl:output disallow mixed content)</p>
+<p>Add support for xsl:import-schema/@role</p>
+</div></details></div>
 <div class="toot" id="minutes—04-29"><h2>QT4 CG meeting 119 draft minutes<span class="toot-id"> #minutes—04-29</span></h2><div class="pubdate">29 Apr at 17:30:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/minutes/2025/04-29">https://qt4cg.org/meeting/minutes/2025/04-29</a></div><p>Draft minutes published.</p></div>
 <div class="toot" id="closed-1961"><h2>Issue #1961 closed<span class="toot-id"> #closed-1961</span></h2><div class="pubdate">29 Apr at 16:20:50 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1961">https://github.com/qt4cg/qtspecs/pull/1961</a></div><p>Attempt to show that xsl:record allows extra attributes</p></div>
 <div class="toot" id="closed-1956"><h2>Issue #1956 closed<span class="toot-id"> #closed-1956</span></h2><div class="pubdate">29 Apr at 16:17:36 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1956">https://github.com/qt4cg/qtspecs/pull/1956</a></div><p>1954 (part) Private variables and functions don't need to be in the module namespace</p></div>
@@ -10,100 +982,5 @@
 <div class="toot" id="closed-1587"><h2>Issue #1587 closed<span class="toot-id"> #closed-1587</span></h2><div class="pubdate">29 Apr at 16:12:31 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1587">https://github.com/qt4cg/qtspecs/pull/1587</a></div><p>557 Add fn:unparsed-binary function</p></div>
 <div class="toot" id="closed-1319"><h2>Issue #1319 closed<span class="toot-id"> #closed-1319</span></h2><div class="pubdate">29 Apr at 16:10:16 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1319">https://github.com/qt4cg/qtspecs/issues/1319</a></div><p>Specification Documents: Editors and Contributors</p></div>
 <div class="toot" id="closed-1416"><h2>Issue #1416 closed<span class="toot-id"> #closed-1416</span></h2><div class="pubdate">29 Apr at 16:10:12 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1416">https://github.com/qt4cg/qtspecs/issues/1416</a></div><p>Key-value pairs: built-in record type `pair`</p></div>
-<div class="toot" id="closed-1844"><h2>Issue #1844 closed<span class="toot-id"> #closed-1844</span></h2><div class="pubdate">29 Apr at 16:10:09 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1844">https://github.com/qt4cg/qtspecs/issues/1844</a></div><p>Drop mapping arrow operator</p></div>
-<div class="toot" id="closed-1704"><h2>Issue #1704 closed<span class="toot-id"> #closed-1704</span></h2><div class="pubdate">29 Apr at 16:09:30 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1704">https://github.com/qt4cg/qtspecs/issues/1704</a></div><p>Ignore the byte order mark more completely/globally</p></div>
-<div class="toot" id="closed-1950"><h2>Issue #1950 closed<span class="toot-id"> #closed-1950</span></h2><div class="pubdate">29 Apr at 16:09:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1950">https://github.com/qt4cg/qtspecs/pull/1950</a></div><p>1704 Add rules/notes for BOM and related topics</p></div>
-<div class="toot" id="closed-1906"><h2>Issue #1906 closed<span class="toot-id"> #closed-1906</span></h2><div class="pubdate">29 Apr at 16:05:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1906">https://github.com/qt4cg/qtspecs/pull/1906</a></div><p>1797 elements-to-maps-conversion-plan function</p></div>
-<div class="toot" id="created-1963"><h2>Pull request #1963 created<span class="toot-id"> #created-1963</span></h2><div class="pubdate">29 Apr at 14:10:54 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1963">https://github.com/qt4cg/qtspecs/pull/1963</a></div><details><summary>1958 Fix simple typo in map:build</summary><div class="markup"><p>Fix #1958</p>
-</div></details></div>
-<div class="toot" id="created-1962"><h2>Issue #1962 created<span class="toot-id"> #created-1962</span></h2><div class="pubdate">26 Apr at 11:05:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1962">https://github.com/qt4cg/qtspecs/issues/1962</a></div><details><summary>fn:map-to-element</summary><div class="markup"><p>As this feature request has been reported back to us more than once, I want to raise the question here if we want to introduce a function that inverts the result of <code>fn:map-to-element</code> back to an XML representation – provided that a conversion plan exists.</p>
-<p>Many results would certainly be lossy, but as the plan is now available separately, it would be possible to roundtrip a lot of data with regular structures, without having to write custom conversion code.</p>
-</div></details></div>
-<div class="toot" id="created-1961"><h2>Pull request #1961 created<span class="toot-id"> #created-1961</span></h2><div class="pubdate">25 Apr at 11:26:40 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1961">https://github.com/qt4cg/qtspecs/pull/1961</a></div><details><summary>Attempt to show that xsl:record allows extra attributes</summary><div class="markup"><p>By the simple expedient of adding</p>
-<pre><code class="language-xml">&lt;e:attribute name="*" required="yes"&gt;
-   &lt;e:data-type name="expression"/&gt;
-&lt;/e:attribute&gt;
-</code></pre>
-<p>to the syntax summary we get</p>
-<p><img src="https://github.com/user-attachments/assets/0eaab6d7-9b0e-4b67-92e2-fd3cd6d6ce9e" alt="Screenshot 2025-04-25 at 12-25-57 XSL Transformations (XSLT) Version 4 0"></p>
-<p>With some additional prose, would that be sufficient?</p>
-</div></details></div>
-<div class="toot" id="closed-1960"><h2>Issue #1960 closed<span class="toot-id"> #closed-1960</span></h2><div class="pubdate">25 Apr at 08:59:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1960">https://github.com/qt4cg/qtspecs/pull/1960</a></div><p>Attempt to improve rendering of the dynamic ToC</p></div>
-<div class="toot" id="created-1960"><h2>Pull request #1960 created<span class="toot-id"> #created-1960</span></h2><div class="pubdate">25 Apr at 08:58:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1960">https://github.com/qt4cg/qtspecs/pull/1960</a></div><details><summary>Attempt to improve rendering of the dynamic ToC</summary><div class="markup"><p>This is an attempt to complete action QT4CG-116-03.</p>
-<p>Part of the confusion in the rendering is that it’s partly done by CSS and partly done by JavaScript and those had gotten out of sync. Given that the JavaScript code has to do some of the work, I changed things so it does all of the work.</p>
-<p>I also discovered that the weird Firefox bug where the font size changed was, wait for it, caused by the particular codepoint being used for “changed”. So I, uh, changed it.</p>
-<p>We now get ✚ for new sections, ✭ for changed sections, and both when there are both new and changed sections. I spent a bit of time trying to find a third symbol, but gave up.</p>
-<p>The markup in the XSLT specification isn’t quite the same as in other specifications, so the results are a tiny bit odd in places. There are some sections that get marked “both” in the ToC but when you expand the ToC, there’s only one mark. I haven’t tried to work out what’s going on there yet.</p>
-</div></details></div>
-<div class="toot" id="created-1959"><h2>Pull request #1959 created<span class="toot-id"> #created-1959</span></h2><div class="pubdate">24 Apr at 15:49:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1959">https://github.com/qt4cg/qtspecs/pull/1959</a></div><details><summary>1953 (part) XSLT Worked example using methods to implement atomic sets</summary><div class="markup"><p>Provides an XSLT package that uses named record types and methods to implement an atomic set data type, as an example of how abstract data types can now be implemented.</p>
-</div></details></div>
-<div class="toot" id="created-1958"><h2>Issue #1958 created<span class="toot-id"> #created-1958</span></h2><div class="pubdate">24 Apr at 14:41:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1958">https://github.com/qt4cg/qtspecs/issues/1958</a></div><details><summary>Typo in map:build</summary><div class="markup"><blockquote>
-<p>If the key is already present, the processor combines the new value
-for the key with the existing value as determined by <strong>the and duplicates</strong> option.</p>
-</blockquote>
-</div></details></div>
-<div class="toot" id="created-1957"><h2>Issue #1957 created<span class="toot-id"> #created-1957</span></h2><div class="pubdate">24 Apr at 11:58:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1957">https://github.com/qt4cg/qtspecs/issues/1957</a></div><details><summary>Schema for XSLT incorrectly allows mixed content for xsl:output</summary><div class="markup"><p>The declaration (line 1412) says mixed="true".</p>
-</div></details></div>
-<div class="toot" id="created-1956"><h2>Pull request #1956 created<span class="toot-id"> #created-1956</span></h2><div class="pubdate">24 Apr at 11:34:34 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1956">https://github.com/qt4cg/qtspecs/pull/1956</a></div><details><summary>1954 (part) Private variables and functions don't need to be in the module namespace</summary><div class="markup"><p>See issue #1954</p>
-<p>The PR removes the requirement for private variables and functions declared in library modules to be in the module namespace. There has never been any sensible reason for this restriction.</p>
-<p>The restriction is retained for public variables and functions; one could argue that it is unnecessary in that case also, but it does no harm and enforces good coding discipline.</p>
-</div></details></div>
-<div class="toot" id="created-1955"><h2>Issue #1955 created<span class="toot-id"> #created-1955</span></h2><div class="pubdate">24 Apr at 09:58:46 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1955">https://github.com/qt4cg/qtspecs/issues/1955</a></div><details><summary>fn:doc, fn:parse-xml: entity expansion</summary><div class="markup"><p>The current rule for the <code>entity-expansion-limit</code> option is:</p>
-<blockquote>
-<p>The processor should impose a limit on the number of entity references that are expanded, or on the size of the expanded entities, depending on the options available in the underlying XML parser; the limit should be commensurate with the value requested, but the precise effect may be . <a href="https://qt4cg.org/specifications/xpath-functions-40/Overview.html#implementation-dependent">implementation-dependent</a>. If the XML parser does not offer the ability to impose a limit, or if the value is zero, then entity expansion should if possible be disabled entirely, leading to a dynamic error if the input contains any entity references. A negative value should be interpreted as placing no limits on entity expansion.</p>
-</blockquote>
-<p>By default, Java uses 64000 as limit. An explicit value less than or equal to 0 indicates no limit (https://docs.oracle.com/javase/tutorial/jaxp/limits/limits.html, https://docs.oracle.com/en/java/javase/17/docs/api/java.xml/module-summary.html). I don’t know about other languages.</p>
-<p>I would like to…</p>
-<ol>
-<li>change the option to an <code>expand-entities</code> Boolean, or</li>
-<li>change the rules and make <code>0</code> disable the limit.</li>
-</ol>
-<p>Any favorites?</p>
-</div></details></div>
-<div class="toot" id="created-1954"><h2>Issue #1954 created<span class="toot-id"> #created-1954</span></h2><div class="pubdate">24 Apr at 09:39:56 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1954">https://github.com/qt4cg/qtspecs/issues/1954</a></div><details><summary>Private fields in records</summary><div class="markup"><p>It would be nice to have some way of indicating that some of the fields in a record are (in some sense) private, intended for internal use.</p>
-<p>I'm not proposing full encapsulation - the instances of a record type are maps, and can be manipulated by functions such as map:keys(), map:get(), and map:put() which expose all the keys.</p>
-<p>Rather I'm proposing a convention that makes it difficult to access the fields "accidentally" using lookup expressions: a bit like naming the fields using a leading underscore, but something a bit stronger. Analogous to reflection in Java, which allows you to break encapsulation with a bit of effort.</p>
-<p>I'd suggest making the keys for these "private" fields QNames rather than strings:</p>
-<ul>
-<li>In the record declaration, we allow a field name to be a QName rather than a string: record(private:data as item()*, long, lat).</li>
-<li>QNames can't be used directly in a lookup; to access the field, you need to know what namespace "private" is bound to, which doesn't need to be published information (though it is of course discoverable)</li>
-<li>Internally the implementor of this interface can bind a QName to a private variable and use this:</li>
-</ul>
-<p><code>declare %private variable $private:data as xs:QName('http://my.private.namespace/', 'data')</code></p>
-<p>and then access it using <code>$record?$private:data</code></p>
-</div></details></div>
-<div class="toot" id="created-1953"><h2>Issue #1953 created<span class="toot-id"> #created-1953</span></h2><div class="pubdate">24 Apr at 09:19:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1953">https://github.com/qt4cg/qtspecs/issues/1953</a></div><details><summary>Make generation of constructor function for named record types optional</summary><div class="markup"><p>I propose that when a named record type is declared in XQuery or XSLT, the generation of a constructor function should be optional.</p>
-<p>Perhaps in XQuery it should only happen if there is an annotation <code>%constructor</code>, and in XSLT if there is an attribute <code>constructor="yes"</code>. I think it's better for the default to be "no constructor" because it's better to make the existence of a constructor explicitly visible.</p>
-<p>There are cases where you don't want a system-generated constructor primarily because you want to provide your own constructor which perhaps accepts the data in a slightly different form, or perhaps imposes constraints like cross-validation of supplied arguments.</p>
-</div></details></div>
-<div class="toot" id="created-1952"><h2>Issue #1952 created<span class="toot-id"> #created-1952</span></h2><div class="pubdate">23 Apr at 21:47:20 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1952">https://github.com/qt4cg/qtspecs/issues/1952</a></div><details><summary>Change option name from xsi-schema-location to use-xsi-schema-location</summary><div class="markup"><p>Functions (such as fn:doc and fn:parse-xml) that have a boolean option <code>xsi-schema-location</code> should change this to <code>use-xsi-schema-location</code> to make it clearer that the expected value is a boolean and not a schema location.</p>
-<p>(Comment made in passing at the last meeting).</p>
-</div></details></div>
-<div class="toot" id="created-1951"><h2>Issue #1951 created<span class="toot-id"> #created-1951</span></h2><div class="pubdate">23 Apr at 15:54:00 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1951">https://github.com/qt4cg/qtspecs/issues/1951</a></div><details><summary>Some nits regarding the method attribute</summary><div class="markup"><p>A few minor comments on the method attribute (that also apply to XSLT 3.0):</p>
-<ol>
-<li>
-<p>A note in section 25.1 says "In the case of the attributes <strong>method</strong>, cdata-section-elements, suppress-indentation, and use-character-maps, the effective value of the attribute contains a space-separated <strong>list</strong> of EQNames."  The effective value of the method attribute should not be a list of values, just one value, right?</p>
-</li>
-<li>
-<p>The XSD schema requires that the method attribute contain a colon if it is not one of the 6 "built-in" values.  (The type xsl:method restricts xsl:EQName with the pattern "\c*:\c*").  Now that it can be an expanded QName,  it should also allow for Q{...}.</p>
-</li>
-<li>
-<p>A note in section 3.2 says:  "Extension attributes may also be used to influence the behavior of the serialization methods <strong>xml, xhtml, html, or text</strong>, to the extent that... If a serialization method other than one of these <strong>four</strong> is requested (<strong>using a prefixed QName</strong> in the method parameter) then...".<br>
-a. This lists only 4 methods, Should "json" and "adaptive" be added to the list and "four" changed to "six"?
-b. Should "using a prefixed QName" be changed to something like "using an EQName with a non-absent namespace"?</p>
-</li>
-<li>
-<p>In the note about error XTSE1570 in Section 26.2.  "The value must (if present) be a valid EQName. If it is a lexical QName with no a prefix, then it identifies a method specified in [XSLT and XQuery Serialization] and must be one of <strong>xml, html, xhtml, or text</strong>.
-a. It only lists the 4 methods, leaving out "json" and "adaptive"
-b. Typo - "no a prefix" should be "no prefix"</p>
-</li>
-</ol>
-<p>Thanks!</p>
-</div></details></div>
-<div class="toot" id="created-1950"><h2>Pull request #1950 created<span class="toot-id"> #created-1950</span></h2><div class="pubdate">23 Apr at 15:52:08 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/1950">https://github.com/qt4cg/qtspecs/pull/1950</a></div><details><summary>1704 Add rules/notes for BOM and related topics</summary><div class="markup"><p>Fix #1704</p>
-<p>The main substantive change is that unparsed-text() now explicitly discards any leading BOM.</p>
-<p>Other functions that involve decoding of octets to strings are updated to reflect the changes that we made to reference the concept of "permitted characters".</p>
-</div></details></div>
-<div class="toot" id="closed-1644"><h2>Issue #1644 closed<span class="toot-id"> #closed-1644</span></h2><div class="pubdate">23 Apr at 15:29:02 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1644">https://github.com/qt4cg/qtspecs/issues/1644</a></div><p>fn:elements-to-maps: Mixed Content</p></div>
-<div class="toot" id="closed-1658"><h2>Issue #1658 closed<span class="toot-id"> #closed-1658</span></h2><div class="pubdate">23 Apr at 15:28:43 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1658">https://github.com/qt4cg/qtspecs/issues/1658</a></div><p>fn:elements-to-maps: `empty`, normalize space ?</p></div></div><p>See 3973
+<div class="toot" id="closed-1844"><h2>Issue #1844 closed<span class="toot-id"> #closed-1844</span></h2><div class="pubdate">29 Apr at 16:10:09 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1844">https://github.com/qt4cg/qtspecs/issues/1844</a></div><p>Drop mapping arrow operator</p></div></div><p>See 3993
             more statuses in yearly archives.</p></article></main></body></html>
