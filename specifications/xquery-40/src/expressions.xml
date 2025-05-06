@@ -19050,6 +19050,10 @@ return $line/value]]></eg>
             <change issue="796" PR="1131" date="2024-04-01">
                The type of a variable used in a <code>let</code> expression can be declared.
             </change>
+            <change issue="37" PR="1942" date="2025-04-22">
+               Sequences, arrays, and maps can be destructured in a <code>let</code> expression
+               to extract the content of those into multiple variables.
+            </change>
          </changes>
 
          <p>XPath allows a variable to be declared and bound to a value using a <term>let expression</term>.</p>
@@ -19075,30 +19079,37 @@ Specifically, any separating comma is replaced by <code>let</code>.</p>
             </item>
 
             <item>
-               <p>In a single-variable let expression, the variable is called the <term>range
-                  variable</term>. The expression that follows the <code>:=</code> symbol is evaluated, and
-                  if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted
-                  to the specified type by applying the <termref def="dt-coercion-rules"/>.
-                  The resulting value is called the <term>binding sequence</term>.</p>
+               <p>In a <nt def="LetValueBinding">LetValueBinding</nt> <code>let $<var>V</var> := <var>EXPR</var></code>:</p>
+               <olist>
+                  <item><p>The variable <var>V</var> is called the <term>range variable</term>.</p></item>
+                  <item><p>The expression <var>EXPR</var> that follows the <code>:=</code> symbol is evaluated, and
+                     if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted
+                     to the specified type by applying the <termref def="dt-coercion-rules"/>.
+                     The resulting value is called the <term>binding sequence</term>.</p></item>
+               </olist>
             </item>
 
             <item>
-               <p>In a sequence destructuring let expression <code>let $( $A1, $A2, $A3, ..., $An ) := EXPR</code>:</p>
+               <p>In a <nt def="LetSequenceBinding">LetSequenceBinding</nt>
+                  <code>let $( $<var>A1</var>, $<var>A2</var>, $<var>A3</var>, ..., $<var>A/n</var> ) := <var>EXPR</var></code>:</p>
                <olist>
-                  <item><p>The expression that follows the <code>:=</code> symbol is evaluated, and
-                     if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted
-                     to the specified type by applying the <termref def="dt-coercion-rules"/>.
-                     The resulting value is called the <term>destructuring sequence</term>.</p></item>
-                  <item><p>The variables within the destructuring expression are called <term>destructured variables</term>.
-                     The <term>destructured index</term> is the position of the variable within the destructuring
-                     expression. That is, the <emph>n<sup>th</sup></emph> <term>destructured variable</term> has a
-                     <term>destructured position</term> of <emph>n</emph>.</p></item>
-                  <item><p>The <term>destructured variables</term> are expanded into single-variable let expressions where
-                     the <term>range variable</term> is the current <term>destructured variable</term> being expanded,
-                     including any associated <nt def="TypeDeclaration">TypeDeclaration</nt>. The
-                     <term>binding sequence</term> of the <term>range variable</term> is the value of the
-                     <term>destructuring sequence</term> for the given <term>destructured position</term> in the
-                     sequence.</p></item>
+                  <item><p>The expression <var>EXPR</var> that follows the <code>:=</code> symbol is evaluated, and
+                     if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted to the
+                     specified type by applying the <termref def="dt-coercion-rules"/>. The resulting value is bound
+                     to a temporary variable <var>T</var> that is not added to the in-scope variables.</p></item>
+                  <item>
+                     <p>The variables <var>A/n</var> are expanded to a set of nested let expressions as follows:</p>
+                     <olist>
+                        <item><p>The variable <var>A/n</var> is called the <term>range variable</term>.</p></item>
+                        <item><p>The value of the sequence <var>T</var> at position <var>n</var> is evaluated, and if a
+                           <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted to the
+                           specified type by applying the <termref def="dt-coercion-rules"/>. If the sequence does not
+                           contain an item at position <var>n</var>, an empty sequence is returned. The resulting value
+                           is called the <term>binding sequence</term>.</p></item>
+                        <item><p>This is equivalent to the expression
+                           <code>let $<var>A/n</var> as <var>TYPE</var> := fn:items-at(<var>T</var>, <var>n</var>)</code>.</p></item>
+                     </olist>
+                  </item>
                </olist>
                <example>
                   <head>Example:</head>
@@ -19106,33 +19117,38 @@ Specifically, any separating comma is replaced by <code>let</code>.</p>
                   <eg role="parse-test"><![CDATA[let ${ $a, $b as xs:integer, $local:c } := (2, 4, 6)
 return $a + $b + $local:c]]></eg>
                   <p>is expanded to:</p>
-                  <eg role="parse-test"><![CDATA[let $temp := (2, 4, 6)
-let $a := fn:item-at($temp, 1)
-let $b as xs:integer := fn:item-at($temp, 2)
-let $local:c := fn:item-at($temp, 3)
-return $a + $b + $local:c]]></eg>
-                  <p>The variable <code>$temp</code> is used for illustrative purposes. In practice, this variable
-                     will not override an in-scope variable and will not be added to the in-scope variables.</p>
+                  <eg role="parse-test">let $<var>temp</var> := (2, 4, 6)
+let $a := fn:items-at($<var>temp</var>, 1)
+let $b as xs:integer := fn:items-at($<var>temp</var>, 2)
+let $local:c := fn:items-at($<var>temp</var>, 3)
+return $a + $b + $local:c</eg>
+                  <p>where <var>temp</var> is some variable name that is otherwise unused.</p>
                </example>
             </item>
 
             <item>
-               <p>In an array destructuring let expression <code>let $[ $A1, $A2, $A3, ..., $An ] := EXPR</code>:</p>
+               <p>In a <nt def="LetArrayBinding">LetArrayBinding</nt>
+                  <code>let $[ $<var>A1</var>, $<var>A2</var>, $<var>A3</var>, ..., $<var>A/n</var> ] := <var>EXPR</var></code>:</p>
                <olist>
-                  <item><p>The expression that follows the <code>:=</code> symbol is evaluated, and
+                  <item><p>The expression <var>EXPR</var> that follows the <code>:=</code> symbol is evaluated, and
                      if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted
                      to the specified type by applying the <termref def="dt-coercion-rules"/>. If no
                      <nt def="TypeDeclaration">TypeDeclaration</nt> is present, <code>array(*)</code> is
-                     used instead. The resulting value is called the <term>destructuring array</term>.</p></item>
-                  <item><p>The variables within the destructuring expression are called <term>destructured variables</term>.
-                     The <term>destructured index</term> is the position of the variable within the destructuring
-                     expression. That is, the <emph>n<sup>th</sup></emph> <term>destructured variable</term> has a
-                     <term>destructured index</term> of <emph>n</emph>.</p></item>
-                  <item><p>The <term>destructured variables</term> are expanded into single-variable let expressions where
-                     the <term>range variable</term> is the current <term>destructured variable</term> being expanded,
-                     including any associated <nt def="TypeDeclaration">TypeDeclaration</nt>. The
-                     <term>binding sequence</term> of the <term>range variable</term> is the value of the
-                     <term>destructuring array</term> for at the given <term>destructured index</term> in the array.</p></item>
+                     used instead. The resulting value is bound to a temporary variable <var>T</var> that
+                     is not added to the in-scope variables.</p></item>
+                  <item>
+                     <p>The variables <var>A/n</var> are expanded to a set of nested let expressions as follows:</p>
+                     <olist>
+                        <item><p>The variable <var>A/n</var> is called the <term>range variable</term>.</p></item>
+                        <item><p>The value of the member of <var>T</var> at index <var>n</var> is evaluated, and if a
+                           <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted to the
+                           specified type by applying the <termref def="dt-coercion-rules"/>. If the array does not
+                           contain a member at index <var>n</var>, an empty sequence is returned. The resulting value
+                           is called the <term>binding sequence</term>.</p></item>
+                        <item><p>This is equivalent to the expression
+                           <code>let $<var>A/n</var> as <var>TYPE</var> := array:get(<var>T</var>, <var>n</var>, ())</code>.</p></item>
+                     </olist>
+                  </item>
                </olist>
                <example>
                   <head>Example:</head>
@@ -19140,31 +19156,39 @@ return $a + $b + $local:c]]></eg>
                   <eg role="parse-test"><![CDATA[let $[ $a, $b as xs:integer, $local:c ] := [2, 4, 6]
 return $a + $b + $local:c]]></eg>
                   <p>is expanded to:</p>
-                  <eg role="parse-test"><![CDATA[let $temp := (2, 4, 6)
-let $a := array:get($temp, 1, ())
-let $b as xs:integer := array:get($temp, 2, ())
-let $local:c := array:get($temp, 3, ())
-return $a + $b + $local:c]]></eg>
-                  <p>The variable <code>$temp</code> is used for illustrative purposes. In practice, this variable
-                     will not override an in-scope variable and will not be added to the in-scope variables.</p>
+                  <eg role="parse-test">let $<var>temp</var> := (2, 4, 6)
+let $a := array:get($<var>temp</var>, 1, ())
+let $b as xs:integer := array:get($<var>temp</var>, 2, ())
+let $local:c := array:get($<var>temp</var>, 3, ())
+return $a + $b + $local:c</eg>
+                  <p>where <var>temp</var> is some variable name that is otherwise unused.</p>
                </example>
             </item>
 
             <item>
-               <p>In a map or record destructuring let expression <code>let ${ $A, $B, $C, ... } := EXPR</code>:</p>
+               <p>In a <nt def="LetMapBinding">LetMapBinding</nt>
+                  <code>let ${ $<var>A1</var>, $<var>A2</var>, $<var>A3</var>, ..., $<var>A/n</var> } := <var>EXPR</var></code>:</p>
                <olist>
-                  <item><p>The expression that follows the <code>:=</code> symbol is evaluated, and
+                  <item><p>The expression <var>EXPR</var> that follows the <code>:=</code> symbol is evaluated, and
                      if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted
                      to the specified type by applying the <termref def="dt-coercion-rules"/>. If no
-                     <nt def="TypeDeclaration">TypeDeclaration</nt> is present, <code>map(*)</code> is
-                     used instead. The resulting value is called the <term>destructuring map</term>.</p></item>
-                  <item><p>The variables within the destructuring expression are called <term>destructured variables</term>.
-                     The <term>destructured key</term> is the NCName of the <term>destructured variable</term>.</p></item>
-                  <item><p>The <term>destructured variables</term> are expanded into single-variable let expressions where
-                     the <term>range variable</term> is the current <term>destructured variable</term> being expanded,
-                     including any associated <nt def="TypeDeclaration">TypeDeclaration</nt>. The
-                     <term>binding sequence</term> of the <term>range variable</term> is the value of the
-                     <term>destructuring map</term> for the given <term>destructured key</term>.</p></item>
+                     <nt def="TypeDeclaration">TypeDeclaration</nt> is present, <code>map(*)</code> is used instead.
+                     The resulting value is bound to a temporary variable <var>T</var> that is not added to the
+                     in-scope variables.</p></item>
+                  <item>
+                     <p>The variables <var>A/n</var> are expanded to a set of nested let expressions as follows:</p>
+                     <olist>
+                        <item><p>The variable <var>A/n</var> is called the <term>range variable</term>.</p></item>
+                        <item><p>Let <var>KEY</var> be the local name of <var>A/n</var>.</p></item>
+                        <item><p>The value of the entry in <var>T</var> for <var>KEY</var> is evaluated, and if a
+                           <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted to the
+                           specified type by applying the <termref def="dt-coercion-rules"/>. If the map does not
+                           contain an entry for <var>KEY</var>, an empty sequence is returned. The resulting value
+                           is called the <term>binding sequence</term>.</p></item>
+                        <item><p>This is equivalent to the expression
+                           <code>let $<var>A/n</var> as <var>TYPE</var> := map:get(<var>T</var>, <var>KEY</var>, ())</code>.</p></item>
+                     </olist>
+                  </item>
                </olist>
                <example>
                   <head>Example:</head>
@@ -19172,13 +19196,12 @@ return $a + $b + $local:c]]></eg>
                   <eg role="parse-test"><phrase role="parse-test"><![CDATA[let ${ $a, $b as xs:integer, $local:c } := map { "a": 2, "b": 4, "c": 6 }
 return $a + $b + $local:c]]></phrase></eg>
                   <p>is expanded to:</p>
-                  <eg role="parse-test"><phrase role="parse-test"><![CDATA[let $temp := (2, 4, 6)
-let $a := map:get($temp, "a", ())
-let $b as xs:integer := map:get($temp, "b", ())
-let $local:c := map:get($temp, "c", ())
-return $a + $b + $local:c]]></phrase></eg>
-                  <p>The variable <code>$temp</code> is used for illustrative purposes. In practice, this variable
-                     will not override an in-scope variable and will not be added to the in-scope variables.</p>
+                  <eg role="parse-test"><phrase role="parse-test">let $<var>temp</var> := (2, 4, 6)
+let $a := map:get($<var>temp</var>, "a", ())
+let $b as xs:integer := map:get($<var>temp</var>, "b", ())
+let $local:c := map:get($<var>temp</var>, "c", ())
+return $a + $b + $local:c</phrase></eg>
+                  <p>where <var>temp</var> is some variable name that is otherwise unused.</p>
                </example>
             </item>
 
