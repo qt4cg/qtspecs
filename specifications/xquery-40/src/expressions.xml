@@ -2129,17 +2129,21 @@ function calling rules), while <code>$b</code> and <code>$c</code> must be numer
 
                
 
-               <p>A processor may raise a type
+               <p>A processor <rfc2119>may</rfc2119> raise a type
                   error during static analysis if the inferred static type of an
                      expression has no overlap (intersection) with the required type, and cannot be converted
                      to the required type using the <termref def="dt-coercion-rules"/>. For example,
-                     given the call <code>fn:upper-case($s)</code>, the processor may raise an error if the
+                     given the call <code>fn:upper-case($s)</code>, the processor <rfc2119>may</rfc2119> raise an error if the
                      declared or inferred type of <code>$s</code> is <code>xs:integer</code>, 
                      but not if it is <code>xs:anyAtomicType</code>.
                   </p>
                
-               <p>In addition, type analysis may conclude that an expression is <code>implausible</code>.
+               <p>In addition, type analysis <rfc2119>may</rfc2119> conclude that an expression is <termref def="dt-implausible"/>.
                Implausible expressions may be considered erroneous unless such checks have been disabled.
+               For example, the expression <code>round(tokenize($input))</code> is implausible because 
+                  the required type for <function>fn:round</function> is <code>xs:numeric?</code>,
+                  while the static type of <code>tokenize($input)</code> is <code>xs:string*</code>,
+                  and these two sequence types are <termref def="dt-substantively-disjoint"/>.
                This topic is described further in <specref ref="id-implausible-expressions"/>.</p>
                 
                
@@ -2698,7 +2702,7 @@ function call raises a dynamic
 error, providing a QName that identifies the error, a descriptive string, and a diagnostic value (assuming that the prefix <code>app</code> is bound to a namespace containing application-defined error codes):</p>
 
             <eg role="parse-test"
-               ><![CDATA[error(xs:QName("app:err057"), "Unexpected value", string($v))]]></eg>
+               ><![CDATA[error(#app:err057, "Unexpected value", string($v))]]></eg>
 
          </div3>
          <div3 id="id-errors-and-opt">
@@ -8500,8 +8504,7 @@ and <nt def="OrExpr"
             <prodrecap ref="PrimaryExpr"/>
          </scrap>
  
-         <!--<p>The usage of the <nt def="TildeExpr"/> is described in <specref ref="id-arrow-operator"/>.</p>
--->
+         
          <div3 id="id-literals">
             <head>Literals</head>
             
@@ -8511,8 +8514,8 @@ and <nt def="OrExpr"
             <p>
                <termdef id="dt-literal" term="literal"
                   >A <term>literal</term> is a direct syntactic representation of an
-		atomic item.</termdef> &language; supports two kinds of literals: numeric literals and
-		string literals.</p>
+		atomic item.</termdef> &language; supports three kinds of literals: numeric literals,
+		string literals, and QName literals.</p>
             
             
             <div4 id="id-numeric-literals">
@@ -8782,6 +8785,42 @@ and <nt def="OrExpr"
                   (<char>U+0060</char>) have a reserved meaning in string templates.</p></item>
                </ulist></note>
             </div4>
+            
+            <div4 id="id-qname-literals">
+               <head>QName Literals</head>
+               
+               <changes>
+                  <change issue="1661">QName literals are new in 4.0.</change>
+               </changes>
+               
+               <p>A QName literal represents a value of type <code>xs:QName</code>.</p>
+               
+               <scrap>
+                  <prodrecap ref="QNameLiteral"/>
+               </scrap>
+               
+               <p>For example, the expression <code>node-name($node) = #xml:space</code>
+               returns true if the name of the node <code>$node</code> is the QName with local part <code>space</code>
+                  and namespace URI <code>http://www.w3.org/XML/1998/namespace</code>.</p>
+               
+               <p>If the <code>EQName</code> is an unprefixed <code>NCName</code>, then it is taken
+                  as being in no namespace. If it is a prefixed <code>QName</code>, then the prefix is
+                  resolved to a namespace URI using the <termref def="dt-static-namespaces"/>. If there
+                  is no binding for the prefix in the <termref def="dt-static-namespaces"/> then
+                  a static error is raised <errorref class="ST" code="0008"/>.
+               </p>
+               
+               <note><p>QNames are widely used in &language; to represent the names of constructs such as
+               functions, variables, and elements. A <code>QName</code> appearing on its own as an expression,
+               for example <code>my:invoice</code>, is an abbreviation for the axis step <code>child::my:step</code>,
+               which selects a child element of the context node having this particular element name. A different
+               construct is therefore needed to represent an atomic value of type <code>xs:QName</code>.
+               For example, the function <code>fn:error</code> expects an <code>xs:QName</code> value
+               as its first argument, so (provided that the prefix <code>err</code> is defined in the static
+               context) it is possible to use a call such as <code>error(#err:XPTY0004)</code> to raise an
+               error with this error code.</p></note>
+            </div4>
+            
             <div4 id="id-constants-other-types">
                <head>Constants of Other Types</head>
  
@@ -9729,6 +9768,11 @@ At evaluation time, the value of a variable reference is the value to which the 
          
          <div4 id="id-eval-dynamic-function-call">
                <head>Evaluating Dynamic Function Calls</head>
+            
+            <changes>
+               <change issue="1240">A dynamic function call can now be applied to a sequence of functions, and in particular
+               to an empty sequence. This makes it easier to chain a sequence of calls.</change>
+            </changes>
            
             
             <p>This section applies to dynamic function calls whose arguments do not include
@@ -9746,21 +9790,38 @@ At evaluation time, the value of a variable reference is the value to which the 
 
 
                <olist>
-
+                  
                   <item>
                      <p>
-                          The <termref def="dt-function-item"/> <var>FI</var> to be called
-                          is obtained by evaluating the base expression of the function call.
-                              If this yields a sequence consisting of a single function item
-                              whose arity matches the number of arguments in the <code>ArgumentList</code>,
-                              let <var>FI</var> denote that function item.
-                              Otherwise, a type error is raised
+                          The base expression of the function call is evaluated.
+                          If this is not of type <code>function(*)*</code> (a sequence
+                        of zero or more function items) then a type error is raised <errorref class="TY" code="0004"/>.
+                     </p>
+                 </item>
+                  
+                  <item>
+                     <p>The result of the dynamic function call is the <termref def="dt-sequence-concatenation"/>
+                        of the results of applying each function item individually, retaining order. That is, the
+                        result of <code><var>F</var>(<var>X</var>, <var>Y</var>, ...)</code> is 
+                        <code>for $FI in <var>F</var> return <var>$FI</var>(<var>X</var>, <var>Y</var>, ...)</code>.
+                        The result of a dynamic function call applied to a single function item <var>FI</var> is defined
+                        by the rules that follow.
+                     </p>
+                  </item>
+                  <item>
+                     <p>
+                              <errorref
+                                 class="TY" code="0004"/>.
+                              If the arity of <var>FI</var> does not match the number of arguments in the <code>ArgumentList</code>,
+                              a type error is raised
                               <errorref
                                  class="TY" code="0004"/>.
                             </p>
-                     <note diff="add" at="A"><p>Keyword arguments are not allowed in a dynamic function call.</p></note>
+                     
                        
                   </item>
+
+                  
 
                   <item>
                      <p>
@@ -9910,7 +9971,35 @@ At evaluation time, the value of a variable reference is the value to which the 
                                     </p>
                                     </item>
                                  </olist>
-                                 <example>
+                                 
+
+                              </item>
+
+                              <item>
+                                 <p>                                  
+                                  If the implementation of <var>FI</var> is
+                                  not an &language; expression
+                                  (for example, if <var>FI</var> is
+                                  a <termref
+                                       def="dt-system-function">system function</termref>
+                                    <phrase role="xquery">or an <termref def="dt-external-function"
+                                          >external function</termref>
+                                    </phrase>), 
+                                    the <phrase diff="chg" at="2023-03-11">body</phrase> of the function is
+                                       evaluated, and the result is converted
+                                       to the declared return type, in the same way as for a 
+                                       static function call (see <specref ref="id-function-calls"/>).</p>
+                                 
+                                 <p>Errors may be raised in the same way.</p>
+                                    
+                                
+                                 
+                              </item>
+
+                           
+               </olist>
+            
+            <example>
                                     <head>Derived Types and Nonlocal Variable Bindings</head>
                                     <p>
                                        <code>$incr</code> is a nonlocal variable that is available within the function because its variable binding has been added to the variable values of the function..  Even though the parameter and return type of this function are both <code>xs:decimal</code>,
@@ -9944,32 +10033,34 @@ let $vat := function { @vat + @price }
 return $vat(doc('wares.xml')/shop/article)
 ]]></eg>
                                  </example>
-
-                              </item>
-
-                              <item>
-                                 <p>                                  
-                                  If the implementation of <var>FI</var> is
-                                  not an &language; expression
-                                  (for example, <var>FI</var> is
-                                  a <termref
-                                       def="dt-system-function">system function</termref>
-                                    <phrase role="xquery">or an <termref def="dt-external-function"
-                                          >external function</termref>,
-                                    </phrase>
-                                    the <phrase diff="chg" at="2023-03-11">body</phrase> of the function is
-                                       evaluated, and the result is converted
-                                       to the declared return type, in the same way as for a 
-                                       static function call (see <specref ref="id-function-calls"/>).</p>
-                                 
-                                 <p>Errors may be raised in the same way.</p>
-                                    
-                                
-                                 
-                              </item>
-
-                           
-               </olist>
+            
+            <example>
+               <head>Chaining method calls</head>
+               
+               <p>Methods are described in <specref ref="id-methods"/>, and are commonly used in 
+                  dynamic function calls such as <code>$rectangle?area()</code>. In this example <code>$rectangle</code>
+               is typically a map, and <code>area</code> is the key of one of the entries in the map, the value
+               of the entry being a <termref def="dt-method"/>. The lookup expression
+                  <code>$rectangle?area</code> returns a function item whose captured context includes the containing
+               map, and the dynamic function call then evaluates the body of this method, which is
+               able to access the containing map as the context item.</p>
+               
+               <p>Such calls can be chained. For example if <code>$rectangle?resize(2)</code> returns a rectangle that
+               is twice the size of the original, then <code>$rectangle?resize(2)?area()</code> returns the area of the
+               enlarged rectangle.</p>
+               
+               <p>This kind of chaining extends to the case where a method returns zero or more maps. For example, suppose
+               that rectangles are nested, and that <code>$rectangle?contents()</code> delivers a sequence of zero or more 
+               rectangles. Then the expression <code>$rectangle?area() - sum($rectangle?contents()?area())</code> returns
+               the difference between the area of the containing rectangle and the total area of the contained
+               rectangles. This works because the dynamic function call <code>$rectangle?contents()?area()</code>
+               applies the function <code>area</code> to each of the function items in the sequence returned
+               by the expression <code>$rectangle?contents()</code>.</p>
+               
+               
+            </example>
+            
+               <note diff="add" at="A"><p>Keyword arguments are not allowed in a dynamic function call.</p></note>
             </div4>
             </div3>
 
@@ -9986,11 +10077,15 @@ return $vat(doc('wares.xml')/shop/article)
                <p>The rules for partial function application in static function calls and dynamic function
                calls have a great deal in common, but they are stated separately below for clarity.</p>
                
-               <p>In each case, the result of a partial function application is a 
-                  <termref def="dt-function-item"/>, whose
+               <p>Partial function application delivers
+                  <termref def="dt-function-item">function items</termref>, whose
                   arity is equal to the number of placeholders in the call.</p>
                
-               <p>More specifically, the result of the partial function application is 
+               <p>A static partial function application always delivers one <termref def="dt-function-item"/>.
+               A dynamic partial function application delivers one <termref def="dt-function-item"/> for each
+               <termref def="dt-function-item"/> in the input.</p>
+               
+               <p>More specifically, each function item in the result of the partial function application is 
                   a <termref
                   def="dt-partially-applied-function"
                   >partially applied function</termref>.
@@ -10014,19 +10109,6 @@ return $vat(doc('wares.xml')/shop/article)
                         arguments.</p>
                   </item>
                   
-                  <!--<item><p>If <var>FD</var> is <termref def="dt-variadic"/>, and
-                     the function call has no keyword arguments, then the static function call
-                  <code><var>F</var>(<var>ARGS</var>)</code> is transformed into the dynamic
-                  call <code><var>F</var>#<var>N</var>(<var>ARGS</var>)</code>, where <var>N</var>
-                  is the number of supplied arguments.</p>
-                  <note><p>For example, <code>fn:concat('[', ?, ']')</code> is transformed
-                  into the expression <code>fn:concat#3('[', ?, ']')</code>. For the meaning
-                     of a named function reference applied to a variadic function, 
-                     see <specref ref="id-named-function-ref"/>.</p></note></item>-->
-                  
-                  <!--<item><p>If <var>FD</var> is <termref def="dt-variadic"/>, and
-                     the function call does have keyword arguments, then a static error
-                     is raised <errorref class="ST" code="0017"/>. </p></item>-->
                   
                   
                   <item>
@@ -10165,10 +10247,24 @@ return $sum-of-squares(1 to 3)]]></eg>
 
                <olist>
                   <item>
-                     <p>The <termref def="dt-function-item"/> <var>FI</var> to be partially applied is 
-                        determined in the same way as for a 
-                        dynamic function call without placeholders, as described in <specref ref="id-dynamic-function-invocation"/>.
-                        For this purpose an <code>ArgumentPlaceholder</code> contributes to the count of
+                     <p>
+                          The base expression of the function call is evaluated.
+                          If this is not of type <code>function(*)*</code> (a sequence
+                        of zero or more function items) then a type error is raised.
+                     </p>
+                 </item>
+                  
+                  <item>
+                     <p>The result of the dynamic function call is the <termref def="dt-sequence-concatenation"/>
+                        of the results of partial applying each function item, retaining order. That is, the
+                        result of <code><var>F</var>(<var>X</var>, <var>Y</var>, ...)</code> is 
+                        <code>for $FI in <var>F</var> return <var>$FI</var>(<var>X</var>, <var>Y</var>, ...)</code>.
+                        The result of a dynamic function call applied to a single function item <var>FI</var> is defined
+                        by the rules that follow.
+                     </p>
+                  </item>
+                  <item>
+                     <p>An <code>ArgumentPlaceholder</code> contributes to the count of
                         arguments.</p>
                   </item>
                   
@@ -20223,7 +20319,7 @@ declare function recursive-content($item as item()) as record(key, value)* {
                <eg><![CDATA[declare function array-or-map($item as item()) {
   typeswitch ($item) {
     case array(*) | map(*) return $item
-    default return error(xs:QName("err:XPTY0004"))
+    default return error(#err:XPTY0004)
   }
 }]]></eg>
 
