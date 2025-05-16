@@ -79,6 +79,7 @@
             </xsl:for-each>
             <xsl:text>) as </xsl:text>
             <xsl:apply-templates select="(@return-type, @return-type-ref)[1]"/>
+            <xsl:value-of select="@return-type-ref-occurs"/>
          </test>
          <result>
             <assert-true/>
