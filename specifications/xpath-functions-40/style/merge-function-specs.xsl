@@ -237,6 +237,17 @@
 		<head>Record fn:{$definition/@id}</head>
 		<xsl:apply-templates select="processing-instruction('record-description')   (:$definition:)"/>
 	</xsl:template>
+	
+	<xsl:template match="processing-instruction('record-description-index')" expand-text="yes">
+		<ulist>
+		<xsl:for-each select="$fosdoc/fos:functions/fos:record-type">
+			<xsl:sort select="@id"/>
+			<item>
+				<p>Record <loc href="#{@id}">{@id}</loc></p>
+			</item>
+		</xsl:for-each>
+		</ulist>
+	</xsl:template>
 
    <xsl:template match="fos:record-type">
    	<xsl:call-template name="show-record-type">
