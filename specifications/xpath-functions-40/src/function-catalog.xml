@@ -22921,13 +22921,77 @@ for-each-pair(
       </fos:changes>
    </fos:function>
 
-   <fos:function name="sort" prefix="fn" diff="chg" at="2023-08-15">
+   <fos:function name="sort" prefix="fn">
       <fos:signatures>
          <fos:proto name="sort" return-type="item()*">
             <fos:arg name="input" type="item()*" usage="navigation"/>
-            <fos:arg name="collations" type="xs:string*" usage="absorption" default="fn:default-collation()"/>
-            <fos:arg name="keys" type="(fn(item()) as xs:anyAtomicType*)*" usage="inspection" default="fn:data#1"/>
-            <fos:arg name="orders" type="enum('ascending', 'descending')*" usage="absorption" default="'ascending'"/>
+            <fos:arg name="collation" type="xs:string?" usage="absorption" default="fn:default-collation()"/>
+            <fos:arg name="key" type="fn(item()) as xs:anyAtomicType*" usage="inspection" default="fn:data#1"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property dependency="collations">context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+ 
+
+      <fos:summary>
+         <p>Sorts a supplied sequence, based on the value of a sort key supplied as a function.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>This function is retained for compatibility from version 3.1 of this specification. Version 4.0
+         introduces two more powerful functions, <function>fn:sort-by</function> and <function>fn:sort-with</function>.</p>
+         
+         <p>The function call <code>fn:sort($input, $collation, $key)</code> is defined to have the same effect as the
+         call <code>fn:sort-by($input, { 'key': $key, 'collation': $collation, 'order': 'ascending'})</code>.
+         See <function>fn:sort-by</function>.</p>
+         
+         <p>The result of the function is a sequence that contains all the items from <code>$input</code>,
+         typically in a different order, the order being defined by the supplied sort key definitions.</p>
+         
+ 
+      </fos:rules>
+      <fos:equivalent style="xpath-expression">
+         fn:sort-by($input, { 'key':$key, 'collation':$collation, 'order':'ascending' })
+      </fos:equivalent>
+      <fos:errors>
+         <p>If the set of computed sort keys contains values that are not comparable using the <code>lt</code> operator then the sort 
+            operation will fail with a type error (<xerrorref
+               spec="XP" class="TY" code="0004"/>).
+         </p>
+      </fos:errors>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>sort((1, 4, 6, 5, 3))</fos:expression>
+               <fos:result>1, 3, 4, 5, 6</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>sort((1, -2, 5, 10, -10, 10, 8), (), abs#1)</fos:expression>
+               <fos:result>1, -2, 5, 8, 10, -10, 10</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <p>To sort a set of strings <code>$in</code> using Swedish collation:</p>
+            <eg>let $SWEDISH := collation({ 'lang': 'se' })
+return sort($in, $SWEDISH)</eg>
+         </fos:example>
+         <fos:example>
+            <p>To sort a sequence of employees by last name as the major sort key and first name as the minor sort key,
+               using the default collation:
+            </p>
+            <eg>sort($employees, (), fn { name ! (last, first) })</eg>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+   
+   <fos:function name="sort-by" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="sort-by" return-type="item()*">
+            <fos:arg name="input" type="item()*" usage="navigation"/>
+            <fos:arg name="keys" type="record(key? as (fn(item()) as xs:anyAtomicType*)?, collation? as xs:string?, order? as enum('ascending', 'descending')?)*"
+                     default="()"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -22944,47 +23008,33 @@ for-each-pair(
          <p>The result of the function is a sequence that contains all the items from <code>$input</code>,
          typically in a different order, the order being defined by the supplied <term>sort key definitions</term>.</p>
          
-         <p>A <term>sort key definition</term> has three parts:</p>
+         <p>A <term>sort key definition</term> is a record with three parts:</p>
          
          <olist>
-            <item><p>A <term>sort key function</term>, which is applied to each item in the input sequence to
-            determine a <term>sort key value</term>.</p></item>
-            <item><p>A <term>collation</term>, which is used when comparing <term>sort key values</term>
-               that are of type <code>xs:string</code> or <code>xs:untypedAtomic</code>.</p></item>
-            <item><p>An <term>order direction</term>, which is <code>ascending</code> or
-            <code>descending</code>.</p></item>
+            <item><p><code>key:</code> A <term>sort key function</term>, which is applied to each item in the input sequence to
+            determine a <term>sort key value</term>. If no function is supplied, the default is <code>fn:data#1</code>,
+            which atomizes the item.</p></item>
+            <item><p><code>collation:</code> A <term>collation</term>, which is used when comparing <term>sort key values</term>
+               that are of type <code>xs:string</code> or <code>xs:untypedAtomic</code>. If no collation is supplied, the default
+               collation from the static context is used.</p>
+               <p>When comparing values of types other than <code>xs:string</code> or <code>xs:untypedAtomic</code>,
+               the collation is ignored (but an error <rfc2119>may</rfc2119> be reported if it is
+               invalid). For more information see <specref ref="choosing-a-collation"/>.</p>
+            
+            </item>
+            <item><p><code>order:</code> An <term>order direction</term>, either <code>"ascending"</code> or
+            <code>"descending"</code>. The default is <code>"ascending"</code>.</p></item>
          </olist>
          
-         <p>The number of sort key definitions is determined by the number of function items supplied
+         <p>The number of sort key definitions is determined by the number of records supplied
             in the <code>$keys</code> argument. If the argument is absent or empty, the default is
-            a single sort key definition using the function <code>data#1</code>.</p>
+            a single sort key definition using the function <code>data#1</code>, using the default collation
+            from the static context, and with order <code>ascending</code>.</p>
          
-         <p>The <code>$n</code>th sort key definition (where <code>$n</code> counts from one (1))
-         is established as follows:</p>
-         
-         <olist>
-            <item><p>The <term>sort key function</term> is <code>$keys[$n] otherwise data#1</code>.</p></item>
-            <item><p>The <term>collation</term> is <code>$collations[$n] otherwise $collations[last()]
-               otherwise default-collation()</code>.
-            That is, it is the collation supplied in the corresponding item of the supplied
-             <code>$collations</code> argument; or in its absence, the last entry in 
-            <code>$collations</code>; or if <code>$collations</code> is absent or empty, the
-            default collation from the static context of the caller.</p></item>
-            <item><p>The <term>order direction</term> is 
-               <code>$orders[$n] otherwise $orders[last()] otherwise "ascending"</code>.
-            That is, it is <code>"ascending"</code> or <code>"descending"</code> according
-            to the value of the corresponding item in the supplied <code>$orders</code>
-            argument; or in its absence, the last entry in <code>$orders</code>; or
-            if <code>$orders</code> is absent or empty, then <code>"ascending"</code>.</p></item>
-         </olist>
-         
-         <p>When comparing values of types other than <code>xs:string</code> or <code>xs:untypedAtomic</code>,
-         the corresponding collation is ignored, and no error is reported if the supplied value is
-         not a known or valid collation name. If it is necessary to supply such an ignored value
-         (for example, in the case where a non-string sort key is followed by another sort key 
-         that requires a collation) the empty string can be supplied.</p>
         
-         <p>The result of the function is obtained as follows:</p>
+         
+        
+         <p>The result of the <code>fn:sort-by</code> function is obtained as follows:</p>
          
          <olist>
             <item>
@@ -23068,67 +23118,53 @@ else +1</eg>
          </p>
       </fos:errors>
       <fos:notes>
-         <p>XSLT and XQuery both provide native sorting capability, but earlier releases of XPath provided no sorting functionality
-         for use in standalone environments.</p>
-         <p>In addition there are cases where this function may be more flexible than the built-in sorting capability for XQuery or XSLT,
-         for example when the sort key or collation is chosen dynamically, or when the sort key is a sequence of items rather than a single
-         item.</p>
-         <p>The results are compatible with the results of XSLT sorting (using <code>xsl:sort</code>) in the case where the sort key evaluates to a sequence of
-         length zero or one, given the options <code>stable="yes"</code>.</p>
-         <p>The results are compatible with the results of XQuery sorting (using the <code>order by</code> clause) in the case where the sort key evaluates to a sequence of
-            length zero or one, given the options <code>stable</code>, <code>ascending</code>, and <code>empty least</code>.</p>
-         <p>The function has been enhanced in 4.0 to allow multiple sort keys to be defined, each potentially with
-         a different collation, and to allow sorting in descending order.</p>
-         <p>The effect of the XQuery option <code>empty least|greatest</code>, which controls
-         whether the empty sequence is sorted before or after all other values, can be achieved by adding an
-         extra sort key definition that evaluates whether or not the actual sort key is empty (when sorting
-         boolean values, <code>false</code> precedes <code>true</code>).</p>
-         <p>Supplying too many items in the <code>$collations</code> and/or <code>$orders</code> arguments
-         is not an error; the excess values are ignored except for type-checking against the function
-         signature.</p>
+         <p>The function is a generalization of the <function>fn:sort</function> function available in 3.1, 
+            which is retained for compatibility. The enhancements allow multiple sort keys to be defined, each potentially with
+         a different collation, and allow sorting in descending order.</p>
+         <p>If the sort key for an item evaluates to an empty sequence, the effect of the rules is that this item
+            precedes any value for which the key is non-empty. This is equivalent to the effect of the XQuery option 
+            <code>empty least</code>. The effect of the option <code>empty greatest</code> can be achieved by adding an
+            extra sort key definition with <code>{'key': fn{empty(K(.)}}</code>: when comparing boolean sort keys,
+            <code>false</code> precedes <code>true</code>.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression>sort((1, 4, 6, 5, 3))</fos:expression>
+               <fos:expression>sort-by((1, 4, 6, 5, 3))</fos:expression>
                <fos:result>1, 3, 4, 5, 6</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>sort((1, 4, 4e0, 6, 5, 3), orders := "descending")</fos:expression>
+               <fos:expression>sort-by((1, 4, 4e0, 6, 5, 3), {'order' : 'descending'})</fos:expression>
                <fos:result>6, 5, 4, 4e0, 3, 1</fos:result>
             </fos:test>
             <fos:test>
-               <fos:expression>sort((1, -2, 5, 10, -10, 10, 8), (), abs#1)</fos:expression>
+               <fos:expression>sort-by((1, -2, 5, 10, -10, 10, 8), {'key':abs#1})</fos:expression>
                <fos:result>1, -2, 5, 8, 10, -10, 10</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
             <p>To sort a set of strings <code>$in</code> using Swedish collation:</p>
             <eg>let $SWEDISH := collation({ 'lang': 'se' })
-return sort($in, $SWEDISH)</eg>
+return sort-by($in, {'collation':$SWEDISH})</eg>
          </fos:example>
          <fos:example>
             <p>To sort a sequence of employees by last name as the major sort key and first name as the minor sort key,
                using the default collation:
             </p>
-            <eg>sort($employees, (), fn { name ! (last, first) })</eg>
+            <eg>sort-by($employees, {'key':fn { name ! (last, first) }})</eg>
          </fos:example>
          <fos:example>
             <p>To sort a sequence of employees first by increasing last name (using Swedish collation order)
                and then by decreasing salary:
             </p>
-            <eg>sort(
+            <eg>sort-by(
   $employees, 
-  collation({ 'lang': 'se' }),
-  (fn { name/last }, fn { xs:decimal(salary) }), 
-  ("ascending", "descending")
-)</eg>
+  ({ 'key': fn { name/last }, 'collation': collation({ 'lang': 'se' }) },
+   { 'key': fn { xs:decimal(salary) }, 'order': 'descending'}))</eg>
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="93" PR="623" date="2023-07-19"><p>Substantially revised to allow multiple sort
-            key definitions.</p>
-         </fos:change>
+         <fos:change issue="1085" PR="2001" date="2025-05-19"><p>New in 4.0.</p></fos:change>
       </fos:changes>
    </fos:function>
 
@@ -30976,13 +31012,12 @@ fold-left($input, [], fn($array, $record) {
    
    
 
-   <fos:function name="sort" prefix="array" diff="chg" at="2023-11-08">
+   <fos:function name="sort" prefix="array">
       <fos:signatures>
          <fos:proto name="sort" return-type="item()*">
-            <fos:arg name="array" type="array(*)"/>
-            <fos:arg name="collations" type="xs:string*" default="fn:default-collation()"/>
-            <fos:arg name="keys" type="(fn(item()*) as xs:anyAtomicType*)*" default="fn:data#1"/>
-            <fos:arg name="orders" type="enum('ascending', 'descending')*" default="'ascending'"/>
+            <fos:arg name="array" type="array(*)" usage="navigation"/>
+            <fos:arg name="collation" type="xs:string?" usage="absorption" default="fn:default-collation()"/>
+            <fos:arg name="key" type="fn(item()*) as xs:anyAtomicType*" usage="inspection" default="fn:data#1"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -30990,86 +31025,38 @@ fold-left($input, [], fn($array, $record) {
          <fos:property dependency="collations">context-dependent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
-      
-      
+ 
+
       <fos:summary>
-         <p>Sorts a supplied array, based on the value of a number of sort keys supplied as functions.</p>
+         <p>Sorts a supplied array, based on the value of a sort key supplied as a function.</p>
       </fos:summary>
       <fos:rules>
-         <p>The result of the function is an array that contains all the members from <code>$input</code>,
-            typically in a different order, the order being defined by the supplied <term>sort key definitions</term>.</p>
+         <p>This function is retained for compatibility from version 3.1 of this specification. Version 4.0
+         introduces a more powerful functions, <function>array:sort-by</function>.</p>
          
-         <p>A <term>sort key definition</term> has three parts:</p>
+         <p>The function call <code>array:sort($array, $collation, $key)</code> is defined to have the same effect as the
+         call <code>array:sort-by($array, { 'key': $key, 'collation': $collation, 'order': 'ascending'})</code>.
+         See <function>array:sort-by</function>.</p>
          
-         <olist>
-            <item><p>A <term>sort key function</term>, which is applied to each member in the input array to
-               determine a <term>sort key value</term>.</p></item>
-            <item><p>A <term>collation</term>, which is used when comparing <term>sort key values</term>
-               that are of type <code>xs:string</code> or <code>xs:untypedAtomic</code>.</p></item>
-            <item><p>An <term>order direction</term>, which is <code>ascending</code> or
-               <code>descending</code>.</p></item>
-         </olist>
+         <p>The result of the function is a sequence that contains all the items from <code>$input</code>,
+         typically in a different order, the order being defined by the supplied sort key definitions.</p>
          
-         <p>The number of sort key definitions is determined by the number of function items supplied
-            in the <code>$keys</code> argument. If the argument is absent or empty, the default is
-            a single sort key definition using the function <code>data#1</code>.</p>
-         
-         <p>The <code>$n</code>th sort key definition (where <code>$n</code> counts from one (1))
-            is established as follows:</p>
-         
-         <olist>
-            <item><p>The <term>sort key function</term> is <code>$keys[$n] otherwise data#1</code>.</p></item>
-            <item><p>The <term>collation</term> is <code>$collations[$n] otherwise $collations[last()]
-               otherwise default-collation()</code>.
-               That is, it is the collation supplied in the corresponding item of the supplied
-               <code>$collations</code> argument; or in its absence, the last entry in 
-               <code>$collations</code>; or if <code>$collations</code> is absent or empty, the
-               default collation from the static context of the caller.</p></item>
-            <item><p>The <term>order direction</term> is 
-               <code>$orders[$n] otherwise $orders[last()] otherwise "ascending"</code>.
-               That is, it is <code>"ascending"</code> or <code>"descending"</code> according
-               to the value of the corresponding item in the supplied <code>$orders</code>
-               argument; or in its absence, the last entry in <code>$orders</code>; or
-               if <code>$orders</code> is absent or empty, then <code>"ascending"</code>.</p></item>
-         </olist>
-         
-         <p>When comparing values of types other than <code>xs:string</code> or <code>xs:untypedAtomic</code>,
-            the corresponding collation is ignored, and no error is reported if the supplied value is
-            not a known or valid collation name. If it is necessary to supply such an ignored value
-            (for example, in the case where a non-string sort key is followed by another sort key 
-            that requires a collation) the empty string can be supplied.</p>
-         
-         <p>The result of the function is defined by reference to the <function>fn:sort</function> function.</p>
+ 
       </fos:rules>
-            <fos:equivalent style="xpath-expression"><![CDATA[
-$array
-=> array:members()
-=> sort(
-  $collations,
-  for $key in ($keys otherwise data#1)
-  return fn($member as record(value)) as xs:anyAtomicType* {
-    $key(map:get($member, 'value'))
-  },
-  $orders
-)
-=> array:of-members()
-       ]]></fos:equivalent>         
-
+      <fos:equivalent style="xpath-expression">
+         array:sort-by($array, { 'key':$key, 'collation':$collation, 'order':'ascending' })
+      </fos:equivalent>
       <fos:errors>
          <p>If the set of computed sort keys contains values that are not comparable using the <code>lt</code> operator then the sort 
             operation will fail with a type error (<xerrorref
                spec="XP" class="TY" code="0004"/>).
          </p>
       </fos:errors>
-      <fos:examples>
+      <fos:examples role="wide">
          <fos:example>
             <fos:test>
                <fos:expression>array:sort([ 1, 4, 6, 5, 3 ])</fos:expression>
                <fos:result>[ 1, 3, 4, 5, 6 ]</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>array:sort([ 1, 4, 4e0, 6, 5, 3 ], orders := "descending")</fos:expression>
-               <fos:result>[ 6, 5, 4, 4e0, 3, 1 ]</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression>array:sort([ 1, -2, 5, 10, -10, 10, 8 ], (), abs#1)</fos:expression>
@@ -31079,32 +31066,180 @@ $array
                <fos:expression>array:sort([ [ 2, "i" ], [ 1, "e" ], [ 2, "g" ], [ 1, "f" ] ])</fos:expression>
                <fos:result>[ [ 1, "e" ], [ 1, "f" ], [ 2, "g" ], [ 2, "i" ] ]</fos:result>
             </fos:test>
+         </fos:example>
+      </fos:examples>
+   </fos:function>
+   
+   <fos:function name="sort-by" prefix="array">
+      <fos:signatures>
+         <fos:proto name="sort-by" return-type="item()*">
+            <fos:arg name="array" type="item()*" usage="navigation"/>
+            <fos:arg name="keys" type="record(key? as (fn(item()*) as xs:anyAtomicType*)?, collation? as xs:string?, order? as enum('ascending', 'descending')?)*"
+                     default="()"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property dependency="collations">context-dependent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+ 
+
+      <fos:summary>
+         <p>Sorts a supplied array, based on the value of a number of sort keys supplied as functions.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The result of the function is an array that contains the same members as <code>$array</code>,
+         typically in a different order, the order being defined by the supplied <term>sort key definitions</term>.</p>
+         
+         <p>A <term>sort key definition</term> is a record with three parts:</p>
+         
+         <olist>
+            <item><p><code>key:</code> A <term>sort key function</term>, which is applied to each member of the input sequence to
+            determine a <term>sort key value</term>. If no function is supplied, the default is <code>fn:data#1</code>,
+            which atomizes the value of the array member.</p></item>
+            <item><p><code>collation:</code> A <term>collation</term>, which is used when comparing <term>sort key values</term>
+               that are of type <code>xs:string</code> or <code>xs:untypedAtomic</code>. If no collation is supplied, the default
+               collation from the static context is used.</p>
+               <p>When comparing values of types other than <code>xs:string</code> or <code>xs:untypedAtomic</code>,
+               the collation is ignored (but an error <rfc2119>may</rfc2119> be reported if it is
+               invalid). For more information see <specref ref="choosing-a-collation"/>.</p>
+            
+            </item>
+            <item><p><code>order:</code> An <term>order direction</term>, either <code>"ascending"</code> or
+            <code>"descending"</code>. The default is <code>"ascending"</code>.</p></item>
+         </olist>
+         
+         <p>The number of sort key definitions is determined by the number of records supplied
+            in the <code>$keys</code> argument. If the argument is absent or empty, the default is
+            a single sort key definition using the function <code>data#1</code>, using the default collation
+            from the static context, and with order <code>ascending</code>.</p>
+         
+        
+         
+        
+         <p>The result of the <code>array:sort-by</code> function is obtained as follows:</p>
+         
+         <olist>
+            <item>
+               <p>The result array contains the same members as <code>$array</code>, 
+                  but generally in a different order.</p>
+            </item>
+            <item>
+               <p>The sort key definitions are established as described above.
+                  The sort key definitions are in major-to-minor order. That is, the position of two
+                  values <code>$A</code> and <code>$B</code> in the result sequence is determined first by the 
+                  relative magnitude of their
+                  primary sort key values, which are computed by evaluating the <term>sort key function</term> in the 
+                  first sort key definition.
+                  If those two sort key values are equal, then the position is determined by the relative magnitude
+                  of their secondary sort key values, computed by evaluating the 
+                  sort key function in the second sort key definition, and so on.</p>              
+            </item>
+            <item>
+               <p>When a pair of corresponding sort key values of <code>$A</code> and <code>$B</code> are 
+                  found to be not equal,
+                  then <code>$A</code> precedes <code>$B</code> in the result sequence 
+                  if both the following conditions are true, or if both conditions are false:</p>
+                  <olist>
+                     <item>
+                        <p>The sort key value for <code>$A</code> is less than the sort key value for <code>$B</code>,
+                           as defined below.</p>
+                     </item>
+                     <item>
+                        <p>The <term>order direction</term> in the corresponding sort key definition
+                        is <code>"ascending"</code>.</p>
+                     </item>
+                  </olist>
+            </item>
+            <item><p>If all the sort key values for <code>$A</code> and <code>$B</code> are pairwise equal, then 
+               <code>$A</code> precedes <code>$B</code> in the result sequence if and only if
+               <code>$A</code> precedes <code>$B</code> in the input sequence.</p>
+               <note><p>That is, the sort is <emph>stable</emph>.</p></note>
+            </item>
+            <item>
+               <p>Each sort key value for a given array member is obtained by applying the sort key
+               function of the corresponding sort key definition to that member. The result
+               of this function is in the general case a sequence of atomic items.
+               Two sort key values <code>$a</code> and <code>$b</code> are compared as follows:</p>
+               <olist>
+                  <item><p>Let <var>$C</var> be the collation in the corresponding
+                     sort key definition.</p>
+                  </item>
+                  <item><p>Let <code>$REL</code> be the result of evaluating <code>op:lexicographic-compare($key($A), $key($B), $C)</code>
+                     where <code>op:lexicographic-compare($a, $b, $C)</code> is defined as follows:</p>
+                     <eg>if (empty($a) and empty($b)) then 0 
+else if (empty($a)) then -1
+else if (empty($b)) then +1
+else let $rel = op:simple-compare(head($a), head($b), $C)
+     return if ($rel eq 0)
+            then op:lexicographic-compare(tail($a), tail($b), $C)
+            else $rel</eg></item>
+                  <item><p>Here <code>op:simple-compare($k1, $k2)</code> is defined as follows:</p>
+                     <eg>if ($k1 instance of (xs:string | xs:anyURI | xs:untypedAtomic)
+    and $k2 instance of (xs:string | xs:anyURI | xs:untypedAtomic))
+then compare($k1, $k2, $C)
+else if ($k1 instance of xs:numeric and $k2 instance of xs:numeric)
+then compare($k1, $k2)
+else if ($k1 eq $k2) then 0
+else if ($k2 lt $k2) then -1
+else +1</eg>
+                     <note><p>This raises an error if two keys are not comparable, for example
+                        if one is a string and the other is a number, or if both belong to a non-ordered
+                        type such as <code>xs:QName</code>.</p></note></item>
+                  <item><p>If <code>$REL</code> is zero, then the two sort key values are deemed
+                     equal; if <code>$REL</code> is -1 then <code>$a</code> is deemed less than
+                     <code>$b</code>, and if <code>$REL</code> is +1 then <code>$a</code> is deemed greater than
+                     <code>$b</code></p></item>
+               </olist>
+            </item>
+         </olist>
+      </fos:rules>
+                  <fos:equivalent style="xpath-expression"><![CDATA[
+$array
+=> array:members()
+=> fn:sort-by(
+  for $key-spec in ($keys otherwise {})
+  return map:put{$key-spec, 'key', fn($member as record(value)) as xs:anyAtomicType* {
+    map:get($key-spec, 'key', fn:data#1)(map:get($member, 'value'))
+  }
+)
+=> array:of-members()
+       ]]></fos:equivalent>
+      <fos:errors>
+         <p>If the set of computed sort keys contains values that are not comparable using the <code>lt</code> operator then the sort 
+            operation will fail with a type error (<xerrorref
+               spec="XP" class="TY" code="0004"/>).
+         </p>
+      </fos:errors>
+      <fos:notes>
+         <p>The function is a generalization of the <function>array:sort</function> function available in 3.1, 
+            which is retained for compatibility. The enhancements allow multiple sort keys to be defined, each potentially with
+         a different collation, and allow sorting in descending order.</p>
+         <p>If the sort key for an item evaluates to an empty sequence, the effect of the rules is that this item
+            precedes any value for which the key is non-empty. This is equivalent to the effect of the XQuery option 
+            <code>empty least</code>. The effect of the option <code>empty greatest</code> can be achieved by adding an
+            extra sort key definition with <code>{'key': fn{empty(K(.)}}</code>: when comparing boolean sort keys,
+            <code>false</code> precedes <code>true</code>.</p>
+      </fos:notes>
+      <fos:examples role="wide">
+         <fos:example>
             <fos:test>
-               <fos:expression><eg>array:sort(
-  [ [ 2, "i" ], [ 1, "e" ], [ 2, "g" ], [ 1, "f" ] ], 
-  (), 
-  (array:get(?, 1), array:get(?, 2)),
-  ("ascending", "descending")
-)</eg></fos:expression>
-               <fos:result>[ [ 1, "f" ], [ 1, "e" ], [ 2, "i" ], [ 2, "g" ]]</fos:result>
+               <fos:expression>array:sort-by([1, 4, 6, 5, 3])</fos:expression>
+               <fos:result>[1, 3, 4, 5, 6]</fos:result>
             </fos:test>
-         </fos:example>
-         <fos:example>
-            <p>To sort an array of strings <code>$in</code> using Swedish collation:</p>
-            <eg>
-let $SWEDISH := collation({ 'lang': 'se' })
-return array:sort($in, $SWEDISH)
-            </eg>
-         </fos:example>
-         <fos:example>
-            <p>To sort an array of maps representing employees, using last name as the major sort key and first name as the minor sort key,
-               with the default collation:
-            </p>
-            <eg>array:sort($employees, (), fn($emp) { $emp?name?last, $emp?name?first })</eg>
+            <fos:test>
+               <fos:expression>array:sort-by([1, 4, 4e0, 6, 5, 3], {'order': 'descending'})</fos:expression>
+               <fos:result>[6, 5, 4, 4e0, 3, 1]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>array:sort-by([(1,4,3), 4, (5,6), 2], ({'key': count#1}, {}))</fos:expression>
+               <fos:result>[2, 4, (5,6), (1,4,3)]</fos:result>
+            </fos:test>
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change><p>New in 4.0</p></fos:change>
+         <fos:change issue="1085" PR="2001" date="2025-05-19"><p>New in 4.0.</p></fos:change>
       </fos:changes>
    </fos:function>
       
