@@ -542,58 +542,7 @@ therefore can also be contained within sequences.</p>
   </div3>
 </div2>
 
-  <div2 id="id-LabeledItems">
-    <head>Labeled Items</head>
-    <changes>
-      <change issue="960" PR="988" date="2024-02-27">
-        Introduced the concept of labeled items.
-      </change>
-    </changes>
-    <p><termdef id="dt-labeled-item" term="labeled item">A <term>labeled item</term>
-    is a pair (<var>S</var>, <var>L</var>) where <var>S</var> (called the subject)
-    is any item, and <var>L</var> (called the label) is a map containing supplementary
-    information about the item.</termdef>.</p>
-    <p>The keys in the map are always instances of <code>xs:string</code>, and the associated values
-    can be arbitrary values.</p>
-    <p>There are currently no constructs in the language that would cause either 
-      the subject or the label of a labeled item to
-      itself be a labeled item. Nor is there anything that would cause the 
-      label to contain a labeled item.</p>
-    <p>Operations on labeled items fall into three categories:</p>
-    <ulist>
-      <item><p>Operations that select items which are present in their input return the
-      labeled item unchanged (including its label). 
-      Examples are filter expressions, axis expressions, lookup
-      expressions, and functions such as <function>fn:head</function>, <code>fn:tail</code>,
-      and <code>fn:subsequence</code>.</p></item>
-      <item><p>Operations that construct new values from their input treat the labeled
-      item exactly as if the operation were applied directly to the subject. That is,
-      the label is ignored. Examples are arithmetic and comparison operators, operators
-      such as <code>is</code> and <code>instance of</code>, cast expressions, atomization,
-      and functions such as 
-      <code>fn:avg</code> or <code>fn:index-of</code>.</p></item>
-      <item><p>The <code>fn:label</code> function is a special case: it returns the
-      label of a labeled item, as a map. If applied to an item that is not labeled, it 
-      returns an empty map.</p></item>
-    </ulist>
-    <note><p>Two items representing the same node (such that <code>$n1 is $n2</code> returns
-    true) may nevertheless have different labels. It is perhaps helpful to think of such items
-    not as nodes, but as references to nodes, which are automatically dereferenced by the majority
-    of operations.</p></note>
-    <note><p>A labeled item matches a type if its subject matches the type; labels are thus extraneous
-    to the type system.</p></note>
-    <p>Labeled items are returned by certain operations, such as the lookup operators <code>?</code> 
-      and <code>??</code>. As a result, the lookup operation can be treated at one level as if it
-    returned a simple value (an entry found in a map or array), but applications that need extra
-    information about the value can find this by examining the label: for example, they can identify
-    the associated key value.</p>
-    <p>The function <code>fn:pin</code> takes a map or array <var>J</var> as its argument, and returns
-    a labeled map or array with <var>J</var> as its subject (or the subject of <var>J</var>, if <var>J</var>
-    is itself a labeled item), and with a map <var>M</var> as its label, where <var>M</var> contains
-    a single entry having the key <code>"pinned"</code> (as an <code>xs:string</code>) and an associated
-    <code>xs:boolean</code> value <code>true</code>. An item <code>$item</code> 
-      satisfying <code>$item[label(.)?pinned]</code> is referred to as a <term>pinned</term> item.</p>
-  </div2>
+  
   </div1>
   <div1 id="schemas-and-types">
     <head>Schemas and Types</head>
@@ -1025,17 +974,32 @@ constraints of the selected version of XML.</p></item>
     an instance of one or more <termref def="dt-item-type">item types</termref>:</p>
   
   <ulist diff="chg" at="2022-11-05">
-    <item><p>All items are instances of the type <code>item()</code>.</p></item>
-    <item><p>Every <termref def="dt-node"/> is an instance of the type <code>node()</code>, and more
-      specifically it is an instance of one of seven node kinds: <code>document()</code>,
-      <code>element(*)</code>, <code>attribute(*)</code>, <code>text()</code>,
-      <code>comment()</code>, <code>processing-instruction()</code>, or
-      <code>namespace()</code>. Nodes may also be instances of more specific
-      types characterized by the node name and type annotation.</p></item>
+    <item><p>All items are instances of the type <code>item()</code>. There are three kinds of
+    item: atomic items, generic nodes (GNodes), and function items.</p></item>
+    
     <item><p>Every <termref def="dt-atomic-item"/> is an instance of a specific <termref def="dt-atomic-type"/>
       determined by its <termref def="dt-type-annotation"/>; it is also an instance of every type from which that
       type is derived by restriction (directly or indirectly), and of every union type that
       includes that type as a member type.</p></item>
+    
+    <item><p>A generic node (GNode) is either an XNode (for "XML node"), or a JNode (for "JSON node").
+      For continuity reasons, throughout these specifications the term <term>node</term>, when
+      used without qualification, means an XNode; furthermore the item type <code>node()</code>
+      refers exclusively to an XNode. The term <term>XNode</term> is used only when there
+      is a need to distinguish clearly from JNodes.</p>
+      
+      <p>XNodes represent the constructs found in an XML document.
+        Every <termref def="dt-node"/> (that is, every XNode) is an instance of the type <code>node()</code>, and more
+      specifically it is an instance of one of seven node kinds: <code>document()</code>,
+      <code>element(*)</code>, <code>attribute(*)</code>, <code>text()</code>,
+      <code>comment()</code>, <code>processing-instruction()</code>, or
+      <code>namespace()</code>. Nodes may also be instances of more specific
+      types characterized by the node name and type annotation.</p>
+    
+      <p>JNodes are newly introduced in 4.0 for the purpose of navigating trees of maps and arrays,
+      typically derived by parsing JSON.</p>
+    </item>
+    
     <item><p>Every <termref def="dt-function-item"/> is an instance of the generic type <code>function(*)</code>,
       and also of a specific function type defining the types of the function's parameters and the
       type of the result.</p>
@@ -1439,103 +1403,108 @@ an attribute node that has no parent.</p>
 </div2>
 
   </div1>
+  
+  <div1 id="generic-nodes">
+    <head>Generic Nodes (GNodes)</head>
+    
+    <changes>
+      <change issue="2025">
+        JNodes are introduced to represent nodes in a JSON tree. The term XNode is introduced
+        when we need to distinguish XML nodes from JSON nodes; and the term GNode (for <term>generic node</term>)
+        is used as a collective term for XNodes and JNodes.
+      </change>
+    </changes>
+    <p><termdef id="dt-GNode" term="GNode">The term <term>generic node</term> or <term>GNode</term>
+    is a collective term for XNodes (more commonly called simply nodes) representing
+    the parts of an XML document, and JNodes, representing the parts of a JSON document.</termdef>
+    </p>
+    
+    <p><termdef id="dt-XNode" term="XNode">An <term>XNode</term>, more commonly referred
+      to simply as a node, represents a construct found in an XML document. There are seven
+      kinds: document nodes, element nodes, attribute nodes, text nodes, comment nodes,
+      processing instruction nodes, and namespace nodes</termdef></p>
+    <p><termdef id="dt-JNode" term="JNode">A <term>JNode</term> represents an encapsulation
+      of a value in a tree of maps and arrays, such as might be obtained by parsing a JSON
+      document. XDM maps and arrays, howver, are more general than those found in JSON.</termdef></p>
+    
+    <p>Both kinds of GNode (XNodes and JNodes) form part of a tree structure. Each GNode, other
+    than the root of a tree, has a single parent GNode and zero or more child GNodes.
+    GNodes have unique identity, and the GNodes within a tree have an ordering called
+    document order.</p>
+    
+    <p><termdef id="dt-root-node" term="root node">The <term>root GNode</term> is the 
+      topmost node of a tree, the GNode with no
+    parent.</termdef>
+    Every tree has exactly one root GNode and every other node can be reached
+    from exactly one root node.
+  </p>
 
-<div1 id="documents-and-nodes">
-  <head>Documents and Nodes</head>
-  
-  
-<div2 id="nodes">
-  
-  <head>Nodes</head>
-  
-  <p>Nodes are used to represent the structure of an XML document in the form of a tree.</p>
-
-<p>Every node is one of the seven kinds of nodes defined in <specref
-ref="node-kinds"/>. Nodes form a tree. Each node has at most one parent
-(reachable via the <function>parent</function> accessor) and zero or more descendant
-nodes that are reachable directly or indirectly
-via the <function>children</function>,
-<function>attributes</function>, and
-<function>namespace-nodes</function> accessors.</p>
-<p><termdef id="dt-root-node" term="root node">The
-<term>root node</term> is the topmost node of a tree, the node with no
-parent.</termdef>
-Every tree has exactly one root node and every other node can be reached
-from exactly one root node.
-</p>
-
-<note><p>The term <term>root node</term> means any node that has no parent. 
-  It may be any kind of node. In the XPath 1.0 datamodel only document nodes
-  could be parentless, so the term root node always meant a document node.</p>
+<note><p>The term <term>root</term> means any GNode that has no parent. 
+  It may be any kind of GNode. In the XPath 1.0 datamodel only document nodes
+  could be parentless, so the term <emph>root node</emph> always meant a document node.</p>
 </note>
     
     <note diff="add" at="2022-11-05"><p>Generally, the term <term>tree</term>
     is used to refer to a complete tree rooted at a parentless node. On occasions,
     which should be clear from the context, the same term is used to refer
     to a subtree, that is, a tree forming part of a larger tree.</p></note>
+    
+    <p><termdef id="dt-XTree" term="XTree">A tree that is rooted at a parentless
+    <termref def="dt-XNode"/> is referred to as an <term>XTree</term>.</termdef>
+    All the nodes in an XTree are XNodes.</p>
+    
+    <p><termdef id="dt-JTree" term="JTree">A tree that is rooted at a parentless
+    <termref def="dt-JNode"/> is referred to as a <term>JTree</term>.</termdef>
+    All the nodes in a JTree are JNodes.</p>
 
-<p><termdef id="dt-document" term="document">A
-tree whose root node is a &documentNode; is referred to as a
-<term>document</term>.</termdef></p>
-
-<p><termdef id="dt-fragment"
-term="fragment">A tree whose root node is not a &documentNode; is
-referred to as a <term>fragment</term>.</termdef></p>
-
-
-
-</div2>
-
-
-
-<div2 id="node-identity">
-<head>Node Identity</head>
-
-<p>Each node has a unique identity.
-
-The identity of
-a node is distinct from its value or other intrinsic properties; nodes may be
-distinct even when they have the same values for all intrinsic
-properties other than their identity.
-(The
-identity of <termref def="dt-atomic-item">atomic items</termref>, by contrast, is determined solely by their
-intrinsic properties. No two distinct integers, for example, have the
-same value;
-every instance of the value “5” as an integer is identical to every
-other instance of the value “5” as an integer.)
-</p>
-
-<note>
-<p>The concept of node identity should not be confused with the
-concept of a unique ID, which is a unique name assigned to an element
-by the author to represent references using ID/IDREF correlation.</p>
-</note>
-</div2>
-
-<div2 id="document-order">
+ <div2 id="node-identity">
+    <head>Node Identity</head>
+    
+    <p>Each GNode has a unique identity.
+    
+    The identity of
+    a GNode is distinct from its value or other intrinsic properties; nodes may be
+    distinct even when they have the same values for all intrinsic
+    properties other than their identity.
+    (The
+    identity of <termref def="dt-atomic-item">atomic items</termref>, by contrast, is determined solely by their
+    intrinsic properties. No two distinct integers, for example, have the
+    same value;
+    every instance of the value “5” as an integer is identical to every
+    other instance of the value “5” as an integer.)
+    </p>
+    
+    <note>
+    <p>The concept of node identity should not be confused with the
+    concept of a unique ID, which is a unique name assigned to an element
+    by the author to represent references using ID/IDREF correlation.</p>
+    </note>
+    </div2>
+    
+    <div2 id="document-order">
 <head>Document Order</head>
 
 <p><termdef id="dt-document-order" term="document order">A
-<term>document order</term> is defined among all the nodes
+<term>document order</term> is defined among all the GNodes
 accessible during a given query or transformation. Document order is a
-total ordering, although the relative order of some nodes is
+total ordering, although the relative order of some GNodes is
 implementation-dependent. Informally, document order is the order in
-which nodes appear in the XML serialization of a document.</termdef>
+which GNodes appear in the XML or JSON serialization of a document.</termdef>
 <termdef id="dt-stable" term="stable">Document order is
 <term>stable</term>, which means that the relative order of two
-nodes will not change during the processing of a given query or
+GNodes will not change during the processing of a given query or
 transformation, even if this order is implementation-dependent.</termdef></p>
 
-<p>Within a tree, document order satisfies the following constraints:</p>
+<p>Within an <termref def="dt-XTree"/>, document order satisfies the following constraints:</p>
 
 <olist>
 <item>
-<p>The root node is the first node.
+<p>The root XNode is the first node.
 </p>
 </item>
 
 <item>
-<p>Every node occurs before all of its children and descendants.</p>
+<p>Every XNode occurs before all of its children and descendants.</p>
 </item>
 
 <item>
@@ -1564,15 +1533,93 @@ the &dm.prop.children; property of their parent node.</p>
 <p>Children and descendants occur before following siblings.</p>
 </item>
 </olist>
+      
+      <p>Similarly, within an <termref def="dt-JTree"/>, document order satisfies the following constraints:</p>
 
-<p>The relative order of nodes in distinct trees is stable but
+      <olist>
+        <item>
+        <p>The root JNode is the first node.
+        </p>
+        </item>
+      
+        <item>
+          <p>Every JNode occurs before all of its children.</p>
+        </item>
+        
+        <item>
+          <p>For a JNode that encapsulates an array (see <specref ref="array-items"/>),
+          the ordering of its children reflects the ordering of the array members.</p>
+        </item>
+        
+        <item>
+          <p>For a JNode that encapsulates a map (see <specref ref="map-items"/>),
+          the ordering of its children reflects the ordering of the map entries.</p>
+        </item>
+      </olist>
+        
+
+
+<p>The relative order of GNodes in distinct trees is stable but
 implementation-dependent, subject to the following constraint: If
 any node in a given tree, <code>T1</code>, occurs before any node in a different
-tree, <code>T2</code>, then all nodes in <code>T1</code> are before all nodes in
+tree, <code>T2</code>, then all GNodes in <code>T1</code> are before all GNodes in
 <code>T2</code>.</p>
 <imp-dep-feature>The relative order of distinct trees is
 stable but implementation-dependent.</imp-dep-feature>
 </div2>
+  </div1>
+
+<div1 id="documents-and-nodes">
+  <head>XML Documents and Nodes</head>
+  
+  
+<div2 id="nodes">
+  
+  <head>XML Nodes</head>
+  
+  <p>XNodes, commonly referred to simply as <term>nodes</term>, 
+    are used to represent the structure of an XML document in the form of a tree.</p>
+
+<p>Every node is one of the seven kinds of nodes defined in <specref
+ref="node-kinds"/>. Nodes form a tree. Each node has at most one parent
+(reachable via the <function>parent</function> accessor) and zero or more descendant
+nodes that are reachable directly or indirectly
+via the <function>children</function>,
+<function>attributes</function>, and
+<function>namespace-nodes</function> accessors.</p>
+<!--<p><termdef id="dt-root-node" term="root node">The
+<term>root node</term> is the topmost node of a tree, the node with no
+parent.</termdef>
+Every tree has exactly one root node and every other node can be reached
+from exactly one root node.
+</p>-->
+
+<note><p>The term <term>root node</term> means any node that has no parent. 
+  It may be any kind of node. In the XPath 1.0 datamodel only document nodes
+  could be parentless, so the term root node always meant a document node.</p>
+</note>
+    
+    <note diff="add" at="2022-11-05"><p>Generally, the term <term>tree</term>
+    is used to refer to a complete tree rooted at a parentless node. On occasions,
+    which should be clear from the context, the same term is used to refer
+    to a subtree, that is, a tree forming part of a larger tree.</p></note>
+
+<p><termdef id="dt-document" term="document">An
+<termref def="dt-XTree"/> whose root node is a &documentNode; is referred to as a
+<term>document</term>.</termdef></p>
+
+<p><termdef id="dt-fragment"
+term="fragment">An <termref def="dt-XTree"/> whose root node is not a &documentNode; is
+referred to as a <term>fragment</term>.</termdef></p>
+
+
+
+</div2>
+
+
+
+
+
 
 
 <div2 id="namespace-names">
@@ -1624,7 +1671,8 @@ valid URIs or IRIs, but they are <emph>not required</emph> to do so.
 <div2 id="construction">
 <head>Document Construction</head>
 
-<p>This section describes the constraints on documents (that is, trees of nodes).</p>
+<p>This section describes the constraints on <termref def="dt-document">documents</termref> 
+  (that is, trees of nodes).</p>
 
 <p>The data model supports well-formed XML documents conforming to
 <bibref ref="xml-names"/> or <bibref ref="xml-names11"/>.
@@ -5968,6 +6016,56 @@ position, in the range 1 to the size of the array.</p>
 
     
 </div2>
+    
+    <div2 id="id-JNodes">
+    <head>JNodes</head>
+    <changes>
+      <change issue="2025">
+        Introduced the concept of JNodes.
+      </change>
+    </changes>
+    
+    <p>A <termref def="dt-JNode"/> is a kind of item: specifically, JNode is a subtype of GNode (a generic node).
+    JNodes have identity, and are organized into trees called <termref def="dt-JTree">JTrees</termref>.</p>
+      
+      <p>A <termref def="dt-JNode"/> has (potentially) three properties (aside from its identity):</p>
+    
+      <ulist>
+        <item><p><term>¶value</term>: an arbitrary <termref def="dt-value"/> (that is, in general, a
+        <termref def="dt-sequence"/>) encapsulated by the JNode.</p></item>
+        <item><p><term>¶parent</term>: another JNode acting as the parent of this JNode in a 
+        <termref def="dt-JTree"/>. The <code>¶value</code> of the <code>¶parent</code> JNode
+        will always be either a map or an array.</p></item>
+        <item><p><term>¶selector</term>: an <termref def="dt-atomic-item"/> that uniquely identifies
+          this JNode within its parent JNode. </p>
+          <ulist><item><p>If the <code>¶value</code> of the <code>¶parent</code> JNode
+            is an array, this will be an integer representing the 1-based index of a member in the parent array, 
+            and the <code>¶value</code> of this JNode will be the corresponding member.</p></item>
+            <item><p>If the <code>¶value</code> of the <code>¶parent</code> JNode
+            is a map, this will be an atomic item representing the key of an a entry in the parent map, 
+            and the <code>¶value</code> of this JNode will be the value corresponding to this key.</p></item>
+          </ulist></item>
+      </ulist>
+        
+          <p>For a JNode representing the root of a JTree, the <code>¶parent</code> and <code>¶value</code>
+          properties will always be absent. For a non-root JNode, both these properties will be present.</p>
+          
+          <p>The identity of a root JNode is established when the root JNode is constructed, so that
+          every operation that constructs a root JNode returns a JNode with distinct identity. The
+          identity of a non-root JNode is a function of its <code>¶parent</code> and <code>¶selector</code>
+          properties: two non-root JNodes are identical by definition if and only if their
+            <code>¶parent</code>s are identical and their <code>¶selector</code>s are equal as
+          determined by the <function>atomic-equal</function> function.</p>
+          
+          <p>A root JNode is constructed, wrapping a map or array, by a call on the <function>pin</function>
+          function applied to that map or array. This can be called explicitly, but it is also called
+          implicitly when a map or array is used as the left-hand operand of a lookup expression (using the
+          <code>?</code> or <code>??</code> operator).</p>
+      
+      
+  </div2>
+    
+    
   </div1>
 
 
