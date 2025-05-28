@@ -6414,6 +6414,9 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
       <e:attribute name="name" required="yes">
          <e:data-type name="eqname"/>
       </e:attribute>
+      <e:attribute name="constructor" default="'no'">
+         <e:data-type name="boolean"/>
+      </e:attribute>
       <e:attribute name="extensible" default="'no'">
          <e:data-type name="boolean"/>
       </e:attribute>
@@ -6646,12 +6649,12 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
    &lt;xsl:field name="left" as="my:binary-tree?"/&gt;
    &lt;xsl:field name="payload" as="item()*"/&gt;
    &lt;xsl:field name="right" as="my:binary-tree?"/&gt;
-   &lt;xsl:field name="depth" as="fn(my:binary-tree) as xs:integer"
-      default="fn() {1 + max((?left =?&gt; depth(), ?right =?&gt; depth())) otherwise 0)}"/&gt;
-&lt;/xsl:record-type&gt;</eg><p>The <code nobreak="false">=?&gt;</code> operator is described in
-                  <xspecref spec="XP40" ref="lookup-arrow-expression"/>. Its effect
-                  is to make a dynamic call on a function item that is present as
-                  an entry in a map, passing that map implicitly as the first argument.
+   &lt;xsl:field name="depth" as="%method fn(my:binary-tree) as xs:integer"
+      default="%method fn() {1 + max((?left ? depth(), ?right ? depth())) otherwise 0)}"/&gt;
+&lt;/xsl:record-type&gt;</eg><p>The <code nobreak="false">%method</code> annotation is described in
+                     <xspecref spec="XP40" ref="id-methods"/>. Its effect is to
+                     give a function item contained in a map access to the containing
+                     map.
                   It thus mimics method invocation in object-oriented languages, though
                   there is no inheritance or encapsulation.</p><p>The following code builds a simple tree and calculates its depth:</p><eg xml:space="preserve">
 let $tree := my:binary-tree(
@@ -6659,7 +6662,144 @@ let $tree := my:binary-tree(
                18,
                my:binary-tree((), 19, 
                  my:binary-tree((), 20, ())))
-return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example></div3></div2><div2 id="defining-decimal-format"><head>Defining a Decimal Format</head><changes><change issue="1048" PR="1250" date="2024-06-03">
+return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A more detailed example that uses a recursive named record type
+               appears in the following section.</p></div3><div3 id="id-atomic-set-example"><head>Example: Defining an Atomic Set</head><p>This example demonstrates a library package that provides a new data type
+               to manipulate sets of atomic items.</p><p>A stylesheet that incorporates this package (by referencing
+               it in an <elcode>xsl:use-package</elcode> declaration) can use constructs such as:</p><ulist><item><p>
+                     <eg xml:space="preserve">&lt;xsl:variable name="empty" 
+       as="set:atomic-set"
+       select="set:build(())"/&gt;</eg>
+                  </p></item><item><p>
+                     <eg xml:space="preserve">&lt;xsl:variable name="evens"
+      as="set:atomic-set"                        
+      select="set:build((1 to 100)[. mod 2 = 0])"/&gt;</eg>
+                  </p></item><item><p>
+                     <eg xml:space="preserve">&lt;xsl:variable name="odds"
+      as="set:atomic-set"
+      select="set:build((1 to 100)) ? except($evens)"/&gt;</eg>
+                  </p></item><item><p>
+                     <eg xml:space="preserve">&lt;xsl:function name="my:is-even" as="xs:boolean"&gt;
+   &lt;xsl:param name="n" as="xs:integer"/&gt;
+   &lt;xsl:sequence select="$evens ? contains($n)"/&gt;
+&lt;/xsl:function&gt;</eg>
+                  </p></item></ulist><p>Here is the implementation of the package. It relies heavily
+               on the use of the function annotation <code nobreak="false">%method</code>, which
+               gives a function item contained in a map access to the containing
+               map: methods are described in <xspecref spec="XP40" ref="id-methods"/>.</p><eg xml:space="preserve">
+&lt;xsl:package name="http://qt4cg.org/atomic-set"
+             package-version="1.0.0"
+             xmlns:set="http://qt4cg.org/atomic-set"
+             xmlns:map="http://www.w3.org/2005/xpath-functions/map"
+             xmlns:xs="http://www.w3.org/2001/XMLSchema"&gt;
+   
+   &lt;xsl:note&gt;
+      This package defines a type set:atomic-set which represents
+      a set of distinct atomic items. Atomic items are considered
+      distinct based on the comparison function fn:atomic-equal.
+      
+      An instance of an atomic set can be constructed using a function
+      call such as set:build((1, 3, 5, 7, 9)).
+      
+      If $A and $B are instances of set:atomic-set, then they
+      can be manipulated using methods including:
+      
+      $A?size() - returns the number of items in the set
+      $A?empty() - returns true if the set is empty
+      $A?contains($k) - determines whether $k is a member of the set
+      $A?contains-all($B) - returns true if $B is a subset of $A
+      $A?values() - returns the items in $A, as a sequence
+      $A?add($k) - returns a new atomic set containing an additional item
+      $A?remove($k) - returns a new atomic set in which the given item is absent
+      $A?union($B) - returns a new atomic set holding the union of $A and $B
+      $A?intersect($B) - returns a new atomic set holding the intersection of $A and $B
+      $A?except($B) - returns a new atomic set holding the difference of $A and $B
+   &lt;/xsl:note&gt;
+   
+   &lt;xsl:record-type name="set:atomic-set" 
+                    visibility="public"
+                    extensible="yes"&gt;
+      &lt;xsl:field name="_data" 
+                 as="map(xs:anyAtomicType, xs:boolean)"/&gt;
+      &lt;xsl:field name="size" 
+                 as="%method fn() as xs:integer"/&gt;
+      &lt;xsl:field name="empty" 
+                 as="%method fn() as xs:boolean"/&gt;
+      &lt;xsl:field name="contains" 
+                 as="%method fn($value as xs:anyAtomicType) as xs:boolean"/&gt; 
+      &lt;xsl:field name="contains-all" 
+                 as="%method fn($value as set:atomic-set) as xs:boolean"/&gt; 
+      &lt;xsl:field name="add" 
+                 as="%method fn($item as xs:anyAtomicType) as set:atomic-set"/&gt; 
+      &lt;xsl:field name="remove" 
+                 as="%method fn($item as xs:anyAtomicType) as set:atomic-set"/&gt;
+      &lt;xsl:field name="union" 
+                 as="%method fn($value as set:atomic-set) as set:atomic-set"/&gt;
+      &lt;xsl:field name="intersect" 
+                 as="%method fn($value as set:atomic-set) as set:atomic-set"/&gt; 
+      &lt;xsl:field name="except" 
+                 as="%method fn($value as set:atomic-set) as set:atomic-set"/&gt; 
+   &lt;/xsl:record-type&gt;
+   
+   &lt;xsl:variable name="DATA" select="'_data'" visibility="private"/&gt;
+   
+   &lt;xsl:note&gt;
+      The private function set:replaceData processes the internal map
+      by applying a supplied function, and returns a new atomic set
+      with the resulting internal map 
+   &lt;/xsl:note&gt;
+   
+   &lt;xsl:function name="set:replaceData" 
+                 visibility="private" 
+                 as="map(xs:anyAtomicType, xs:boolean)"&gt;
+      &lt;xsl:param name="input" as="set:atomic-set"/&gt;
+      &lt;xsl:param name="update" as="fn(map(*)) as map(*)"/&gt;
+      &lt;xsl:sequence select="map:put($input, $DATA, $update($input?$DATA))"/&gt;
+   &lt;/xsl:function&gt;   
+   
+   &lt;xsl:function name="set:build" as="set:atomic-set" visibility="public"&gt;
+      &lt;xsl:param name="values" as="xs:anyAtomicType*" default="()"/&gt;
+      &lt;xsl:record as="set:atomic-set"
+         _data=
+            "map:build($values, values:=true#0, {'duplicates': 'use-first'})"
+         size=
+            "%method fn() as xs:integer 
+                     { map:size(?$DATA) }"
+         empty=
+            "%method fn() as xs:boolean 
+                     { map:empty(?$DATA) }"
+         contains=
+            "%method fn($value as xs:anyAtomicType) as xs:boolean 
+                     { map:contains(?$DATA, $value) }"
+         contains-all=
+            "%method fn($other as set:atomic-set) as xs:boolean 
+                     { every($value, map:contains(?$DATA, ?)) }"
+         values=
+            "%method fn() as xs:anyAtomicType* 
+                     { keys(?$DATA) }"
+         add=
+            "%method fn($value as xs:anyAtomicType) as xs:anyAtomicType*
+                     { set:replaceData(., map:put(?, $value, true())) }"
+         remove=
+            "%method fn($value as xs:anyAtomicType) as xs:anyAtomicType* 
+                     { set:replaceData(., map:remove(?, $value)) }"
+         union=
+            "%method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., fn($this) {map:merge(($this, $other?$DATA),
+                                                    {'duplicates': 'use-first'})})
+                     }"
+         intersect=
+            "%method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:filter(?, $other?contains)) }"
+         except=
+            "%method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:remove(?, $other?values())) }"/&gt;
+      
+   &lt;/xsl:function&gt;
+   
+   
+&lt;/xsl:package&gt;                  
+                  </eg><ednote><edtext><p>The example is not yet tested. It could also be written
+               using the new xsl:record instruction, which might be more concise.</p></edtext></ednote></div3></div2><div2 id="defining-decimal-format"><head>Defining a Decimal Format</head><changes><change issue="1048" PR="1250" date="2024-06-03">
                   The strings used in the formatted number to represent 
                      a decimal separator, grouping separator, exponent
                   separator, percent sign, per mille sign, or minus sign,
@@ -19747,8 +19887,6 @@ return if ($i le count($S))
       </p></item><item><p>
          <code nobreak="false">fn:ceiling(A)</code>
       </p></item><item><p>
-         <code nobreak="false">fn:chain(A, A)</code>
-      </p></item><item><p>
          <code nobreak="false">fn:char(A)</code>
       </p></item><item><p>
          <code nobreak="false">fn:character-map(A)</code>
@@ -23076,7 +23214,7 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                </change><change issue="729" PR="1254" date="2024-06-08">
                   The rules concerning the interpretation of <code nobreak="false">xsi:schemaLocation</code>
                   and <code nobreak="false">xsi:noNamespaceSchemaLocation</code> attributes have been tightened up.
-               </change><change issue="2029">
+               </change><change issue="2029" PR="2030" date="2025-05-28">
                   In order to reduce duplication between the XSLT and XQuery specifications, description
                   of the validation process has been moved to the <emph>Functions and Operators</emph>
                   specification.
