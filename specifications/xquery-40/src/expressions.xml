@@ -7516,7 +7516,7 @@ declare record Particle (
                      <note><p>For example, if <code>$A</code> is an array and the members
                      of the array are maps, then <code>$A?child::*</code> returns a sequence
                      of JNodes that encapsulate maps, and the size of these maps can be obtained 
-                     using the expression <code>$A?child::* ! map:size()</code>.</p></note>
+                     using the expression <code>$A?child::* ! map:size(.)</code>.</p></note>
                   </item>
                               
                   <item diff="add" at="A">
@@ -20329,19 +20329,25 @@ processing with JSON processing.</p>
                   A deep lookup operator <code>??</code> is provided for searching
                   trees of maps and arrays.
                </change>
-               <change issue="960 1094" PR="1125" date="2024-04-23">
+               <!--<change issue="960 1094" PR="1125" date="2024-04-23">
                   Lookup expressions can now take a modifier (such as <code>keys</code>,
                   <code>values</code>, or <code>pairs</code>) enabling them to return
-                  structured results rather than a flattened sequence. <!--In addition
+                  structured results rather than a flattened sequence. <!-\-In addition
                   they can be qualified with a type to select only the results that
-                  match that type.-->
-               </change>
+                  match that type.-\->
+               </change>-->
                <change issue="1800 1845" PR="1817 1853" date="2025-03-04">An inline function may be annotated
                as a <code>%method</code>, giving it access to its containing map.</change>
                <change issue="1456 1866" PR="1864 1877">
                   The key specifier can reference an item type or sequence type, to select
                   values of that type only. This is especially useful when processing
                   trees of maps and arrays, as encountered when processing JSON input.
+               </change>
+               <change issue="2025">
+                  The "?" operator can now be followed by an axis step, such as <code>child::*</code>
+                  or <code>descendant::*</code>. This returns a sequence of JNodes, which
+                  allow access to the key used for selection, and to parents and ancestors 
+                  in the selection tree; it also avoids flattening the result sequence.
                </change>
             </changes>
 
@@ -20380,26 +20386,41 @@ processing with JSON processing.</p>
                   <item><p><code>$A ? * ? *</code> returns <code>(3, 5, 8, 6)</code></p></item>
                   <item><p><code>$A ? * ? Peter</code> returns <code>8</code></p></item>
                   <item><p><code>$A ? 2 ? *</code> returns (8, 6)</p></item>
-                  <item><p><code>$A ?? *</code> returns <code>(3, 5, 8, 6)</code></p></item>
+                  <item><p><code>$A ?? *</code> returns <code>({ "John": 3, "Jill": 5}, 3, 5, {"Peter": 8, "Mary": 6}, 8, 6)</code></p></item>
+                  <item><p><code>$A ?? ~[xs:integer]</code> returns <code>(3, 5, 8, 6)</code></p></item>
                </ulist>
                
-               <p>We will start by giving the rules for the case where a <code>JAxis</code>
-               is included, and then explain what happens when it is omitted.</p>
+               <p>The expression <code>$A ? ..</code> is an abbreviation for <code>$A ? parent::*</code>.</p>
                
-               <p>An expression such as <code>$A ? child::<var>KS</var> is evaluated as follows:</code></p>
+               <p>The expression <code>$A ? .</code> is an abbreviation for <code>$A ? self::*</code>.</p>
+               
+               <p>We will start by giving the rules for the case where a <code>JAxis</code>
+               is included (either explicitly, or by use of the abbreviated forms <code>.</code> or <code>..</code>), 
+               and then explain what happens when it is omitted.</p>
+               
+               <p>An expression such as <code>$A ? child::<var>KS</var></code> (where <code>child</code>
+                  might be replaced by any other <code>JAxis</code>) is evaluated as follows:</p>
                
                <ulist>
-                  <item><p>If the value of <code>$A</code> is not a singleton, then the expression
-                  is evaluated for each item in <code>$A</code>, and the expression returns
-                  the <termref def="dt-sequence-concatenation"/> of the results.</p></item>
-                  <item><p>If the value of <code>$A</code> is a map or an array, then it
+                  <item><p>The expression
+                  is expanded to <code>for $a in $A return $a ? child::<var>KS</var></code>
+                     (where <code>$a</code> is some otherwise unused variable name),
+                     which is then evaluated using the rules below.</p></item>
+                  
+                  <item><p>If the value of <code>$a</code> is anything other than a map,
+                  an array, or a JNode, then a type error is raised <errorref class="TY" code="0004"/>.</p></item>
+                 
+                  <item><p>If the value of <code>$a</code> is a map or an array, then it
                   is wrapped in a root <xtermref spec="DM40" ref="dt-JNode"/> by applying
-                  the <function>pin</function> function.</p></item>
-                  <item><p>If the value of <code>$A</code> is a <xtermref spec="DM40" ref="dt-JNode"/>,
+                  the <function>pin</function> function, and the expression is then
+                  evaluated using the rules below.</p></item>
+                  
+                  <item><p>If the value of <code>$a</code> is a <xtermref spec="DM40" ref="dt-JNode"/>,
                   then the <code>JAxis</code> is evaluated, as described below, to deliver a sequence
                   of JNodes.</p></item>
-                  <item><p>This sequence of JNodes is filtered, retaining only those that satisfy
-                  the <code>KeySpecifier</code> <var>KS</var>.</p></item>
+                  
+                  <item><p>This sequence of JNodes is filtered and potentially reordered, retaining 
+                     only those JNodes that satisfy the <code>KeySpecifier</code> <var>KS</var>.</p></item>
                </ulist>
                
                <p>A <code>JAxis</code> is essentially a function that takes a JNode as its input
@@ -20415,8 +20436,8 @@ processing with JSON processing.</p>
                   returns the transitive closure of the <code>parent</code> <code>JAxis</code>,
                      that is, it returns the <code>¶parent</code>, then the <code>¶parent</code>
                      of the <code>¶parent</code>,
-                     and so on until the root JNode (which has no parent) is reached. Note
-                  that the result is in reverse document order.</p></item>
+                     and so on until the root JNode (which has no parent) is reached. 
+                     The result is in reverse document order.</p></item>
                   <item><p>The <code>ancestor-or-self</code> <code>JAxis</code>, applied to a JNode <var>N</var>,
                      returns <var>N</var> followed by the content of the <code>ancestor</code> <code>JAxis</code>.
                      The result is in reverse document order.</p></item>
@@ -20449,49 +20470,74 @@ processing with JSON processing.</p>
             
                </ulist>
                
-               <ednote><edtext>Elimination of duplicates?</edtext></ednote>
                
-               <p>The <code>KeySpecifier</code> filters the result, as follows:</p>
+               <p>The <code>KeySpecifier</code> filters and potentially reorders the result 
+                  (referred to below as the <term>raw result</term>), as follows:</p>
                
                <ulist>
                   <item><p>If the <code>KeySpecifier</code> is a <code>LookupWildcard</code>, 
-                     then a JNode <var>J</var> satisfies the <code>KeySpecifier</code> unconditionally.</p></item>
+                     then the raw result is returned unchanged.</p></item>
                   
                   <item><p>If the <code>KeySpecifier</code> is a <code>TypeSpecifier</code>, 
-                     then a JNode <var>J</var> satisfies the <code>KeySpecifier</code> if and only if
-                     the <code>¶value</code> property of <var>J</var> is an instance of
-                     the sequence type defined by the <code>KeySpecifier</code>.</p></item>
+                     then the raw result is filtered to retain only those JNodes 
+                     whose <code>¶value</code> property is an instance of
+                     the sequence type defined by the <code>KeySpecifier</code>.</p>
+                  </item>
 
-                  <item><p>If the <code>KeySpecifier</code> is an NCName, then a 
-                     JNode <var>J</var> satisfies the <code>KeySpecifier</code> if and only if
-                     the <code>¶selector</code> property of <var>J</var> is equal to the NCName
-                     under the rules of the <function>atomic-equal</function> function.</p></item>
+                  <item><p>If the <code>KeySpecifier</code> is an NCName, then the raw
+                     result if filtered to retain only those JNodes whose <code>¶selector</code> property 
+                     is equal to the NCName
+                     under the rules of the <function>atomic-equal</function> function.</p>
+                     <note><p>There may be more than one such JNode in the case of a <code>JAxis</code>
+                     other than <code>child</code>.</p></note>
+                  </item>
            
                   <item><p>In all other cases the <code>KeySpecifer</code> is treated as an expression.
-                  It is evaluated in the current context and the result is atomized to deliver
-                  a sequence of atomic items.</p>
-                  <p>A JNode <var>J</var> satisfies the <code>KeySpecifer</code>
-                  if the <code>¶selector</code> property of <var>J</var> is equal to some atomic item
-                  in this sequence, under the rules of the <function>atomic-equal</function>
-                  function.</p></item>
+                  It is evaluated in the current context: call the result <code>$K</code>.</p>
+                     <p>The final result is then obtained from the raw result <code>$RR</code>
+                      by evaluating the expression:</p>
+                     <eg>
+for $k in data($K)
+return $RR[atomic-equal($k, selector(.))] 
+                     </eg>
+                     
+                        <note><p>This expression will never raise a type error, nor will it raise
+                        an error if an array index is out of bounds.</p></note>   
+                        
+                           
+                        <p>For example, the expression:</p>
+                           <eg>let $M := {1:10, 2:20, 3:30} return $M?child::(3, 1, 82)</eg>
+                        <p>returns JNodes representing the entries <code>3:30</code>
+                           and <code>1:10</code> in that order; the index <code>82</code>
+                        selects nothing.</p>
+                     </item>   
+                  
+                  
                </ulist>
                
-               <p>In the absence of an <code>JAxis</code>, an abbreviated lookup expression
-               is evaluated as follows:</p>
+               <p>The lookup operator <code>?</code> (unlike the path operator <code>/</code>)
+               does not force the results into document order, nor does it eliminate duplicates.
+               If this is required, it can be achieved by a call on the <code>distinct-ordered-nodes</code>
+               function (or more concisely, with the union operator: <code>$X|()</code> has the same effect
+               as <code>distinct-ordered-nodes($X)</code>).</p>
                
-               <ulist>
-                  <item><p><code>$C ? <var>KS</var></code> is evaluated as 
-                  <code>$C ? child::KS => unpin()</code></p></item>
-                  <item><p><code>$C ?? <var>KS</var></code> is evaluated as 
-                  <code>$C ? descendant::KS =!> unpin()</code></p></item>
-               </ulist>
+               <p>In the absence of an <code>JAxis</code>, a shallow lookup expression
+               <code>$C ? <var>KS</var></code> is evaluated as follows:</p> 
                
-               <p>The effect of the <function>unpin</function> call is to extract the 
-               <code>¶value</code> properties of the returned JNodes and deliver their
-               <termref def="dt-sequence-concatenation"/>.</p>
+               <eg>
+for $c in $C
+return if ($c instance of JNode())
+       then $c ? child::KS
+       else pin($c) ? child::KS =!> unpin()
+               </eg>
+               
+               <p>The effect of this is that when the left-hand operand of the expression
+               contains a JNode, the result will contain a JNode. But when the left-hand
+               operand is a simple (unpinned) map or array, the result will contain
+               simple values, flattened by <termref def="dt-sequence-concatenation"/>.</p>
                
                <note>
-                  <p>The effect of omitting the explicit axis is to lose information.
+                  <p>The effect of unpinning the result is to lose information.
                   This happens in two ways.
                   Firsly, no information is retained about the parent map or array,
                   or about the key that was used to make the selection, which means
@@ -20501,7 +20547,22 @@ processing with JSON processing.</p>
                   expression <code>[ 1, 2, (), 4 ] ? *</code> is the sequence
                   <code>( 1, 2, 4 )</code>, losing any information about the third
                   array member.</p>
+                  
+                  <p>This effect can be avoided in a number of ways:</p>
+                  
+                  <ulist>
+                     <item><p>Use of an explicit call on <function>pin</function>, 
+                     for example <code>pin($A)?K</code></p></item>
+                     <item><p>Use of an explicit axis, for example
+                     <code>$A?child::K</code></p></item>
+                     <item><p>Implicit pinning using the step <code>.</code>,
+                     for example <code>$A?.?K</code>. This is equivalent
+                     to <code>$A?self::*?K</code>, which (because it uses an
+                        explicit axis) ensures that the left-hand operand of the second <code>?</code>
+                     operator is a JNode.</p></item>
+                  </ulist>
                </note>
+               
                
                <p>The following examples use the <code>?</code> operator without a <code>JAxis</code>.
                   Given <code>$A</code> as an array
@@ -20528,8 +20589,18 @@ processing with JSON processing.</p>
                      </tr>                   
                      <tr>
                         <td><code>$A ? (3, 1)</code></td>
-                        <td><eg>("a", "b", "e", "f")</eg></td>
-                     </tr>                    
+                        <td><eg>("e", "f", "a", "b")</eg></td>
+                     </tr> 
+                     <tr>
+                        <td><code>$A ? 82</code></td>
+                        <td><eg>()</eg>
+                        <note><p>There is no array bound checking.</p></note></td>
+                     </tr> 
+                     <tr>
+                        <td><code>$A ? xyz</code></td>
+                        <td><eg>()</eg>
+                        <note><p>No type error is raised.</p></note></td>
+                     </tr>
                      <tr>
                         <td><code>$A ? ~[xs:integer]</code></td>
                         <td><eg>42</eg></td>
@@ -20560,7 +20631,7 @@ processing with JSON processing.</p>
                      </tr>
                      <tr>
                         <td><code>$M ? ("Z", "X")</code></td>
-                        <td><eg>( "a", "b", "e", "f",)</eg></td>
+                        <td><eg>("e", "f", "a", "b")</eg></td>
                      </tr>
                      <tr>
                         <td><code>$M ? ~[xs:integer]</code></td>
@@ -20592,10 +20663,17 @@ processing with JSON processing.</p>
                         <td><eg>20</eg></td>
                      </tr>
                      <tr>
-                        <td><code>$A ? descendant::c ? parent::* ? a</code></td>
+                        <td><code>data($A ? descendant::c ? parent::* ? a)</code></td>
                         <td><eg>2</eg></td>
                      </tr>
-                     
+                     <tr>
+                        <td><code>data($A ? descendant::c ? .. ? a)</code></td>
+                        <td><eg>2</eg></td>
+                     </tr>
+                     <tr>
+                        <td><code>$A ? ~[record(a, b, c)] ? c ? 2</code></td>
+                        <td><eg>20</eg></td>
+                     </tr>
                   </tbody>
                </table>
                
@@ -20641,21 +20719,17 @@ processing with JSON processing.</p>
   "previous-address": { "street": "12 Seaview Road", "postcode": "EX8 9AA" }
 }</eg>
 
-                     <p>then <code>?~[record(street, postcode)]?postcode</code>
+                     <p>then <code>? ~[record(street, postcode)] ? postcode</code>
                         returns <code>("MK12 2EX", "EX8 9AA")</code> (reflecting the 
                         <xtermref spec="DM40" ref="dt-entry-order"/> of the map).</p>
-                     <note><p>Writing <code>?*?postcode</code> would raise a type error, because the result of the initial
-                        step <code>?*</code> includes an item (the string <code>"John Smith"</code>) that is neither
-                        a map nor an array.</p></note>
+                     <note><p>Writing <code>? * ? postcode</code> would raise a type error, 
+                        because the result of the initial
+                        step <code>? *</code> includes an item (the string <code>"John Smith"</code>) 
+                        that is neither a map nor an array. Writing <code>?? postcode</code>
+                        avoids this problem.</p></note>
                   </item>
-                  <item diff="add" at="A">
+                  <item>
                      <p><code>?"first name"</code> is equivalent to <code>.("first name")</code></p>
-                  </item>
-                  
-                  <item role="xquery">
-                     <p>
-                        <code>?("$funky / &lt;looking @string")</code> is equivalent to
-                        <code>.("$funky / &lt;looking @string")</code>, an appropriate lookup for a map with rather odd conventions for keys.</p>
                   </item>
                   <item>
                      <p>
@@ -20668,7 +20742,9 @@ processing with JSON processing.</p>
                   </item>
                   <item>
                      <p>
-                        <code>?(3.5)</code> raises a type error if the context value is an array because the parameter must be an integer.</p>
+                        <code>?(3.0e0)</code> returns the same result as <code>?3</code>, because <code>xs:double(3.0e0)</code>
+                        and <code>xs:integer(3)</code> compare equal under the rules of the <function>atomic-equal</function>
+                        function.</p>
                   </item>
                   
                   <item role="xquery">
@@ -20725,11 +20801,18 @@ processing with JSON processing.</p>
                   No explicit JAxis is allowed, because the <code>descendant</code> JAxis
                   is implicit.</p>
                
+               <scrap>
+                  <prodrecap ref="DeepLookup"/>
+               </scrap>
+               
                <p>A deep lookup expression
                is evaluated as follows:</p>
                
                <p><code>$C ?? <var>KS</var></code> is equivalent to 
                   <code>$C ? descendant::KS =!> unpin()</code></p>
+               
+               <ednote><edtext>Should we drop the <code>unpin()</code>? The result is much more
+               useful if we can use it as a basis for further navigation.</edtext></ednote>
                
                <!--<p>First we define the <term>recursive content</term> of an item as follows:</p>
                

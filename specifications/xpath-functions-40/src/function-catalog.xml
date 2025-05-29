@@ -823,6 +823,8 @@
          <p>If <code>$value</code> is a node, the function returns the string value of the node, as obtained using the
                      <code>dm:string-value</code> accessor defined in <bibref
                ref="xpath-datamodel-31"/> (see <xspecref spec="DM40" ref="dm-string-value"/>).</p>
+         
+         <p>If <code>$value</code> is a JNode, the function returns the result of <code>string(unpin($value))</code>.</p>
 
          <p>If <code>$value</code> is an atomic item, the function returns the result of the expression <code>$value cast
                      as xs:string</code> (see <specref
@@ -14158,8 +14160,8 @@ let $newi := $o/tool</eg>
    
    <fos:function name="distinct-ordered-nodes" prefix="fn">
       <fos:signatures>
-         <fos:proto name="distinct-ordered-nodes" return-type="node()*">
-            <fos:arg name="nodes" type="node()*" usage="navigation"/>
+         <fos:proto name="distinct-ordered-nodes" return-type="GNode()*">
+            <fos:arg name="nodes" type="GNode()*" usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -14169,17 +14171,19 @@ let $newi := $o/tool</eg>
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Removes duplicate nodes and sorts the input into document order.</p>
+         <p>Removes duplicate GNodes and sorts the input into document order.</p>
       </fos:summary>
       <fos:rules>
-         <p>Any duplicate nodes in the input (based on node identity) are discarded. The remaining nodes
+         <p>Any duplicate GNodes (that is, XNodes or JNodes) in the input 
+            (based on node identity) are discarded. The remaining GNodes
          are returned in <xtermref spec="XP40" ref="dt-document-order">document order</xtermref>.</p>
       </fos:rules>
       <fos:notes>
          <p>Document order is <termref def="implementation-dependent"/> (but stable) for
-         nodes in different documents. If some node in document <var>A</var>
-         precedes some node in document <var>B</var>, then every node in <var>A</var> precedes
-         every node in <var>B</var>.</p>
+         GNodes in different trees. If some GNode in tree <var>A</var>
+         precedes some GNode in tree <var>B</var>, then every GNode in <var>A</var> precedes
+         every GNode in <var>B</var>.</p>
+
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -14190,6 +14194,15 @@ return distinct-ordered-nodes(($x//c, $x//b, $x//a, $x//b)) ! name()]]></eg></fo
                <fos:postamble>The two <code>$x//b</code> expressions select the same node; one of these
                is eliminated as a duplicate. The <code>$x//c</code> expression selects two nodes
                that have distinct identity, so both are retained.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $x := {"a":{"a":{"a":1}}}
+return distinct-ordered-nodes(
+           $x ? descendant::a ? descendant::a) 
+       => count() ]]></eg></fos:expression>
+               <fos:result>3</fos:result>
+               <fos:postamble>The innermost map entry <code>"a":1</code> is selected by two different
+                  routes; the lookup operator does not eliminate duplicate JNodes.</fos:postamble>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -25966,9 +25979,9 @@ return map:build($titles/title, fn($title) { $title/ix })
             <eg>map:build(//*, generate-id#1)</eg>
          </fos:example>
          <fos:example>
-            <p>The following expression creates a map allowing efficient access to values in a recorsive JSON tree
+            <p>The following expression creates a map allowing efficient access to values in a recursive JSON structure
                using hierarchic paths:</p>
-            <eg>let $tree := {
+            <eg>let $tree := parse-json('{
   "type": "package",
   "name": "org",
   "content": [
@@ -25987,15 +26000,15 @@ return map:build($titles/title, fn($title) { $title/ix })
                ]
             }]
        }]
-   }
-   return map:build($tree ? descendant::~record(type, name, *),
+   }')
+   return map:build($tree ? descendant::~[record(type, name, *)],
                     fn{?ancestor-or-self::name => reverse() => string-join(,)},
                     fn{`{?type} {?name}`})
             </eg>
             <p>The result is the map:</p>
             <eg>{ "org.xml.sax.Attributes": "class Attributes",
   "org.xml.sax.ContentHandler": "class ContentHandler",
-  "org.xml.saxon.XMLReader": "class XMLReader" }</eg>
+  "org.xml.sax.XMLReader": "class XMLReader" }</eg>
          </fos:example>
          
       </fos:examples>
@@ -35216,17 +35229,20 @@ return $result
          with no context. By contrast, the result of <code>pin(json-doc($source)) ? descendant::name</code> 
             is a sequence of JNodes encapsulating the same set
          of strings, but retaining information about where they were found. For example, if <code>$result</code>
-            is the result of the expression <code>pin(json-doc($source)) ? descendant::name</code>, then:</p>
+            is the result of the expression <code>json-doc($source) ? descendant::name</code>, then:</p>
          
          <ulist>
-            <item><p><code>$result => . ? parent::* ? ssn</code> locates the map that contained each
+            <item><p><code>$result ? .. ? ssn</code> locates the map that contained each
                <code>name</code>, and returns the value of the <code>ssn</code> entry in that map.</p></item>
-            <item><p><code>$result => . ? ancestor::course</code> returns the values of any
+            <item><p><code>$result ? ancestor::course</code> returns the values of any
             <code>course</code> entries in containing maps.</p></item>
-            <item><p><code>$result => . ? ancestor::* => selector() </code> returns a sequence of map keys and array index
+            <item><p><code>$result ? ancestor::* => selector() </code> returns a sequence of map keys and array index
             values representing the location of the found entries within the JSON structure.</p></item>
   
          </ulist>
+         
+         <p>An alternative way of pinning a map or array, rather than calling <code>pin($X)</code>,
+         is to use the lookup expression <code>$X?.</code>.</p>
          
          
       </fos:notes>
@@ -35249,7 +35265,7 @@ return $result
   "fr": { "capital": "Paris", "languages": [ "French" ] }, 
   "de": { "capital": "Berlin", "languages": [ "German" ] }
 }
-return pin($data) ? descendant::languages[. = 'German'] ? parent::* ?capital)[1]</eg></fos:expression>
+return pin($data) ? descendant::languages[. = 'German'] ? .. ? capital)[1]</eg></fos:expression>
                <fos:result>"Berlin"</fos:result>
             </fos:test>
          </fos:example>
@@ -35322,7 +35338,7 @@ return $array ? descendant::*[. gt 25][1] ? ancestor::* =!> selector() => revers
       </fos:summary>
       <fos:rules>
          <p>If <code>$input</code> is an empty sequence, the function returns an empty sequence.</p>
-         <p>Otherwise, the function returns the <code>¶selector</code> property of <code>$input</code>.</p>
+         <p>Otherwise, the function returns the <code>¶value</code> property of <code>$input</code>.</p>
       </fos:rules>
       <fos:notes>
          <p>In many cases it is unnecessary to make an explicit call on <code>unpin</code>, because
@@ -35334,7 +35350,7 @@ return $array ? descendant::*[. gt 25][1] ? ancestor::* =!> selector() => revers
          <p>One case where the function call may be needed is when computing the effective boolean
          value. As with XNodes, writing <code>if (?child::*[1]) ...</code> tests for the existence
          of a child, it does not test its value. To test its value, write <code>if (unpin(?child::*[1])) ...</code>,
-         or equivalently <code>if (data(?child::*[1])) ...</code>.</p>
+         or equivalently <code>if (xs:boolean(?child::*[1])) ...</code>.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
