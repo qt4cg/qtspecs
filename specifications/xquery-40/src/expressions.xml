@@ -17406,24 +17406,251 @@ for member $y in $expr2]]></eg>
                   The value bound to a variable in a <code>let</code> clause is now converted
                to the declared type by applying the coercion rules.
                </change>
+               <change issue="37" PR="1942" date="2025-06-17">
+               Sequences, arrays, and maps can be destructured in a <code>let</code> 
+               clause to extract their components into multiple variables. 
+            </change>
             </changes>
             <scrap>
                <prodrecap ref="LetClause"/>
             </scrap>
-            <p>The purpose of a <code>let</code> clause is to bind values to one or more variables. Each variable is bound to the result of evaluating an expression.</p>
-            <p>If a <code>let</code> clause contains multiple variables, it is semantically equivalent to multiple <code>let</code> clauses, each containing a single variable. For example, the clause</p>
+            <p>The purpose of a <code>let</code> clause is to bind values to one or more variables. 
+               Each variable is bound to the result of evaluating an expression.</p>
+            <p>If a <code>let</code> clause declares multiple variables separated by commas, 
+               it is semantically equivalent to multiple <code>let</code> clauses, 
+               each containing a single variable. For example, the clause</p>
             <eg><![CDATA[let $x := $expr1, $y := $expr2]]></eg>
             <p>is semantically equivalent to the following sequence of clauses:</p>
             <eg><![CDATA[let $x := $expr1
 let $y := $expr2]]></eg>
-            <p>In the remainder of this section, we define the semantics of a <code>let</code> clause containing a single variable <emph>V</emph> and an associated expression <emph>E</emph>.</p>
-            <p>If a single-variable <code>let</code> clause is the initial clause in a FLWOR expression, it simply binds the variable <emph>V</emph> to the result of the expression <emph>E</emph>. The result of the <code>let</code> clause is a tuple stream consisting of one tuple with a single binding that binds <emph>V</emph> to the result of <emph>E</emph>. This tuple stream serves as input to the next clause in the FLWOR expression.</p>
-            <p>If a single-variable <code>let</code> clause is an intermediate clause in a FLWOR expression, it adds a new binding for variable <emph>V</emph> to each tuple in the input tuple stream. For each input tuple, the value bound to <emph>V</emph> is the result of evaluating expression <emph>E</emph>, given the bindings that are already present in that input tuple. The resulting tuples become the output tuple stream of the <code>let</code> clause.</p>
-            <p>The number of tuples in the output tuple stream of an intermediate <code>let</code> clause is the same as the number of tuples in the input tuple stream. The number of bindings in the output tuples is one more than the number of bindings in the input tuples, unless the input tuples already contain bindings for <emph>V</emph>; in this case, the new binding for <emph>V</emph> occludes (replaces) the earlier binding for <emph>V</emph>, and the number of bindings is unchanged.</p>
-            <p>A <code>let</code> clause may contain one or more <termref def="dt-type-declaration"
-                  >type declarations</termref>, identified by the keyword <code>as</code>. The semantics of type declarations are defined in <specref
+            
+            <p>After performing this expansion, the effect of a <code>let</code> clause is as follows:</p>
+            
+            
+            <olist>
+            <item>
+               <p>If the let expression uses multiple variables, it is first expanded to a
+set of nested let expressions, each of which uses only one variable. 
+Specifically, any separating comma is replaced by <code>let</code>.</p>
+               <example>
+                  <head>Example:</head>
+                  <p>The expression:</p>
+                  <eg>let $x := 4, $y := 3 return $x + $y</eg>
+                  <p>is expanded to:</p>
+                  <eg>let $x := 4 let $y := 3 return $x + $y</eg>
+               </example>
+               
+               
+            </item>
+
+            <item>
+               <p>In a <nt def="LetValueBinding">LetValueBinding</nt>
+                  such as <code>let $<var>V</var> as <var>T</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The variable <var>V</var> is declared as a <term>range variable</term>.</p></item>
+                     <item><p>The sequence type <var>T</var> is called the <term>declared type</term>.
+                     If there is no declared type, then <code>item()*</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared type by applying the <termref def="dt-coercion-rules"/>.
+                     The resulting value forms the <term>binding sequence</term> for the range variable.</p></item>
+                  </olist>
+            </item>
+            <item>
+               <p>In a <nt def="LetSequenceBinding">LetSequenceBinding</nt>
+                  such as <code>let $( $<var>A1</var> as <var>T1</var>, $<var>A2</var> as <var>T2</var>, ...
+                     , $<var>A/n</var> as <var>T/n</var> ) as <var>ST</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The sequence type <var>ST</var> is called the <term>declared sequence type</term>.
+                     If there is no declared sequence type, then <code>item()*</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared sequence type <var>ST</var> by applying the <termref def="dt-coercion-rules"/>.
+                     Call the resulting (coerced) value <var>V</var>.</p></item>
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := items-at(<var>V</var>, <var>i</var>)</code>.
+                     That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
+                     is the item <var>V[ i ]</var>, after coercion to the type <var>T/i</var> if specified.
+                     If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
+                     <code>item()?</code>).</p>
+                        <note><p>If <var>i</var> exceeds the length of the sequence <var>V</var>, then
+                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
+                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        <note><p>It is permissible to bind several variables with the same name;
+                        all but the last are shadowed. A useful convention is therefore to bind
+                        items in the sequence that are of no interest to the variable <code>$_</code>:
+                        for example <code>let $( $_, $_, $x ) := <var>EXPR</var></code> effectively
+                        binds <code>$x</code> to the third item in the sequence and causes the first two
+                        items to be ignored.</p></note>
+                     
+                  <example>
+                     <head>Example:</head>
+                     <p>The expression:</p>
+                     <eg>let $( $a, $b as xs:integer, $local:c ) := (2, 4, 6)
+return $a + $b + $local:c</eg>
+                     <p>is expanded to:</p>
+                     <eg>let $temp := (2, 4, 6)
+let $a := fn:items-at($temp, 1)
+let $b as xs:integer := fn:items-at($temp, 2)
+let $local:c := fn:items-at($temp, 3)
+return $a + $b + $local:c</eg>
+                     <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
+                  </example>
+                  <example>
+                     <head>Example:</head>
+                     <p>Consider the element <var>$E</var> := <code>&lt;e A="p q r" B="x y z"/></code>, where
+                     <var>$E</var> has been validated against a schema that defines both attributes
+                     <code>A</code> and <code>B</code> as being lists of strings.</p>
+                     <p>Then the expression:</p>
+                     <eg>let $( $a as xs:string*, $b as xs:string* ) := $E/(@A, @B)</eg>
+                     <p>binds <code>$a</code> to the sequence <code>("p", "q", "r")</code>
+                     and <code>$b</code> to the sequence <code>("x", "y", "z")</code>.
+                     The evaluation of the expression <code>$E/(@A, @B)</code>
+                        returns a sequence of two attribute nodes;
+                     the value of <code>$a</code> is formed by atomizing the first of these
+                     nodes, while <code>$b</code> is formed by atomizing the second.</p>
+                     
+                  </example>
+                  </item>
+                     
+                     
+                </olist>
+            </item>
+            
+            <item>
+               <p>In a <nt def="LetArrayBinding">LetArrayBinding</nt>
+                  such as <code>let $[ $<var>A1</var> as <var>T1</var>, $<var>A2</var> as <var>T2</var>, ...
+                     , $<var>A/n</var> as <var>T/n</var> ] as <var>AT</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The sequence type <var>AT</var> is called the <term>declared array type</term>.
+                     If there is no declared array type, then <code>array(*)</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared array type <var>AT</var> by applying the <termref def="dt-coercion-rules"/>.
+                     A type error <errorref class="TY" code="0004"/> is raised if the result is not
+                        a <termref def="dt-singleton"/> array.
+                     Call the resulting (coerced) value <var>V</var>.</p></item>
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := array:get(<var>V</var>, <var>i</var>, ())</code>.
+                     That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
+                     is the array member <var>V ? i</var>, after coercion to the type <var>T/i</var> if specified.
+                     If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
+                     <code>item()*</code>).</p>
+                        <note><p>If <var>i</var> exceeds the length of the array <var>V</var>, then
+                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
+                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        <note><p>It is permissible to bind several variables with the same name;
+                        all but the last are shadowed. A useful convention is therefore to bind
+                        items in the sequence that are of no interest to the variable <code>$_</code>:
+                        for example <code>let $( $_, $_, $x ) := <var>EXPR</var></code> effectively
+                        binds <code>$x</code> to the third item in the sequence and causes the first two
+                        items to be ignored.</p></note>
+                     
+                  <example>
+                     <head>Example:</head>
+                     <p>The expression:</p>
+                     <eg>let $[ $a, $b as xs:integer, $local:c ] := [ 2, 4, 6 ]
+return $a + $b + $local:c</eg>
+                     <p>is expanded to:</p>
+                     <eg>let $temp := [ 2, 4, 6 ]
+let $a := array:get($temp, 1, ())
+let $b as xs:integer := array:get($temp, 2, ())
+let $local:c := array:get($temp, 3, ())
+return $a + $b + $local:c</eg>
+                     <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
+                  </example>
+                  
+                  </item>
+                     
+                     
+                </olist>
+            </item>
+            
+            <item>
+               <p>In a <nt def="LetMapBinding">LetMapBinding</nt>
+                  such as <code>let ${ $<var>A1</var> as <var>T1</var>, $<var>A2</var> as <var>T2</var>, ...
+                     , $<var>A/n</var> as <var>T/n</var> } as <var>MT</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The sequence type <var>MT</var> is called the <term>declared map type</term>.
+                     If there is no declared map type, then <code>map(*)</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared map type <var>MT</var> by applying the <termref def="dt-coercion-rules"/>.
+                     A type error <errorref class="TY" code="0004"/> is raised if the result is not
+                        a <termref def="dt-singleton"/> map.
+                     Call the resulting (coerced) value <var>V</var>.</p></item>
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := map:get(<var>V</var>, "<var>N/i</var>", ())</code>,
+                        where <var>N/i</var> is the local part of the name of the variable <var>A/i</var>.
+                     That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
+                     is the value of the map entry in <var>V</var> whose key is an <code>xs:string</code> (or <code>xs:anyURI</code> or <code>xs:untypedAtomic</code>)
+                        equal to the local part of the variable name, after coercion to the type <var>T/i</var> if specified.
+                     If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
+                     <code>item()*</code>).</p>
+                        <note><p>If there is no entry in the map with a key corresponding to the variable
+                           name, then the variable
+                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
+                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        
+                        <note><p>It is not possible to use this mechanism to bind variables to values
+                        in a map unless the keys in the map are strings in the form of <code>NCNames</code>.</p></note>
+                     
+                  <example>
+                     <head>Example:</head>
+                     <p>The expression:</p>
+                     <eg>let ${ $a, $b as xs:integer, $local:c } := { "a": 2, "b": 4, "c": 6, "d": 8 }
+return $a + $b + $local:c</eg>
+                     <p>is expanded to:</p>
+                     <eg>let $temp := { "a": 2, "b": 4, "c": 6 }
+let $a := map:get($temp, "a", ())
+let $b as xs:integer := map:get($temp, "b", ())
+let $local:c := map:get($temp, "c", ())
+return $a + $b + $local:c</eg>
+                     <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
+                  </example>
+                  
+                  </item>
+                     
+                     
+                </olist>
+            </item>
+            
+            
+                        
+             <item><p>The effect of the <nt def="LetClause">LetClause</nt> is to add
+             one or more variable bindings to the tuple stream. Specifically, each
+             <term>range variable</term> declared within the <code>LetClause</code>
+             is bound to its corresponding <term>binding sequence</term>, and 
+             the resulting variable binding is added to the current tuple, replacing
+             any existing variable binding with the same variable name.</p>
+                
+             <p>If the <code>LetClause</code> is the initial clause in a FLWOR expression, 
+                it creates an initial tuple for the tuple stream, containing these variable
+                bindings. This tuple stream serves as input to the next clause in the FLWOR expression.</p>
+            <p>If the <code>LetClause</code> is an intermediate clause in a FLWOR expression, 
+               it adds the relevant variable bindings to each tuple in the input tuple stream. 
+               The resulting tuples become the output tuple stream of the <code>let</code> clause.</p>
+            <p>The number of tuples in the output tuple stream of an intermediate <code>let</code> 
+               clause is the same as the number of tuples in the input tuple stream. 
+               The number of variable bindings in the output tuples is always greater than
+               the number of variable bindings in the input tuples, unless the input tuples 
+               already contain bindings for every variable binding created by the <code>LetClause</code>; 
+               in this case, the new binding for any given variable name occludes (replaces) 
+               an earlier binding for that variable name, and the number of bindings is unchanged.</p>
+               
+            </item>
+            </olist>
+            
+            <p>The semantics of type declarations are further defined in <specref
                   ref="id-binding-rules"/>.</p>
-            <p>The following code fragment illustrates how a <code>for</code> clause and a <code>let</code> clause can be used together. The <code>for</code> clause produces an initial tuple stream containing a binding for variable <code>$d</code> to each department number found in a given input document. The <code>let</code> clause adds an additional binding to each tuple, binding variable <code>$e</code> to a sequence of employees whose department number matches the value of <code>$d</code> in that tuple.</p>
+            
+            
+            <p>The following code fragment illustrates how a <code>for</code> clause 
+               and a <code>let</code> clause can be used together. The <code>for</code> 
+               clause produces an initial tuple stream containing a binding for variable 
+               <code>$d</code> to each department number found in a given input document. 
+               The <code>let</code> clause adds an additional binding to each tuple, 
+               binding variable <code>$e</code> to a sequence of employees whose department 
+               number matches the value of <code>$d</code> in that tuple.</p>
             <eg><![CDATA[for $d in doc("depts.xml")/depts/deptno
 let $e := doc("emps.xml")/emps/emp[deptno eq $d]]]></eg>
          </div3>
@@ -18996,9 +19223,13 @@ return ($i, $j)]]></eg>
                   the <code>for</code>expression is first expanded to a set of nested <code>for</code> 
                   expressions, each of which contains a single <nt def="ForBinding">ForBinding</nt>.
                More specifically, every separating comma is replaced by <code>for</code>.</p>
-               <p>For example, the expression
-               <code role="parse-test">for $x in X, $y in Y return $x + $y</code> is expanded to
-               <code role="parse-test">for $x in X for $y in Y return $x + $y</code>.</p>
+               <example>
+                  <p>The expression:</p>
+                  <eg>for $x in X, $y in Y return $x + $y</eg>
+                  <p>is expanded to:</p>
+                  <eg>for $x in X for $y in Y return $x + $y</eg>
+               </example>
+              
             </item>
             
             <item>
@@ -19228,6 +19459,10 @@ return $line/value]]></eg>
             <change issue="796" PR="1131" date="2024-04-01">
                The type of a variable used in a <code>let</code> expression can be declared.
             </change>
+            <change issue="37" PR="1942" date="2025-06-17">
+               Sequences, arrays, and maps can be destructured in a <code>let</code> 
+               expression to extract their components into multiple variables. 
+            </change>
          </changes>
 
          <p>XPath allows a variable to be declared and bound to a value using a <term>let expression</term>.</p>
@@ -19238,35 +19473,207 @@ return $line/value]]></eg>
 
          <p>A let expression is evaluated as follows:</p>
 
-         <ulist>
+         <olist>
             <item>
                <p>If the let expression uses multiple variables, it is first expanded to a
 set of nested let expressions, each of which uses only one variable. 
 Specifically, any separating comma is replaced by <code>let</code>.</p>
-               <p>For example, the expression 
-                  <code role="parse-test">let $x := 4, $y := 3 return $x + $y</code> is expanded to
-                   <code role="parse-test">let $x := 4 let $y := 3 return $x + $y</code>.</p>
+               <example>
+                  <head>Example:</head>
+                  <p>The expression:</p>
+                  <eg>let $x := 4, $y := 3 return $x + $y</eg>
+                  <p>is expanded to:</p>
+                  <eg>let $x := 4 let $y := 3 return $x + $y</eg>
+               </example>
+               
                
             </item>
 
             <item>
-               <p>In a single-variable let expression, the variable is called the range
-variable. The expression that follows the <code>:=</code> symbol is evaluated, and
-                  if a <nt def="TypeDeclaration">TypeDeclaration</nt> is present, its value is converted
-                     to the specified type by applying the <termref def="dt-coercion-rules"/>.
-                     The resulting value is called
-the binding sequence. The expression in the <nt def="ForLetReturn">ForLetReturn</nt> part 
+               <p>In a <nt def="LetValueBinding">LetValueBinding</nt>
+                  such as <code>let $<var>V</var> as <var>T</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The variable <var>V</var> is called the <term>range variable</term>.</p></item>
+                     <item><p>The sequence type <var>T</var> is called the <term>declared type</term>.
+                     If there is no declared type, then <code>item()*</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared type by applying the <termref def="dt-coercion-rules"/>.
+                     The resulting value is called the <term>binding sequence</term>.</p></item>
+                  </olist>
+            </item>
+            <item>
+               <p>In a <nt def="LetSequenceBinding">LetSequenceBinding</nt>
+                  such as <code>let $( $<var>A1</var> as <var>T1</var>, $<var>A2</var> as <var>T2</var>, ...
+                     , $<var>A/n</var> as <var>T/n</var> ) as <var>ST</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The sequence type <var>ST</var> is called the <term>declared sequence type</term>.
+                     If there is no declared sequence type, then <code>item()*</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared sequence type <var>ST</var> by applying the <termref def="dt-coercion-rules"/>.
+                     Call the resulting (coerced) value <var>V</var>.</p></item>
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := items-at(<var>V</var>, <var>i</var>)</code>.
+                     That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
+                     is the item <var>V[ i ]</var>, after coercion to the type <var>T/i</var> if specified.
+                     If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
+                     <code>item()?</code>).</p>
+                        <note><p>If <var>i</var> exceeds the length of the sequence <var>V</var>, then
+                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
+                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        <note><p>It is permissible to bind several variables with the same name;
+                        all but the last are shadowed. A useful convention is therefore to bind
+                        items in the sequence that are of no interest to the variable <code>$_</code>:
+                        for example <code>let $( $_, $_, $x ) := <var>EXPR</var></code> effectively
+                        binds <code>$x</code> to the third item in the sequence and causes the first two
+                        items to be ignored.</p></note>
+                     
+                  <example>
+                     <head>Example:</head>
+                     <p>The expression:</p>
+                     <eg>let $( $a, $b as xs:integer, $local:c ) := (2, 4, 6)
+return $a + $b + $local:c</eg>
+                     <p>is expanded to:</p>
+                     <eg>let $temp := (2, 4, 6)
+let $a := fn:items-at($temp, 1)
+let $b as xs:integer := fn:items-at($temp, 2)
+let $local:c := fn:items-at($temp, 3)
+return $a + $b + $local:c</eg>
+                     <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
+                  </example>
+                  <example>
+                     <head>Example:</head>
+                     <p>Consider the element <var>$E</var> := <code>&lt;e A="p q r" B="x y z"/></code>, where
+                     <var>$E</var> has been validated against a schema that defines both attributes
+                     <code>A</code> and <code>B</code> as being lists of strings.</p>
+                     <p>Then the expression:</p>
+                     <eg>let $( $a as xs:string*, $b as xs:string* ) := $E/(@A, @B)</eg>
+                     <p>binds <code>$a</code> to the sequence <code>("p", "q", "r")</code>
+                     and <code>$b</code> to the sequence <code>("x", "y", "z")</code>.
+                     The evaluation of the expression <code>$E/(@A, @B)</code>
+                        returns a sequence of two attribute nodes;
+                     the value of <code>$a</code> is formed by atomizing the first of these
+                     nodes, while <code>$b</code> is formed by atomizing the second.</p>
+                     
+                  </example>
+                  </item>
+                     
+                     
+                </olist>
+            </item>
+            
+            <item>
+               <p>In a <nt def="LetArrayBinding">LetArrayBinding</nt>
+                  such as <code>let $[ $<var>A1</var> as <var>T1</var>, $<var>A2</var> as <var>T2</var>, ...
+                     , $<var>A/n</var> as <var>T/n</var> ] as <var>AT</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The sequence type <var>AT</var> is called the <term>declared array type</term>.
+                     If there is no declared array type, then <code>array(*)</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared array type <var>AT</var> by applying the <termref def="dt-coercion-rules"/>.
+                     A type error <errorref class="TY" code="0004"/> is raised if the result is not
+                        a <termref def="dt-singleton"/> array.
+                     Call the resulting (coerced) value <var>V</var>.</p></item>
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := array:get(<var>V</var>, <var>i</var>, ())</code>.
+                     That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
+                     is the array member <var>V ? i</var>, after coercion to the type <var>T/i</var> if specified.
+                     If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
+                     <code>item()*</code>).</p>
+                        <note><p>If <var>i</var> exceeds the length of the array <var>V</var>, then
+                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
+                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        <note><p>It is permissible to bind several variables with the same name;
+                        all but the last are shadowed. A useful convention is therefore to bind
+                        items in the sequence that are of no interest to the variable <code>$_</code>:
+                        for example <code>let $( $_, $_, $x ) := <var>EXPR</var></code> effectively
+                        binds <code>$x</code> to the third item in the sequence and causes the first two
+                        items to be ignored.</p></note>
+                     
+                  <example>
+                     <head>Example:</head>
+                     <p>The expression:</p>
+                     <eg>let $[ $a, $b as xs:integer, $local:c ] := [ 2, 4, 6 ]
+return $a + $b + $local:c</eg>
+                     <p>is expanded to:</p>
+                     <eg>let $temp := [ 2, 4, 6 ]
+let $a := array:get($temp, 1, ())
+let $b as xs:integer := array:get($temp, 2, ())
+let $local:c := array:get($temp, 3, ())
+return $a + $b + $local:c</eg>
+                     <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
+                  </example>
+                  
+                  </item>
+                     
+                     
+                </olist>
+            </item>
+            
+            <item>
+               <p>In a <nt def="LetMapBinding">LetMapBinding</nt>
+                  such as <code>let ${ $<var>A1</var> as <var>T1</var>, $<var>A2</var> as <var>T2</var>, ...
+                     , $<var>A/n</var> as <var>T/n</var> } as <var>MT</var> := <var>EXPR</var></code>:</p>
+                  <olist>
+                     <item><p>The sequence type <var>MT</var> is called the <term>declared map type</term>.
+                     If there is no declared map type, then <code>map(*)</code> is assumed.</p></item>
+                     <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
+                     to the declared map type <var>MT</var> by applying the <termref def="dt-coercion-rules"/>.
+                     A type error <errorref class="TY" code="0004"/> is raised if the result is not
+                        a <termref def="dt-singleton"/> map.
+                     Call the resulting (coerced) value <var>V</var>.</p></item>
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := map:get(<var>V</var>, "<var>N/i</var>", ())</code>,
+                        where <var>N/i</var> is the local part of the name of the variable <var>A/i</var>.
+                     That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
+                     is the value of the map entry in <var>V</var> whose key is <code>xs:string</code> (or <code>xs:anyURI</code> or <code>xs:untypedAtomic</code>)
+                        equal to the local part of the variable name, after coercion to the type <var>T/i</var> if specified.
+                     If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
+                     <code>item()*</code>).</p>
+                        <note><p>If there is no entry in the map with a key corresponding to the variable
+                           name, then the variable
+                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
+                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        
+                        <note><p>It is not possible to use this mechanism to bind variables to values
+                        in a map unless the keys in the map are strings in the form of <code>NCNames</code>.</p></note>
+                     
+                  <example>
+                     <head>Example:</head>
+                     <p>The expression:</p>
+                     <eg>let ${ $a, $b as xs:integer, $local:c } := { "a": 2, "b": 4, "c": 6, "d": 8 }
+return $a + $b + $local:c</eg>
+                     <p>is expanded to:</p>
+                     <eg>let $temp := { "a": 2, "b": 4, "c": 6 }
+let $a := map:get($temp, "a", ())
+let $b as xs:integer := map:get($temp, "b", ())
+let $local:c := map:get($temp, "c", ())
+return $a + $b + $local:c</eg>
+                     <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
+                  </example>
+                  
+                  </item>
+                     
+                     
+                </olist>
+            </item>
+            
+            
+                        
+             <item><p>The expression in the <nt def="ForLetReturn">ForLetReturn</nt> part 
                   (that is, the following <nt def="LetExpr">LetExpr</nt> or
                   <nt def="ForExpr">ForExpr</nt>, or the <nt def="ExprSingle">ExprSingle</nt> 
                   that follows the <code>return</code> keyword) is
 called the <term>return expression</term>. The result of the let expression is obtained
-by evaluating the <term>return expression</term> with a dynamic context in which the range variable is bound to the
-binding sequence. </p>
+by evaluating the <term>return expression</term> with a dynamic context in which each range variable is bound to the
+corresponding binding sequence. </p>
             </item>
             
            
 
-         </ulist>
+         </olist>
 
          <p>The scope of a variable bound in a let expression is the
             <term>return expression</term>.
