@@ -35517,4 +35517,147 @@ return $array ? descendant::*[. gt 25][1] ? ancestor-or-self::* =!> JNode-value(
       </fos:examples>
    </fos:function>
    
+   <fos:function name="update" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="update" return-type="GNode()?">
+            <fos:arg name="root" type="GNode()?"/>
+            <fos:arg name="select" type="GNode()*"/>
+            <fos:arg name="action" type="fn(GNode()) as item()*"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Updates the contents of a tree of XNodes or JNodes, returning a modified copy.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$input</code> is an empty sequence, the function returns an empty sequence.</p>
+         <p>Informally, the function returns a modified copy of <code>$root</code>, in which
+         any GNodes appearing in the value of <code>$select</code> are modified by applying
+         the function <code>$action</code>.</p>
+         <p>The result of the <code>$action</code> function must be compatible with its input. Specifically,</p>
+         <ulist>
+            <item><p>If the input is an attribute node, the result must be a sequence of zero or more
+            attribute nodes. These replace any existing attribute nodes having the same name; but if two
+            or more replacement attribute nodes on the same element have the same name, then an error is raised.</p></item>
+            <item><p>If the input is an element, text, comment, or processing instruction node, then
+            the result must be a sequence of element, text, comment, or processing instruction nodes.</p></item>
+            <item><p>If the input is a JNode representing an entry in a map (that is, the JNode <var>J</var>
+            has <code>JNode-parent(<var>J</var>) instance of JNode(map(*))</code>), the result
+            must be a map. The entries in this map replace any existing map entries with the same key,
+            but if two or more replacement map entries have the same key, then an error is raised.</p></item>
+            <item><p>If the input is a JNode representing an entry in an array (that is, the JNode <var>J</var>
+            has <code>JNode-parent(<var>J</var>) instance of JNode(array(*))</code>), the result
+            must be an array. The members of this array replace the selected array member.</p></item>
+         </ulist>
+         <note><p>The GNode supplied to the <code>$action</code> function will always be in one of the
+         above categories.</p></note>
+         <p>The effect of the function is equivalent to the following XSLT 4.0 implementation, except
+            for error handling:</p>
+         <eg><![CDATA[<xsl:function name="fn:update" as="GNode()?">
+  <xsl:param name="root" as="GNode()?"/> 
+  <xsl:param name="select" as="GNode()*"/>
+  <xsl:param name="action" as="fn(GNode()) as GNode()*"/>
+  
+  <!-- Function to process an individual GNode. If it is a selected GNode,
+       call the supplied $action function. Otherwise, call fn:update
+       to process it recursively using the same options -->
+  <xsl:variable 
+      name="process" as="fn(GNode()) as GNode()*"
+      select="fn{ if (. intersect $select) 
+                  then $action(.) 
+                  else update(., $select, $action) }"/>
+  
+  <xsl:choose>
+  
+    <!-- Processing for XNodes -->
+    <xsl:when test="$root instance of node()">
+      <xsl:copy select="$root">
+        <xsl:sequence select="$root ! (@*, node()) ! process(.)"/>
+      </xsl:copy>
+    </xsl:when>
+    
+    <!-- Processing for JNodes that wrap maps -->
+    <xsl:when test="$root instance of JNode(map(*))
+       select="map:merge( $root ? child::* ! $process(.) ) => JNode()"/>
+              
+    <!-- Processing for JNodes that wrap arrays -->          
+    <xsl:when test="$root instance of JNode(array(*))
+       select="array:join( $root ? child::* ! $process(.) ) => JNode()"/>
+    
+    <!-- Processing anything else -->
+    <xsl:otherwise select="()"/>
+    
+  </xsl:choose>
+</xsl:function>]]></eg>
+      </fos:rules>
+      <fos:notes>
+         <p>The <code>$select</code> argument identifies those GNodes within
+            the tree rooted at <code>$root</code> that are to be replaced.</p>
+         <p>A GNode selected by the <code>$select</code> argument is effectively ignored if:</p>
+         <ulist>
+            <item><p>it does not not have <code>$root</code> as an ancestor; or</p></item>
+            <item><p>it has an ancestor GNode that is itself selected in <code>$select</code></p></item>
+         </ulist>
+         <p>A dynamic error occurs if the replacement for a selected GNode is unsuitable.
+         For example, an error will arise if an attribute is replaced by an element,
+         or an element by an attribute (unless it happens to be the last attribute or the
+         first element).</p>
+         <p>When updating an XTree, each node in the new tree has new node identity. Although
+         optimizations are always possible, the complexities of handling node identity, type annotations,
+         in-scope namespaces, and parent pointers mean that in practice, it is likely that the function
+         will make a physical copy of the entire tree.</p>
+         <p>By contrast, when updating a JTree, none of these complexities arise, and by using
+         persistent (also known as immutable or functional) data structures, an implementation may well be able
+         to reuse those parts of the JTree that are not affected by changes, meaning that the cost
+         in time and space will be proportional to the extent of the change, not to the size
+         of the input tree.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $tree := parse-xml('<a><b v="1"/><b v="2"/></a>')
+return update($tree, $tree//@v, fn{.+1})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[parse-xml('<a><b v="2"/><b v="3"/></a>]]></eg></fos:result>
+               <fos:postamble>Modifies the value of selected attributes.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $tree := parse-xml('<a><b v="1"/><b v="2"/></a>')
+return update($tree, $tree//@v, fn{()})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[parse-xml('<a><b/><b/></a>]]></eg></fos:result>
+               <fos:postamble>Deletes selected attributes.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $tree := <a><b v="1"/><b v="2"/></a>
+return update($tree, $tree//@v[. gt 1], fn{., attribute #new {'true'})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[<a><b v="1"/><b v="2" new="true"/></a>]]></eg></fos:result>
+               <fos:postamble>Inserts new attributes under specified conditions.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $tree := <a><b/><b>12</b></a>
+return update($tree, $tree//b[empty(child::node)], fn{., text {'default'})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[<a><b>default</b><b>12</b></a>]]></eg></fos:result>
+               <fos:postamble>Expands empty elements with default values.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $tree := {1: ["a", "b", "c"], 2: ["x", "y", "z"]}
+return update($tree, $tree/?*?2, fn{[upper-case(.)]})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[{1: ["a", "B", "c"], 2: ["x", "Y", "z"]}]]></eg></fos:result>
+               <fos:postamble>Updates selected members of selected arrays.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[let $tree := {1: ["a", "b", "c"], 2: ["x", "y", "z"]}
+return update($tree, $tree/?*?2, fn{[]})]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[{1: ["a", "c"], 2: ["x", "z"]}]]></eg></fos:result>
+               <fos:postamble>Deletes selected members of selected arrays.</fos:postamble>
+            </fos:test>
+ 
+         </fos:example>
+         
+      </fos:examples>
+   </fos:function>
+   
 </fos:functions>
