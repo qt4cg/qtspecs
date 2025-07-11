@@ -2748,7 +2748,7 @@
             </span>
           </a>
           <xsl:if test="$more-toc">
-            <span class="exptoc collapsed">&#x2009;▶</span>
+            <span class="exptoc collapsed"></span>
           </xsl:if>
         </summary>
         <xsl:if test="$more-toc">
@@ -2780,7 +2780,7 @@
             </span>
           </a>
           <xsl:if test="$more-toc">
-            <span class="exptoc collapsed">&#x2009;▶</span>
+            <span class="exptoc collapsed"></span>
           </xsl:if>
         </summary>
         <xsl:if test="$more-toc">
@@ -2812,7 +2812,7 @@
             </span>
           </a>
           <xsl:if test="$more-toc">
-            <span class="exptoc collapsed">&#x2009;▶</span>
+            <span class="exptoc collapsed"></span>
           </xsl:if>
         </summary>
         <xsl:if test="$more-toc">
@@ -2844,7 +2844,7 @@
             </span>
           </a>
           <xsl:if test="$more-toc">
-            <span class="exptoc collapsed">&#x2009;▶</span>
+            <span class="exptoc collapsed"></span>
           </xsl:if>
         </summary>
         <xsl:if test="$more-toc">
@@ -2876,7 +2876,7 @@
             </span>
           </a>
           <xsl:if test="$more-toc">
-            <span class="exptoc collapsed">&#x2009;▶</span>
+            <span class="exptoc collapsed"></span>
           </xsl:if>
         </summary>
         <xsl:if test="$more-toc">
@@ -2923,7 +2923,7 @@
             </span>
           </a>
           <xsl:if test="$more-toc">
-            <span class="exptoc collapsed">&#x2009;▶</span>
+            <span class="exptoc collapsed"></span>
           </xsl:if>
         </summary>
         <xsl:if test="$more-toc">
