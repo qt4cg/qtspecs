@@ -19791,9 +19791,26 @@ processing with JSON processing.</p>
                   </change>
                   <change issue="1651" PR="1703" date="2025-01-14">The order of key-value
                      pairs in the map constructor is now retained in the constructed map.</change>
+                  <change issue="2003" >A general expression is allowed within a map
+                     constructor; this facilitates the creation of maps in which the
+                     presence or absence of particular keys is decided dynamically.</change>
                </changes>
 
                <p>A map can be created using a <nt def="MapConstructor">MapConstructor</nt>.</p>
+               
+               <p>Examples are:</p>
+               
+               <eg>{ "a": 1, "b", 2 }</eg>
+               
+               <p>which constructs a map with two entries, and</p>
+               
+               <eg>{ "a": 1, if ($condition) { map{ "b", 2 } } }</eg>
+               
+               <p>which constructs a map having either one or two entries depending on the
+               value of <code>$condition</code>.</p>
+               
+               <p>Both the keys and the values in a map constructor can be supplied as expressions
+               rather than as constants.</p>
 
                <scrap>
                   <prodrecap ref="MapConstructor"/>
@@ -19813,78 +19830,37 @@ processing with JSON processing.</p>
                   <p>Although the grammar allows a <nt def="MapConstructor">MapConstructor</nt>
                   to appear within an <nt def="EnclosedExpr">EnclosedExpr</nt> (that is, between
                   curly brackets), this may be confusing to readers, and using the <code>map</code>
-                  keyword in such cases may improve clarity. In any event, if the <nt def="EnclosedExpr">EnclosedExpr</nt>
+                  keyword in such cases may improve clarity. The keyword <code>map</code> is used in the
+                  second example above to avoid any confusion between the braces required for the
+                  <code>then</code> part of the conditional expression, and the braces
+                  required for the inner map constructor.</p>
+                  
+                  <p>If the <nt def="EnclosedExpr">EnclosedExpr</nt>
                   appears in a context such as a <nt def="StringTemplate">StringTemplate</nt>,
                   the two adjacent left opening braces must at least be separated by whitespace.</p>
                </note>
 
-
-               <note>
-                  <p>
-    In some circumstances, it is necessary to include whitespace before or after the colon
-    of a <nt
-                        def="MapConstructorEntry"
-                     >MapConstructorEntry</nt> to ensure that it is parsed as intended.
-    </p>
-
-                  <p>
-    For instance, consider the expression <code>{a:b}</code>.
-    Although it matches the EBNF for MapConstructor
-    (with <code>a</code> matching MapKeyExpr and <code>b</code> matching MapValueExpr),
-    the "longest possible match" rule requires that <code>a:b</code> be parsed as a QName,
-    which results in a syntax error.
-    Changing the expression to <code>{a :b}</code> or <code>{a: b}</code>
-    will prevent this, resulting in the intended parse.
-    </p>
-
-                  <p>Similarly, consider these three expressions:</p>
-                  <eg><![CDATA[
-{a:b:c}
-{a:*:c}
-{*:b:c}]]></eg>
-                  <p>
-    In each case, the expression matches the EBNF in two different ways,
-    but the “longest possible match” rule forces the parse in which
-    the MapKeyExpr is <code>a:b</code>, <code>a:*</code>, or <code>*:b</code> (respectively)
-    and the MapValueExpr is <code>c</code>.
-    To achieve the alternative parse
-    (in which the MapKeyExpr is merely <code>a</code> or <code>*</code>),
-    insert whitespace before and/or after the first colon.
-    </p>
-
-                  <p>See <specref ref="lexical-structure"/>.</p>
-               </note>
-
-               <p>The value of the expression (whether or not the <code>map</code> keyword is present)
-                  is a map whose entries
-    correspond to the key-value pairs obtained by
-    evaluating the successive <nt
-                     def="MapKeyExpr">MapKeyExpr</nt> and
-    <nt def="MapValueExpr"
-                     >MapValueExpr</nt> expressions.</p>
-               <p>Each <nt def="MapKeyExpr"
-                     >MapKeyExpr</nt> expression is evaluated
-    and atomized; a 
-
+               <p>When a <nt def="MapConstructorEntry">MapConstructorEntry</nt> is written as two instances of
+               <nt def="ExprSingle">ExprSingle</nt> separated by a colon, the first expression
+               is evaluated and atomized to form a key, and the second expression is evaluated to form the
+               corresponding value. The result is a <xtermref spec="DM40" ref="dt-single-entry-map"/>
+               which will be merged into the constructed map, as described below.
+               A <termref def="dt-type-error">type error</termref>
+                  <errorref class="TY" code="0004"/> occurs if the result of the first
+                  expression (after atomization) is not a single atomic item. The result
+               of the second expression is used <emph>as is</emph>.</p>
+               
+               <p>When the <nt def="MapConstructorEntry">MapConstructorEntry</nt> is written as a
+               single instance of <nt def="ExprSingle">ExprSingle</nt> with no colon, it must evaluate
+               to a sequence of zero or more map items (<errorref class="TY" code="0004"/>). 
+                  These map items will be merged into the constructed map, as described below.</p>
+               
+               <p>Each contained <nt def="MapConstructorEntry">MapConstructorEntry</nt> thus
+                  delivers zero or more maps, and the result of the map constructor is a new map
+                  obtained by merging these component maps, in order, as if by the <function>map:merge</function>
+                  function.</p>
     
-    <termref
-                     def="dt-type-error">type error</termref>
-                  <errorref class="TY" code="0004"
-                     /> occurs if the result is
-    not a single atomic item.
-
-      The associated value is the
-    result of evaluating the corresponding
-    <nt
-                     def="MapValueExpr">MapValueExpr</nt>.
-
-    If the <nt def="MapValueExpr"
-                     >MapValueExpr</nt> evaluates to a node, the
-    associated value is the node itself, not a new node with the same
-    values.
-
-    
-                  <termdef id="dt-same-key" term="same key"
+                  <p><termdef id="dt-same-key" term="same key"
                         >Two atomic items <code>K1</code> and
     <code>K2</code> have the <term>same key value</term> if
     
@@ -19927,6 +19903,37 @@ processing with JSON processing.</p>
 }]]></eg>
 
       </example>
+               
+     <example>
+         <head>Constructing a map with conditional entries</head>
+
+               <p>The following expression constructs a map with either five or seven entries,
+                  depending on a supplied condition:</p>
+               <eg><![CDATA[
+{
+  "Mo" : "Monday",
+  "Tu" : "Tuesday",
+  "We" : "Wednesday",
+  "Th" : "Thursday",
+  "Fr" : "Friday",
+  if ($include-weekends) {
+    { "Sa" : "Saturday",
+      "Su" : "Sunday"
+    }
+  }
+}]]></eg>
+
+      </example>
+               <example>
+         <head>Constructing a map to index nodes</head>
+
+               <p>The following expression (which uses two nested map constructors)
+                  constructs a map that indexes employees by the value 
+                  of their <code>@id</code> attribute:</p>
+                  
+               <eg>{ //employee ! {@id, .} }</eg>
+
+      </example>
       <example>
          <head>Constructing nested maps</head>
                
@@ -19967,9 +19974,47 @@ processing with JSON processing.</p>
                value can be replaced with an expression.</p></note>
       </example>
                
-               <p>Both the keys and the values in a map constructor can be supplied as expressions
-               rather than as constants; the number of entries in the map, however, is fixed.
-               There are several functions that can be used to construct maps with a variable
+               <note>
+                  <p>
+    In some circumstances, it is necessary to include whitespace before or after the colon
+    of a <nt
+                        def="MapConstructorEntry"
+                     >MapConstructorEntry</nt> to ensure that it is parsed as intended.
+    </p>
+
+                  <p>
+    For instance, consider the expression <code>{a:b}</code>.
+    Although it matches the EBNF for MapConstructor
+    (with <code>a</code> matching MapKeyExpr and <code>b</code> matching MapValueExpr),
+    the "longest possible match" rule requires that <code>a:b</code> be parsed as a QName,
+    which results in a syntax error.
+    Changing the expression to <code>{a :b}</code> or <code>{a: b}</code>
+    will prevent this, resulting in the intended parse.
+    </p>
+
+                  <p>Similarly, consider these three expressions:</p>
+                  <eg><![CDATA[
+{a:b:c}
+{a:*:c}
+{*:b:c}]]></eg>
+                  <p>
+    In each case, the expression matches the EBNF in two different ways,
+    but the “longest possible match” rule forces the parse in which
+    the MapKeyExpr is <code>a:b</code>, <code>a:*</code>, or <code>*:b</code> (respectively)
+    and the MapValueExpr is <code>c</code>.
+    To achieve the alternative parse
+    (in which the MapKeyExpr is merely <code>a</code> or <code>*</code>),
+    insert whitespace before and/or after the first colon.
+    </p>
+
+                  <p>See <specref ref="lexical-structure"/>.</p>
+               </note>
+
+               
+               
+               
+     <note>        
+               <p>There are also several functions that can be used to construct maps with a variable
                number of entries:</p>
                
                <ulist>
@@ -19995,6 +20040,7 @@ processing with JSON processing.</p>
                   <item><p>The way in which duplicate keys are handled, and </p></item>
                   <item><p>The ordering of entries in the resulting map.</p></item>
                </ulist>
+     </note>  
 
             </div4>
             <div4 id="id-map-lookup">
