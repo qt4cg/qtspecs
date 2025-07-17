@@ -2310,6 +2310,145 @@ return $box?expand(2)?perimeter()</eg>
      in which the <code>area</code> field holds some different function: while the syntax imitates
      that of object-oriented languages, there is no encapsulation.</p></note>
     </div3>
+    
+    <div3 id="id-atomic-set-example">
+               <head>Example: Defining an Atomic Set</head>
+               
+               <p>This example demonstrates an XQuery library module that provides a new data type
+               to manipulate sets of atomic items.</p>
+               
+               <p>A query that incorporates this module (by referencing
+               it in an <code>import module</code> declaration) can use constructs such as:</p>
+               
+               <ulist>
+                  <item><p>
+                     <eg><![CDATA[declare variable $empty-set as set:atomic-set
+    := set:build(());]]></eg>
+                  </p></item>
+                  
+                  <item><p>
+                     <eg><![CDATA[declare variable $evens as set:atomic-set
+    := set:build((1 to 100)[. mod 2 = 0]);]]></eg>
+                  </p></item>
+                  
+                  <item><p>
+                     <eg><![CDATA[declare variable $odds as set:atomic-set
+    := set:build((1 to 100)) ? except($evens)]]></eg>
+                  </p></item>
+                  
+                  <item><p>
+                     <eg><![CDATA[declare function my:is-even ($n as xs:integer) as xs:boolean {
+    $evens ? contains($n)
+};]]></eg>
+                  </p></item>
+                  
+               </ulist>
+               
+               <p>Here is the implementation of the package. It relies heavily
+               on the use of the function annotation <code>%method</code>, which
+               gives a function item contained in a map access to the containing
+               map: methods are described in <specref ref="id-methods"/>.</p>
+               
+               <eg><![CDATA[
+module namespace set = "http://qt4cg.org/atomic-set";
+   
+   (:
+      This package defines a type set:atomic-set which represents
+      a set of distinct atomic items. Atomic items are considered
+      distinct based on the comparison function fn:atomic-equal.
+      
+      An instance of an atomic set can be constructed using a function
+      call such as set:build((1, 3, 5, 7, 9)).
+      
+      If $A and $B are instances of set:atomic-set, then they
+      can be manipulated using methods including:
+      
+      $A?size() - returns the number of items in the set
+      $A?empty() - returns true if the set is empty
+      $A?contains($k) - determines whether $k is a member of the set
+      $A?contains-all($B) - returns true if $B is a subset of $A
+      $A?values() - returns the items in $A, as a sequence
+      $A?add($k) - returns a new atomic set containing an additional item
+      $A?remove($k) - returns a new atomic set in which the given item is absent
+      $A?union($B) - returns a new atomic set holding the union of $A and $B
+      $A?intersect($B) - returns a new atomic set holding the intersection of $A and $B
+      $A?except($B) - returns a new atomic set holding the difference of $A and $B
+   :)
+   
+   declare %public record set:atomic-set (
+       _data        as map(xs:anyAtomicType, xs:boolean),
+       size         as %method fn() as xs:integer,
+       empty        as %method fn() as xs:boolean,
+       contains     as %method fn($value as xs:anyAtomicType) as xs:boolean,
+       contains-all as %method fn($value as set:atomic-set) as xs:boolean,
+       add          as %method fn($item as xs:anyAtomicType) as set:atomic-set,
+       remove       as %method fn($item as xs:anyAtomicType) as set:atomic-set,
+       union        as fn($value as set:atomic-set) as set:atomic-set,
+       intersect    as fn($value as set:atomic-set) as set:atomic-set,
+       except       as fn($value as set:atomic-set) as set:atomic-set,
+       * );
+
+   declare %private variable DATA := "'_data'"; 
+   
+   (:
+      The private function set:replaceData processes the internal map
+      by applying a supplied function, and returns a new atomic set
+      with the resulting internal map 
+   :)
+   
+   declare %private function set:replaceData (
+       $input as set:atomic-set,
+       $update as fn(map(*)) as map(*)) as map(xs:anyAtomicType, xs:boolean) {
+       
+       map:put($input, $DATA, $update($input?$DATA))
+   }
+   
+   declare %public function set:build (
+       $values as xs:anyAtomicType* := ()) {
+       
+       {
+         _data:
+             map:build($values, values:=true#0, {'duplicates': 'use-first'}),
+         size:
+             %method fn() as xs:integer 
+                     { map:size(?$DATA) },
+         empty:
+             %method fn() as xs:boolean 
+                     { map:empty(?$DATA) },
+         contains:
+             %method fn($value as xs:anyAtomicType) as xs:boolean 
+                     { map:contains(?$DATA, $value) },
+         contains-all:
+             %method fn($other as set:atomic-set) as xs:boolean 
+                     { every($value, map:contains(?$DATA, ?)) },
+         values:
+            "%method fn() as xs:anyAtomicType* 
+                     { keys(?$DATA) }"
+         add:
+             %method fn($value as xs:anyAtomicType) as xs:anyAtomicType*
+                     { set:replaceData(., map:put(?, $value, true())) },
+         remove:
+             %method fn($value as xs:anyAtomicType) as xs:anyAtomicType* 
+                     { set:replaceData(., map:remove(?, $value)) },
+         union:
+             %method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., fn($this) {map:merge(($this, $other?$DATA),
+                                                    {'duplicates': 'use-first'})})
+                     },
+         intersect:
+             %method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:filter(?, $other?contains)) },
+         except=
+             %method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:remove(?, $other?values())) }
+      }
+   };]]></eg>
+               
+               <ednote><edtext>The example is not yet tested. It could also be written
+               using the new xsl:record instruction, which might be more concise.</edtext></ednote>
+            </div3>
+    
+    
   </div2>
   
   
