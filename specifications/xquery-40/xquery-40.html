@@ -1343,6 +1343,11 @@ Michael Sperberg-McQueen&nbsp;(1954–2024).</p>
                                     <summary><a href="#id-functions-as-fields"><span class="secno">5.20.3 </span><span class="content">Using Methods in Records</span></a></summary>
                                  </details>
                               </li>
+                              <li>
+                                 <details>
+                                    <summary><a href="#id-atomic-set-example"><span class="secno">5.20.4 </span><span class="content">Example: Defining an Atomic Set</span></a></summary>
+                                 </details>
+                              </li>
                            </ol>
                         </details>
                      </li>
@@ -31681,6 +31686,151 @@ return $box?expand(2)?perimeter()</pre>
      that of object-oriented languages, there is no encapsulation.</p>
                   </div>
                </div>
+               <div class="div3">
+                  
+                  <h4><a id="id-atomic-set-example"></a>5.20.4 <a href="#id-atomic-set-example" style="text-decoration: none">Example: Defining an Atomic Set</a></h4>
+                  <p>This example demonstrates an XQuery library module that provides a new data type
+               to manipulate sets of atomic items.</p>
+                  <p>A query that incorporates this module (by referencing
+               it in an <code>import module</code> declaration) can use constructs such as:</p>
+                  <ul>
+                     <li>
+                        <div class="exampleInner">
+                           <pre>declare variable $empty-set as set:atomic-set
+    := set:build(());</pre>
+                        </div>
+                     </li>
+                     <li>
+                        <div class="exampleInner">
+                           <pre>declare variable $evens as set:atomic-set
+    := set:build((1 to 100)[. mod 2 = 0]);</pre>
+                        </div>
+                     </li>
+                     <li>
+                        <div class="exampleInner">
+                           <pre>declare variable $odds as set:atomic-set
+    := set:build((1 to 100)) ? except($evens)</pre>
+                        </div>
+                     </li>
+                     <li>
+                        <div class="exampleInner">
+                           <pre>declare function my:is-even ($n as xs:integer) as xs:boolean {
+    $evens ? contains($n)
+};</pre>
+                        </div>
+                     </li>
+                  </ul>
+                  <p>Here is the implementation of the package. It relies heavily
+               on the use of the function annotation <code>%method</code>, which
+               gives a function item contained in a map access to the containing
+               map: methods are described in <a href="#id-methods"><b>4.5.6.1 Methods</b></a>.</p>
+                  <div class="exampleInner">
+                     <pre>
+module namespace set = "http://qt4cg.org/atomic-set";
+   
+   (:
+      This package defines a type set:atomic-set which represents
+      a set of distinct atomic items. Atomic items are considered
+      distinct based on the comparison function fn:atomic-equal.
+      
+      An instance of an atomic set can be constructed using a function
+      call such as set:build((1, 3, 5, 7, 9)).
+      
+      If $A and $B are instances of set:atomic-set, then they
+      can be manipulated using methods including:
+      
+      $A?size() - returns the number of items in the set
+      $A?empty() - returns true if the set is empty
+      $A?contains($k) - determines whether $k is a member of the set
+      $A?contains-all($B) - returns true if $B is a subset of $A
+      $A?values() - returns the items in $A, as a sequence
+      $A?add($k) - returns a new atomic set containing an additional item
+      $A?remove($k) - returns a new atomic set in which the given item is absent
+      $A?union($B) - returns a new atomic set holding the union of $A and $B
+      $A?intersect($B) - returns a new atomic set holding the intersection of $A and $B
+      $A?except($B) - returns a new atomic set holding the difference of $A and $B
+   :)
+   
+   declare %public record set:atomic-set (
+       _data        as map(xs:anyAtomicType, xs:boolean),
+       size         as %method fn() as xs:integer,
+       empty        as %method fn() as xs:boolean,
+       contains     as %method fn($value as xs:anyAtomicType) as xs:boolean,
+       contains-all as %method fn($value as set:atomic-set) as xs:boolean,
+       add          as %method fn($item as xs:anyAtomicType) as set:atomic-set,
+       remove       as %method fn($item as xs:anyAtomicType) as set:atomic-set,
+       union        as fn($value as set:atomic-set) as set:atomic-set,
+       intersect    as fn($value as set:atomic-set) as set:atomic-set,
+       except       as fn($value as set:atomic-set) as set:atomic-set,
+       * );
+
+   declare %private variable DATA := "'_data'"; 
+   
+   (:
+      The private function set:replaceData processes the internal map
+      by applying a supplied function, and returns a new atomic set
+      with the resulting internal map 
+   :)
+   
+   declare %private function set:replaceData (
+       $input as set:atomic-set,
+       $update as fn(map(*)) as map(*)) as map(xs:anyAtomicType, xs:boolean) {
+       
+       map:put($input, $DATA, $update($input?$DATA))
+   }
+   
+   declare %public function set:build (
+       $values as xs:anyAtomicType* := ()) {
+       
+       {
+         _data:
+             map:build($values, values:=true#0, {'duplicates': 'use-first'}),
+         size:
+             %method fn() as xs:integer 
+                     { map:size(?$DATA) },
+         empty:
+             %method fn() as xs:boolean 
+                     { map:empty(?$DATA) },
+         contains:
+             %method fn($value as xs:anyAtomicType) as xs:boolean 
+                     { map:contains(?$DATA, $value) },
+         contains-all:
+             %method fn($other as set:atomic-set) as xs:boolean 
+                     { every($value, map:contains(?$DATA, ?)) },
+         values:
+            "%method fn() as xs:anyAtomicType* 
+                     { keys(?$DATA) }"
+         add:
+             %method fn($value as xs:anyAtomicType) as xs:anyAtomicType*
+                     { set:replaceData(., map:put(?, $value, true())) },
+         remove:
+             %method fn($value as xs:anyAtomicType) as xs:anyAtomicType* 
+                     { set:replaceData(., map:remove(?, $value)) },
+         union:
+             %method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., fn($this) {map:merge(($this, $other?$DATA),
+                                                    {'duplicates': 'use-first'})})
+                     },
+         intersect:
+             %method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:filter(?, $other?contains)) },
+         except=
+             %method fn($other as set:atomic-set) as set:atomic-set 
+                     { set:replaceData(., map:remove(?, $other?values())) }
+      }
+   };</pre>
+                  </div>
+                  <table class="ednote" caption="Editorial note">
+                     <tr>
+                        <td style="text-align: left; vertical-align:top; width: 50%;"><b>Editorial note</b></td>
+                        <td style="text-align: right; vertical-align:top; width: 50%;">&nbsp;</td>
+                     </tr>
+                     <tr style="text-align: left; vertical-align: top;">
+                        <td colspan="2">The example is not yet tested. It could also be written
+                           using the new xsl:record instruction, which might be more concise.</td>
+                     </tr>
+                  </table>
+               </div>
             </div>
             <div class="div2">
                
@@ -34867,7 +35017,7 @@ parent. </p>
                <div class="div3">
                   
                   <h4><a id="terminal-symbols"></a>A.3.1 <a href="#terminal-symbols" style="text-decoration: none">Terminal Symbols</a></h4>
-                  <a id="d3e54348"></a><table class="scrap">
+                  <a id="d3e54392"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xquery40-IntegerLiteral"></a><code>IntegerLiteral</code></td>
@@ -35201,7 +35351,7 @@ parent. </p>
                   </table>
                   <p>The following symbols are used only in the definition of terminal symbols; they are not
         terminal symbols in the grammar of <a href="#id-grammar"><b>A.1 EBNF</b></a>.</p>
-                  <a id="d3e54676"></a><table class="scrap">
+                  <a id="d3e54720"></a><table class="scrap">
                      <tbody>
                         <tr style="vertical-align:baseline;">
                            <td><a id="prod-xquery40-Digits"></a><code>Digits</code></td>
