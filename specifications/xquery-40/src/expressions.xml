@@ -17985,21 +17985,31 @@ Specifically, any separating comma is replaced by <code>let</code>.</p>
                      <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
                      to the declared sequence type <var>ST</var> by applying the <termref def="dt-coercion-rules"/>.
                      Call the resulting (coerced) value <var>V</var>.</p></item>
-                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>-1)
                      is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
                         of the form <code>let <var>A/i</var> as <var>T/i</var> := items-at(<var>V</var>, <var>i</var>)</code>.
                      That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
                      is the item <var>V[ i ]</var>, after coercion to the type <var>T/i</var> if specified.
                      If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
-                     <code>item()?</code>).</p>
-                        <note><p>If <var>i</var> exceeds the length of the sequence <var>V</var>, then
+                     <code>item()?</code>).</p></item>
+                     <item><p>The last variable <var>A/n</var> 
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/n</var> as <var>T/n</var> := subsequence(<var>V</var>, <var>n</var>)</code>.
+                        That is, the last variable is bound to the rest of the binding sequence (or to the empty sequence
+                        if the binding sequence has fewer items than the number of variables).
+                     </p>
+                     </item>
+                  </olist>
+               
+                        <note><p>For any variable <var>A/i</var>, including the last, 
+                           if <var>i</var> exceeds the length of the sequence <var>V</var>, then
                         <var>A/i</var> is bound to an empty sequence. This will cause a type error if
                         type <var>T/i</var> does not permit an empty sequence.</p></note>
                         <note><p>It is permissible to bind several variables with the same name;
                         all but the last are occluded. A useful convention is therefore to bind
                         items in the sequence that are of no interest to the variable <code>$_</code>:
                         for example <code>let $( $_, $_, $x ) := <var>EXPR</var></code> effectively
-                        binds <code>$x</code> to the third item in the sequence and causes the first two
+                        binds <code>$x</code> to the subsequence starting at the third item, while causing the first two
                         items to be ignored.</p></note>
                      
                   <example>
@@ -18011,7 +18021,7 @@ return $a + $b + $local:c</eg>
                      <eg>let $temp := (2, 4, 6)
 let $a := fn:items-at($temp, 1)
 let $b as xs:integer := fn:items-at($temp, 2)
-let $local:c := fn:items-at($temp, 3)
+let $local:c := fn:subsequence($temp, 3)
 return $a + $b + $local:c</eg>
                      <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
                   </example>
@@ -18030,10 +18040,22 @@ return $a + $b + $local:c</eg>
                      nodes, while <code>$b</code> is formed by atomizing the second.</p>
                      
                   </example>
-                  </item>
-                     
-                     
-                </olist>
+               <example>
+                     <head>Example:</head>
+                     <p>Consider transforming the string <code>"Nf3 Nf6 c4 g6 Nc3 Bg7 d4 O-O Bf4 d5"</code>
+                     (notation for the start of a chess game) to the form 
+                     <code>(["Nf3", "Nf6",] ["c4", "g6"], [ "Nc3", "Bg7"], [ "d4", "O-O"], ["Bf4", "d5"])</code>.
+                     This can be achieved as follows:</p>
+                     <eg>declare function local:grouped-moves($moves) {
+   if (exists($moves)) {
+     let $($m1, $m2, $rest) := $moves
+     return [$m1, $m2], local:grouped-moves($rest)
+  }
+};
+local:grouped-moves(tokenize("Nf3 Nf6 c4 g6 Nc3 Bg7 d4 O-O Bf4 d5"))</eg>
+
+                  </example>
+                  
             </item>
             
             <item>
@@ -18050,14 +18072,13 @@ return $a + $b + $local:c</eg>
                      Call the resulting (coerced) value <var>V</var>.</p></item>
                      <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
                      is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
-                        of the form <code>let <var>A/i</var> as <var>T/i</var> := array:get(<var>V</var>, <var>i</var>, ())</code>.
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := array:get(<var>V</var>, <var>i</var>)</code>.
                      That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
                      is the array member <var>V ? i</var>, after coercion to the type <var>T/i</var> if specified.
                      If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
                      <code>item()*</code>).</p>
                         <note><p>If <var>i</var> exceeds the length of the array <var>V</var>, then
-                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
-                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        an error <xerrorref spec="FO" class="AR" code="0001"/> is raised.</p></note>
                         <note><p>It is permissible to bind several variables with the same name;
                         all but the last are occluded. A useful convention is therefore to bind
                         items in the sequence that are of no interest to the variable <code>$_</code>:
@@ -18073,7 +18094,7 @@ return $a + $b + $local:c</eg>
                      <p>is expanded to:</p>
                      <eg>let $temp := [ 2, 4, 6 ]
 let $a := array:get($temp, 1, ())
-let $b as xs:integer := array:get($temp, 2, ())
+let $b as xs:integer := array:get($temp, 2)
 let $local:c := array:get($temp, 3, ())
 return $a + $b + $local:c</eg>
                      <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
@@ -20035,13 +20056,21 @@ Specifically, any separating comma is replaced by <code>let</code>.</p>
                      <item><p>The expression <var>EXPR</var> is evaluated, and its value is converted
                      to the declared sequence type <var>ST</var> by applying the <termref def="dt-coercion-rules"/>.
                      Call the resulting (coerced) value <var>V</var>.</p></item>
-                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
+                     <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>-1)
                      is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
                         of the form <code>let <var>A/i</var> as <var>T/i</var> := items-at(<var>V</var>, <var>i</var>)</code>.
                      That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
                      is the item <var>V[ i ]</var>, after coercion to the type <var>T/i</var> if specified.
                      If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
-                     <code>item()?</code>).</p>
+                     <code>item()?</code>).</p></item>
+                     <item><p>The last variable <var>A/n</var> 
+                     is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
+                        of the form <code>let <var>A/n</var> as <var>T/n</var> := subsequence(<var>V</var>, <var>n</var>)</code>.
+                        That is, the last variable is bound to the rest of the binding sequence (or to the empty sequence
+                        if the binding sequence has fewer items than the number of variables).
+                     </p>
+                     </item>
+                  </olist>
                         <note><p>If <var>i</var> exceeds the length of the sequence <var>V</var>, then
                         <var>A/i</var> is bound to an empty sequence. This will cause a type error if
                         type <var>T/i</var> does not permit an empty sequence.</p></note>
@@ -20061,7 +20090,7 @@ return $a + $b + $local:c</eg>
                      <eg>let $temp := (2, 4, 6)
 let $a := fn:items-at($temp, 1)
 let $b as xs:integer := fn:items-at($temp, 2)
-let $local:c := fn:items-at($temp, 3)
+let $local:c := fn:subsequence($temp, 3)
 return $a + $b + $local:c</eg>
                      <p>where <code>$temp</code> is some variable name that is otherwise unused.</p>
                   </example>
@@ -20080,10 +20109,8 @@ return $a + $b + $local:c</eg>
                      nodes, while <code>$b</code> is formed by atomizing the second.</p>
                      
                   </example>
-                  </item>
-                     
-                     
-                </olist>
+                  
+                  
             </item>
             
             <item>
@@ -20100,14 +20127,13 @@ return $a + $b + $local:c</eg>
                      Call the resulting (coerced) value <var>V</var>.</p></item>
                      <item><p>Each variable <var>A/i</var> (for <var>i</var> in 1 to <var>n</var>)
                      is effectively replaced by a <nt def="LetValueBinding">LetValueBinding</nt>
-                        of the form <code>let <var>A/i</var> as <var>T/i</var> := array:get(<var>V</var>, <var>i</var>, ())</code>.
+                        of the form <code>let <var>A/i</var> as <var>T/i</var> := array:get(<var>V</var>, <var>i</var>)</code>.
                      That is, a <term>range variable</term> named <var>A/i</var> is declared, whose <term>binding sequence</term>
                      is the array member <var>V ? i</var>, after coercion to the type <var>T/i</var> if specified.
                      If <var>T/i</var> is absent, no further coercion takes place (the default is effectively
                      <code>item()*</code>).</p>
                         <note><p>If <var>i</var> exceeds the length of the array <var>V</var>, then
-                        <var>A/i</var> is bound to an empty sequence. This will cause a type error if
-                        type <var>T/i</var> does not permit an empty sequence.</p></note>
+                        a dynamic error <xerrorref spec="FO" class="AR" code="0001"/> is raised.</p></note>
                         <note><p>It is permissible to bind several variables with the same name;
                         all but the last are occluded. A useful convention is therefore to bind
                         items in the sequence that are of no interest to the variable <code>$_</code>:
