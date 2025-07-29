@@ -12081,21 +12081,31 @@ return if (every $r in $R satisfies $r instance of gnode())
                   is equal to one of the values (necessarily an <code>xs:QName</code>)
                   present in the atomized value of the selector expression.</p>
                
-               <p>That is, if <code>$N</code> is an XNode, then 
-                  <code>$N/<var>axis</var>::get(<var>EXPR</var>)</code> returns the result
-               of <code>$N/<var>axis</var>::*[some(data(<var>EXPR</var>), atomic-equal(?, node-name()))]</code>,
-               with the qualification that <var>EXPR</var> must not depend on the focus.</p>
+               <p>That is, if the context item is an XNode, then 
+                  <code><var>axis</var>::get(<var>EXPR</var>)</code> returns the result
+               of the expression:</p>
+               
+               <eg><![CDATA[let $selector := fn(){ data(<var>EXPR</var>) }()
+return <var>axis</var>::*[some($selector, atomic-equal(?, node-name()))]
+]]></eg>
                
                <note><p>It is not an error if the atomized value of <var>EXPR</var>
-               includes atomic values that are not <code>xs:QName</code> values:
+               includes atomic items that are not <code>xs:QName</code> values:
                such values are effectively ignored.</p></note>
                
-     
+               <note><p>Unnamed nodes (such as text nodes) will never be selected</p></note>
                
-               <p>For example, <code>child::get(#body, #x:body)</code> selects
-               an element whose name is one of the QName values <code>body</code>
+               <note><p>The result is in document order. The order of items in
+               the result of the selector expression is immaterial.</p></note>
+                         
+               <p>For example, <code>child::get((#body, #x:body))</code> selects
+               all child elements whose name is one of the QName values <code>body</code>
                or <code>x:body</code>. Note that the evaluation of QName literals
                is not sensitive to the default namespace for elements and types.</p>
+               
+               <p>A further example: <code>descendant::(get(#para) | text())</code> returns
+               all descendants of the context node that are either elements named
+               <code>para</code> (in no namespace) or text nodes; the results are in document order.</p>
             </div4>
             
             <div4 id="id-selectors-for-JNodes">
@@ -12112,7 +12122,8 @@ return if (every $r in $R satisfies $r instance of gnode())
                is absent).</p>
                
                <p>If the selector takes the form of an <code>NCName</code>, then it matches
-               every JNode whose <term>·selector·</term> property is a string (or <code>xs:anyURI</code>
+               every JNode whose <term>·selector·</term> property is a atomic item
+                  (necessarily an <code>xs:string</code>, <code>xs:anyURI</code>
                   or <code>xs:untypedAtomic</code> value) that is equal to this <code>NCName</code>
                   under the rules of the <function>fn:atomic-equal</function> function.</p>
                
@@ -12129,12 +12140,26 @@ return if (every $r in $R satisfies $r instance of gnode())
                   present in the atomized value of the selector expression, under the rules
                   of the <function>atomic-equal</function> function.</p>
                
-               <p>That is, if <code>$J</code> is a JNode, then 
-                  <code>$J/<var>axis</var>::get(<var>EXPR</var>)</code> returns the result
-               of <code>$J/<var>axis</var>::*[some(data(<var>EXPR</var>), atomic-equal(?, jnode-selector()))]</code>,
-               with the qualification that <var>EXPR</var> must not depend on the focus.</p>
-
                
+               <p>That is, if the context item is a JNode, then 
+                  <code><var>axis</var>::get(<var>EXPR</var>)</code> returns the result
+               of the expression:</p>
+               
+               <eg><![CDATA[let $selector := fn(){ data(<var>EXPR</var>) }()
+return <var>axis</var>::*[some($selector, atomic-equal(?, jnode-selector()))]
+]]></eg>
+               
+               <note><p>It is not an error if the atomized value of <var>EXPR</var>
+               includes atomic items that select nothing: such values are effectively ignored.
+               This is true both for maps and arrays.</p></note>
+               
+               <note><p>The result is in document order. The order of items in
+               the result of the selector expression is immaterial.</p></note>
+                           
+               <note><p>A performant implementation might reasonably be expected,
+               at least in the case where the value of the selector is a single
+               atomic item, to select an entry in a map or a member in an array
+               in constant time.</p></note>
                
                <p>For example:</p>
                
@@ -12148,7 +12173,7 @@ return if (every $r in $R satisfies $r instance of gnode())
                   <note><p>The same result can be achieved using the expression <code>child::*[3]</code>.</p></note></item>
                   <item><p><code>child::get(1 to 3)</code> selects the first three members
                   of an array, in document order.</p>
-                  <note><p><code>child::get(3, 2, 1)</code> also returns the first three
+                  <note><p><code>child::get((3, 2, 1))</code> also returns the first three
                   members in document order.</p></note></item>
                   <item><p><code>child::get(current-date())</code>
                selects an entry in a map whose key is an <code>xs:date</code> value
@@ -17987,52 +18012,30 @@ return $a + $b + $local:c</eg>
                   </example>
                   <example>
                      <head>Example:</head>
-                     <p>Consider the element <var>$E</var> := <code>&lt;e A="p q r" B="x y z"/></code>.</p>
+                     <p>Consider the element <var>$E</var> := <code>&lt;e A="p q r" B="x y z"/></code>, where
+                     <var>$E</var> has been validated against a schema that defines both attributes
+                     <code>A</code> and <code>B</code> as being lists of strings.</p>
                      <p>Then the expression:</p>
                      <eg>let $( $a, $b ) := $E/(@A, @B)</eg>
-                     <p>binds <code>$a</code> to the attribute node <code>A="p q r"</code>, and
-                        <code>$b</code> to the attribute node <code>B="x y z"</code>.</p>
-                     <p>If type declarations are added to the individual variables, thus:</p>
-                     <eg>let $( $a as xs:string, $b as xs:string ) := $E/(@A, @B)</eg>
-                     <p>then the attributes are atomized, so that <code>$a</code> is bound
-                        to the string <code>"p q r"</code>, and
-                        <code>$b</code> to the string <code>"x y z"</code>.</p>
-                     <p>The same result is achieved if a type declaration is added for the sequence
-                        as a whole:</p>
-                        <eg>let $( $a, $b ) as xs:string* := $E/(@A, @B)</eg>
-                     <p>Now consider the case where the same element <code>$E</code> is validated
-                        against a schema that defines both attributes as lists of strings.</p>
-                      <p>Then the raw expression, without type declarations:</p>
-                     <eg>let $( $a, $b ) := $E/(@A, @B)</eg>
-                        <p>still binds <code>$a</code> and <code>$b</code> to the two attribute
-                           nodes (the only difference being that the typed value of each
-                           attribute is now a sequence of three strings).</p>
-                        <p>If type declarations are added to the individual variables, thus:</p>
-                        <eg>let $( $a as xs:string*, $b as xs:string* ) := $E/(@A, @B)</eg>
-                        <p>then <code>$a</code> is bound to the result of atomizing the first
-                           attribute (that is, to the sequence of three strings <code>("p", "q", "r")</code>),
-                           while <code>$b</code> is bound to the result of atomizing the second
-                           attribute (that is, to the sequence of three strings <code>("x", "y", "z")</code>).</p>
-                        <p>If however, a type declaration is added for the sequence as a whole, namely:</p>
-                        <eg>let $( $a, $b ) as xs:string* := $E/(@A, @B)</eg>
-                        <p>then the binding sequence is a sequence of six strings, <code>("p", "q", "r", "x", "y", "z")</code>.
-                           The variable <code>$a</code> is bound to the first string, <code>"p"</code>, while
-                           <code>$b</code> is bound to the remaining five strings, <code>("q", "r", "x", "y", "z")</code>.</p>
-                     
-                     
+                     <p>binds <code>$a</code> to the sequence <code>("p", "q", "r")</code>
+                     and <code>$b</code> to the sequence <code>("x", "y", "z")</code>.
+                     The evaluation of the expression <code>$E/(@A, @B)</code>
+                        returns a sequence of two attribute nodes;
+                     the value of <code>$a</code> is formed by atomizing the first of these
+                     nodes, while <code>$b</code> is formed by atomizing the second.</p>
                      
                   </example>
                <example>
                      <head>Example:</head>
                      <p>Consider transforming the string <code>"Nf3 Nf6 c4 g6 Nc3 Bg7 d4 O-O Bf4 d5"</code>
                      (notation for the start of a chess game) to the form 
-                     <code>(["Nf3", "Nf6"], ["c4", "g6"], ["Nc3", "Bg7"], ["d4", "O-O"], ["Bf4", "d5"])</code>.
+                     <code>(["Nf3", "Nf6",] ["c4", "g6"], [ "Nc3", "Bg7"], [ "d4", "O-O"], ["Bf4", "d5"])</code>.
                      This can be achieved as follows:</p>
                      <eg>declare function local:grouped-moves($moves) {
    if (exists($moves)) {
-      let $($m1, $m2, $rest) := $moves
-      return [$m1, $m2], local:grouped-moves($rest)
-   }
+     let $($m1, $m2, $rest) := $moves
+     return [$m1, $m2], local:grouped-moves($rest)
+  }
 };
 local:grouped-moves(tokenize("Nf3 Nf6 c4 g6 Nc3 Bg7 d4 O-O Bf4 d5"))</eg>
 
