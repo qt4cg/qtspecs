@@ -770,6 +770,12 @@
         </xsl:for-each>
         <code><xsl:apply-templates/></code>
       </xsl:when>
+      <xsl:when test="parent::head">
+        <!-- don't make links in the head; that makes nested links -->
+        <code>
+          <xsl:apply-templates/>
+        </code>
+      </xsl:when>
       <xsl:otherwise>
         <xsl:variable name="spec" select="tokenize($target-uri, '/')[last() - 1]"/>
         <xsl:variable name="same-spec"
@@ -1417,9 +1423,10 @@
     </ul>
   </xsl:template>
 
-  <!-- p: a standard paragraph -->
+  <!-- p: a standard paragraph; we do a little work to try to
+       unwrap nested blocks that can't nest in HTML. -->
   <xsl:template match="p">
-    <p>
+    <xsl:variable name="atts" as="attribute()*">
       <xsl:if test="@id">
         <xsl:attribute name="id">
           <xsl:value-of select="@id"/>
@@ -1430,8 +1437,51 @@
           <xsl:value-of select="@role"/>
         </xsl:attribute>
       </xsl:if>
-      <xsl:apply-templates/>
-    </p>
+    </xsl:variable>
+
+    <xsl:call-template name="unwrap-p">
+      <xsl:with-param name="content" select="node()"/>
+      <xsl:with-param name="atts" select="$atts"/>
+    </xsl:call-template>
+  </xsl:template>
+
+  <xsl:template name="unwrap-p">
+    <xsl:param name="content" as="node()*"/>
+    <xsl:param name="atts" as="attribute()*" select="()"/>
+    <xsl:param name="accumulator" as="node()*" select="()"/>
+
+    <xsl:choose>
+      <xsl:when test="empty($content)">
+        <xsl:if test="exists($atts) or exists($accumulator)">
+          <p>
+            <xsl:sequence select="$atts"/>
+            <xsl:apply-templates select="$accumulator"/>
+          </p>
+        </xsl:if>
+      </xsl:when>
+      <!-- error is special, it contains a "p" but isn't presented as one. -->
+      <xsl:when test="not($content[1]/self::error)
+                      and ($content[1]/self::eg or $content[1]/self::ednote
+                           or $content[1]/self::olist or $content[1]/self::ulist or $content[1]/self::slist
+                           or $content[1][.//p])">
+        <xsl:if test="exists($atts) or exists($accumulator)">
+          <p>
+            <xsl:sequence select="$atts"/>
+            <xsl:apply-templates select="$accumulator"/>
+          </p>
+        </xsl:if>
+        <xsl:apply-templates select="$content[1]"/>
+        <xsl:call-template name="unwrap-p">
+          <xsl:with-param name="content" select="$content[position() gt 1]"/>
+        </xsl:call-template>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:call-template name="unwrap-p">
+          <xsl:with-param name="content" select="$content[position() gt 1]"/>
+          <xsl:with-param name="accumulator" select="($accumulator, $content[1])"/>
+        </xsl:call-template>
+      </xsl:otherwise>
+    </xsl:choose>
   </xsl:template>
   
   <!-- p role="closetermdef": indicates the end of an open term definition -->

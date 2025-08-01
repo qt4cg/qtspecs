@@ -119,9 +119,9 @@
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
     <xsl:apply-templates/>
+    <!-- Put it at the end so it doesn't precede the doctype -->
+    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   </xsl:template>
 
   <!-- When processing the g:grammar as input, this template wraps the

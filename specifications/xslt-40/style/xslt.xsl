@@ -249,10 +249,18 @@
 </xsl:template>-->
 
 <xsl:template match="elcode">
-   <!--xsl:call-template name="diff"/-->
-   <a href="#element-{substring-after(.,'xsl:')}"><code><xsl:value-of select="."/></code></a>
+  <xsl:choose>
+    <xsl:when test="parent::head">
+      <!-- no links inside heads -->
+      <code><xsl:value-of select="."/></code>
+    </xsl:when>
+    <xsl:otherwise>
+      <a href="#element-{substring-after(.,'xsl:')}">
+        <code><xsl:value-of select="."/></code>
+      </a>
+    </xsl:otherwise>
+  </xsl:choose>
 </xsl:template> 
-
 
 <xsl:template match="processing-instruction('element-syntax-summary')">
 
@@ -1021,13 +1029,6 @@ constructor. These elements are:</p>
   <xsl:variable name="max-y" select="max($svg//svg:rect/(@y + @height))"/>
   <embed src="tree{$number}.svg" width="{$max-x + 20}" height="{$max-y + 20}" type="image/svg+xml"/>
 </xsl:template>
-  
-  <xsl:template match="div1/head/text() | div2/head/text() | div3/head/text() | div4/head/text()">
-    <!-- insert a link to self, to make the ID value visible for the benefit of spec editors -->
-    <a href="#{../../@id}" style="text-decoration: none">
-      <xsl:apply-imports/>
-    </a>
-  </xsl:template>
  
   <xsl:template match="e:element-syntax[@diff and $show.diff.markup=1 and (string(@at) gt $baseline or not(@at))]" mode="get-diff-class"
     xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax">
