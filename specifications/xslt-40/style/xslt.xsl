@@ -249,10 +249,18 @@
 </xsl:template>-->
 
 <xsl:template match="elcode">
-   <!--xsl:call-template name="diff"/-->
-   <a href="#element-{substring-after(.,'xsl:')}"><code><xsl:value-of select="."/></code></a>
+  <xsl:choose>
+    <xsl:when test="parent::head">
+      <!-- no links inside heads -->
+      <code><xsl:value-of select="."/></code>
+    </xsl:when>
+    <xsl:otherwise>
+      <a href="#element-{substring-after(.,'xsl:')}">
+        <code><xsl:value-of select="."/></code>
+      </a>
+    </xsl:otherwise>
+  </xsl:choose>
 </xsl:template> 
-
 
 <xsl:template match="processing-instruction('element-syntax-summary')">
 
