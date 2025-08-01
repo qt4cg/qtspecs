@@ -1021,13 +1021,6 @@ constructor. These elements are:</p>
   <xsl:variable name="max-y" select="max($svg//svg:rect/(@y + @height))"/>
   <embed src="tree{$number}.svg" width="{$max-x + 20}" height="{$max-y + 20}" type="image/svg+xml"/>
 </xsl:template>
-  
-  <xsl:template match="div1/head/text() | div2/head/text() | div3/head/text() | div4/head/text()">
-    <!-- insert a link to self, to make the ID value visible for the benefit of spec editors -->
-    <a href="#{../../@id}" style="text-decoration: none">
-      <xsl:apply-imports/>
-    </a>
-  </xsl:template>
  
   <xsl:template match="e:element-syntax[@diff and $show.diff.markup=1 and (string(@at) gt $baseline or not(@at))]" mode="get-diff-class"
     xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax">
