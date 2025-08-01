@@ -108,7 +108,7 @@
             <p>These are the open pull requests and current branches.
             Where possible, a summary of the
             changes between the pull request or branch and the latest drafts is
-            provided with a <a href="deltaxml.html">DeltaXML</a> pipeline.
+            provided with a <a href="deltaxml.html">DeltaXignia</a> pipeline.
             </p>
 
             <div class="pr-list">
@@ -192,7 +192,7 @@
                           <span class="diffs">
                             <xsl:text> (</xsl:text>
                             <a href="https://qt4cg.org/pr/{$issue?number}/{$spec?dir}/{$autodiff/@html}">
-                              <xsl:text>DeltaXML diff</xsl:text>
+                              <xsl:text>DeltaXignia diff</xsl:text>
                             </a>
                             <xsl:text>)</xsl:text>
                           </span>
@@ -290,7 +290,7 @@
       <span class="diffs">
         <xsl:text> (</xsl:text>
         <a href="https://qt4cg.org/pr/{$line/@number}/{$line/@spec}/{$autodiff/@html}">
-          <xsl:text>DeltaXML diff</xsl:text>
+          <xsl:text>DeltaXignia diff</xsl:text>
         </a>
         <xsl:text>)</xsl:text>
       </span>
