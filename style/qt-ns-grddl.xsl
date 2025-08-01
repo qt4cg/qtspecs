@@ -38,8 +38,6 @@ to fix the rdf:about="xyzzy" on line 3</xsl:message>
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <rdf:RDF>
    <owl:Ontology rdf:about="">
     <owl:imports rdf:resource="link.rdf"/>
@@ -53,6 +51,7 @@ to fix the rdf:about="xyzzy" on line 3</xsl:message>
    </rdf:Description>
    <xsl:apply-templates select="//*[@class='anchor']/rddl:resource"/>
   </rdf:RDF>
+    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
  </xsl:template>
  
  <xsl:template match="*[@class='anchor']/rddl:resource">

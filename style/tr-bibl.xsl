@@ -31,7 +31,6 @@
       </xsl:if>
     </xsl:variable>
     <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <blist>
     <!--* N.B. sequence is:  most mature documents first.
         * Add a descending sort by date, to get latest version first.
@@ -93,6 +92,7 @@
     </xsl:apply-templates>
 
   </blist>
+  <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
 </xsl:template>
 
 <xsl:template match="tr:REC|tr:PER|tr:PR|tr:CR|tr:LastCall|tr:WD|tr:NOTE">

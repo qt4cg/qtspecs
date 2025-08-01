@@ -15,8 +15,6 @@
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <html>
     <head>
       <title>XSL/XML Query Specifications</title>
@@ -68,6 +66,7 @@ span.unavail {
       <xsl:apply-templates/>
     </body>
   </html>
+  <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
 </xsl:template>
 
 <xsl:template match="speclists">

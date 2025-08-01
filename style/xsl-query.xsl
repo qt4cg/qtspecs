@@ -423,17 +423,14 @@ a.env:visited, a.env:link               { color: black;
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <xsl:message>
-      <xsl:value-of select="$XSLTprocessor"/>
-    </xsl:message>
-    <xsl:comment>
-      <xsl:value-of select="$XSLTprocessor"/>
-    </xsl:comment>
 <!--
 <xsl:comment>$show.diff.markup = <xsl:value-of select="$show.diff.markup"/></xsl:comment>
 <xsl:message>$show.diff.markup = <xsl:value-of select="$show.diff.markup"/></xsl:message>
 -->
     <xsl:apply-imports/>
+    <xsl:comment>
+      <xsl:value-of select="$XSLTprocessor"/>
+    </xsl:comment>
   </xsl:template>
 
   <xsl:template name="css">

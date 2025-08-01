@@ -28,10 +28,6 @@
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
-<!-- 2009-11-25, Jim: Added comment to capture datetime when document was built -->
-    <xsl:comment>This document was created at <xsl:value-of select="$currentDateTime"/></xsl:comment>
 
   <xsl:variable name="unwrapped">
     <xsl:apply-templates mode="unwrap.p"/>
@@ -42,6 +38,9 @@
   </xsl:variable>
 
   <xsl:apply-templates select="exsl:node-set($noempty)/*" mode="make.xhtml"/>
+  <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
+  <!-- 2009-11-25, Jim: Added comment to capture datetime when document was built -->
+  <xsl:comment>This document was created at <xsl:value-of select="$currentDateTime"/></xsl:comment>
 </xsl:template>
 
 <!-- This module contains templates that match against HTML nodes. It is used
