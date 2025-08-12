@@ -2986,9 +2986,9 @@ would raise an error because it has an <code>id</code> child whose value is not 
                <item role="xquery"><p>In a <code>typeswitch</code> expression (<nt def="TypeswitchExpr">TypeswitchExpr</nt>), 
                   the <code>return</code> expression of a particular <code>case</code> is guarded by the condition for that case
                   matching, and no earlier case matching.</p></item>
-               <item><p>In an <code>and</code> expression (<nt def="AndExpr">AndExpr</nt>), the second operand
+               <item><p>In an <termref def="dt-and-expression"/>, the second operand
                is guarded by the value of the first operand being true.</p></item>
-               <item><p>In an <code>or</code> expression (<nt def="OrExpr">OrExpr</nt>), the second operand
+               <item><p>In an <termref def="dt-or-expression"/>, the second operand
                   is guarded by the value of the first operand being false.</p></item>
                <item><p>In an <code>otherwise</code> expression (<nt def="OtherwiseExpr">OtherwiseExpr</nt>), the second operand
                   is guarded by the value of the first operand being an empty sequence.</p></item>
@@ -14774,6 +14774,17 @@ return $A ? child::~[xs:integer][1] precedes $A ? child::~[xs:string][1]</eg>
       </div2>
       <div2 id="id-logical-expressions">
          <head>Logical Expressions</head>
+         
+         <changes>
+               <change issue="71 2132" PR="230" date="2022-11-15">
+                  The rules for “errors and optimization” have been tightened up to disallow
+                  many cases of optimizations that alter error behavior. In particular
+                  there are restrictions on reordering the operands of <code>and</code> and <code>or</code>,
+                  and of predicates in filter expressions, in a way that might allow the processor to raise dynamic
+                  errors that the author intended to prevent.
+               </change>
+            </changes>
+         
          <p><termdef id="dt-logical-expression" term="logical expression">
             A <term>logical expression</term> is either an <termref def="dt-and-expression"/>
             or an <termref def="dt-or-expression"/>. If a logical expression does not raise an error, 
@@ -14788,12 +14799,29 @@ return $A ? child::~[xs:integer][1] precedes $A ? child::~[xs:string][1]</eg>
          <p><termdef id="dt-or-expression" term="or expression">An <term>or expression</term>
          is a <termref def="dt-non-trivial"/> instance of the production <nt def="OrExpr">OrExpr</nt>.</termdef></p>
          
-         <p>The first step in evaluating a <termref def="dt-logical-expression"/> is to find the  <termref def="dt-ebv"
-               >effective boolean value</termref> of each of its operands (see <specref ref="id-ebv"
-            />).</p>
+         <p>In the absence of errors, an <termref def="dt-and-expression"/> returns <code>true</code>
+            when both of its operands have an <termref def="dt-ebv"/> of <code>true</code>, while an
+            <termref def="dt-or-expression"/> returns <code>true</code> when either or both of its operands have
+            an <termref def="dt-ebv"/> of <code>true</code>.</p>
+         
+         <p>The rules for error handling follow the principles defined in <specref ref="id-guarded-expressions"/>.
+         Specifically, an <termref def="dt-and-expression"/> returns false if the first operand has an 
+         <termref def="dt-ebv"/> of <code>false</code>, whether or not evaluation of the second
+         operand raises an error; while an <termref def="dt-or-expression"/> returns true if the first operand has an 
+         <termref def="dt-ebv"/> of <code>true</code>, whether or not evaluation of the second
+         operand raises an error.</p>
+         
+         <note><p>This rule is consistent with the so-called “short-circuit” evaluation of
+         logical operators defined in some procedural programming languages. However, unlike many
+         such languages, the rule is concerned only with error behavior, and not with side-effects.
+         A processor may evaluate the operands of a logical expression in any order, or in parallel,
+         provided that the error semantics are respected. For example, an optimizer may choose to
+         evaluate the second operand before evaluating the first, provided that any error in doing so
+         is masked when the result can be determined from the value of the first operand.</p></note>
+        
 
          <p>The value of an <termref def="dt-and-expression"/> is determined by the effective
-boolean values (EBVs) of its operands, as shown in the following table:</p>
+          boolean values (EBVs) of its operands, as shown in the following table:</p>
          <table role="medium" width="80%" border="1">
             <tbody>
                <tr>
@@ -14829,22 +14857,14 @@ boolean values (EBVs) of its operands, as shown in the following table:</p>
                      <code>false</code>
                   </td>
                   <td>
-                     <phrase role="xquery">either <code>false</code> or
-error</phrase>
-                     <phrase role="xpath">if <termref def="dt-xpath-compat-mode"
-                           >XPath 1.0 compatibility mode</termref> is <code>true</code>, then <code>false</code>; otherwise either <code>false</code> or error.</phrase>
+                     <code>false</code>
                   </td>
                </tr>
                <tr>
                   <th>error in EBV<sub>1</sub>
                   </th>
                   <td>error</td>
-                  <td>
-                     <phrase role="xquery">either <code>false</code> or
-error</phrase>
-                     <phrase role="xpath">if <termref def="dt-xpath-compat-mode"
-                           >XPath 1.0 compatibility mode</termref> is <code>true</code>, then error; otherwise either <code>false</code> or error.</phrase>
-                  </td>
+                  <td>error</td>
                   <td>error</td>
                </tr>
             </tbody>
@@ -14877,10 +14897,7 @@ EBV<sub>2</sub>
                      <code>true</code>
                   </td>
                   <td>
-                     <phrase role="xquery">either <code>true</code> or
-error</phrase>
-                     <phrase role="xpath">if <termref def="dt-xpath-compat-mode"
-                           >XPath 1.0 compatibility mode</termref> is <code>true</code>, then <code>true</code>; otherwise either <code>true</code> or error.</phrase>
+                     <code>true</code>
                   </td>
                </tr>
                <tr>
@@ -14899,42 +14916,33 @@ error</phrase>
                   <th>error
 in EBV<sub>1</sub>
                   </th>
-                  <td>
-                     <phrase role="xquery">either <code>true</code> or
-error</phrase>
-                     <phrase role="xpath">if <termref def="dt-xpath-compat-mode"
-                           >XPath 1.0 compatibility mode</termref> is <code>true</code>, then error; otherwise either <code>true</code> or error.</phrase>
-                  </td>
+                  <td>error</td>
                   <td>error</td>
                   <td>error</td>
                </tr>
             </tbody>
          </table>
-         <p role="xpath">If <termref def="dt-xpath-compat-mode"
-               >XPath 1.0 compatibility mode</termref> is <code>true</code>, the order in which the operands of a logical expression are evaluated is effectively prescribed. Specifically, it is defined that when there is no
-need to evaluate the second operand in order to determine the result, then
-no error can occur as a result of evaluating the second operand.</p>
-         <p>
-            <phrase role="xpath">If <termref def="dt-xpath-compat-mode"
-                  >XPath 1.0 compatibility mode</termref> is <code>false</code>, the
-order in which the operands of a logical expression are evaluated is
-<termref
-                  def="dt-implementation-dependent"
-               >implementation-dependent</termref>. In this case,</phrase>
-            <phrase role="xquery"
-                  >The
-order in which the operands of a logical expression are evaluated is
-<termref
-                  def="dt-implementation-dependent"
-               >implementation-dependent</termref>. The tables above are defined in such a way
-that</phrase> an or-expression can return <code>true</code> if the first
-expression evaluated is true, and it can raise an error if evaluation
-of the first expression raises an error. Similarly, an and-expression
-can return <code>false</code> if the first expression evaluated is
-false, and it can raise an error if evaluation of the first expression
-raises an error. As a result of these rules, a logical expression is
-not deterministic in the presence of errors, as illustrated in the examples
-below.</p>
+         
+         <note>
+            <p>XPath 1.0 defined the order of evaluation for 
+               <termref def="dt-and-expression">and-expressions</termref> and 
+               <termref def="dt-or-expression">or-expressions</termref>, thus ensuring
+               “short-circuit” semantics. XPath 2.0 and XQuery 1.0 changed the rules
+               to allow operands to be evaluated in either order, in the interests
+               of optimization, while retaining “short-circuit” semantics when
+               running XPath in 1.0 compatibility mode. The same rules were retained in
+               the 3.0 and 3.1 versions of the specifications.</p> 
+            <p>The disadvantage
+               of that formulation was that it was not possible to use the first operand
+               of a logical expression to guard against dynamic errors in the second;
+               for example the expression <code>$n instance of node() and exists($n/*)</code>
+               might legitimately fail in the case where <code>$n</code> is not a node.</p>
+            <p>The 4.0 specification therefore guarantees that this expression will not fail;
+               but it does so without mandating an order of evaluation for the operands. Instead
+               it mandates only that any error in evaluating the second operand (<code>exists($n/*)</code>)
+               is masked if the first operand (<code>$n instance of node()</code>) is false.
+            </p>
+         </note>
          <p>Here are some examples of logical expressions:</p>
 
 
@@ -14948,21 +14956,14 @@ below.</p>
             </item>
 
             <item>
-               <p>The following
-expression may return either <code>false</code> or raise a <termref
-                     def="dt-dynamic-error">dynamic error</termref>
-                  <phrase role="xpath"> (in <termref def="dt-xpath-compat-mode"
-                        >XPath 1.0 compatibility mode</termref>, the result must be <code>false</code>)</phrase>:</p>
+               <p>The following returns <code>false</code>: it is not allowed to
+               raise an error.</p>
                <eg role="parse-test"><![CDATA[1 eq 2 and 3 idiv 0 = 1]]></eg>
             </item>
 
             <item>
-               <p>The
-following expression may return either <code>true</code> or raise a
-<termref
-                     def="dt-dynamic-error">dynamic error</termref>
-                  <phrase role="xpath"> (in <termref def="dt-xpath-compat-mode"
-                        >XPath 1.0 compatibility mode</termref>, the result must be <code>true</code>)</phrase>:</p>
+               <p>The following expression returns <code>true</code>: it is not allowed to
+               raise an error.</p>
                <eg role="parse-test"><![CDATA[1 eq 1 or 3 idiv 0 = 1]]></eg>
             </item>
 
