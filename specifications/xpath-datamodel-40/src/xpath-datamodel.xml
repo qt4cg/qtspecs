@@ -6039,7 +6039,7 @@ position, in the range 1 to the size of the array.</p>
     
 </div2>
     
-    <div2 id="id-JNodes">
+ <div2 id="id-JNodes">
     <head>JNodes</head>
     <changes>
       <change issue="2025" PR="2031" date="2025-06-11">
@@ -6051,7 +6051,7 @@ position, in the range 1 to the size of the array.</p>
       used to represent a value within the context of a tree of <termref def="dt-map-item">maps</termref>
       and <termref def="dt-array-item">arrays</termref>. A root <term>JNode</term> represents
       a map or array; a non-root <term>JNode</term> represents a <termref def="dt-member"/> of an 
-      array or an <termref def="dt-entry"/> in a map.</termdef></p> 
+      array, an <termref def="dt-entry"/> in a map, or an item in a sequence.</termdef></p> 
       
       <p>The type JNode is a subtype of 
       <termref def="dt-GNode"/> (a generic node).
@@ -6064,35 +6064,42 @@ position, in the range 1 to the size of the array.</p>
       
       <slist>
         <sitem><term>·parent·</term>: a JNode</sitem>
-        <sitem><term>·position·</term>: a positive integer</sitem>
         <sitem><term>·selector·</term>: an atomic item</sitem>
+        <sitem><term>·kind·</term>: one of "array", "map", or "sequence"</sitem>
       </slist>
       
-      <p>In effect, there are four kinds of JNode (though they are not distinguished
+      <p>In effect, there are five kinds of JNode (though they are not distinguished
       as different types in the type system):</p>
       
       <ulist>
         <item><p>A root JNode that represents a map.</p></item>
         <item><p>A root JNode that represents an array.</p></item>
-        <item><p>A non-root JNode that represents an entry in a map.</p></item>
-        <item><p>A non-root JNode that represents a member of an array.</p></item>
+        <item><p>A non-root JNode that represents an entry in a map (specifically, the entry whose key
+          is given by the <term>·selector·</term> property).</p></item>
+        <item><p>A non-root JNode that represents a member of an array (specifically, the member whose 1-based index
+          is given by the <term>·selector·</term> property).</p></item>
+        <item><p>A non-root JNode that represents an item in a sequence (specifically, the item whose 1-based position
+          is given by the <term>·selector·</term> property).</p></item>
       </ulist>
       
       <p><termdef id="dt-j-children" term="j-children">The accessor <code>j-children</code>, applied to a JNode <var>$P</var>, returns a sequence
       of non-root JNodes representing the children of <var>$P</var>.</termdef></p>
       
-
+      <p>Sequences of length greater than one do not arise in trees that result from parsing JSON, but they
+      can arise in arbitrary XDM trees, because an array member can be an arbitrary XDM value, as can the
+      value associated with a key in a map. A JNode whose <term>·content·</term> property is a <termref def="dt-singleton"/>
+      item other than a map or array has no children: it acts as a leaf node in the tree.</p>
       
+      <p>Specifically, a node is leaf node in the tree (that is, a node with no children) if its <term>·content·</term>
+        is one of the following:</p>
+      <ulist>
+        <item><p>An empty sequence</p></item>
+        <item><p>An empty array</p></item>
+        <item><p>An empty map</p></item>
+        <item><p>A <termref def="dt-singleton">singleton sequence</termref> other than an array or a map.</p></item>
+      </ulist>
       
-      <p>Values are classified as <term>leaf</term> or <term>non-leaf</term>. A value is classified
-        as <term>non-leaf</term> if and only if at least one item in the value
-      is a non-empty map or array. If the ·content· property of a JNode is classified as <term>leaf</term>, then
-      the <code>j-children</code> accessor returns an empty sequence.</p>
-      
-      <note><p>If the <code>j-children</code> accessor of a JNode returns an empty sequence,
-      then it is necessary to examine the ·content· property in order to distinguish whether
-      the value is (for example) an empty sequence, an atomic item, an empty map,
-      or an empty array.</p></note>
+ 
       
       <p>If the ·content· property of a JNode <var>P</var> is classified as <term>non-leaf</term>, then
       the <code>j-children</code> accessor returns a sequence of JNodes that includes
@@ -6103,26 +6110,33 @@ position, in the range 1 to the size of the array.</p>
       
       <ulist>
         <item><p>The function
-        <code>dm:j-value</code> is used to access the ·content· property of a JNode</p></item>
+        <code>jnode-content</code> is used to access the ·content· property of a JNode</p></item>
         <item><p>The function <code>dm:JNode</code> is used to construct (or obtain)
         a JNode whose properties correspond to the names of the argument keywords.</p></item>
       </ulist>
       
       <eg>         
-for $item at $pos in dm:j-value($P)
-return
+
+let $content := jnode-content($P)
+return        
+  if (count($content ge 2) 
+  then for $item at $position in $content
+       return dm:JNode(parent := $P,
+                       kind := "sequence",
+                       selector := $position,
+                       content := $item)
   if ($item instance of array(*))
   then for member $member at $index in $item
        return dm:JNode(parent := $P,
-                       position := $pos,
+                       kind := "array",
                        selector := $index,
-                       value := $member)
+                       content := $member)
   else if ($item instance of map(*))
   then for key $key value $value in $item
        return dm:JNode(parent := $P,
-                       position := $pos,
+                       kind := "map",
                        selector := $key
-                       value := $value)
+                       content := $value)
   else ()
 </eg> 
       
@@ -6156,15 +6170,15 @@ return
             <ulist>
               <item><p><term>·parent·</term> is <var>R</var>.</p></item>
               <item><p><term>·content·</term> is the first map.</p></item>
-              <item><p><term>·position·</term> is 1.</p></item>
+              <item><p><term>·kind·</term> is <code>"array"</code>.</p></item>
               <item><p><term>·selector·</term> is 1.</p></item>
               <item><p>The <emph>dm:j-children</emph> accessor returns a sequence of four
               JNodes, as follows:</p>
               <ulist>
                 <item><p>All four have <term>·parent·</term> set to <var>M1</var>.</p></item>
+                <item><p>All four have <term>·kind·</term> set to <code>"map"</code>.</p></item>
                 <item><p>The <term>·content·</term> properties are respectively <code>1</code>,
                   <code>"XXX"</code>, <code>true()</code>, and <code>()</code>.</p></item>
-                <item><p>The <term>·position·</term> properties are all set to 1.</p></item>
                 <item><p>The <term>·selector·</term> properties are respectively <code>"a"</code>
                 <code>"b"</code>, <code>"c"</code>, and <code>"d"</code>.</p></item>
                 <item><p>For each of these JNodes, the <emph>dm:j-children</emph> accessor returns
@@ -6176,15 +6190,15 @@ return
             <ulist>
               <item><p><term>·parent·</term> is <var>R</var>.</p></item>
               <item><p><term>·content·</term> is the second map.</p></item>
-              <item><p><term>·position·</term> is 1.</p></item>
+              <item><p><term>·kind·</term> is <code>"array"</code>.</p></item>
               <item><p><term>·selector·</term> is 2.</p></item>
               <item><p>The <emph>dm:j-children</emph> accessor returns a sequence of four
               JNodes, as follows:</p>
               <ulist>
                 <item><p>All four have <term>·parent·</term> set to <var>M2</var>.</p></item>
+                <item><p>All four have <term>·kind·</term> set to <code>"map"</code>.</p></item>
                 <item><p>The <term>·content·</term> properties are respectively <code>2</code>,
                   <code>"YYY"</code>, <code>false()</code>, and <code>()</code>.</p></item>
-                <item><p>The <term>·position·</term> properties are all set to 1.</p></item>
                 <item><p>The <term>·selector·</term> properties are respectively <code>"a"</code>
                 <code>"b"</code>, <code>"c"</code>, and <code>"d"</code>.</p></item>
                 <item><p>For each of these JNodes, the <emph>dm:j-children</emph> accessor returns
@@ -6194,9 +6208,8 @@ return
           </item>
         </ulist>
         <p>Note that all JNodes in a JTree that represents parsed JSON input will have the
-        <term>·position·</term> property set to 1. This is because every construct in JSON 
-        (arrays, objects, strings, number, booleans, and <code>null</code>) maps to an XDM sequence
-        of length 0 or 1.</p>
+        <term>·kind·</term> property set to either <code>"map"</code> or <code>"array"</code>. 
+          This is because sequences of length 2 or more do not arise.</p>
       </example>
       
       <example>
@@ -6211,72 +6224,202 @@ return
    "e": (<p/>, <q/>)
 }]]></eg>
         
-        <p>Then:</p>
-        <ulist>
-          <item><p>The root JNode <var>R</var> has a ·content· property that is a 
-            map with five entries.</p></item>
-          <item><p>The result of the <code>dm:j-children</code> accessor applied to <var>R</var>
-          is a sequence of five JNodes <var>J1</var>, <var>J2</var>, <var>J3</var>, <var>J4</var>, and <var>J5</var>,
-          as follows:</p>
-          <ulist>
-            <item><p><var>J1</var> is a leaf node. It has <term>·parent·</term>=<var>R</var>, <term>·content·</term>=1, <term>·position·</term>=1, and
-            <term>·selector·</term>="a". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-            <item><p><var>J2</var> is a leaf node. It has <term>·parent·</term>=<var>R</var>, <term>·content·</term>=("x", "y"), <term>·position·</term>=1, and
-            <term>·selector·</term>="b". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-            <item><p><var>J3</var> has <term>·parent·</term>=<var>R</var>, <term>·content·</term>=[(10, 20), 30], <term>·position·</term>=1, and
-            <term>·selector·</term>="c". Its <code>dm:j-children</code> accessor returns a sequence of two
-              JNodes <var>J/31</var> and <var>J/32</var>, representing the two members of the contained
-              array, as follows:</p>
-              <ulist>
-                <item><p><var>J/31</var> is a leaf node. It has <term>·parent·</term>=<var>J3</var>, <term>·content·</term>=(10, 20), <term>·position·</term>=1, and
-                 <term>·selector·</term>="1". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-                <item><p><var>J/32</var> is a leaf node. It has <term>·parent·</term>=<var>J3</var>, <term>·content·</term>=30, <term>·position·</term>=1, and
-                 <term>·selector·</term>="2". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-              </ulist>
-            </item>
-            <item><p><var>J4</var> has <term>·parent·</term>=<var>R</var>, 
-              <term>·content·</term>=(10, [20, 30]), <term>·position·</term>=1, and
-            <term>·selector·</term>="d". Its <code>dm:j-children</code> accessor returns a sequence of two
-              JNodes <var>J/41</var> and <var>J/42</var>, representing the two members of the
-              contained array, as follows:</p>
-              <ulist>
-                <item><p><var>J/41</var> is a leaf node. It has <term>·parent·</term>=<var>J4</var>, <term>·content·</term>=20, <term>·position·</term>=2, and
-                 <term>·selector·</term>="1". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-                <item><p><var>J/42</var> is a leaf node. It has ·parent·=<var>J4</var>, <term>·content·</term>=30, <term>·position·</term>=2, and
-                 <term>·selector·</term>="2". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-              </ulist>
-            </item>
-            <item><p><var>J5</var> is a leaf node. It has ·parent·=<var>R</var>, a <term>·content·</term> that is a sequence
-              of two element nodes named <code>p</code> and <code>q</code>, <term>·position·</term>=1, and
-            <term>·selector·</term>="e". Its <code>dm:j-children</code> accessor returns an empty sequence.</p></item>
-          </ulist>
-          </item>
-        </ulist>
-          
-          <note><p>Sequences (as distinct from maps and arrays) are not represented by an 
-          extra layer of JNodes in the tree. This is because the structure is designed primarily to
-          assist navigation of JTrees derived from JSON processing, in which sequence-valued nodes
-          never arise. Generally, JTrees are easier to manipulate if none of the contained arrays
-          or maps contain sequence-valued members or entries. JTrees containing non-homogenous
-          content (for example, sequences that mix arrays, maps, and other items) can be represented
-          using JNodes without loss of information, but may be difficult to navigate.</p></note>
+        <p>The JNodes comprising this tree are as indicated in the following table:</p>
+        
+        <table border="1">
+          <caption>JNodes in a tree representing arbitrary XDM content</caption>
+          <thead>
+            <tr>
+              <th>Id</th>
+              <th><term>·content·</term></th>
+              <th><term>·kind·</term></th>
+              <th><term>·selector·</term></th>
+              <th><term>·parent·</term></th>
+              <th><term>·children·</term></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th><var>R</var></th>
+              <td><eg><![CDATA[{
+   "a": 1,
+   "b": ("x", "y"),
+   "c": [(10, 20), 30],
+   "d": (10, [20, 30]),
+   "e": (<p/>, <q/>)
+}]]></eg></td>
+              <td>()</td>
+              <td>()</td>
+              <th>()</th>
+              <th><var>J1</var>, <var>J2</var>, <var>J3</var>, <var>J4</var>, <var>J5</var></th>
+            </tr>
+            <tr>
+              <th><var>J1</var></th>
+              <td><code>1</code></td>
+              <td><code>"map"</code></td>
+              <td><code>"a"</code></td>
+              <td><var>R</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J2</var></th>
+              <td><code>"x", "y"</code></td>
+              <td><code>"map"</code></td>
+              <td><code>"b"</code></td>
+              <td><var>R</var></td>
+              <td><var>J/21</var>, <var>J/22</var></td>
+            </tr>
+            <tr>
+              <th><var>J/21</var></th>
+              <td><code>"x"</code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>1</code></td>
+              <td><var>J2</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J/22</var></th>
+              <td><code>"y"</code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>2</code></td>
+              <td><var>J2</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J3</var></th>
+              <td><code>[(10, 20), 30]</code></td>
+              <td><code>"map"</code></td>
+              <td><code>"c"</code></td>
+              <td><var>R</var></td>
+              <td><var>J/31</var>, <var>J/32</var></td>
+            </tr>
+            <tr>
+              <th><var>J/31</var></th>
+              <td><code>(10, 20)</code></td>
+              <td><code>"array"</code></td>
+              <td><code>1</code></td>
+              <td><var>J3</var></td>
+              <td><var>J/311</var>, <var>J/312</var></td>
+            </tr>
+            <tr>
+              <th><var>J/311</var></th>
+              <td><code>10</code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>1</code></td>
+              <td><var>J/31</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J/312</var></th>
+              <td><code>20</code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>2</code></td>
+              <td><var>J/31</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J/32</var></th>
+              <td><code>30</code></td>
+              <td><code>"array"</code></td>
+              <td><code>2</code></td>
+              <td><var>J3</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J4</var></th>
+              <td><code>(10, [20, 30])</code></td>
+              <td><code>"map"</code></td>
+              <td><code>"d"</code></td>
+              <td><var>R</var></td>
+              <td><var>J/41</var>, <var>J/42</var></td>
+            </tr>
+            <tr>
+              <th><var>J/41</var></th>
+              <td><code>10</code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>1</code></td>
+              <td><var>J4</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J/42</var></th>
+              <td><code>[20, 30]</code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>2</code></td>
+              <td><var>J4</var></td>
+              <td><var>J/421</var>, <var>J/422</var></td>
+            </tr>
+            <tr>
+              <th><var>J/421</var></th>
+              <td><code>20</code></td>
+              <td><code>"array"</code></td>
+              <td><code>1</code></td>
+              <td><var>J/42</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J/422</var></th>
+              <td><code>30</code></td>
+              <td><code>"array"</code></td>
+              <td><code>2</code></td>
+              <td><var>J/42</var></td>
+              <td><code>()</code></td>
+            </tr>
+            <tr>
+              <th><var>J5</var></th>
+              <td><code><![CDATA[<p/>, <q/>]]></code></td>
+              <td><code>"map"</code></td>
+              <td><code>"e"</code></td>
+              <td><var>R</var></td>
+              <td><var>J/51</var>, <var>J/52</var></td>
+            </tr>
+            <tr>
+              <th><var>J/51</var></th>
+              <td><code><![CDATA[<p/>]]></code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>1</code></td>
+              <td><var>J5</var></td>
+              <td>()</td>
+            </tr>
+            <tr>
+              <th><var>J/52</var></th>
+              <td><code><![CDATA[<q/>]]></code></td>
+              <td><code>"sequence"</code></td>
+              <td><code>2</code></td>
+              <td><var>J5</var></td>
+              <td>()</td>
+            </tr>           
+          </tbody>
+        </table>
+        
+          <note><p>Sequences of length 2 or more have children; sequences of length 0 or 1 have none.
+            The reason for this is to ensure that the tree of JNodes is always finite.
+          This can make processing a little difficult in a structure where it is sensible to treat
+          a sequence in the same way regardless of its length (for example, the authors of a book).
+          One solution is to use the <code>descendant</code> axis in place of the <code>child</code>
+          axis. Another solution is to use the <code>child-plus</code> axis which expands sequences of
+          length one in the same ways as sequences of length 2 or more.</p></note>
           
       </example>
       
       
         
-          <p>For a JNode representing the root of a JTree, the <term>·parent·</term>, <term>·position·</term>,
+          <p>For a JNode representing the root of a JTree, the <term>·parent·</term>, 
             and <term>·selector·</term>
-          properties will always be absent. For a non-root JNode, these properties will always be present.</p>
+          properties will always be absent, and the <term>·kind·</term> property
+            will always be <code>"root"</code>.</p>
+   
+          <p>For a non-root JNode, the <term>·parent·</term>, 
+            and <term>·selector·</term> will always be present.</p>
           
           <p>The identity of a root JNode is established when the root JNode is constructed, so that
           every operation that constructs a root JNode returns a JNode with distinct identity. The
-          identity of a non-root JNode is a function of its <term>·parent·</term>, <term>·position·</term>, and <term>·selector·</term>
+          identity of a non-root JNode is a function of its <term>·parent·</term> and <term>·selector·</term>
           properties: two non-root JNodes are identical by definition if and only if their
-            <term>·parent·</term>s are identical and their <term>·position·</term> and <term>·selector·</term>
+            <term>·parent·</term>s are identical and their <term>·selector·</term>
             properties are equal as determined by the <function>atomic-equal</function> function.</p>
           
-          <p>A root JNode is constructed, wrapping a map or array, by a call on the <function>jnode</function>
+          <p>A root JNode is constructed, wrapping a map or array, by a call on the <function>jtree</function>
           function applied to that map or array. This can be called explicitly, but it is also called
           implicitly in a number of situations: for example when a map or array is used as the left-hand 
           operand of the path operator <code>/</code>.</p>
@@ -6301,7 +6444,7 @@ return
       
   </div2>
     
-    
+   
   </div1>
 
 
