@@ -23,11 +23,10 @@
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
     <token-list>
       <xsl:call-template name="show-dt"/>
     </token-list>
+    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   </xsl:template>
 
   <xsl:variable name="nd-chars"  select= "'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890'"/>

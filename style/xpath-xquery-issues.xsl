@@ -23,7 +23,6 @@
       </xsl:if>
     </xsl:variable>
     <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <html>
     <head>
       <title>XPath 2.0 and XQuery 1.0 Issues List</title>
@@ -50,6 +49,7 @@ records pre-Last Call issues.</p>
       </div>
     </body>
   </html>
+  <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
 </xsl:template>
 
 <xsl:template match="issues">

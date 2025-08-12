@@ -29,8 +29,6 @@
         <xsl:value-of select="system-property('xsl:product-version')"/>
       </xsl:if>
     </xsl:variable>
-    <!--<xsl:message><xsl:value-of select="$XSLTprocessor"/></xsl:message>-->
-    <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
   <xsl:variable name="appendix" select="//*[@id=$id]"/>
   <xsl:variable name="items" as="xs:string*">
     <xsl:for-each select="//emph[@role='info-item']">
@@ -89,7 +87,7 @@
       </xsl:otherwise>
     </xsl:choose>
   </xsl:for-each>
-
+  <xsl:comment><xsl:value-of select="$XSLTprocessor"/></xsl:comment>
 </xsl:template>
 
 </xsl:stylesheet>

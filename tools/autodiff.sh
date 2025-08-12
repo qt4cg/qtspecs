@@ -20,6 +20,8 @@ fi
 # Get the current version of the base spec
 curl -s -o /tmp/A.$PID.html https://qt4cg.org/specifications/$BASE/$HTML
 
+echo "Processing https://qt4cg.org/specifications/$BASE/$HTML"
+
 # Convert it to XML
 java -cp tools/htmlparser-1.4.jar nu.validator.htmlparser.tools.HTML2XML \
      /tmp/A.$PID.html /tmp/A.$PID.xml
@@ -29,6 +31,8 @@ java -jar tools/deltaxml/saxon9pe.jar \
      -xsl:tools/xhtml5.xsl -s:/tmp/A.$PID.xml -o:/tmp/A.$PID.html
 
 rm -f /tmp/A.$PID.xml
+
+echo "Processing $SPEC"
 
 # Convert the new version of the spec to XML
 java -cp tools/htmlparser-1.4.jar nu.validator.htmlparser.tools.HTML2XML \
@@ -41,7 +45,7 @@ java -jar tools/deltaxml/saxon9pe.jar \
 rm -f /tmp/B.$PID.xml
 
 # Make the diff version
-java -jar tools/deltaxml/command-15.0.2.jar compare xhtml-patch \
+java -jar tools/deltaxml/command-17.0.0.jar compare xhtml-patch \
      /tmp/A.$PID.html /tmp/B.$PID.html /tmp/autodiff.$PID.html
 
 # Patch the diff version and make it HTML5
