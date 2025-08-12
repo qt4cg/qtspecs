@@ -10495,6 +10495,161 @@ map( xs:string,
          
       </div1>
       
+      <div1 id="building-xtrees">
+         <head>Building XTrees</head>
+         <changes>
+            <change issue="573">
+               New in 4.0
+            </change>
+         </changes>
+         
+         <p>The section introduces functionality for constructing new XNodes and XTrees.</p>
+         
+         <note>
+            <p>XSLT and XQuery include custom syntax for creating nodes, but (other than
+            the <function>parse-xml</function> function), this cannot be achieved directly
+            in XPath. Having functions to construct new nodes is useful because they can
+            be used in any context where functions can be supplied. In addition, the 
+            mechanism provided in this section may be more efficient than the constructs
+            provided in XSLT and XQuery; at any rate, they may be less reliant on
+            a smart optimizer. This is because the semantics do not require nodes and 
+            subtrees to be copied.</p>
+         </note>
+         
+         <p>Trees are constructed in three phases:</p>
+         
+         <olist>
+            <item><p>A tree builder object is instantiated, by calling the
+            <function>fn:builder</function> function.</p></item>
+            <item><p>The tree builder provides methods to construct proto-nodes
+            (for example, proto-elements and proto-texts)</p></item>
+            <item><p>Once a tree of such proto-nodes has been built, it can
+            be converted to a regular node tree by calling the <code>deliver</code>
+            method on the root.</p></item>
+         </olist>
+         
+         <p>The following example shows how this works for a trivial tree
+         containing a single element:</p>
+         
+         <eg>builder() ? element({"name": #foo}) ? deliver()</eg>
+         
+         <p>This returns an element node that serializes as <code>&lt;foo/></code>.</p>
+         
+         <p>A slightly more complex example:</p>
+         
+         <eg>let $B := builder()
+let $tree := $B ? element({ "name": #foo,
+                            "attributes": {#id : "x"}
+                            "content": $B ? text("data")}
+                          )
+return $tree ? deliver()</eg>
+         
+         <p>This returns a tree that serializes as <code><![CDATA[<foo id="x">data</foo>]]></code>.</p>
+         
+         <p>The following more elaborate example uses a helper function to construct child nodes:</p>
+         
+         <eg><![CDATA[let $B := builder()
+let $child := fn($name as xs:QName, $content as xs:string) {
+                $B ? element({ "name": $name,
+                               "content": $B ? text($content) }
+                            )
+              }
+let $book := $B ? element({ "name": #book,
+                            "content": (
+                                   $child(#author : "J. K. Rowling"),
+                                   $child(#title : "Harry Potter and the Philosopher's Stone"),
+                                   $child(#publisher : "Bloomsbury",
+                                   $child(#price : "8.95")
+                             ) })
+return $book ? deliver()]]></eg>
+         
+         <p>This delivers an element node that serializes (with indentation) as:</p>
+         
+         <eg><![CDATA[<book>
+   <author>J. K. Rowling</author>
+   <title>Harry Potter and the Philosopher's Stone</title>
+   <publisher>Bloomsbury</publisher>
+   <price>8.95</price>
+</book>]]></eg>
+         
+         <p>For an application constructing many book elements, it would be useful
+         to encapsulate this in another user-written function that returns a single book, for example
+         a document containing a book list might be constructed as follows:</p>
+         
+         <eg><![CDATA[let $B := builder(),
+let $book := fn($author, $title, $publisher, $price) {
+    $B?element({'name': #book,
+                'content': (
+                   $B?element({'name': #author, 
+                               'content': $B?text($author)}),
+                   $B?element({'name': #title, 
+                               'content': $B?text($title)}),
+                   $B?element({'name': #publisher, 
+                               'content': $B?text($publisher)}),
+                   $B?element({'name': #price, 
+                               'content': $B?text($price)})
+                 )})
+}
+let $list := $B?element({
+                   'name': #booklist,
+                   'content': (
+                     $book("J. K. Rowling",
+                           "Harry Potter and the Philosopher's Stone",
+                           "Bloomsbury",
+                           "8.95"),
+                     $book(...),
+                     $book(...))
+                  })
+return $B?document($list) => deliver()                  
+]]></eg>
+                                          
+         
+            <div2 id="builder-rationale">
+               <head>Rationale</head>
+               
+               <p>The design of this feature might initially appear to be unnecessarily
+               complex, with its three-step approach of first obtaining a builder,
+               then constructing proto-nodes, then converting the root proto-node
+               to a regular root node. The complexity, however, is there for a reason.</p>
+               
+               <p>Nodes have identity, and they are linked to their parent in a tree. The semantics
+               of node and tree construction in XQuery and XSLT are defined to operate bottom-up:
+               an instruction or expression that creates nodes first creates the children, then
+               connects the children to their new parent. Because nodes have identity and parent
+               pointers, this entails copying the subtree to create new nodes with new identity.
+               A smart optimizer can avoid this overhead in many cases, but respecting the detailed
+               rules (especially in areas such as namespaces, maintenance of base URI, and
+               type annotations) creates considerable internal complexity.</p>
+               
+               <p>When nodes are constructed using functions, there are fewer opportunities
+               for optimization, because there is often less scope for static analysis; furthermore,
+               functions that create new nodes are nondeterministic in that calling a function twice
+               with the same arguments produces different results (nodes with different identity)
+               on each call: this further reduces the scope for optimisation.</p>
+               
+               <p>By first building a tree consisting of proto-nodes, which do not have node identity
+               or parent pointers, the model fits far more cleanly into a functional paradigm.
+               Intermediate trees are immutable and can be reused and shared; functional data structures
+               allowing incremental modification can be used internally.</p>
+            </div2>
+         
+         <div2 id="builder-namespaces">
+            <head>Namespaces</head>
+            <p>TODO: we need to say something about namespace inheritance and namespace fixup.</p>
+         </div2>
+         
+        
+            <div2 id="builder-record">
+               <head><?record-description builder-record?></head>
+            </div2>
+            <div2 id="proto-node-record">
+               <head><?record-description proto-node-record?></head>
+            </div2>
+            <div2 id="func-builder">
+               <head><?function fn:builder?></head>
+            </div2>
+      </div1>
+      
       <div1 id="functions-on-types">
          <head>Processing types</head>
          <changes>
