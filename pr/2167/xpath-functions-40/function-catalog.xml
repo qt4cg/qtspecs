@@ -13603,7 +13603,7 @@ else QName("", $value)</eg>
    <fos:function name="path" prefix="fn">
       <fos:signatures>
          <fos:proto name="path" return-type="xs:string?">
-            <fos:arg name="node" type="node()?" default="." usage="navigation"/>
+            <fos:arg name="node" type="gnode()?" default="." usage="navigation"/>
             <fos:arg name="options" type="map(*)?" default="{}"/>
          </fos:proto>
       </fos:signatures>
@@ -13637,16 +13637,16 @@ else QName("", $value)</eg>
          
          <fos:options>
             <fos:option key="origin">
-               <fos:meaning>A node, which must be an ancestor of <code>$node</code>. If present,
+               <fos:meaning>A GNode, which must be an ancestor of <code>$node</code>. If present,
                   the returned path will be a relative path that selects <code>$node</code>
                   starting from the supplied origin node, rather than from the root of the
                   containing tree.
                </fos:meaning>
-               <fos:type>node()?</fos:type>
+               <fos:type>gnode()?</fos:type>
                <fos:default>()</fos:default>
             </fos:option>
             <fos:option key="lexical">
-               <fos:meaning>If true, the names of elements in the path are represented by the
+               <fos:meaning>If true, the names of element nodes in the path are represented by the
                   result of a call on the <function>name</function> function applied to each element. The
                   result in this case does not contain sufficient information to identify the
                   namespace URI of the element.
@@ -13671,17 +13671,17 @@ else QName("", $value)</eg>
             </fos:option>
          </fos:options>
          
-         <p>Let <var>R</var> be the node supplied in the <code>origin</code> option,
-         or the root node of the tree containing <code>$node</code> otherwise.</p>
+         <p>Let <var>R</var> be the GNode supplied in the <code>origin</code> option,
+         or the root GNode of the tree containing <code>$node</code> otherwise.</p>
          
-         <p>If <code>$node</code> is a document node, the function returns the string
-               <code>"/"</code>.</p>
+         <p>If <code>$node</code> is a document node, or a JNode with no parent,
+            the function returns the string <code>"/"</code>.</p>
          
          <p>Otherwise, the function returns a string that consists of a sequence of steps, one
             for each ancestor-or-self of <code>$node</code> that is not an ancestor-or-self 
             of <var>R</var>.</p>
          
-         <p>If <var>R</var> is not a document node and the <code>origin</code> option
+         <p>If <var>R</var> is an XNode other than a document node and the <code>origin</code> option
             is absent or empty, then this string is preceded by
             a string notionally representing a call to the <code>fn:root</code> function, 
             expressed as follows:</p>
@@ -13813,6 +13813,43 @@ else QName("", $value)</eg>
                   </item>
                </olist>
             </item>
+               <item>
+                  <p>For a JNode where the ·content· property of the parent
+                     is an array, then as the string <code>*[<var>N</var>]</code> where <var>N</var>
+                     is the value of the ·selector· property.</p>
+               </item>
+               <item><p>For any other JNode (including the case where the ·content· property of the parent
+                     is a map):</p>
+                  <olist>
+                     <item><p>If the value is an <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                     or <code>xs:anyURI</code> that is castable to <code>xs:NCName</code>, then
+                     the result of casting the value to <code>xs:NCName</code>.</p></item>
+                     <item><p>If the value is an <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                     or <code>xs:anyURI</code> that is not castable to <code>xs:NCName</code>, then
+                     then as the string <code>get("<var>S</var>")</code>
+                     where <var>S</var> is the string value.</p></item>
+                     <item><p>If the value is numeric, then as the string <code>get(<var>N</var>)</code>
+                     where <var>N</var> is the result of casting the numeric value to 
+                        <code>xs:string</code>.</p></item>
+                     <item><p>If the value is an <code>xs:QName</code>, then as the string
+                     <code>get(#Q{<var>uri</var>}<var>local</var>)</code> where <var>uri</var>
+                     and <var>local</var> are the namespace URI and local name parts of the QName.</p></item>
+                     <item><p>If the value is an <code>xs:boolean</code>, then as the string
+                     <code>get(true())</code> or <code>get(false())</code>.</p></item>
+                     <item><p>If the value is of any other type, then as the string
+                     <code>get(xs:<var>T</var>("<var>S</var>"))</code> where <var>T</var> is the
+                        local part of the most specific built-in atomic type of which the value
+                        is an instance, and <var>S</var> is the result of casting the value to 
+                           <code>xs:string</code>.</p></item>
+                  </olist>
+                  
+                  <p>TODO: Better handling of the case where the parent is neither a map nor an array,
+                  for example where it is a sequence of several maps or several arrays. It's hard to
+                  provide a better path for these when there is no AxisStep for selecting within
+                  such values.</p>
+                        
+                     
+               </item>
             </olist>
             </item>
             </olist>
@@ -13847,6 +13884,8 @@ else QName("", $value)</eg>
          <p>Similarly, using the <code>lexical</code> option is convenient if there is no need for precise
          namespace information: it is especially suitable when the containing node tree declares no namespaces.</p>
          
+         <p>If the supplied argument is a map or an array, it will automatically be coerced to a JNode. This
+         however is not useful, because this will be a root JNode, yielding the path <code>/</code>.</p>
          
       </fos:notes>
       
@@ -13946,10 +13985,25 @@ Himmlische, dein Heiligtum.
                <fos:result>'fn:root()/empnr[1]'</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>let $in := [{"b":[3,4]}]
+return path($in/*[1]/b/*[2])</eg></fos:expression>
+               <fos:result>"/*[1]/b/*[2]</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>let $in := [[{'a':1}], [{'a':2}]]
+return path($in//a[. = 2])</eg></fos:expression>
+               <fos:result>"/*[2]/*[1]/a</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:changes>
          <fos:change issue="332 1660" PR="1620 1886" date="2024-11-29">
             <p>Options are added to customize the form of the output.</p>
+         </fos:change>
+         <fos:change issue="2100"  date="2025-08-05">
+            <p>The function is extended to handle JNodes.</p>
          </fos:change>
       </fos:changes>
    </fos:function>
@@ -14059,7 +14113,7 @@ let $newi := $o/tool</eg>
    <fos:function name="has-children" prefix="fn">
       <fos:signatures>
          <fos:proto name="has-children" return-type="xs:boolean">
-            <fos:arg name="node" type="node()?" default="." usage="inspection"/>
+            <fos:arg name="node" type="gnode()?" default="." usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="0">
@@ -14073,16 +14127,14 @@ let $newi := $o/tool</eg>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns <code>true</code> if the supplied node has one or more child nodes (of any kind).</p>
+         <p>Returns <code>true</code> if the supplied GNode has one or more child nodes (of any kind).</p>
       </fos:summary>
       <fos:rules>
-         <p>If the argument is omitted, it defaults to the context value (<code>.</code>).<phrase diff="del" at="2022-11-29"> The
-            behavior of the function if the argument is omitted is exactly the same as if the
-            context value had been passed as the argument.</phrase></p>
+         <p>If the argument is omitted, it defaults to the context value (<code>.</code>).</p>
          <p>Provided that the supplied argument <code>$node</code> matches the expected type
-               <code>node()?</code>, the result of the function call
+               <code>gnode()?</code>, the result of the function call
                <code>fn:has-children($node)</code> is defined to be the same as the result of the
-            expression <code>fn:exists($node/child::node())</code>.</p>
+            expression <code>fn:exists($node/child::gnode())</code>.</p>
       </fos:rules>
       <fos:errors>
          <p>The following errors may be raised when <code>$node</code> is omitted:</p>
@@ -14094,7 +14146,7 @@ let $newi := $o/tool</eg>
                      class="DY" code="0002" type="type"/></p>
             </item>
             <item>
-               <p>If the context value is not an instance of the sequence type <code>node()?</code>, type error <xerrorref spec="XP" class="TY"
+               <p>If the context value is not an instance of the sequence type <code>gnode()?</code>, type error <xerrorref spec="XP" class="TY"
                      code="0004" type="type"/>.</p>
             </item>
          </ulist>
@@ -14120,6 +14172,7 @@ let $newi := $o/tool</eg>
             is intended to circumvent this restriction.</p>
          <p>Although the function was introduced to support streaming use cases, it has general
             utility as a convenience function.</p>
+         <p>If the supplied argument is a map or an array, it will automatically be coerced to a JNode.</p>
       </fos:notes>
       <fos:examples>
          <fos:variable name="e" id="v-has-children-e"><![CDATA[<doc>
@@ -14158,9 +14211,21 @@ let $newi := $o/tool</eg>
                <fos:expression>has-children($e//p[1]/@id)</fos:expression>
                <fos:result>false()</fos:result>
             </fos:test>
+            <fos:test>
+               <fos:expression>[1,2,3] => has-children()</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression>[] => has-children()</fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+            
          </fos:example>
       </fos:examples>
-
+      <fos:changes>
+         <fos:change issue="2100"><p>Generalized to work with JNodes as well as XNodes.</p></fos:change>
+      </fos:changes>
+      
    </fos:function>
    
    
@@ -14221,8 +14286,8 @@ return distinct-ordered-nodes(
    </fos:function>
    <fos:function name="innermost" prefix="fn">
       <fos:signatures>
-         <fos:proto name="innermost" return-type="node()*">
-            <fos:arg name="nodes" type="node()*" usage="navigation"/>
+         <fos:proto name="innermost" return-type="gnode()*">
+            <fos:arg name="nodes" type="gnode()*" usage="navigation"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -14232,30 +14297,45 @@ return distinct-ordered-nodes(
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns every node within the input sequence that is not an ancestor of another member
-            of the input sequence; the nodes are returned in document order with duplicates
+         <p>Returns every GNode within the input sequence that is not an ancestor of another member
+            of the input sequence; the GNodes are returned in document order with duplicates
             eliminated.</p>
       </fos:summary>
       <fos:rules>
          <p>The effect of the function call <code>fn:innermost($nodes)</code> is defined to be
             equivalent to the result of the expression:</p>
-         <eg>$nodes except $nodes/ancestor::node()</eg>
-         <p>That is, the function takes as input a sequence of nodes, and returns every node within
-            the sequence that is not an ancestor of another node within the sequence; the nodes are
+         <eg>$nodes except $nodes/ancestor::gnode()</eg>
+         <p>That is, the function takes as input a sequence of GNodes, and returns every GNode within
+            the sequence that is not an ancestor of another GNode within the sequence; the GNodes are
             returned in document order with duplicates eliminated.</p>
       </fos:rules>
+      <fos:notes>
+         <p>If the supplied argument includes a map or an array, it will automatically be coerced to a JNode.</p>
+      </fos:notes>
       <fos:examples>
          <fos:example>
-            <p>If the source document contains nested sections represented by <code>div</code>
-               elements, the expression <code>innermost(//div)</code> returns those <code>div</code>
-               elements that do not contain further <code>div</code> elements.</p>
+            <fos:test>
+               <fos:expression><eg><![CDATA[parse-xml("<doc>
+    <div id='a'><div id='b'><div id='c'/></div></div>
+  </doc>")//div
+   => innermost() => string(@id)]]></eg></fos:expression>
+               <fos:result><code>"c"</code></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[[[[1,2], [3,4]], [[5,6], [7,8]]]")//array(*)
+   => innermost()]]></eg></fos:expression>
+               <fos:result><code>[1,2], [3,4], [5,6], [7,8]</code></fos:result>
+            </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change issue="2100"><p>Generalized to work with JNodes as well as XNodes.</p></fos:change>
+      </fos:changes>
    </fos:function>
    <fos:function name="outermost" prefix="fn">
       <fos:signatures>
-         <fos:proto name="outermost" return-type="node()*">
-            <fos:arg name="nodes" type="node()*" usage="transmission"/>
+         <fos:proto name="outermost" return-type="gnode()*">
+            <fos:arg name="nodes" type="gnode()*" usage="transmission"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -14265,18 +14345,18 @@ return distinct-ordered-nodes(
          <fos:property>special-streaming-rules</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns every node within the input sequence that has no ancestor that is itself a
+         <p>Returns every GNode within the input sequence that has no ancestor that is itself a
             member of the input sequence; the nodes are returned in document order with duplicates
             eliminated.</p>
       </fos:summary>
       <fos:rules>
          <p>The effect of the function call <code>fn:outermost($nodes)</code> is defined to be
             equivalent to the result of the expression:</p>
-         <eg>$nodes[not(ancestor::node() intersect $nodes)]/.</eg>
+         <eg>$nodes[not(ancestor::gnode() intersect $nodes)]/.</eg>
          <!--bug 17029-->
-         <p>That is, the function takes as input a sequence of nodes, and returns every node within
-            the sequence that does not have another node within the sequence as an ancestor; the
-            nodes are returned in document order with duplicates eliminated.</p>
+         <p>That is, the function takes as input a sequence of GNodes, and returns every GNode within
+            the sequence that does not have another GNode within the sequence as an ancestor; the
+            GNodes are returned in document order with duplicates eliminated.</p>
       </fos:rules>
       <fos:notes>
          <p>The formulation <code>$nodes except $nodes/descendant::node()</code> might appear to be
@@ -14290,14 +14370,27 @@ return distinct-ordered-nodes(
             function can therefore be useful in cases where it is known that sections will not be
             nested, as well as cases where the application actually wishes to process all sections
             except those that are nested within another.</p>
+         <p>If the supplied argument includes a map or an array, it will automatically be coerced to a JNode.</p>
       </fos:notes>
       <fos:examples>
          <fos:example>
-            <p>If the source document contains nested sections represented by <code>div</code>
-               elements, the expression <code>outermost(//div)</code> returns those <code>div</code>
-               elements that are not contained within further <code>div</code> elements.</p>
+            <fos:test>
+               <fos:expression><eg><![CDATA[parse-xml("<doc>
+     <div id='a'><div id='b'><div id='c'/></div></div>
+  </doc>")//div
+   => outermost() => string(@id)]]></eg></fos:expression>
+               <fos:result><code>"a"</code></fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg><![CDATA[[[[1], [2]], [[3], [4]], [[5], [6]]]")//array(*)
+   => outermost() => array:size()]]></eg></fos:expression>
+               <fos:result><code>3</code></fos:result>
+            </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change issue="2100"><p>Generalized to work with JNodes as well as XNodes.</p></fos:change>
+      </fos:changes>
    </fos:function>
    <fos:function name="index-of" prefix="fn">
       <fos:signatures>
