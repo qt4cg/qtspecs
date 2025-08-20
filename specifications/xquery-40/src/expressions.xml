@@ -20810,39 +20810,14 @@ processing with JSON processing.</p>
                   for cases where keys are items other than integers or NCNames.
                   It can also be followed by a variable reference or a context value reference.
                </change>
-               <!--<change issue="297" PR="837" date="2023-11-23">
-                  A deep lookup operator <code>??</code> is provided for searching
-                  trees of maps and arrays.
-               </change>-->
-               <!--<change issue="960 1094" PR="1125" date="2024-04-23">
-                  Lookup expressions can now take a modifier (such as <code>keys</code>,
-                  <code>values</code>, or <code>pairs</code>) enabling them to return
-                  structured results rather than a flattened sequence. <!-\-In addition
-                  they can be qualified with a type to select only the results that
-                  match that type.-\->
-               </change>-->
-               
-               <!--<change issue="1456 1866" PR="1864 1877">
-                  The key specifier can reference an item type or sequence type, to select
-                  values of that type only. This is especially useful when processing
-                  trees of maps and arrays, as encountered when processing JSON input.
-               </change>-->
-               <!--<change issue="2025" PR="2031" date="2025-06-13">
-                  The "?" operator can now be followed by an axis step, such as <code>child::*</code>
-                  or <code>descendant::*</code>. This returns a sequence of JNodes, which
-                  allow access to the key used for selection, and to parents and ancestors 
-                  in the selection tree; it also avoids flattening the result sequence.
-               </change>-->
+
             </changes>
 
-            <!--<p>&language; provides two lookup operators <code>?</code> and <code>??</code>
-               for maps and arrays. These provide a terse syntax
-               for accessing the entries in a map or the members of an array.</p>
-            -->
+            
             <p diff="add" at="2023-11-15">The operator "?", known as the lookup operator,
-               returns values found in the operand map or array.<!-- The operator "??",
-            known as the deep lookup operator, also searches nested maps and arrays. The effect of the
-            deep lookup operator "??" is explained in <specref ref="id-deep-lookup"/>.--></p>
+               returns values found in the operand map or array.</p>
+            
+
             
          
 
@@ -20879,6 +20854,109 @@ processing with JSON processing.</p>
                and the final expression result is the <termref def="dt-sequence-concatenation"/>
                of the individual results.</p>
                
+               <p>The semantics of a postfix lookup expression <code><var>E</var>?<var>KS</var></code> are 
+                  defined by the following rules:</p>
+               
+               
+               <olist>
+                  <item><p><var>E</var> is evaluated to produce a value <code>$V</code>.</p></item>
+                  <item><p>If <code>$V</code> is not a <termref def="dt-singleton"/> 
+                     (that is if <code>count($V) ne 1</code>),
+                  then the result (by recursive application of these rules) is the value of
+                  <code>for $v in $V return $v?<var>KS</var></code>.</p></item>
+                  <item><p>If <code>$V</code> is a <termref def="dt-JNode"/> then it is
+                  coerced to the required type <code>(map(*)|array(*))</code>: see
+                  <termref def="dt-coercion-rules"/>.</p></item>
+                  <item><p>If <code>$V</code> (after coercion) is a <termref def="dt-singleton"/> array item (that is, 
+                     if <code>$V instance of array(*)</code>) then:</p>
+                  <olist>
+                     <item><p>If the <nt def="KeySpecifier">KeySpecifier</nt> <var>KS</var> is either a
+                         <code>Literal</code>, a <code>ContextValueRef</code>, a <code>VarRef</code>,
+                        or a <code>ParenthesizedExpr</code>,
+                        then it is evaluated as an expression to produce a value <code>$K</code>
+                        and the result is:</p> 
+                        <eg><![CDATA[data($K) ! array:get($V, .)]]></eg>
+                        <note>
+                           <p>The focus for evaluating the key specifier expression is the 
+                              same as the focus for the <code>Lookup</code> expression itself.</p>
+                           <p>The order of items in the result reflects the order of subscripts in
+                              <code>$K</code>: <code>[10, 20, 30]?(3, 1)</code> returns <code>(30, 10)</code>.</p>
+                           <p>This rule implies that a type error (<errorref class="TY" code="0004"/>)
+                              is raised if an item in the atomized value of <var>$K</var> cannot be coerced 
+                              to the type <code>xs:integer</code>.</p>
+                           <p>This rule also implies that a dynamic error (<xerrorref
+                           spec="FO40" class="AY" code="0001"/>)
+                              is raised if an integer in the atomized value of <var>$K</var> is outside
+                              the range 1 to <code>array:size($V)</code>.</p>
+                        </note>
+                     </item>
+                     
+                     
+                     <item>
+                        <p>If the <nt def="KeySpecifier">KeySpecifier</nt> <var>KS</var> is an <code>NCName</code>
+                           then it is evaluated in the same way as if the <code>NCName</code> were written
+                           in quotation marks as a <code>StringLiteral</code>: in consequence,
+                           the expression raises a type error <errorref class="TY" code="0004"/>.</p>
+                     </item>
+                     <item>
+                        <p>If the <nt def="KeySpecifier">KeySpecifier</nt> <code>KS</code> is a wildcard
+                           (<code>*</code>), 
+                           the result is the same as <code>$V?(1 to array:size($V))</code>:</p>
+
+                        <note>
+                           <p>Note that array items are returned in order.</p>
+                        </note>
+                     </item>
+                     
+
+                  </olist>
+                  </item>
+                  <item><p>If <var>$V</var> is a <termref def="dt-singleton"/> 
+                     map item (that is, if <code>$V instance of map(*)</code>)
+                     then:</p>
+                     <olist>
+                        <item><p>If the <nt def="KeySpecifier">KeySpecifier</nt> <var>KS</var> is either a
+                         <code>Literal</code>, a <code>ContextValueRef</code>, a <code>VarRef</code>,
+                        or a <code>ParenthesizedExpr</code>,
+                        then it is evaluated as an expression to produce a value <code>$K</code>
+                        and the result is:</p> 
+                           <eg><![CDATA[data($K) ! map:get($V, .)]]></eg>
+                           <note>
+                              <p>The focus for evaluating the key specifier expression is the 
+                                 same as the focus for the <code>Lookup</code> expression itself.</p>
+                              <p>The order of items in the result reflects the order of keys in
+                              <code>$K</code>: <code>{'a':10, 'b':20, 'c':30}?('c', 'a')</code> 
+                                 returns <code>(30, 10)</code>.</p>
+                              <p>There is no error when <code>$K</code> includes a key that is not
+                              present in the map.</p>
+                           </note>
+                        </item>
+                     
+                        <item>
+                           <p>If the <nt def="KeySpecifier">KeySpecifier</nt> 
+                              <var>KS</var> is an <code>NCName</code>, then the result
+                              is the same as if it were written in quotes as
+                              a <code>StringLiteral</code>: for example <code>$map?name</code>
+                           returns the same result as <code>map?"name"</code>.</p>
+                        </item>
+                        
+                        <item>
+                           <p>If the <nt def="KeySpecifier">KeySpecifier</nt> 
+                              <var>KS</var> is a wildcard (<code>*</code>), 
+                              the result is the same as <code>$V?(map:keys($V))</code>.</p>
+                          <note>
+                              <p>The order of entries in the result sequence 
+                                 reflects the <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref>
+                                 of the map.</p>
+                           </note>
+                        </item>
+                        
+                     </olist>
+                  </item>
+                  <item><p>Otherwise (that is, if <code>$V</code> is neither a map nor an array)
+                     a <termref def="dt-type-error">type error</termref> is raised <errorref class="TY"
+                           code="0004"/>.</p></item>
+               </olist>
                
                
     
@@ -20933,7 +21011,10 @@ processing with JSON processing.</p>
                   expression <code>.?KS</code>, which has the context value (<code>.</code>) as the implicit first operand.
                   See <specref ref="id-postfix-lookup"/> for the postfix lookup operator.</p>
                
-               
+               <note><p>Although the grammar allows the key specifier to be a context value expression,
+               this is of no practical use with a unary lookup. The expression <code>[1, 2, 3] -> ?.</code> expands to
+               <code>[1, 2, 3]?(1, 2, 3)</code> which returns <code>(1, 2, 3)</code>; but a more
+               likely result is a type error or array bounds error.</p></note>
                
                <p>Examples:</p>
                
@@ -20985,13 +21066,7 @@ processing with JSON processing.</p>
                         because <code>?3</code> applied to one of the
                         items in the sequence fails.</p>
                   </item>
-                  <item>
-                     <p>If <code>$m</code> is bound to the weekdays map described in <specref
-                        ref="id-maps"
-                     />, then <code>$m?*</code> returns the values <code>("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")</code>, in <termref
-                        def="dt-implementation-dependent"
-                        >implementation-dependent</termref> order.</p>
-                  </item>
+      
                   
                </ulist>
                
@@ -21040,7 +21115,14 @@ processing with JSON processing.</p>
                   automatically extracts its <term>·content·</term>. In other cases the value can
                   be extracted explicitly by a call of the <function>jnode-value</function> function.</p>
                   
-                  
+
+                  <p>Lookup expressions on arrays result in a dynamic error if the subscript is out
+                  of bounds, whereas the equivalent path expression succeeds, returning an empty
+                  sequence. For example <code>array{1 to 5}?10</code> raises 
+                     <xerrorref spec="FO40" class="AY" code="0001"/>, whereas <code>array{1 to 5}/get(10)</code>
+                     returns a empty sequence.
+                 </p>
+
                </div4>
                
                
