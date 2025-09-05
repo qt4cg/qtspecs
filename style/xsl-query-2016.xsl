@@ -736,13 +736,29 @@
     <xsl:variable name="shortSpec" select="replace(@spec, '40$', '')"/>
     <xsl:choose>
       <xsl:when test="$div">
+        
+        <!-- construct and render a suitable bibref. To reuse the bibref template
+          rule, we can't create a new bibref in a new document, we need to find
+          an appropriate bibref within the current document -->
+        <xsl:variable name="bibref" 
+                      select="map{'XP': 'xpath-40', 
+                                  'XQ': 'xquery-40', 
+                                  'XT': 'xslt-40', 
+                                  'SER': 'xslt-xquery-serialization-40', 
+                                  'SE': 'xslt-xquery-serialization-40', 
+                                  'DM': 'xpath-datamodel-40', 
+                                  'FO': 'xpath-functions-40'}($shortSpec)"/>
+        <xsl:if test="$bibref">
+          <xsl:apply-templates select="(//bibref[@ref=$bibref])[1]"/>
+          <xsl:text> section </xsl:text>
+        </xsl:if>        
+        
         <xsl:variable name="linktext">
           <xsl:choose>
             <xsl:when test="$div/self::prod">
               <xsl:value-of select="$div"/>
             </xsl:when>
-            <xsl:otherwise>
-              <xsl:text>Section </xsl:text>
+            <xsl:otherwise>      
               <xsl:value-of select="$div/head"/>
             </xsl:otherwise>
           </xsl:choose>
@@ -758,11 +774,14 @@
             <xsl:sequence select="$linktext"/>
           </xsl:otherwise>
         </xsl:choose>
-        <sup>
-          <small>
-            <xsl:value-of select="$shortSpec"/>
-          </small>
-        </sup>
+        
+        <xsl:if test="not($bibref)">
+          <sup>
+            <small>
+              <xsl:value-of select="$shortSpec"/>
+            </small>
+          </sup>
+        </xsl:if>
       </xsl:when>
       <xsl:when test="$nt">
         <xsl:choose>
