@@ -553,7 +553,7 @@
 	
 	<xsl:template match="fos:result">
 		<xsl:choose>
-			<xsl:when test="contains(., codepoints-to-string(10)) || ..//eg">
+			<xsl:when test="contains(., codepoints-to-string(10)) or ..//eg">
 				<eg><xsl:value-of select="."/></eg>
 			</xsl:when>
 			<xsl:otherwise>
