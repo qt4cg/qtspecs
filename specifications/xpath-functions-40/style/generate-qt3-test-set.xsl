@@ -97,7 +97,7 @@
       <test>
         <xsl:for-each select="id(@use)">
           {"let $" || @name || " := " || @select}
-          <xsl:value-of select="text()" disable-output-escaping="yes"/>
+          <xsl:value-of select="text()"/>
           {" return 
 "}
         </xsl:for-each>
