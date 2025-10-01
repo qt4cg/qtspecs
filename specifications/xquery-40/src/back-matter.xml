@@ -768,61 +768,111 @@ See
   <p>This appendix provides a non-normative summary of the various functions and operators used for comparison
     of atomic items, with some background on the history and rationale.</p>
   
-  
-  <div2 id="id-equality-comparison">
-    <head>Equality Comparisons</head>
-    <p>In &language; there are essentially four ways of comparing two atomic items for equality:</p>
+    <p>In &language; there are several ways of comparing two atomic items for equality or ordering.
+    The rules for each are summarized in the following sections</p>
     
-    <ulist>
-      <item><p><code>$A = $B</code></p>
-        <p>This operator was introduced in XPath 1.0. The semantics were changed slightly in XPath 2.0, but the
-          original semantics remain available when XPath 1.0 compatibility mode is enabled.</p>
-        <p>With a general comparison in XPath 2.0 or later (and in XQuery), the following rules are observed:</p>
-        <ulist>
-          <item><p>Either operand may be a sequence; the result is true if any pair of items from the
-            two sequences compares equal.</p>
-            <p>In consequence, if either operand is an empty sequence, the result is false.</p></item>
-          <item><p>If nodes are supplied, they are atomized.</p></item>
-          <item><p>Untyped atomic items appearing in one operand are converted to the type of the
-            other operand (if both operands are untyped atomic, they are compared as strings).</p></item>
-          <item><p>As a result, the operator is not transitive: the untyped atomic items <code>"4.0"</code>
-            and <code>"4"</code> are not equal to each other, but both compare equal to the integer value 
-            <code>4</code>.</p></item>
-          <item><p>Comparison of certain values is context-sensitive. In particular, comparison of strings
-            uses the default collation from the static context, while comparison of date/time values lacking
-            an explicit timezone takes the timezone from the dynamic context.</p></item>
-          <item><p>NaN is not equal to NaN; negative zero is equal to positive zero.</p></item>
-          <item><p><code>xs:hexBinary</code> and <code>xs:base64Binary</code> values are mutually comparable:
-          they are equal if they represent the same sequence of octets.</p></item>
-          <item><p>Comparing incompatible values (for example <code>xs:integer</code> and <code>xs:date</code>)
-            raises an error.</p></item>
-        </ulist>
-      </item>
-      <item><p><code>$A eq $B</code></p>
+    <div2 id="value-comparisons-summary">
+      <head>Value Comparisons</head>
+
+      
+      <p>For example <code>$A eq $B</code> or <code>$A lt $B</code>.</p>
+      
         <p>Value comparisons were introduced in XPath 2.0 and XQuery 1.0. One of the aims was to make
           the comparison transitive (a precondition for a wide variety of optimizations), however in edge
-          cases involving comparisons across different numeric types this was not entirely achieved.</p>
+          cases involving comparisons across different numeric types this was not entirely achieved.
+          To fix this problem, the rules have changed in the 4.0 specification.</p>
         <p>With a value comparison, the rules are:</p>
         <ulist>
           <item><p>Each operand must either be a single atomic item, or an empty sequence.</p></item>
           <item><p>If either operand is an empty sequence, the result is an empty sequence; in most
             contexts this has the same effect as returning false.</p></item>
-          <item><p>If nodes are supplied, they are atomized.</p></item>
-          <item><p>Untyped atomic items are converted to strings (regardless of the type of the other operand).</p></item>
-          <item><p>Numeric values of types <code>xs:integer</code>, <code>xs:decimal</code>, or <code>xs:float</code>
-            are converted to <code>xs:double</code>.</p>
-            <p>This can lead to problems with implementations of <code>xs:decimal</code> that support more precision 
-              than can be held in an <code>xs:double</code>.</p></item>
-          <item><p>As with general comparisons, the default collation and implicit timezone are taken from the
-            context.</p></item>
+          <item><p>Strings are compared using the default collation from the static context
+          of the expression.</p></item>
+          <item><p>Date and time values are compared after normalizing the timezone offset.
+          If the timezone is absent, the implicit timezone from the dynamic evaluation context
+          is used.</p></item>
+          <item><p>If nodes are supplied, they are atomized. In the absence of schema validation,
+          the result of atomizing a node is an untyped atomic value, which is treated as a string.
+          Comparison of a node to a value such as a number or a date therefore raises an error.</p></item>
+          <item><p>Numeric values of types <code>xs:integer</code>, <code>xs:decimal</code>, 
+            or <code>xs:float</code> are mutually comparable. Except for the special values <code>NaN</code>
+            and positive and negative infinity, both operands
+            are converted to <code>xs:decimal</code>, using an implementation of <code>xs:decimal</code>
+          that supports unlimited precision (or at least, sufficient precision to represent every
+          datum in the <code>xs:double</code> value space losslessly), and the comparison then
+          follows the normal mathematical principles.</p>
+            <note><p>This is a change from previous versions, where both values were converted
+            to <code>xs:double</code>. The reason for the change is to make comparisons transitive,
+            which is vital for operations such as sorting and grouping.</p></note>           
+          </item>
           <item><p>NaN is not equal to NaN; negative zero is equal to positive zero.</p></item>
-          <item><p><code>xs:hexBinary</code> and <code>xs:base64Binary</code> values are mutually comparable:
+          <item><p>In 4.0, <code>xs:hexBinary</code> and <code>xs:base64Binary</code> values are mutually comparable:
             they are equal if they represent the same sequence of octets.</p></item>
           <item><p>Comparing incompatible values (for example <code>xs:integer</code> and <code>xs:date</code>)
             raises an error.</p></item>
         </ulist>
-      </item>
-      <item><p><code>deep-equal($A, $B)</code></p>
+    </div2>
+  
+  <div2 id="general-comparisons-summary">
+    <head>General Comparisons</head>
+  
+      
+      <p>For example <code>$A = $B</code> or <code>$A &lt; $B</code>.</p>
+    
+        <p>These operators were introduced in XPath 1.0. The semantics were changed significantly in XPath 2.0, but the
+          original semantics remain available when XPath 1.0 compatibility mode is enabled.</p>
+        <p>The following rules are observed:</p>
+        <ulist>
+          <item><p>Either operand may be a sequence; the result is true if any pair of items from the
+            two sequences have the required relationship (when compared using a value comparison,
+            as described above). For equality tests, the result is reasonably
+            intuitive, for example <code>(position() = 1 to 10)</code> is true if the value of 
+            <code>position()</code> is equal to any of the values from 1 to 10 inclusive. For other
+            operators, the result may be less obvious: for example <code>(position() > 1 to 10)</code>
+            has exactly the same meaning as <code>(position() > 1)</code>.</p>
+            <p>In consequence, if either operand is an empty sequence, the result is false.</p></item>
+          <item><p>If nodes are supplied, they are atomized.</p></item>
+          <item><p>Untyped atomic items appearing in one operand are converted to the type of the
+            other operand (if both operands are untyped atomic, they are compared as strings).
+            As a result, the operator is not transitive: the untyped atomic items <code>"4.0"</code>
+            and <code>"4"</code> are not equal to each other, but both compare equal to the integer value 
+            <code>4</code>.</p></item>
+          
+          <item><p>As with value comparisons, the result is context-sensitive. In particular, comparison of strings
+            uses the default collation from the static context, while comparison of date/time values lacking
+            a timezone takes the implicit timezone from the dynamic context.</p></item>
+          
+          <item><p>Comparing incompatible values (for example <code>xs:integer</code> and <code>xs:date</code>)
+            raises an error.</p></item>
+          
+          <item><p>For version 4.0, two changes arise as a consequence of the changes
+          to value comparisons, described above:</p>
+            <olist>
+              <item><p><code>xs:hexBinary</code> and <code>xs:base64Binary</code> values become 
+                mutually comparable.</p></item>
+              <item><p>Comparison between mixed numeric types (for example <code>xs:decimal</code>
+              and <code>xs:double</code>) now converts both values to <code>xs:decimal</code>
+              rather than <code>xs:double</code>.</p></item>
+            </olist>
+          </item>
+          
+          <item>
+            <p>To mitigate the compatibility impact of the above change, the rules for handling
+            untyped atomic values have changed: for example, if <code>$a</code> is an untyped
+            attribute node with the value <code>"8.95"</code>, then the comparison
+            <code>$a = 8.95</code> remains true. This is because an untyped atomic value is
+            now converted to the type of the other operand, which in this case is <code>xs:decimal</code>,
+            and the two <code>xs:decimal</code> values compare equal.</p>
+          </item>
+        </ulist>
+     
+  </div2>
+  <div2 id="deep-equal-summary">
+    <head>fn:deep-equal</head>
+ 
+      
+      <p>For example, <code>deep-equal($A, $B)</code></p>
+    
         <p>As the name implies, the <code>deep-equal</code> function was introduced primarily for comparing nodes,
           or sequences of nodes; however in its simplest form it can also be used to compare two atomic items. The semantics
           of the comparison used by <code>deep-equal($A, $B)</code> are also invoked by a wide variety of other functions
@@ -834,20 +884,25 @@ See
             sequence the result is false; but if both operands are empty sequences, the result is true.</p></item>
           <item><p>If nodes are supplied, they are not atomized; they are compared as nodes.</p></item>
           <item><p>Strings can be compared using the default collation or using an explicitly specified collation;
-            there are also options to compare after normalizing whitespace or unicode.</p></item>
+            there are also options to compare after normalizing whitespace or Unicode.</p></item>
           <item><p>Comparisons of dates and times lacking a timezone uses the implicit timezone from the dynamic
             context.</p></item>
-          <item><p>Numeric values are converted to <code>xs:decimal</code> prior to comparison, not to <code>xs:double</code>.
-            This represents a departure in 4.0 from previous versions of the specification. The conversion must use
-            an implementation of <code>xs:decimal</code> that does not cause loss of precision. As a result, the comparison
-            is now truly transitive, which makes it suitable to underpin grouping operations.</p></item>
-          <item><p>To ensure that every value is equal to itself, comparing NaN to NaN returns true.</p></item>
+          <item><p>To ensure that every value is equal to itself, comparing NaN to NaN returns true.</p></item>        
+          <item><p>In all other cases comparison between numeric values, including comparison of mixed
+            types such as <code>xs:double</code> and <code>xs:decimal</code>, follows the same
+            rules as for value comparisons using the <code>eq</code> operator.</p></item>
           <item><p><code>xs:hexBinary</code> and <code>xs:base64Binary</code> values are mutually comparable:
             they are equal if they represent the same sequence of octets.</p></item>
           <item><p>Comparing incompatible values (for example <code>xs:integer</code> and <code>xs:date</code>)
             returns false; it does not raise an error.</p></item>
-        </ulist></item>
-      <item><p><code>atomic-equal($A, $B)</code></p>
+        </ulist>
+  </div2>
+  
+  <div2 id="atomic-equal-summary">
+    <head>fn:atomic-equal</head>
+  
+      
+      <p>For example, <code>atomic-equal($A, $B)</code></p>
         <p>This comparison operation was introduced in XPath 3.0 (and XQuery 3.0) for comparing keys in maps;
           the 4.0 specifications expose it directly as a function that can be called from user applications.
           The dominant requirements for keys in maps were that the comparison should be transitive, error-free, 
@@ -860,19 +915,54 @@ See
             normalization.</p></item>
           <item><p>Dates and times lacking a timezone are never equal to dates and times that have a timezone.
             However, when comparing two dates or times that both have a timezone, the timezone is normalized.</p></item>
-          <item><p>As with <code>deep-equal</code>, numeric values are converted to <code>xs:decimal</code> 
-            prior to comparison, not to <code>xs:double</code>.</p></item>
-          <item><p>Comparing NaN to NaN returns true.</p></item>
-          <item><p><code>xs:hexBinary</code> and <code>xs:base64Binary</code> values are distinct:
-            both can co-exist as distinct keys in a map even if the underlying sequence of octets is the same.</p></item>
+          <item><p>Comparison of numeric values follows the same rules as <function>deep-equal</function>:
+            NaN is considered equal to NaN, positive zero is equal to negative zero, 
+            and numeric values of differing type are converted to <code>xs:decimal</code> 
+            prior to comparison.</p></item>
+    
+          <item><p><code>xs:hexBinary</code> and <code>xs:base64Binary</code> values are mutually comparable:
+            they are equal if they represent the same sequence of octets. This represents
+          an incompatibility with previous versions, in that an <code>xs:hexBinary</code> and <code>xs:base64Binary</code>
+          value representing the same sequence of octets can no longer co-exist in the same map;
+          they are considered to be duplicate keys.</p></item>
           <item><p>Comparing incompatible values (for example <code>xs:integer</code> and <code>xs:date</code>)
             returns false; it does not raise an error.</p></item>
         </ulist>
         
-      </item>
-    </ulist>
+  </div2>
+  
+  <div2 id="fn-compare-summary">
+    <head>fn:compare</head>
+    
+    <p>The function <function>fn:compare</function> was introduced in XPath 3.0 and XQuery 3.0 for comparing
+    strings; in 4.0 it has been extended to handle other data types. Unlike <function>fn:deep-equal</function>
+    and <code>fn:atomic-equal</code> it establishes the order relationship of two atomic items, rather than
+    simply determining whether they are equal.</p>
+    
+    <p>Broadly speaking, the <function>fn:compare</function> function establishes the relationship between
+    its first two operands in the same way as value comparisons using the <code>eq</code> and <code>lt</code>
+    operators. The main differences are:</p>
+    
+    <olist>
+      <item><p><function>fn:compare</function> allows a collation to be supplied explicitly, rather than
+      relying on the static context.</p></item>
+      <item><p><function>fn:compare</function> treats <code>NaN</code> as equal to itself (and less than any
+        other numeric value).</p></item>
+    </olist>
+    
+    <p>All other functions and operations that depend on sorting values (for example the <function>fn:sort</function>,
+    <function>fn:sort-by</function>, and <function>fn:sort-with</function> functions, the <function>fn:min</function>
+    and <function>fn:max</function> functions, <function>fn:highest</function> and <function>fn:lowest</function>,
+    the <code>order by</code> clause in XQuery, and the <code>xsl:sort</code> and <code>xsl:merge</code> instructions
+    in XSLT, are ultimately defined in terms of either <code>fn:compare</code> or the value comparison operators
+    <code>eq</code> and <code>lt</code>.</p>
+  </div2>
+  
+  <div2 id="comparison-methods-summary">
+    <head>Summary of Atomic Comparison Methods</head>
+ 
       
-      <p>The following table summarizes these differences. For all these examples it is assumed that
+      <p>The following table summarizes these differences for different ways of comparing values. For all these examples it is assumed that
       (a) the default collation is the HTML case-blind collation, (b) the implicit timezone is
       +01:00, and (c) nodes are untyped.</p>
       
@@ -885,6 +975,7 @@ See
             <th><code>$A eq $B</code></th>
             <th><code>deep-equal(&#x200B;$A, $B)</code></th>
             <th><code>atomic-equal(&#x200B;$A, $B)</code></th>
+            <th><code>compare(&#x200B;$A, $B)</code></th>
           </tr>
         </thead>
         <tbody>
@@ -895,6 +986,7 @@ See
             <td><p><code>()</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>error</code></p></td>
+            <td><p><code>()</code></p></td>
           </tr>
           <tr>
             <td><p><code>12</code></p></td>
@@ -903,6 +995,7 @@ See
             <td><p><code>()</code></p></td>
             <td><p><code>false</code></p></td>
             <td><p><code>error</code></p></td>
+            <td><p><code>()</code></p></td>
           </tr>
           <tr>
             <td><p><code>(1,2)</code></p></td>
@@ -910,6 +1003,7 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>error</code></p></td>
             <td><p><code>false</code></p></td>
+            <td><p><code>error</code></p></td>
             <td><p><code>error</code></p></td>
           </tr>
           <tr>
@@ -919,14 +1013,16 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code>0.2</code></p></td>
             <td><p><code>0.2e0</code></p></td>
-            <td><p><code>true</code></p></td>
-            <td><p><code>true</code></p></td>
             <td><p><code>false</code></p></td>
             <td><p><code>false</code></p></td>
+            <td><p><code>false</code></p></td>
+            <td><p><code>false</code></p></td>
+            <td><p><code>-1</code></p></td>
           </tr>
           <tr>
             <td><p><code>NaN</code></p></td>
@@ -935,6 +1031,7 @@ See
             <td><p><code>false</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code>+0e0</code></p></td>
@@ -943,6 +1040,7 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code>"A"</code></p></td>
@@ -951,6 +1049,7 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>false</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code>"A"</code></p></td>
@@ -959,6 +1058,7 @@ See
             <td><p><code>error</code></p></td>
             <td><p><code>false</code></p></td>
             <td><p><code>false</code></p></td>
+            <td><p><code>error</code></p></td>
           </tr>
           <tr>
             <td><p><code><![CDATA[<a>A</a>]]></code></p></td>
@@ -967,6 +1067,7 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>false</code></p></td>
             <td><p><code>true</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code><![CDATA[<a>12</a>]]></code></p></td>
@@ -975,6 +1076,7 @@ See
             <td><p><code>error</code></p></td>
             <td><p><code>false</code></p></td>
             <td><p><code>false</code></p></td>
+            <td><p><code>error</code></p></td>
           </tr>
           <tr>
             <td><p><code>xs:time(&#x200B;'12:00:00Z')</code></p></td>
@@ -983,6 +1085,7 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code>xs:time(&#x200B;'12:00:00Z')</code></p></td>
@@ -991,6 +1094,7 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>false</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
           <tr>
             <td><p><code>xs:hexBinary(&#x200B;"0000")</code></p></td>
@@ -998,23 +1102,12 @@ See
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
             <td><p><code>true</code></p></td>
-            <td><p><code>false</code></p></td>
+            <td><p><code>true</code></p></td>
+            <td><p><code>0</code></p></td>
           </tr>
         </tbody>
       </table>
 
-  </div2>
-  <div2 id="id-ordering-comparison">
-    <head>Ordering Comparisons</head>
-    <p>In &language; there are essentially three ways of comparing two atomic items for their relative ordering:</p>
-    
-    <ulist>
-      <item><p><code>$A &lt; $B</code></p></item>
-      <item><p><code>$A lt $B</code></p></item>
-      <item><p><code>Sorting</code></p></item>
-    </ulist>
-    
-    <p>TODO: to be expanded.</p>
   </div2>
   
 </inform-div1>
@@ -1024,8 +1117,16 @@ See
 
 <head>Backwards Compatibility</head>
   
-  <div2 id="id-incompatibilities-31" diff="add" at="2022-11-16">
+  <div2 id="id-incompatibilities-31">
     <head>Incompatibilities relative to &language-tech; 3.1</head>
+    
+    <p>Comparisons between numeric values of different types (for example <code>xs:double</code>
+    and <code>xs:decimal</code>) may give a different result, because the values will now be compared
+    as decimals rather than as doubles. For example, the comparison <code>3.1 = 3.1e0</code> will now return
+    false, because the exact value of the <code>xs:double</code> written as <code>3.1e0</code>
+    is actually <code>3.100000000000000088817841970012523233890533447265625</code>. This change is made
+    to ensure that comparison operations are fully transitive, which is a prerequisite for certain
+    sorting and grouping algorithms.</p>
     
     <p>In <code>fn:format-integer</code>, certain formatting pictures using a circumflex as a grouping separator might
     be interpreted differently in 4.0: for example <code>format-integer(1234, "9^999")</code> would output <code>"1^234"</code>
