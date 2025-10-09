@@ -142,9 +142,9 @@
     <xsl:variable name="duplicate" as="xs:integer" 
       select="count(preceding::prodrecap[@ref=current()/@ref][not(../@role='example')]) + 1"/>
 
-    <xsl:if test="$duplicate != 1">
+    <!--<xsl:if test="$duplicate != 1">
       <xsl:message expand-text="1">*** Duplicate prodrecap {@ref} ***</xsl:message>
-    </xsl:if>
+    </xsl:if>-->
     
     <xsl:variable name="id-prefix" as="xs:string">
       <xsl:choose>
