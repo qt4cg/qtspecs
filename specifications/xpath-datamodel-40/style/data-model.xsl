@@ -498,17 +498,17 @@
   <xsl:choose>
     <xsl:when test="ends-with(@source, '.svg')">
       <!-- We have to embed the SVG because we want the links to work -->
-      <div class="svg-figure" style="width:100%;overflow-x:scroll;">
+      <div class="svg-figure" style="width:50rem;overflow-x:scroll;">
         <div class="svg-diagram" style="text-align:center;">
           <xsl:variable name="svg"
-                        select="doc('../../../build/type-hierarchy/'||@source)"/>
+                        select="doc('../images/' || @source)"/>
           <xsl:comment>SVG embedded so that links work</xsl:comment>
           <xsl:apply-templates select="$svg" mode="strip-svg"/>
         </div>
       </div>
     </xsl:when>
     <xsl:otherwise>
-      <next-match/>
+      <xsl:next-match/>
     </xsl:otherwise>
   </xsl:choose>
 </xsl:template>
