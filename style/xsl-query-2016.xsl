@@ -732,8 +732,15 @@
     <xsl:variable name="doc" select="document(concat('../build/etc/', @spec, '.xml'))"/>
     <xsl:variable name="div" select="$doc//*[@id=$ref]"/>
     <xsl:variable name="nt" select="($doc//*[@def=$ref])[1]"/>
-    <xsl:variable name="uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
+
+    <xsl:variable name="link-uri" select="replace($doc/document-summary/@uri, '^http:', 'https:')"/>
+    <xsl:variable name="uri"
+                  select="if (starts-with($link-uri, $qt4cg))
+                          then '../' || substring-after($link-uri, $qt4cg)
+                          else $link-uri"/>
+
     <xsl:variable name="shortSpec" select="replace(@spec, '40$', '')"/>
+
     <xsl:choose>
       <xsl:when test="$div">
         
