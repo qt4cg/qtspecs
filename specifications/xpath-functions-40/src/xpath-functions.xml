@@ -11047,9 +11047,9 @@ $gen2ToInf =?> make-generator(fn($numGenerated as xs:integer)
 				  <item>
 				    <eg>
 <code>let $myMap := {"John": 22, "Ann": 28, "Peter": 31},
-         $genMap := $gen2ToInf =?> make-generator-from-map($myMap)
-      return
-        $genMap =?> to-map()</code></eg>
+     $genMap := $gen2ToInf =?> make-generator-from-map($myMap)
+   return
+         $genMap =?> to-map()</code></eg>
             		<p>returns the map <code>{"John":22,"Ann":28,"Peter":31}</code>.</p>				  
 				  </item>
 				</ulist>
@@ -14986,6 +14986,625 @@ ISBN 0 521 77752 6.</bibl>
          
          <?record-description-index?>
       </div1>
+	  
+	  <div1 id="id-generator-methods-formal-equivalents">
+		 <head>Formal semantics of the methods of the record f:generator</head>
+        <p>This appendix lists the formal equivalents for each of the methods of the built-in <code>f:generator</code> record type,
+         available in the static context of every application.</p>
+		 <ulist>
+		   <item>
+		     <p>append()</p>
+<eg>append := fn($this as f:generator, $value as item()*) as f:generator
+{
+let $gen := if(not($this?initialized)) then $this =?> move-next()
+			else $this,
+	$genSingle := 
+	  $gen => map:put("get-current",   fn($this as f:generator){$value})
+		   => map:put("move-next",   
+			      fn($this as f:generator){$gen =?> empty-generator()})
+		   => map:put("end-reached", false())
+ return
+   $gen =?> concat($genSingle)                  
+}</eg>
+		   </item>
+		   <item>
+		     <p>at()</p>
+<eg>at := fn($this as f:generator, $ind as xs:positiveInteger) as item()* 
+{$this =?> subrange($ind, $ind) =?>get-current()}</eg>
+		   </item>
+		   <item>
+		     <p>chunk()</p>
+<eg>chunk := fn($this as f:generator, $size as xs:positiveInteger) as f:generator
+ {
+let $gen := if(not($this?initialized)) then $this =?> move-next()
+			  else $this
+ return
+   if($gen?end-reached) then $gen =?> empty-generator()
+   else
+	 let $thisChunk := $gen =?> take($size) =?> to-array(),
+		 $cutGen := $gen =?> skip($size),
+		 $resultGen := 
+		    $gen => map:put("get-current", fn($this as f:generator){$thisChunk})
+			 => map:put("move-next", 
+			             fn($this as f:generator){$cutGen =?> chunk($size)})
+	  return $resultGen
+ }</eg>
+		   </item>
+		   <item>
+		     <p>concat()</p>
+<eg>concat := fn($this as f:generator, $gen2 as f:generator) as f:generator
+{
+let $gen := if(not($this?initialized)) then $this =?> move-next()
+			else $this,
+	$gen2 := if(not($gen2?initialized)) then $gen2 =?> move-next()
+			else $gen2,
+	$resultGen := 
+		if($gen?end-reached) then $gen2
+		else if($gen2?end-reached) then $gen
+		else
+		  $gen  => map:put( "move-next", 
+				     fn($this as f:generator)
+				     {
+				     let $nextGen := $gen =?> move-next()
+				       return 
+					     $nextGen =?> concat($gen2)
+				     }
+			           )                                   
+return 
+   $resultGen            
+}</eg>
+		   </item>
+		   <item>
+		     <p>contains()</p>
+<eg>contains := fn($this as f:generator, $value as item()*) as xs:boolean
+ {
+let $gen := if(not($this?initialized)) then $this =?> move-next()
+	   else $this
+return
+  if($gen?end-reached) then false()
+   else
+	let $current := $gen =?> get-current()
+	 return
+	  if(deep-equal($current, $value)) then true()
+	  else ($gen =?> move-next()) =?> contains($value)                  
+ }</eg>
+		   </item>
+		   <item>
+		     <p>distinct()</p>
+<eg>distinct := fn($this as f:generator) as f:generator
+{
+let $gen := if(not($this?initialized)) then $this =?> move-next()
+			  else $this
+ return
+   if($gen?end-reached) then $gen
+   else
+     let $priorValue := $gen =?> get-current()
+       return
+	 $gen => map:put("move-next",   
+			 fn($this as f:generator)
+			   {   
+			   ($gen =?> tail()) 
+				 =?> remove-where(fn($x){deep-equal($priorValue, $x)})
+				 =?> distinct()
+			   }
+		           )
+}</eg>
+		   </item>
+		   <item>
+		     <p>empty-generator()</p>
+<eg>empty-generator := fn($this as f:generator) as f:generator
+{
+$this => map:put("initialized", true()) => map:put("end-reached", true())
+	=> map:put("get-current", 
+	  fn($this as f:generator) {error((),"get-current() called on an empty-generator")})
+	=> map:put("move-next", 
+	  fn($this as f:generator) {error((),"move-next() called on an empty-generator")})
+}</eg>
+		   </item>
+		   <item>
+		     <p>filter()</p>
+<eg>filter := fn($this as f:generator, $pred as function(item()*) as xs:boolean) as f:generator
+{
+ if($this?initialized and $this?end-reached) then $this =?> empty-generator()
+  else
+   let $getNextGoodGen := function($gen as map(*), 
+				   $pred as function(item()*) as xs:boolean)
+   {
+    if($gen?end-reached) then $gen =?> empty-generator()
+    else
+      let $mapResult := 
+		while-do($gen,
+			 function($x) { not($x?end-reached) 
+			               and not($pred($x =?> get-current()))},
+			 function($x) { $x =?> move-next() }
+			 )   
+        return 
+	  if($mapResult?end-reached) then $gen =?> empty-generator()
+	    else $mapResult                           
+   },
+   
+   $gen := if($this?initialized) then $this 
+			 else $this =?> move-next(),
+   $nextGoodGen := $getNextGoodGen($gen, $pred)
+ return
+  if($nextGoodGen?end-reached) then $nextGoodGen =?> empty-generator()
+  else
+   $nextGoodGen  => map:put("inputGen", $nextGoodGen)
+		 => map:put("move-next", 
+			  fn($this as f:generator) 
+			  {
+			   let $nextGoodGen := $getNextGoodGen($this?inputGen 
+								   =?> move-next(), $pred)
+			    return
+				 if($nextGoodGen?end-reached) 
+				  then $nextGoodGen =?> empty-generator()
+				  else
+				   $nextGoodGen => map:put("move-next",   
+							     fn($this as f:generator) 
+							     {
+							     ($nextGoodGen =?> move-next())
+							     =?> filter($pred)
+							     }
+							   )
+						=> map:put("inputGen", $nextGoodGen)
+			   }
+			    )
+}</eg>
+		   </item>
+		   <item>
+		   <p>first-where()</p>
+<eg>first-where := fn($this as f:generator, $pred as function(item()*) as xs:boolean) as item()*
+{
+  $this =?> filter($pred) =?> head()
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>fold-lazy()</p>
+<eg>fold-lazy := fn($this as f:generator, $init as item()*, $action as fn(*), 
+                $shortCircuitProvider as function(*)) as item()*
+{
+  if($this?end-reached) then $init
+  else
+   let $current := $this =?> get-current()
+	 return
+	   if(function-arity($shortCircuitProvider($current, $init)) eq 0)
+	     then $shortCircuitProvider($current, $init)()
+	     else $action($current, ($this =?> move-next()) 
+		      =?> fold-lazy($init, $action, $shortCircuitProvider))
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>fold-left()</p>
+<eg>fold-left := fn($this as f:generator, $init as item()*, $action as fn(*)) as item()*
+{
+  if($this?end-reached) then $init
+    else $this =?> tail() =?> fold-left($action($init, $this =?> get-current()), $action)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>fold-right()</p>
+<eg>fold-right := fn($this as f:generator, $init as item()*, $action as fn(*)) as item()*
+{
+  if($this?end-reached) then $init          
+    else $action($this =?> head(), $this =?> tail() =?> fold-right($init, $action))
+}</eg>		   
+		   </item>		   
+		   <item>
+		   <p>for-each()</p>
+<eg>for-each := fn($this as f:generator, $fun as function(*)) as f:generator
+ {
+  let $gen := if(not($this?initialized)) then $this =?> move-next()
+	        else $this        
+   return
+	 if($gen?end-reached) then $gen =?> empty-generator($gen)
+	  else
+	   let $current := $fun($gen =?> get-current()),
+		$newResultGen := map:put($gen, "get-current",   
+					fn($this as f:generator){$current}),
+		$nextGen := $gen =?> move-next()
+		return
+		  if($nextGen?end-reached) then $newResultGen
+		else
+		  let $newResultGen2 :=  map:put($newResultGen, "move-next",   
+						fn($this as f:generator) 
+						{$nextGen =?> for-each($fun)}) 
+		    return
+		      $newResultGen2                    
+  }</eg>		   
+		   </item>		   
+		   <item>
+		   <p>for-each-pair()</p>
+<eg>for-each-pair := fn($this as f:generator, $gen2 as f:generator, $fun as function(*)) 
+                   as f:generator
+{
+let $gen := if(not($this?initialized)) then $this =?> move-next()
+              else $this,
+    $gen2 := if(not($gen2?initialized)) then $gen2 =?> move-next()
+             else $gen2
+ return
+  if($gen?end-reached or $gen2?end-reached) then $gen =?> empty-generator() 
+    else  
+     let $current := $fun($gen =?> get-current(), $gen2 =?> get-current()),
+         $newResultGen := map:put($gen, "get-current",   fn($this as f:generator){$current}),
+	  $nextGen1 := $gen =?> move-next(),
+	  $nextGen2 := $gen2 =?> move-next()
+  return
+   if($nextGen1?end-reached or $nextGen2?end-reached) then $newResultGen
+     else
+      let $newResultGen2 := map:put($newResultGen, "move-next", 
+	                            fn($this as f:generator)
+				   {$nextGen1 =?> for-each-pair($nextGen2, $fun)})
+       return
+	   $newResultGen2
+}</eg>		   
+		   </item>	
+		   <item>
+		   <p>head()</p>
+<eg>head := fn($this as f:generator) as item()* 
+           {$this =?> take(1) =?> get-current()}</eg>		   
+		   </item>
+		   <item>
+		   <p>insert-at()</p>
+<eg>insert-at := fn($this as f:generator, $pos as xs:positiveInteger, $value as item()*) 
+                 as f:generator
+{
+let $genTail := $this =?> skip-strict($pos - 1, true())
+ return
+	if($pos gt 1)
+	  then ($this =?> take($pos - 1)) =?> append($value) =?> concat($genTail)
+	  else $genTail =?> prepend($value)               
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>make-generator()</p>
+<eg>make-generator := fn($this as f:generator, $provider as function(xs:integer) as item()*) 
+                      as f:generator
+{
+ let $gen := if(not($this?initialized)) then $this =?> move-next()
+	    else $this,
+     $nextDataItemGetter := $provider(0),      
+     $nextGen := if(not($nextDataItemGetter instance of function(*))) 
+		   then $gen =?> empty-generator()  
+		   else $gen =?> empty-generator()
+			   => map:put("numDataItems", 1)
+			   => map:put("current", $nextDataItemGetter())
+			   => map:put("end-reached", false())
+			   => map:put("get-current", 
+						  fn($this as f:generator) {$this?current})
+			   => map:put("move-next",  
+				  fn($this as f:generator) 
+				  {
+				   let $nextDataItemGetter := $provider($this?numDataItems)
+				return
+				  if(not($nextDataItemGetter instance of function(*))) 
+				    then $gen =?> empty-generator()
+				    else
+				     $this => map:put("current", $nextDataItemGetter())
+					   => map:put("numDataItems", $this?numDataItems + 1)
+				  }
+					)
+ return $nextGen                                                                                      
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>make-generator-from-array()</p>
+<eg>make-generator-from-array := fn($this as f:generator, $input as array(*)) as f:generator
+{
+  let $size := array:size($input),
+	  $arrayProvider := fn($ind as xs:integer)
+			    {
+			      if($ind +1 gt $size) then -1
+			       else fn(){$input($ind + 1)}
+			    }
+   return $this =?> make-generator($arrayProvider)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>make-generator-from-map()</p>
+<eg>make-generator-from-map := fn($this as f:generator, $inputMap as map(*)) as f:generator
+{
+  let $keys := map:keys($inputMap),
+  $size := map:size($inputMap),
+  $mapProvider := fn($ind as xs:integer)
+  {
+   if($ind +1 gt $size) then -1
+   else fn() 
+	   {
+	    let $key := $keys[$ind + 1]
+	     return
+	      ( $key, [ $inputMap($key) ])
+	   }
+  }
+   return
+     $this =?> make-generator($mapProvider)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>make-generator-from-sequence()</p>
+<eg>make-generator-from-sequence := fn($this as f:generator, $input as item()*) as f:generator
+{
+  let $size := count($input),
+      $seqProvider := fn($ind as xs:integer)
+			{
+			  if($ind +1 gt $size) then -1
+			   else fn(){$input[$ind + 1]}
+			}
+   return $this =?> make-generator($seqProvider)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>prepend()</p>
+<eg>prepend := fn($this as f:generator, $value as item()*) as f:generator
+{
+  let $gen := if(not($this?initialized)) then $this =?> move-next()
+	          else $this,
+  $genSingle := $gen => map:put("get-current",   fn($this as f:generator){$value})
+		     => map:put("move-next",   
+		                fn($this as f:generator){$gen =?> empty-generator()})
+  return
+    $genSingle =?> concat($gen)    
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>remove-at()</p>
+<eg>remove-at := fn($this as f:generator, $pos as xs:nonNegativeInteger) as f:generator
+{
+  let $genTail := $this =?> skip-strict($pos, true())
+   return
+    if($pos gt 1)
+     then ($this =?> take($pos - 1)) =?> concat($genTail)
+     else $genTail
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>remove-where()</p>
+<eg>remove-where := fn($this as f:generator, $predicate as function(item()*) as xs:boolean)
+                  as f:generator
+{
+ let $gen := if(not($this?initialized)) then $this =?> move-next()
+	       else $this
+   return
+     $gen =?> filter(fn($x){not($predicate($x))})  
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>replace()</p>
+<eg>replace := fn($this as f:generator, $funIsMatching as function(item()*) as xs:boolean, 
+                  $replacement as item()*) as f:generator
+{
+if($this?end-reached) then $this
+  else
+   let $current := $this =?> get-current()
+    return
+      if($funIsMatching($current))
+	then let $nextGen := $this =?> move-next()
+	       return
+	         $this => map:put("get-current",   fn($this as f:generator) {$replacement})
+	               => map:put("move-next",   fn($this as f:generator) { $nextGen } 
+			  )
+	else (: $current is not the match for replacement :)
+	  let $nextGen := $this =?> move-next()
+	   return $this => map:put("move-next", 
+				   fn($this as f:generator)
+				   {
+				     let $intendedReplace := function($z) 
+						{$z =?> replace($funIsMatching, $replacement)}
+				      return
+				        if($nextGen?end-reached) then $nextGen
+				        else $intendedReplace($nextGen)
+				    }
+				)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>reverse()</p>
+<eg>reverse := fn($this as f:generator) as f:generator
+{
+ if($this?end-reached) then $this =?> empty-generator()
+   else
+    let $current := $this =?> get-current()
+     return
+       $this =?> tail() =?> reverse() =?> append($current)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>scan-left()</p>
+<eg>scan-left := fn($this as f:generator, $init as item()*, $action as fn(*)) as f:generator
+{
+  let $resultGen := $this =?> empty-generator() 
+				   => map:put("end-reached", false())
+				   => map:put("get-current", fn($this as f:generator){$init})
+   return
+    if($this?end-reached) 
+      then $resultGen => map:put("move-next", 
+	                         fn($this as f:generator){$this =?> empty-generator()})
+      else
+	 let $resultGen := $resultGen 
+	                      => map:put("get-current", fn($this as f:generator){$init}),
+	     $partialFoldResult := $action($init, $this =?> get-current())
+	   return
+	     let $nextGen := $this =?> move-next()
+	      return
+	         $resultGen => map:put("move-next",   
+			                fn($this as f:generator)
+					{ 
+					  $nextGen =?> scan-left($partialFoldResult, $action)
+					}
+					)                        
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>scan-right()</p>
+<eg>scan-right := fn($this as f:generator, $init as item()*, $action as fn(*)) as f:generator
+{
+  $this =?> reverse() =?> scan-left($init, $action) =?> reverse()                         
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>skip()</p>
+<eg>skip := fn($this as f:generator, $n as xs:nonNegativeInteger) as f:generator
+ {
+   $this =?> skip-strict($n, false())
+ }</eg>		   
+		   </item>
+		   <item>
+		   <p>skip-strict()</p>
+<eg>skip-strict := fn($this as f:generator, $n as xs:nonNegativeInteger, 
+                    $issueErrorOnEmpty as xs:boolean) as f:generator
+ {
+ if($n eq 0) then $this
+   else if($this?end-reached) 
+	  then if($issueErrorOnEmpty)
+		 then error((), "Input Generator too-short") 
+		 else $this =?> empty-generator()
+	   else 
+	     let $gen := if(not($this?initialized)) then $this =?> move-next()
+	                   else $this
+	       return
+	         if(not($gen?end-reached)) 
+	           then ($gen =?> move-next()) =?> skip-strict($n -1, $issueErrorOnEmpty)
+	           else $gen =?> empty-generator($gen)                  
+ }</eg>		   
+		   </item>
+		   <item>
+		   <p>skip-while()</p>
+<eg>skip-while := fn($this as f:generator, $pred as function(item()*) as xs:boolean) 
+                as f:generator
+{
+ let $gen := if(not($this?initialized)) then $this =?> move-next()
+             else $this
+  return
+   if($gen?end-reached) then $gen =?> empty-generator()
+     else
+      let $current := $gen =?> get-current()
+       return
+         if(not($pred($current))) then $gen
+           else ($gen =?> move-next()) =?> skip-while( $pred)                     
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>some()</p>
+<eg>some := fn($this as f:generator) as xs:boolean
+{
+   $this?initialized and not($this?end-reached)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>some-where()</p>
+<eg>some-where := fn($this as f:generator, $pred as function(item()*) as xs:boolean) as xs:boolean
+{
+   $this =?> filter($pred) =?> some()
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>subrange()</p>
+<eg>subrange := fn($this as f:generator, $m as xs:positiveInteger, $n as xs:positiveInteger) 
+              as f:generator
+{
+   $this =?> skip($m - 1) =?> take($n - $m + 1)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>tail()</p>
+<eg>tail := fn($this as f:generator) as f:generator {$this =?> skip(1)}</eg>		   
+		   </item>
+		   <item>
+		   <p>take()</p>
+<eg>take := fn($this as f:generator, $n as xs:integer) as f:generator
+{
+ let $gen := if(not($this?initialized)) then $this?move-next()
+               else $this
+  return
+   if($gen?end-reached or $n le 0) then $gen =?> empty-generator()
+     else
+      let $current := $gen =?> get-current(),
+          $newResultGen := map:put($gen, "get-current", fn($this as f:generator){$current}),
+          $nextGen := $gen =?> move-next()
+       return
+         if($nextGen?end-reached) then $newResultGen
+           else
+             let  $newResultGen2 :=  map:put($newResultGen, "move-next",   
+                                             fn($this as f:generator) 
+                                               {$nextGen =?> take($n -1)}) 
+             return
+               $newResultGen2  
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>take-while()</p>
+<eg>take-while := fn($this as f:generator, $pred as function(item()*) as xs:boolean) 
+                as f:generator
+{
+ let $gen := if(not($this?initialized)) then $this =?> move-next()
+               else $this
+  return
+   if($gen?end-reached) then $gen =?> empty-generator($gen)
+     else      
+      let $current := $gen =?> get-current()
+        return
+          if(not($pred($current))) then $gen =?> empty-generator()
+            else
+             let $newResultGen := map:put($gen, "get-current", 
+                                          fn($this as f:generator){$current}),
+                 $nextGen := $gen =?> move-next()
+              return
+                if($nextGen?end-reached) then $newResultGen
+                  else
+                   let $newResultGen2 :=  map:put($newResultGen, "move-next",   
+                                                  fn($this as f:generator) 
+                                                    {$nextGen =?> take-while($pred)}) 
+                    return $newResultGen2  
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>to-array()</p>
+<eg>to-array :=   fn($this as f:generator) as array(*)
+{
+  while-do( [$this, []],
+           function( $inArr) 
+           { $inArr(1)?initialized and not($inArr(1)?end-reached) },                 
+           function($inArr) 
+           { 
+             array{$inArr(1) =?> move-next(), 
+                   array:append($inArr(2), $inArr(1) =?> get-current())
+                  } 
+           }         
+ ) (2)
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>to-map()</p>
+<eg>to-map := fn($this as f:generator) as map(*)
+{
+  let $genPairs := $this =?> for-each(fn($x)
+                   {
+                     let $key := head($x),
+                         $tail := tail($x),
+                         $value := if($tail instance of array(*)) 
+                                   then for $ind in 1 to array:size($tail)
+                                         return $tail($ind)
+                                   else $tail
+                      return
+                        map:pair($key, $value)
+                   }
+				 ) 
+   return
+     map:of-pairs($genPairs =?> to-sequence())
+}</eg>		   
+		   </item>
+		   <item>
+		   <p>to-sequence()</p>
+<eg>to-sequence := fn($this as f:generator) as item()* {$this =?> to-array() => array:items()}</eg>		   
+		   </item>
+		   <item>
+		   <p>zip()</p>
+<eg>zip := fn($this as f:generator, $gen2 as f:generator) as f:generator
+{
+  $this =?> for-each-pair($gen2, fn($x1, $x2){[$x1, $x2]})
+}</eg>		   
+		   </item>
+		 </ulist>
+	  </div1>
       
       <div1 id="schemata">
          <head>Schemas</head>
