@@ -47,6 +47,7 @@
 
 <xsl:output method="html" version="5.0" encoding="UTF-8" indent="yes" />
 
+<xsl:variable name="qt4cg" select="'https://qt4cg.org/specifications/'"/>
 <xsl:variable name="fo31" select="doc('../build/etc/FO31.xml')"/>
 
 <!--
@@ -2303,14 +2304,22 @@
   <xsl:template match="titleref">
     <xsl:choose>
       <xsl:when test="@href">
-        <a href="{@href}">
+        <a>
+          <xsl:attribute name="href"
+                         select="if (starts-with(@href, $qt4cg))
+                                 then '../' || substring-after(@href, $qt4cg)
+                                 else @href"/>
           <cite>
             <xsl:apply-templates/>
           </cite>
         </a>
       </xsl:when>
       <xsl:when test="ancestor::bibl/@href">
-        <a href="{ancestor::bibl/@href}">
+        <a>
+          <xsl:attribute name="href"
+                         select="if (starts-with(ancestor::bibl/@href, $qt4cg))
+                                 then '../' || substring-after(ancestor::bibl/@href, $qt4cg)
+                                 else ancestor::bibl/@href"/>
           <cite>
             <xsl:apply-templates/>
           </cite>
