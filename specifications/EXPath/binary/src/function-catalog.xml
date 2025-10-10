@@ -812,7 +812,7 @@ $in =!> bin:to-octets() => bin:from-octets()
         <fos:signatures>
             <fos:proto name="decode-string" return-type="xs:string?">
                 <fos:arg name="in" type="(xs:hexBinary | xs:base64Binary)?"/>
-                <fos:arg name="encoding" type="xs:string?" default="'utf-8'"/>
+                <fos:arg name="encoding" type="xs:string?" default="()"/>
                 <fos:arg name="offset" type="xs:integer?" default="0"/>
                 <fos:arg name="size" type="xs:integer?" default="()"/>
             </fos:proto>
@@ -823,36 +823,37 @@ $in =!> bin:to-octets() => bin:from-octets()
             <fos:property>focus-independent</fos:property>
         </fos:properties>
         <fos:summary>
-            <p>Decodes a binary value as a string in a given encoding.</p>
+            <p>Decodes a binary value as a string.</p>
         </fos:summary>
         <fos:rules>
             <p>If the value of <code>$in</code> is the empty sequence, the function returns an empty
-                sequence.</p>
-            <p>If <code>$offset</code> and <code>$size</code> are provided, the <code>$size</code>
-                octets from <code>$offset</code> are decoded. If <code>$offset</code> alone is
-                provided, octets from <code>$offset</code> to the end are decoded. If neither
-                <code>$offset</code> nor <code>$size</code> is provided, the
-                entire octet sequence is decoded.</p>
-            <p>The function returns the string obtained by decoding the selected octets using
-                the specified <code>$encoding</code> name.</p>
-            <p>The <code>$encoding</code> argument is the name of an encoding. The values for 
-                <code>$encoding</code> follow the same rules as for the 
-                <code>encoding</code> attribute in an XML
-                declaration. The only values which every implementation is
-                    <rfc2119>required</rfc2119> to recognize are <code>utf-8</code>, 
+                sequence. Otherwise, it returns the string obtained by decoding the selected octets.</p>
+            <p>The encoding is inferred from the initial octets of the input, which may start with
+                a byte order mark:</p>
+            <ulist>
+                <item><p><code>xFE</code> and <code>xFF</code> imply UTF-16LE.</p></item>
+                <item><p><code>xFF</code> and <code>xFE</code> imply UTF-16BE.</p></item>
+                <item><p><code>xEF</code>, <code>xBB</code>, and <code>xBF</code> imply UTF-8.</p></item>
+                <item><p>Otherwise, UTF-8 is assumed.</p></item>
+            </ulist>
+            <p>The BOM octets are skipped. If an <code>$encoding</code> argument is specified,
+                it takes precedence over the inferred encoding. The rules for its values are the same
+                as for the <code>encoding</code> attribute in an XML declaration. The only values which
+                every implementation is <rfc2119>required</rfc2119> to recognize are <code>utf-8</code>,
                 <code>utf-16</code>, <code>utf-16be</code>, and <code>utf-16le</code>.
-                The encoding name <code>utf-16</code> is interpreted as <code>utf16be</code>
-                unless <code>$in</code> starts with the two octets <code>fffe</code>, in which
-                case it is interpreted as <code>utf-16le</code>.
-            </p>
-            <p>If <code>$encoding</code> is omitted, <code>utf-8</code> encoding is assumed.</p>
-            <p>If the data being decoded includes a byte order mark (<char>U+FEFF</char>), this
-            is decoded and returned in the same way as any other character.</p>
-            <p>The values of <code>$offset</code> and <code>$size</code>, if present,
-                <rfc2119>must</rfc2119> be non-negative integers.</p>           
-            
-            <p><code>$offset</code> is zero based.</p>
+                <code>utf-16</code> is interpreted as <code>utf-16be</code>.</p>
+            <p>If <code>$offset</code> and <code>$size</code> are provided, the <code>$size</code>
+                octets from <code>$offset</code> are decoded.
+                <code>$offset</code> is zero based. If <code>$offset</code> alone is
+                provided, octets from <code>$offset</code> to the end are decoded.
+                If present, the values <rfc2119>must</rfc2119> be non-negative integers.
+                If neither <code>$offset</code> nor <code>$size</code> is provided, the
+                entire octet sequence is decoded.</p>
         </fos:rules>
+        <fos:notes>
+            <p>The offset refers to the first octet of the input. An optionally present byte order mark
+                has no influence on the effective offset value.</p>
+        </fos:notes>
         <fos:errors>
             <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$offset</code> is
                 negative or <code>$offset + $size</code> is larger than the size of the binary data
@@ -873,11 +874,19 @@ $in =!> bin:to-octets() => bin:from-octets()
                     <fos:result>"ABC"</fos:result>
                 </fos:test>
                 <fos:test>
-                    <fos:expression>bin:decode-string(bin:hex('FEFF004100420043'), 'utf-16be', 2)</fos:expression>
+                    <fos:expression>bin:decode-string(bin:hex('414243'), (), 2, 1)</fos:expression>
+                    <fos:result>"C"</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:decode-string(bin:hex('EFBBBF414243', (), 5, 1))</fos:expression>
+                    <fos:result>"C"</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:decode-string(bin:hex('FEFF004100420043'))</fos:expression>
                     <fos:result>"ABC"</fos:result>
                 </fos:test>
                 <fos:test>
-                    <fos:expression>bin:decode-string(bin:hex('FFFE410042004300'), 'utf-16', 2)</fos:expression>
+                    <fos:expression>bin:decode-string(bin:hex('FFFE410042004300'))</fos:expression>
                     <fos:result>"ABC"</fos:result>
                     <fos:postamble>Little-endian byte order is used because of the BOM at the start
                     of the data.</fos:postamble>
@@ -885,14 +894,15 @@ $in =!> bin:to-octets() => bin:from-octets()
             </fos:example>
             <fos:example>
                 <p>The following tests whether the binary value <code>$data</code> starts
-                with four octets that decode to the string '%PDF' (which always appears at the start
-                of a PDF file)</p>
+                with four octets that decode to the string <code>"%PDF"</code>
+                (which always appears at the start of a PDF file).</p>
                 <eg xml:space="preserve">bin:decode-string($data, 'UTF-8', 0, 4) eq '%PDF'</eg>
             </fos:example>
         </fos:examples>
         <fos:changes>
-            <fos:change issue="1751" PR="1765" date="2025-02-11"><p>The handling of byte order marks has been clarified. This may
-            differ from the interpretation adopted by exising implementations.</p></fos:change>
+            <fos:change issue="2217" PR="2222" date="2025-10-02">
+                <p>The encoding is now inferred from the input.</p>
+            </fos:change>
         </fos:changes>
     </fos:function>
 
@@ -959,7 +969,7 @@ $in =!> bin:to-octets() => bin:from-octets()
         </fos:examples>
         <fos:changes>
             <fos:change issue="1751" PR="1765" date="2025-02-11"><p>The handling of byte order marks has been clarified. This may
-            differ from the interpretation adopted by exising implementations.</p></fos:change>
+            differ from the interpretation adopted by existing implementations.</p></fos:change>
         </fos:changes>
     </fos:function>
 
