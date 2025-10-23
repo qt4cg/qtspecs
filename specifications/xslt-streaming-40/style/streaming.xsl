@@ -1,9 +1,14 @@
 <?xml version="1.0"?>
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-                version="1.0">
+                version="3.0"
+                expand-text="yes">
   <xsl:import href="../../../style/xsl-query-2016.xsl"/>
 
   <xsl:param name="additional.css" select="'xslt-xquery-serialization-40.css'"/>
+  
+  <xsl:template match="elcode">
+    <a href="../../xslt-40/Overview.html#{.}">{.}</a>
+  </xsl:template>
 
 <!-- ==================================================================== -->
 
