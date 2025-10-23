@@ -25,8 +25,10 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This do
   In this version, the specification has been modularised so that streaming features
   are described separately. This has been done in order to make the set of specification
   documents more manageable both for editors and for readers.</p></abstract><langusage><language id="en">English</language></langusage><revisiondesc><p>See the GIT changelog.</p></revisiondesc></header><body><div1 id="intro"><head>Introduction</head><changes><change>Use the arrows to browse significant changes since the 3.1 version of this specification.</change><change>Sections with significant changes are marked Δ in the table of contents.</change></changes><p>This document defines the streaming feature of the XSLT 4.0 language: see
-<bibref ref="xslt-40"/>.</p><p>In this document, examples and material labeled as <quote>Note</quote> are provided for
-explanatory purposes and are not normative. </p><div2 id="terminology"><head>Terminology</head><p>In this specification the phrases <rfc2119>must</rfc2119>, <rfc2119>must
+<bibref ref="xslt-40"/>.</p><p>Streaming is an optional feature of the XSLT language that enables documents
+  to be transformed that are too large to be held in memory. Stylesheets that aim
+  to achieve streamed processing must adhere to contraints (called streamability rules)
+  that are defined in this specification.</p><div2 id="terminology"><head>Terminology</head><p>In this specification the phrases <rfc2119>must</rfc2119>, <rfc2119>must
                   not</rfc2119>, <rfc2119>should</rfc2119>, <rfc2119>should not</rfc2119>,
                   <rfc2119>may</rfc2119>, <rfc2119>required</rfc2119>, and
                   <rfc2119>recommended</rfc2119>, when used in normative
@@ -186,7 +188,9 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                      document only if all the template rules adhere to the constraints required for
                      streamability. To enforce these rules, while still allowing unrestricted
                      processing of other documents within the same transformation, all streaming
-                     evaluation must be carried out using a specific <xtermref spec="XP40" ref="dt-mode">mode</xtermref>, which is declared to be a streaming mode by means of an
+                     evaluation must be carried out using a specific 
+                    <xtermref spec="XT40" ref="dt-mode">mode</xtermref>, which is declared 
+                    to be a streaming mode by means of an
                         <elcode>xsl:mode</elcode> declaration in the stylesheet.</p></item></ulist><p>There are important classes of application in which streaming is possible only if
                multiple streams can be processed in parallel. This specification therefore provides
                facilities:</p><olist><item><p>allowing multiple sorted input sequences to be merged into one sorted output
@@ -226,7 +230,14 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                at the start of a document) is not required to continue reading once the data it needs 
                has been read. This means that XML well-formedness or validity errors occurring in the unread part 
                of the input stream may go undetected.
-            </p></div2><div2 id="initiating-streaming"><head>Initiating a Streamed Transformation</head><p>With a streamable processor, the <xtermref spec="XT40" ref="dt-initial-match-selection"/>&gt; can consist
+            </p><note><p>The analysis of guaranteed streamability (see <specref ref="streamability"/>)
+             takes no account of information that might be obtained from a schema-aware
+             static analysis of the stylesheet. Implementations may, however, be able to use
+             streaming strategies for stylesheets that are not guaranteed-streamable, by
+             taking advantage of such information. For example, an implementation might be
+             able to treat the expression <code nobreak="false">.//title</code> as <termref def="dt-striding"/> rather than <termref def="dt-crawling"/> if it can
+             establish from knowledge of the schema that two <code nobreak="false">title</code> elements
+             will never be nested one inside the other.</p></note></div2><div2 id="initiating-streaming"><head>Initiating a Streamed Transformation</head><p>With a streamable processor, the <xtermref spec="XT40" ref="dt-initial-match-selection"/>&gt; can consist
                   of streamed nodes, but the <xtermref spec="XT40" ref="dt-global-context-item"/> is always <termref def="dt-grounded"/>,
                   because it is available to all global variables and there is no control over the sequence of processing.</p><p>If the initial mode is <termref def="dt-declared-streamable"/>,
                      then a streaming processor <rfc2119>should</rfc2119> allow some or all of the items
@@ -588,12 +599,424 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                      the same (or, perhaps more plausibly, where such duplicates occur within a
                      single input file), the <elcode>xsl:merge-action</elcode> ensures that only the
                      first of the duplicates will be copied. </p>
-               </example>--></div2></div1><div1 id="streamability"><head>Streamability</head><p>This section contains rules that can be used to determine
+               </example>--></div2></div1><div1 id="streamability-of-stylesheet-functions"><head>Streamable Stylesheet Functions</head><p>The <code nobreak="false">streamability</code> attribute of <elcode>xsl:function</elcode> is used
+                  to assign the function to one of a number of <termref def="dt-streamability-category">streamability categories</termref>. The various
+                  categories, and their effect on the streamability of function calls, are described
+                  in <specref ref="streamable-stylesheet-functions"/>.</p><p>The streamability category of a function characterizes the way in which the
+                  function processes any streamed nodes supplied in the first argument to the
+                  function. (In general, streamed nodes cannot be supplied in other arguments,
+                  unless they are atomized by the <xtermref spec="XT40" ref="dt-coercion-rules"/>.)
+                  The <code nobreak="false">streamability</code> attribute is therefore not applicable unless the
+                  function takes at least one argument.</p><p><error spec="XT" type="dynamic" class="SE" code="3155"><p>It is a static error if an <elcode>xsl:function</elcode> element with no
+                           <elcode>xsl:param</elcode> children has a <code nobreak="false">streamability</code>
+                        attribute with any value other than <code nobreak="false">unclassified</code>.</p></error></p><div2 id="streamable-stylesheet-functions"><head>Classifying Stylesheet Functions</head><p>Under specific conditions, described in this section, a stylesheet function can be
+                  used to process nodes from a <termref def="dt-streamed-document">streamed input
+                     document</termref>.</p><p><termdef id="dt-streamability-category" term="streamability category">Stylesheet
+                     functions belong to one of a number of <term>streamability categories</term>:
+                     the choice of category characterizes the way in which the function handles
+                     streamed input.</termdef></p><p>The <termref def="dt-streamability-category">category</termref> to which a
+                  function belongs is declared in the <code nobreak="false">streamability</code> attribute of the
+                     <elcode>xsl:function</elcode> declaration, and defaults to
+                     <code nobreak="false">unclassified</code>.</p><p>The streamability categories defined in this specification are:
+                     <code nobreak="false">unclassified</code>, <code nobreak="false">absorbing</code>, <code nobreak="false">inspection</code>,
+                     <code nobreak="false">filter</code>, <code nobreak="false">shallow-descent</code>, <code nobreak="false">deep-descent</code>,
+                  and <code nobreak="false">ascent</code>. It is also possible to specify the streamability category
+                  as a QName in an <termref def="dt-implementation-defined"/> namespace, in which
+                  case the streamability rules are <termref def="dt-implementation-defined"/>; a
+                  processor that does not recognize a category defined in this way
+                     <rfc2119>must</rfc2119> analyze the function as if
+                     <code nobreak="false">streamability="unclassified"</code> were specified. </p><imp-def-feature id="idf-ext-streamingcategories">Additional <termref def="dt-streamability-category">streamability categories</termref> for
+                  stylesheet functions may be defined by an implementation.</imp-def-feature><p>A stylesheet function is <termref def="dt-declared-streamable"/> if the
+                     <elcode>xsl:function</elcode> declaration has a <code nobreak="false">streamability</code>
+                  attribute with a value other than <code nobreak="false">unclassified</code>.</p><p>The only <termref def="dt-streamability-category">category</termref> permitted for
+                  a zero-arity function (one with no arguments) is <code nobreak="false">unclassified</code>. All
+                  function calls to zero-arity stylesheet functions are <termref def="dt-grounded"/>
+                  and <termref def="dt-motionless"/>.</p><p>In general (subject to more detailed rules below), a node belonging to a <termref def="dt-streamed-document"/> can be present within the value of an argument of
+                  a call on a <xtermref spec="XT40" ref="dt-stylesheet-function"/> only if one of the following
+                  conditions is true:</p><olist><item><p>The stylesheet function is <termref def="dt-declared-streamable"/>, and the
+                        argument in question is the first argument of the function call.</p></item><item><p>The corresponding <xtermref spec="XT40" ref="dt-function-parameter"/> is declared with a
+                           <xtermref spec="XT40" ref="dt-required-type"/> that triggers 
+                       <xtermref spec="XT40" ref="dt-atomization">atomization</xtermref> of any supplied node.</p></item></olist><p><termdef id="dt-streaming-parameter" term="streaming parameter">The first 
+                 <xtermref spec="XT40" ref="dt-function-parameter">parameter</xtermref> of a 
+                 <termref def="dt-declared-streamable"/>
+                     <xtermref spec="XT40" ref="dt-stylesheet-function"/> is referred to as a <term>streaming
+                        parameter</term>.</termdef></p><note><p>If a stylesheet function returns streamed nodes, then these nodes can only
+                     derive from streamed nodes passed in an argument to the function. This is
+                     because streamed nodes cannot be bound to global variables, and they cannot be
+                     returned by an <elcode>xsl:source-document</elcode> instruction within the function body
+                     (the result of <elcode>xsl:source-document</elcode> is always grounded).</p></note><p>The choice of <termref def="dt-streamability-category">category</termref> places
+                  constraints on the function body, and also on calls to the function. These constraints
+                  are defined below, separately for each category. A function is <termref def="dt-guaranteed-streamable"/> only if the constraints are satisfied,
+                and a static function call is
+               guaranteed-streamable only if the function is guaranteed-streamable and the
+               function call itself satisfies the constraints for the chosen category.</p><p>Dynamic function calls are <termref def="dt-guaranteed-streamable"/> only
+   in trivial cases, for example where the function signature indicates that an argument is required to
+   be a text node or an attribute node. For details, see <specref ref="streamability-of-dynamic-function-calls"/>.</p><p>The constraints on the function body are expressed in terms of the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of the function result. The
+                     <termref def="dt-posture"/> and <termref def="dt-sweep"/> of the function
+                  result are the <termref def="dt-type-adjusted-posture-and-sweep"/> of the <xtermref spec="XT40" ref="dt-sequence-constructor"/> contained within the
+                     <elcode>xsl:function</elcode> element, given the declared return type of the
+                  function, which defaults to <code nobreak="false">item()*</code>.</p><note><p>Determining the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of
+                     the function result requires first determining the <termref def="dt-posture"/>
+                     and <termref def="dt-sweep"/> of the contained <xtermref spec="XT40" ref="dt-sequence-constructor"/>, which is done according to the rules in
+                        <specref ref="classifying-sequence-constructors"/>. This in turn will
+                     usually involve examination of variable references that are bound to the
+                     function’s parameters. The analysis of these variable references is described
+                     in <specref ref="streamability-of-variable-references"/>.</p></note><p>If the function is <termref def="dt-declared-streamable"/> but does not satisfy
+                  the constraints that make it <termref def="dt-guaranteed-streamable"/>, the
+                  consequences are explained in <specref ref="streamability-guarantees"/>.</p><p>If a stylesheet function is overridden in another package (using
+                     <elcode>xsl:override</elcode>), then the overriding stylesheet function must
+                  belong to the same <termref def="dt-streamability-category"/> as the function that
+                  it overrides. This ensures that overriding a function cannot affect the
+                  streamability of calls to that function.</p><p>The rules for each <termref def="dt-streamability-category"/> are given in the
+                  following sections.</p><div3 id="category-unclassified"><head>Streamability Category: unclassified</head><p><term>Informal description:</term> Functions in this category cannot be called
+                     with streamed nodes supplied in an argument, unless the function signature
+                     causes such nodes to be atomized.</p><p><term>Rules for the function signature:</term> there are no constraints.</p><p><term>Rules for the function body:</term> there are no constraints.</p><p><term>Rules for references to the streaming
+                        parameter:</term> not applicable, because there is no streaming
+                     parameter.</p><p><term>Rules for function calls:</term> the <termref def="dt-general-streamability-rules"/> apply. The operands are the
+                     expressions appearing in the argument list of the function call, with the
+                        <termref def="dt-operand-usage"/> of each operand being the <termref def="dt-type-determined-usage"/> based on the declared type of the
+                     corresponding parameter in the function signature. </p><example><head>An unclassified stylesheet function that accepts nodes</head><p>The <termref def="dt-streamability-category"/> is
+                        <code nobreak="false">unclassified</code>.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:exclude-first" as="node()*"&gt;
+  &lt;xsl:param name="nodes" as="node()*"/&gt;
+  &lt;xsl:sequence select="$nodes[not(node-name() = preceding-sibling::*/node-name())]"/&gt;
+&lt;/xsl:function&gt;  
+                        </eg><p>The effect of the rules is that a call to this function is guaranteed
+                        streamable if and only if the sequence supplied as the value of the
+                           <code nobreak="false">$nodes</code> argument is <termref def="dt-grounded"/> (that is, it
+                        contains no streamed nodes).</p></example><example><head>An unclassified stylesheet function that accepts atomic items</head><p>The <termref def="dt-streamability-category"/> is
+                        <code nobreak="false">unclassified</code>.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:min" as="xs:integer"&gt;
+  &lt;xsl:param name="arg0" as="xs:integer"/&gt;
+  &lt;xsl:param name="arg1" as="xs:integer"/&gt;
+  &lt;xsl:sequence select="min(($arg0, $arg1))"/&gt;
+&lt;/xsl:function&gt;  
+                        </eg><p>The effect of the rules is that a call to this function is streamable under
+                        similar circumstances to those that apply to a binary operator such as
+                           <code nobreak="false">+</code>. For example, a call is streamable if two atomic items
+                        are supplied, or if two attribute nodes are supplied, whether from streamed
+                        or unstreamed documents. The main constraint is that it is not permitted for
+                        both arguments to be consuming; for example, if the context node is a node
+                        in a streamed document, then the function call <code nobreak="false">f:min((price,
+                           discount))</code> would not be guaranteed streamable.</p></example></div3><div3 id="category-absorbing"><head>Streamability Category: absorbing</head><p><term>Informal description:</term> Functions in this category typically read
+                     the subtrees rooted at the node or nodes supplied in the first argument. These
+                     subtrees must not overlap each other. The function must not return any streamed
+                     nodes.</p><p><term>Rules for the function signature:</term> there are no constraints.</p><p><term>Rules for the function body:</term> 
+                     For the function to be <termref def="dt-guaranteed-streamable"/>, the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
+                     the function body with respect to the declared return type must be <termref def="dt-grounded"/>, and the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
+                     with respect to the declared return type must be <termref def="dt-motionless"/> or <termref def="dt-consuming"/>.</p><p><term>Rules for references to the streaming
+                        parameter:</term> If the declared type of the <termref def="dt-streaming-parameter"/> permits more than one node, then a variable
+                     reference referring to the streaming parameter is <termref def="dt-striding"/>
+                     and <termref def="dt-consuming"/>. Otherwise such a variable reference is
+                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> If the first argument is <termref def="dt-crawling"/> then the function call is <termref def="dt-roaming"/>
+                     and <termref def="dt-free-ranging"/>; otherwise the <termref def="dt-general-streamability-rules"/> apply. The operands are the
+                     expressions appearing in the argument list of the function call. The <termref def="dt-operand-usage"/> of the first argument is <termref def="dt-absorption"/>; the operand usage of other arguments is the <termref def="dt-type-determined-usage"/> based on the declared type of the
+                     corresponding <xtermref spec="XT40" ref="dt-parameter"/> in the function signature. </p><note><p>Absorbing functions perform an operation analogous to atomization on their
+                        supplied arguments, in that they typically use information from the subtree
+                        rooted at a node to compute atomic items. Atomization can be seen as a
+                        special case of absorption. Calls on absorbing functions are therefore, from
+                        a streamability point of view, equivalent to calls on functions that
+                        implicitly atomize the supplied nodes.</p><p>An important difference, however, is that whereas atomization can be applied
+                        to any argument of a function call, absorption applies only to the first
+                        argument.</p><p>Another difference is that atomization is allowed on a sequence of nodes in
+                           <termref def="dt-crawling"/> posture, whereas generalized absorption is
+                        not. Within a sequence, there may be nodes whose subtrees overlap, and the
+                        code for atomization is expected to handle this, but more general absorption
+                        operations are not. To write a function that accepts streamed nodes and
+                        atomizes them, it is better to use the streamability category
+                           <code nobreak="false">unclassified</code>, and to declare the first argument with an
+                        atomic type, rather than using the category <code nobreak="false">absorbing</code> which
+                        allows more general processing, but restricts what can be supplied in the
+                        argument to the function call.</p></note><example><head>An absorbing stylesheet function</head><p>The following function is declared as absorbing, and the function body meets
+                        the rules for this category because it makes downward selections only, and
+                        returns an atomic item.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:count-descendants" as="xs:integer" streamability="absorbing"&gt;
+  &lt;xsl:param name="input" as="node()*"/&gt;
+  &lt;xsl:sequence select="count($input//*)"/&gt;
+&lt;/xsl:function&gt;  
+                        </eg><p>The effect of the rules is that a call to this function is <termref def="dt-guaranteed-streamable"/> provided that the sequence supplied as
+                        the value of the <code nobreak="false">$input</code> argument is <termref def="dt-motionless"/> or <termref def="dt-consuming"/>, and is either
+                           <termref def="dt-grounded"/> or <termref def="dt-striding"/>.</p></example><example><head>An absorbing stylesheet function with two arguments</head><p>The following function is declared as absorbing, and the function body meets
+                        the rules for this category because it makes downward selections only from
+                        the node supplied as the first argument, and returns an atomic item.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:compare-size" as="xs:integer" streamability="absorbing"&gt;
+  &lt;xsl:param name="input0" as="node()"/&gt;
+  &lt;xsl:param name="input1" as="node()"/&gt;
+  &lt;xsl:sequence select="count($input0//*) - count($input1//*)"/&gt;
+&lt;/xsl:function&gt;</eg><p>This function takes two nodes as its arguments. Some examples of function
+                        calls include: </p><ulist><item><p>Streamable: <code nobreak="false">f:compare-size(a, b)</code> where <code nobreak="false">a</code> is
+                              an element in a streamed document and <code nobreak="false">b</code> is an element in
+                              an unstreamed document</p></item><item><p>Streamable: <code nobreak="false">f:compare-size(a, b)</code> where <code nobreak="false">a</code> and
+                                 <code nobreak="false">b</code> are both elements in unstreamed documents</p></item><item><p>Not streamable: <code nobreak="false">f:compare-size(a, b)</code> where <code nobreak="false">a</code>
+                              is an element in an unstreamed document and <code nobreak="false">b</code> is an
+                              element in a streamed document</p></item></ulist><p>The reason for the asymmetry is that for the first
+                     argument the <termref def="dt-operand-usage"/> is <termref def="dt-absorption"/>,
+                     while for the second argument it is <termref def="dt-navigation"/>. It is a consequence
+                     of the <termref def="dt-general-streamability-rules"/> that when streamed nodes are
+                     supplied to an operand with usage navigation, the resulting expression is
+                     <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></example><example><head>A recursive absorbing stylesheet function</head><p>The following function is declared as absorbing, and the function body meets
+                        the rules for this category. Analysis of the function body reveals that it
+                        is grounded and consuming; to establish this, it is necessary to analyze the
+                        recursive call <code nobreak="false">f:outline(*)</code>, and this is possible because it is
+                        known to be a call on an absorbing stylesheet function.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:outline" as="xs:string" streamability="absorbing"&gt;
+  &lt;xsl:param name="input" as="element()*"/&gt;
+  &lt;xsl:value-of select="$input ! (name() || '(' || f:outline(*) || ')')" 
+                separator=", "/&gt;
+&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
+                        streamable in the typical case where the sequence supplied as the value of
+                        the <code nobreak="false">$input</code> argument is <termref def="dt-striding"/> and
+                           <termref def="dt-consuming"/>.</p></example></div3><div3 id="category-inspection"><head>Streamability Category: inspection</head><p><term>Informal description:</term> Functions in this category typically return
+                     properties of the node supplied in the first argument, where these properties
+                     can be determined without advancing the input stream. This allows access to
+                     properties such as the name and type of each node, and also to its ancestors,
+                     attributes, and namespaces. </p><p><term>Rules for the function signature:</term> If
+                     the declared type of the streaming parameter permits more than one node,
+                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term>
+                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
+                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
+                     the function body with respect to the declared return type must be <termref def="dt-grounded"/>, and the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
+                     with respect to the declared return type must be <termref def="dt-motionless"/>.</p><p><term>Rules for references to the streaming
+                        parameter:</term> Such a variable reference is
+                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> the <termref def="dt-general-streamability-rules"/> apply. The operands are the
+                     expressions appearing in the argument list of the function call. The <termref def="dt-operand-usage"/> of the first argument is <termref def="dt-inspection"/>; the operand usage of other arguments is the <termref def="dt-type-determined-usage"/> based on the declared type of the
+                     corresponding argument in the function signature. </p><note><p>The <termref def="dt-streaming-parameter"/> is restricted to be a single
+                        node because if <code nobreak="false">$input</code> were a sequence of nodes, then an
+                        expression such as <code nobreak="false">($input/name(), $input/@id)</code> would not be
+                        streamable.</p></note><example><head>Example of an inspection stylesheet function</head><p>The following function is declared with category <code nobreak="false">inspection</code>,
+                        and the function body meets the rules for this category because all
+                        references to the supplied node are motionless.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:depth" as="xs:integer" streamability="inspection"&gt;
+  &lt;xsl:param name="input" as="node()"/&gt;
+  &lt;xsl:sequence select="count($input/ancestor-or-self::*)"/&gt;
+&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
+                        streamable provided that the expression supplied as the value of the
+                           <code nobreak="false">$input</code> argument is <termref def="dt-motionless"/> or
+                           <termref def="dt-consuming"/>.</p></example><example><head>Example of an inspection stylesheet function with two arguments</head><p>The following function is declared with category <code nobreak="false">inspection</code>,
+                        and the function body meets the rules for this category because the function
+                        signature ensures that the second argument cannot be a node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:get-attribute-value" as="xs:string"&gt;
+  &lt;xsl:param name="element" as="node()"/&gt;
+  &lt;xsl:param name="attribute-name" as="xs:string"/&gt;
+  &lt;xsl:sequence select="string($element/@*[local-name() = $attribute-name])"/&gt;
+&lt;/xsl:function&gt;</eg><p>Although the normal usage of this function might be to supply an element
+                        from a streamed document as the first argument, and a literal string as the
+                        second, it is also permissible (and guaranteed streamable) to supply an
+                        unstreamed element as the first argument, and an element node from a
+                        streamed document as the second. When applying the general streamability
+                        rules in this case, the first operand is grounded and motionless, while the
+                        second is grounded and consuming (by virtue of the rules for type-determined
+                        usage), and this makes the function call grounded and consuming.</p></example></div3><div3 id="category-filter"><head>Streamability Category: filter</head><p><term>Informal description:</term> Functions in this category typically return
+                     either the node supplied in the first argument or nothing, depending on the
+                     values of properties that can be determined without advancing the input stream.
+                     This allows access to properties such as the name and type of each node, and
+                     also to its ancestors, attributes, and namespaces. </p><p><term>Rules for the function signature:</term> If
+                     the declared type of the streaming parameter permits more than one node,
+                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
+                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
+                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
+                     the function body with respect to the declared return type must be <termref def="dt-striding"/>, and the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
+                     with respect to the declared return type must be <termref def="dt-motionless"/>.</p><p><term>Rules for references to the streaming
+                        parameter:</term> Such a variable reference is
+                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The <termref def="dt-posture"/> and
+                        <termref def="dt-sweep"/> of a call to a function in this category are
+                     determined by applying the <termref def="dt-general-streamability-rules"/>. The
+                     operands are the expressions supplied as arguments to the function call. The
+                     first argument has <termref def="dt-operand-usage"/>
+                     <termref def="dt-transmission"/>; any further arguments have <termref def="dt-type-determined-usage"/> based on the declared type of the
+                     corresponding parameter in the function signature.</p><example><head>Example of a filtering stylesheet function</head><p>The following function is declared as filtering, and the function body meets
+                        the rules for this category because it selects nodes from the input based on
+                        motionless properties (namely, the existence of attributes).</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:large-regions" as="element(region)" streamability="filter"&gt;
+  &lt;xsl:param name="input" as="element(region)"/&gt;
+  &lt;xsl:sequence select="$input[@size gt 1000]"/&gt;
+&lt;/xsl:function&gt;</eg><p>The effect of the rules is that the posture and sweep of a function call 
+                        <code nobreak="false">f:large-regions(EXPR)</code> are the same as the posture and sweep of <code nobreak="false">EXPR</code>.</p><p>Although the name <code nobreak="false">filter</code> suggests that the result must always
+                        be a subset of the input, this is not strictly required by the rules. The
+                        function can also return atomic items, as well as attribute and namespace
+                        nodes.</p></example></div3><div3 id="category-shallow-descent"><head>Streamability Category: shallow-descent</head><p><term>Informal description:</term> Functions in this category typically return
+                     children of the nodes supplied in the first argument. They may also select
+                     deeper in the subtrees of these nodes, provided that no node in the result can
+                     possibly be an ancestor of any other node in the result. </p><p><term>Rules for the function signature:</term> If
+                     the declared type of the streaming parameter permits more than one node,
+                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
+                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
+                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
+                     the function body with respect to the declared return type must be <termref def="dt-striding"/>, and the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
+                     with respect to the declared return type must be <termref def="dt-motionless"/> or <termref def="dt-consuming"/>.</p><p><term>Rules for references to the streaming
+                        parameter:</term> Such a variable reference is
+                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The rules are as follows, in order:</p><olist><item><p>Let <var>T0</var> be the <termref def="dt-utype"/> corresponding to the
+                           declared type of the <termref def="dt-streaming-parameter"/> in the
+                           function signature (defaulting to <var>U{*}</var>).</p></item><item><p>Let <var>P0</var> and <var>S0</var> be the <termref def="dt-type-adjusted-posture-and-sweep"/> of the first argument
+                           expression, based on type <var>T0</var>.</p></item><item><p>If <var>P0</var> is not <termref def="dt-striding"/> or <termref def="dt-grounded"/>, the function call is <termref def="dt-roaming"/>
+                           and <termref def="dt-free-ranging"/>.</p></item><item><p>Consider a construct <var>C</var> whose operands are the argument
+                           expressions other than the first argument, with <termref def="dt-type-determined-usage">type-determined operand usage</termref>
+                           based on the declared type of the corresponding parameter in the function
+                           signature. Let <var>P1</var> and <var>S1</var> be the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of <var>C</var>,
+                           assessed using the <termref def="dt-general-streamability-rules"/>.</p><note><p>If there is only one argument, then <var>P1</var> is <termref def="dt-grounded"/> and <var>S1</var> is <termref def="dt-motionless"/>.</p></note></item><item><p>If <var>P1</var> is not <termref def="dt-grounded"/>, the function call
+                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>S0</var> and <var>S1</var> are both <termref def="dt-consuming"/>, or if either is <termref def="dt-free-ranging"/>, then the function
+                           call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-grounded"/>, then the <termref def="dt-posture"/> of the function call is <termref def="dt-grounded"/>, and the <termref def="dt-sweep"/> of the function call is the wider
+                           of <var>S0</var> and <var>S1</var>.</p></item><item><p>Otherwise, the <termref def="dt-posture"/> of the function call is
+                              <var>P0</var>, and the <termref def="dt-sweep"/> of the function call
+                           is as follows:</p><olist><item><p>If the intersection of <var>T0</var> with
+                                       <var>U{document-node(), element()}</var> is empty (that is,
+                                    the declared type of the first argument does not permit document
+                                    or element nodes) then <var>S0</var>.</p></item><item><p>Let <var>A</var> be the <termref def="dt-static-type"/> of the
+                                    expression supplied as the first argument. If the intersection
+                                    of <var>A</var> with <var>U{document-node(), element()}</var> is
+                                    empty (that is, the inferred type of the expression supplied as
+                                    the first argument does not permit document or element nodes)
+                                    then <var>S0</var>.</p></item><item><p>Otherwise, <termref def="dt-consuming"/>.</p></item></olist></item></olist><example><head>A shallow-descent stylesheet function</head><p>The following function is declared as shallow-descent, and the function body
+                        meets the rules for this category because it selects children of the
+                        supplied input node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:alternate-children" as="node()*" 
+                                          streamability="shallow-descent"&gt;
+  &lt;xsl:param name="input" as="element()"/&gt;
+  &lt;xsl:sequence select="$input/node()[position() mod 2 = 1]"/&gt;
+&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
+                        streamable in the typical case where the node supplied as the value of
+                        the <code nobreak="false">$input</code> argument is <termref def="dt-striding"/> and
+                           <termref def="dt-consuming"/>.</p></example></div3><div3 id="category-deep-descent"><head>Streamability Category: deep-descent</head><p><term>Informal description:</term> Functions in this category typically return
+                     descendants of the nodes supplied in the first argument. </p><p><term>Rules for the function signature:</term> If
+                     the declared type of the streaming parameter permits more than one node,
+                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
+                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
+                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
+                     the function body with respect to the declared return type must be <termref def="dt-crawling"/>, and the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
+                     with respect to the declared return type must be <termref def="dt-motionless"/> or <termref def="dt-consuming"/>.</p><p><term>Rules for references to the streaming
+                        parameter:</term> Such a variable reference is
+                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The rules are as follows, in order:</p><olist><item><p>Let <var>T0</var> be the <termref def="dt-utype"/> corresponding to the
+                           declared type of the <termref def="dt-streaming-parameter"/> in the
+                           function signature (defaulting to <var>U{*}</var>).</p></item><item><p>Let <var>P0</var> and <var>S0</var> be the <termref def="dt-type-adjusted-posture-and-sweep"/> of the first argument
+                           expression, based on type <var>T0</var>.</p></item><item><p>If <var>P0</var> is not <termref def="dt-striding"/> or <termref def="dt-grounded"/>, the function call is <termref def="dt-roaming"/>
+                           and <termref def="dt-free-ranging"/>.</p></item><item><p>Consider a construct <var>C</var> whose operands are the argument
+                           expressions other than the first argument, with <termref def="dt-type-determined-usage">type-determined operand usage</termref>
+                           based on the declared type of the corresponding parameter in the function
+                           signature. Let <var>P1</var> and <var>S1</var> be the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of <var>C</var>,
+                           assessed using the <termref def="dt-general-streamability-rules"/></p><note><p>If there is only one argument, then <var>P1</var> is <termref def="dt-grounded"/> and <var>S1</var> is <termref def="dt-motionless"/>.</p></note></item><item><p>If <var>P1</var> is not <termref def="dt-grounded"/>, the function call
+                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>S0</var> and <var>S1</var> are both <termref def="dt-consuming"/>, or if either is <termref def="dt-free-ranging"/>, the function call
+                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-grounded"/>, then the <termref def="dt-posture"/> of the function call is <termref def="dt-grounded"/>, and the <termref def="dt-sweep"/> of the function call is the wider
+                           of <var>S0</var> and <var>S1</var>.</p></item><item><p>Otherwise, the <termref def="dt-posture"/> of the function call is
+                              <termref def="dt-crawling"/>, and the <termref def="dt-sweep"/> of the
+                           function call is as follows:</p><olist><item><p>If the intersection of <var>T0</var> with
+                                       <var>U{document-node(), element()}</var> is empty (that is,
+                                    the declared type of the first argument does not permit document
+                                    or element nodes) then <var>S0</var>.</p></item><item><p>Let <var>A</var> be the <termref def="dt-static-type"/> of the
+                                    expression supplied as the first argument. If the intersection
+                                    of <var>A</var> with <var>U{document-node(), element()}</var> is
+                                    empty (that is, the inferred type of the expression supplied as
+                                    the first argument does not permit document or element nodes)
+                                    then <var>S0</var>.</p></item><item><p>Otherwise, <termref def="dt-consuming"/>.</p></item></olist></item></olist><example><head>A deep-descent stylesheet function</head><p>The following function is declared as deep-descent, and the function body
+                        meets the rules for this category because it selects descendants of the
+                        supplied input node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:all-comments" as="comment()*" 
+                                    streamability="deep-descent"&gt;
+  &lt;xsl:param name="input" as="element()"/&gt;
+  &lt;xsl:sequence select="$input//comment()"/&gt;
+&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
+                        streamable in the typical case where the node supplied as the value of
+                        the <code nobreak="false">$input</code> argument is <termref def="dt-striding"/> and
+                           <termref def="dt-consuming"/>.</p></example></div3><div3 id="category-ascent"><head>Streamability Category: ascent</head><p><term>Informal description:</term> Functions in this category typically return
+                     ancestors of the nodes supplied in the first argument. </p><p><term>Rules for the function signature:</term> If
+                     the declared type of the streaming parameter permits more than one node,
+                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
+                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
+                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
+                     the function body with respect to the declared return type must be either 
+                     <termref def="dt-climbing"/> or <termref def="dt-grounded"/>, and the 
+                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
+                     with respect to the declared return type must be <termref def="dt-motionless"/>.</p><p><term>Rules for references to the streaming
+                        parameter:</term> Such a variable reference is
+                        <termref def="dt-climbing"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The <termref def="dt-posture"/> and
+                        <termref def="dt-sweep"/> of a call to a function in this category are
+                     determined as follows:</p><olist><item><p>Let <var>P0</var> and <var>S0</var> be the <termref def="dt-posture"/>
+                           and <termref def="dt-sweep"/> obtained by assessing the function call
+                           using the <termref def="dt-general-streamability-rules"/>, where the
+                           operands are the arguments to the function call, with an <termref def="dt-operand-usage"/> 
+                           for the first argument of <phrase diff="chg" at="2022-01-01"><termref def="dt-transmission"/></phrase>, 
+                           and an <termref def="dt-operand-usage"/> for
+                           arguments after the first being the <termref def="dt-type-determined-usage"/> based on the declared type of the
+                           corresponding <xtermref spec="XT40" ref="dt-function-parameter"/>. 
+                           <!--<phrase diff="add" at="2022-01-01">[XSLT 3.0 Erratum E31, bug 30289]</phrase>--></p></item><item><p>If <var>P0</var> is <termref def="dt-roaming"/> or <var>S0</var> is
+                              <termref def="dt-free-ranging"/>, then the function call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>S0</var> is not <termref def="dt-motionless"/>, then the function
+                           call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-roaming"/>, then the function call
+                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-grounded"/>, then the function call
+                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item><item diff="add" at="2022-01-01"><p>If the declared return type of the function does not permit nodes, then the function call
+                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.<!-- [XSLT 3.0 Erratum E31, bug 30289].--></p></item><item><p>Otherwise, the function call is <termref def="dt-climbing"/> and <termref def="dt-motionless"/>.</p></item></olist><example><head>An ascending stylesheet function</head><p>The following function is declared with category <code nobreak="false">ascent</code>, and
+                        the function body meets the rules for this category because it selects
+                        ancestors of the supplied node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
+&lt;xsl:function name="f:containing-section" as="element(section)" 
+                                          streamability="ascent"&gt;
+  &lt;xsl:param name="input" as="element(para)*"/&gt;
+  &lt;xsl:sequence select="$input/ancestor::section[last()]"/&gt;
+&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
+                        streamable provided that the node supplied as the value of the
+                           <code nobreak="false">input</code> argument is not <termref def="dt-roaming"/> or
+                           <termref def="dt-free-ranging"/>. There are no other constraints on the
+                        node supplied in the input sequence.</p></example></div3></div2></div1><div1 id="streamability-of-attribute-sets"><head>Streamable Attribute Sets</head><p>An <xtermref spec="XT40" ref="dt-attribute-set">attribute set</xtermref> may be designated as
+                  streamable by including the attribute <code nobreak="false">streamable="yes"</code> on each
+                     <elcode>xsl:attribute-set</elcode> declaration making up the attribute set. If
+                  any <elcode>xsl:attribute-set</elcode> declaration for an attribute set has the
+                  attribute <code nobreak="false">streamable="yes"</code>, then every
+                     <elcode>xsl:attribute-set</elcode> declaration for that attribute set
+                     <rfc2119>must</rfc2119> have the attribute <code nobreak="false">streamable="yes"</code>.</p><p>An <xtermref spec="XT40" ref="dt-attribute-set">attribute set</xtermref> is
+                     <termref def="dt-guaranteed-streamable"/> if all the following conditions are
+                  satisfied:</p><olist><item><p>Every <elcode>xsl:attribute-set</elcode>
+                        declaration for the attribute set has the attribute
+                           <code nobreak="false">streamable="yes"</code>.</p></item><item><p>Every <elcode>xsl:attribute-set</elcode> declaration for the attribute set
+                        is <termref def="dt-grounded"/> and <termref def="dt-motionless"/> according to the analysis in <specref ref="classifying-attribute-sets"/>.</p></item></olist><p>Specifying <code nobreak="false">streamable="yes"</code> on an
+                     <elcode>xsl:attribute-set</elcode> element declares an intent that the
+                  attribute set should be streamable, either
+                     because it is <termref def="dt-guaranteed-streamable"/>, or because it takes
+                     advantage of streamability extensions offered by a particular
+                     processor. The consequences of declaring the attribute set to be
+                  streamable when it is not in fact guaranteed streamable depend on the conformance
+                  level of the processor, and are explained in <specref ref="streamability-guarantees"/>.</p><p><error spec="XT" type="static" class="SE" code="0730"><p>If an <elcode>xsl:attribute</elcode> set element specifies
+                           <code nobreak="false">streamable="yes"</code> then every attribute set referenced in its
+                           <code nobreak="false">use-attribute-sets</code> attribute (if present) must also specify
+                           <code nobreak="false">streamable="yes"</code>.</p></error></p><note><p>It is common for attribute sets to create attributes with constant values, and
+                     such attribute sets will always be grounded and motionless and therefore streamable.
+                     Although such cases are fairly simple for a processor to detect, references to
+                     attribute sets are not guaranteed streamable unless the attribute set is
+                     declared with the attribute <code nobreak="false">streamable="yes"</code>, which should
+                     therefore be used if interoperable streaming is required.</p></note><div2 id="classifying-attribute-sets"><head>Classifying Attribute Sets</head><p>The <termref def="dt-posture"/> of an <xtermref spec="XT40" ref="dt-attribute-set"/>
+               is always <termref def="dt-grounded"/> (its result can never return streamed nodes).</p><p>The <termref def="dt-sweep"/> of an <xtermref spec="XT40" ref="dt-attribute-set"/>
+                  is <termref def="dt-motionless"/> if all the following conditions hold:</p><olist><item><p>Every <elcode>xsl:attribute</elcode> instruction within the declarations comprising the attribute set
+                     is <termref def="dt-motionless"/> when assessed as described in <specref ref="streamability-of-attribute-sets"/>,
+                  using a <termref def="dt-context-posture"/> of <termref def="dt-striding"/>.</p></item><item><p>Every attribute set referenced in the <code nobreak="false">use-attribute-sets</code> attribute of an <elcode>xsl:attribute-set</elcode>
+                  declaration of the attribute set has the attribute <code nobreak="false">streamable="yes"</code>.</p></item><item><p/></item></olist><p>If the <termref def="dt-sweep"/> of an <xtermref spec="XT40" ref="dt-attribute-set"/>
+                  is not <termref def="dt-motionless"/> then it is <termref def="dt-free-ranging"/>.</p><note><p>Attribute sets will always be <termref def="dt-grounded"/>,
+                     because they return newly constructed attribute nodes.</p><p>Attribute sets will very often be <termref def="dt-motionless"/>, but if they
+                     access the context item, they may be <termref def="dt-free-ranging"/>. Although some attribute sets could theoretically be
+                  classified as <termref def="dt-consuming"/>, this option has been excluded because
+                  it is unlikely to be useful; given the requirement to create attributes whose values
+                  are obtained by reading a streamed input document, use of a streamable <xtermref spec="XT40" ref="dt-template-rule"/>
+                  is a more versatile approach.</p><p>Because attribute sets can be overridden in another <xtermref spec="XT40" ref="dt-package"/>, 
+                    the streamability of a construct such as an
+                        <elcode>xsl:element</elcode> instruction containing a
+                        <code nobreak="false">use-attribute-sets</code> attribute is based on the declared
+                     streamability of the named attribute sets, as defined by the
+                        <code nobreak="false">streamable</code> attribute of the <elcode>xsl:attribute-set</elcode>
+                     element. If <code nobreak="false">streamable="yes"</code> is specified, then there is a
+                     requirement that any overriding attribute set should also specify
+                        <code nobreak="false">streamable="yes"</code>, and a streaming processor is required to
+                     check that an attribute set containing such a declaration does in fact satisfy
+                     the streamability rules.</p></note></div2></div1><div1 id="keys-and-streaming"><head>Keys and Streaming</head><p>Keys are not applicable to streamed documents.</p><p>This is ensured by the rules for the streamability of the <function>key</function> function 
+               (see <specref ref="classifying-built-in-functions"/>). These rules make the <termref def="dt-operand-usage"/> of the
+               third argument <termref def="dt-navigation"/>, which has the consequence that when the <function>key</function> function
+            is applied to a streamed input document, the call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>, which effectively makes
+            the containing construct non-streamable.</p></div1><div1 id="streamability"><head>Streamability</head><p>This section contains rules that can be used to determine
             properties of <termref def="dt-construct">constructs</termref> in the 
            <xtermref spec="XT40" ref="dt-stylesheet"/> — specifically, the <termref def="dt-posture"/> and
                <termref def="dt-sweep"/> of a construct — which enable the streamability of
             the stylesheet to be assessed.</p><p>These properties are used to determine the streamability
-            of:</p><ulist><item><p><xtermref spec="XT40" ref="dt-template-rule">Template rules</xtermref>: see <xspecref spec="XT40" ref="streamable-templates"/></p></item><item><p>The <elcode>xsl:source-document</elcode> instruction: see <xspecref spec="XT40" ref="source-document-instruction"/></p></item><item><p><xtermref spec="XT40" ref="dt-attribute-set">Attribute sets</xtermref>: see <specref ref="streamability-of-attribute-sets"/></p></item><item><p><xtermref spec="XT40" ref="dt-accumulator">Accumulators</xtermref>: see <specref ref="streamability-of-accumulators"/></p></item><item><p><xtermref spec="XT40" ref="dt-stylesheet-function">Stylesheet functions</xtermref>: see <specref ref="streamable-stylesheet-functions"/></p></item><item><p>The <elcode>xsl:merge</elcode> instruction: see <specref ref="streamable-merging"/></p></item></ulist><p>In each case, the conditions for constructs to be <termref def="dt-guaranteed-streamable"/> are defined in terms of these properties. The result
+            of:</p><ulist><item><p><xtermref spec="XT40" ref="dt-template-rule">Template rules</xtermref>: see <specref ref="streamable-templates"/></p></item><item><p>The <elcode>xsl:source-document</elcode> instruction: see <xspecref spec="XT40" ref="source-document-instruction"/></p></item><item><p><xtermref spec="XT40" ref="dt-attribute-set">Attribute sets</xtermref>: see <specref ref="streamability-of-attribute-sets"/></p></item><item><p><xtermref spec="XT40" ref="dt-accumulator">Accumulators</xtermref>: see <specref ref="streamability-of-accumulators"/></p></item><item><p><xtermref spec="XT40" ref="dt-stylesheet-function">Stylesheet functions</xtermref>: see <specref ref="streamable-stylesheet-functions"/></p></item><item><p>The <elcode>xsl:merge</elcode> instruction: see <specref ref="streamable-merging"/></p></item></ulist><p>In each case, the conditions for constructs to be <termref def="dt-guaranteed-streamable"/> are defined in terms of these properties. The result
             of this analysis in turn (see <specref ref="streamability-guarantees"/>) imposes rules
             on how the constructs are handled by processors that implement the <termref def="dt-streaming-feature"/>. The analysis has no effect on the behavior of
             processors that do not implement this feature.</p><p>The analysis is relevant to constructs such as streamable template rules and the
@@ -607,7 +1030,7 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
             global variables, functions, or named templates), then information from the signature of
             the referenced component is sometimes used. This is invariably information that cannot
             be changed if a component is overridden in a different 
-           <xtermref spec="XP40" ref="dt-package">package</xtermref>. 
+           <xtermref spec="XT40" ref="dt-package">package</xtermref>. 
            The analysis thus requires as a pre-condition that function calls
             and calls on named templates have been resolved to the extent that the corresponding
             function/template signature is known. </p><p>The detailed way in which the construct tree is derived from the lexical form of the
@@ -615,16 +1038,16 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
             can be optimized without affecting the result of the rules in this section: for example,
             a sequence constructor containing a single instruction can be replaced by that
             instruction, and a parenthesized expression can be replaced by its content.</p><p><termdef id="dt-construct" term="construct">The term <term>construct</term> refers to
-               the union of the following: a <xtermref spec="XP40" ref="dt-sequence-constructor"/>, 
-           an <xtermref spec="XP40" ref="dt-instruction">instruction</xtermref>, an 
+               the union of the following: a <xtermref spec="XT40" ref="dt-sequence-constructor"/>, 
+           an <xtermref spec="XT40" ref="dt-instruction">instruction</xtermref>, an 
            <xtermref spec="XT40" ref="dt-attribute-set">attribute set</xtermref>, a 
              <xtermref spec="XT40" ref="dt-value-template">value
-                  template</xtermref>, an <xtermref spec="XP40" ref="dt-expression">expression</xtermref>, or a
+                  template</xtermref>, an <xtermref spec="XT40" ref="dt-expression">expression</xtermref>, or a
                   <xtermref spec="XT40" ref="dt-pattern">pattern</xtermref>.</termdef></p><p>These <termref def="dt-construct">constructs</termref> are classified into
                <term>construct kinds</term>: in particular, 
             <xtermref spec="XT40" ref="dt-instruction">instructions</xtermref> are 
             classified according to the name of the XSLT instruction,
-            and <xtermref spec="XP40" ref="dt-expression">expressions</xtermref> are classified according to the
+            and <xtermref spec="XT40" ref="dt-expression">expressions</xtermref> are classified according to the
             most specific production in the XPath grammar that the expression satisfies. (This
             means, for example, that <code nobreak="false">2+2</code> is classified as an <code nobreak="false">AdditiveExpr</code>,
             rather than say as a <code nobreak="false">UnionExpr</code>; although it also satisfies the production
@@ -805,8 +1228,8 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                   deemed to be <var>U{xs:boolean}</var>, reflecting the fact that a pattern is
                   essentially a function that can be applied to items to deliver a <code nobreak="false">true</code> or <code nobreak="false">false</code>
                   (matching or non-matching) result.
-               For constructs other than <xtermref spec="XP40" ref="dt-expression">expressions</xtermref>
-                  and <xtermref spec="XP40" ref="dt-pattern">patterns</xtermref>, the <termref def="dt-static-type"/> for the
+               For constructs other than <xtermref spec="XT40" ref="dt-expression">expressions</xtermref>
+                  and <xtermref spec="XT40" ref="dt-pattern">patterns</xtermref>, the <termref def="dt-static-type"/> for the
                   purpose of streamability analysis is taken as <var>U{*}</var>.</p><p>The rules given here are deliberately simple. Implementations may well be able to
                compute a more precise <termref def="dt-static-type"/>, but this will rarely be
                useful for streamability analysis. The item type for each kind of XPath expression is
@@ -883,7 +1306,8 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                static type of <code nobreak="false">@*</code> is the same as the static type of <code nobreak="false">attribute::*</code>.</p><p>Both the constructs <code nobreak="false">ForwardStep</code> or <code nobreak="false">ReverseStep</code>, in their
                   unabbreviated form, are written as <code nobreak="false">Axis::NodeTest</code>. The static type depends
                on both the <code nobreak="false">Axis</code> and the <code nobreak="false">NodeTest</code>, and also on the
-                  <xtermref spec="XT40" ref="dt-context-item-type"/>, determined as described in <specref ref="determining-context-item-type"/>.</p><p>If the <termref def="dt-context-item-type"/> has an empty intersection with <code nobreak="false">U{N}</code>
+                  <termref def="dt-context-item-type"/>, determined as described in 
+                 <specref ref="determining-context-item-type"/>.</p><p>If the <termref def="dt-context-item-type"/> has an empty intersection with <code nobreak="false">U{N}</code>
                   (that is, if the context item type cannot be a node), then evaluation of the <code nobreak="false">AxisStep</code>
                   will always fail; it is permissible to raise a type error statically in this case, but for the
                   sake of the analysis, the static type of the <code nobreak="false">AxisStep</code> can be taken as <code nobreak="false">U{}</code>.
@@ -936,7 +1360,7 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                            <elcode>xsl:for-each-group</elcode>; path expressions, filter
                         expressions, and simple mapping expressions; and all patterns.</p></note></item><item><p><termdef id="dt-controlling-operand" term="controlling operand">Within a
                            <termref def="dt-focus-changing-construct"/> there is in many cases one
-                           <xtermref spec="XT40" ref="dt-operand">operand</xtermref> whose value determines the
+                           <termref def="dt-operand">operand</termref> whose value determines the
                            <xtermref spec="XT40" ref="dt-focus"/> for evaluating other operands; this is referred
                         to as the <term>controlling operand</term>.</termdef></p><note><p>For example, the controlling operand of an <elcode>xsl:for-each</elcode>,
                            <elcode>xsl:iterate</elcode>, or <elcode>xsl:for-each-group</elcode>
@@ -1042,7 +1466,7 @@ explanatory purposes and are not normative. </p><div2 id="terminology"><head>Ter
                            posture. The posture transition rules permit this; we now have a sequence
                            of child elements, and still a <termref def="dt-striding"/> posture.</p></item><item><p>The same applies to the next step, <code nobreak="false">child::emp</code></p></item><item><p>The content of the <elcode>xsl:for-each</elcode> instruction is a
                               <xtermref spec="XT40" ref="dt-sequence-constructor"/> which itself has a single
-                              <xtermref spec="XT40" ref="dt-operand"/>, the <elcode>xsl:value-of</elcode>
+                              <termref def="dt-operand"/>, the <elcode>xsl:value-of</elcode>
                            instruction.</p></item><item><p>The <elcode>xsl:value-of</elcode> instruction is evaluated once for each
                               <code nobreak="false">emp</code> child, with that child as context item and in a
                               <termref def="dt-striding"/> posture. This instruction uses the
@@ -1289,19 +1713,19 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                   conditions:</p><olist><item><p>The <elcode>xsl:accumulator</elcode> declaration has the attribute
                            <code nobreak="false">streamable="yes"</code>.</p></item><item><p>In every contained <elcode>xsl:accumulator-rule</elcode>, the 
                        <xtermref spec="XT40" ref="dt-pattern">pattern</xtermref> in the <code nobreak="false">match</code> attribute is
-                        a <termref def="dt-motionless"/> pattern (see <specref ref="classifying-patterns"/>).</p></item><item><p>The <xtermref spec="XP40" ref="dt-expression">expression</xtermref> in the
+                        a <termref def="dt-motionless"/> pattern (see <specref ref="classifying-patterns"/>).</p></item><item><p>The <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the
                            <code nobreak="false">initial-value</code> attribute is <termref def="dt-grounded"/> and
                            <termref def="dt-motionless"/>.</p></item><item><p><phrase diff="add" at="issue211">In an <elcode>xsl:accumulator-rule</elcode> with 
                         <code nobreak="false">phase="start"</code> (the default value),</phrase>
                         the <termref def="dt-type-adjusted-posture-and-sweep"/> of
-                        the <xtermref spec="XP40" ref="dt-expression">expression</xtermref> in the <code nobreak="false">select</code> attribute or the contained
+                        the <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the <code nobreak="false">select</code> attribute or the contained
                            <xtermref spec="XT40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
                            is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item><item diff="add" at="issue211"><p>In an <elcode>xsl:accumulator-rule</elcode> with 
                         <code nobreak="false">phase="end"</code>, one of the
                         following conditions holds:</p><olist><item><p>The rule has <code nobreak="false">capture="no"</code> (the default value),
                            and the <termref def="dt-type-adjusted-posture-and-sweep"/> of
-                           the <xtermref spec="XP40" ref="dt-expression">expression</xtermref> in the <code nobreak="false">select</code> attribute or the contained
-                           <xtermref spec="XP40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
+                           the <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the <code nobreak="false">select</code> attribute or the contained
+                           <xtermref spec="XT40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
                            is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item><item><p diff="chg" at="issue731">The rule has <code nobreak="false">capture="yes"</code>.</p></item></olist></item></olist><p>Specifying <code nobreak="false">streamable="yes"</code> on an
                      <elcode>xsl:accumulator</elcode> element declares an intent that the
                   accumulator should be streamable, either
@@ -1639,7 +2063,7 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                                  with a <termref def="dt-context-posture"/> of <termref def="dt-grounded"/> (usage <termref def="dt-absorption"/>).</p></item></olist><p>For example, <code nobreak="false">&lt;xsl:apply-templates
                               select="copy-of(.)"/&gt;</code> is <termref def="dt-grounded"/> and
                               <termref def="dt-consuming"/>.</p></item><item><p>If there is an <elcode>xsl:sort</elcode> child element, then <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If the implicit or explicit <code nobreak="false">mode</code> attribute identifies a
-                              <xtermref spec="XP40" ref="dt-mode">mode</xtermref> that is not declared with
+                              <xtermref spec="XT40" ref="dt-mode">mode</xtermref> that is not declared with
                               <code nobreak="false">streamable="yes"</code>, then <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>. </p><note><p>When <code nobreak="false">mode="#current"</code> is specified, this is treated as
                               equivalent to specifying a streamable mode; although it is not known
                               statically what the mode will be, it is always the case that if the
@@ -2056,7 +2480,8 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                         respect to the <elcode>xsl:source-document</elcode> instruction itself, and not with
                         respect to the containing template, or an outer <elcode>xsl:source-document</elcode>
                         instruction.</p>
-                  </note>--><p>The <elcode>xsl:source-document</elcode> instruction is <termref def="dt-guaranteed-streamable"/> if both the following conditions are satisfied:</p><olist><item><p>It is <termref def="dt-declared-streamable"/>, by specifying
+                  </note>--><p>The <elcode>xsl:source-document</elcode> instruction is 
+                   <termref def="dt-guaranteed-streamable"/> if both the following conditions are satisfied:</p><olist><item><p>It is <termref def="dt-declared-streamable"/>, by specifying
                <code nobreak="false">streamable="yes"</code>.</p></item><item><p>the contained <xtermref spec="XT40" ref="dt-sequence-constructor"/> is <termref def="dt-grounded"/>, as assessed using
                the streamability analysis in <specref ref="streamability"/>. The consequences of
                being or not being guaranteed streamable depend on the processor conformance level,
@@ -2129,412 +2554,15 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                                     <termref def="dt-absorption"/>).</p></item></olist></item></olist><note><p>The effect of the initialization expression having usage <termref def="dt-navigation"/> is that it is not possible in streamable constructs
                         to bind a variable to a node in a streamed document.</p></note></div4><div4 id="streamability-xsl-where-populated"><head>Streamability of <elcode>xsl:where-populated</elcode></head><p>The <termref def="dt-posture"/> and <termref def="dt-sweep"/> of an
                         <elcode>xsl:where-populated</elcode> instruction are the <termref def="dt-posture"/> and <termref def="dt-sweep"/> 
-                    of the contained <xtermref spec="XT40" ref="dt-sequence-constructor"/>.</p></div4></div3><div3 id="streamable-stylesheet-functions"><head>Classifying Stylesheet Functions</head><p>Under specific conditions, described in this section, a stylesheet function can be
-                  used to process nodes from a <termref def="dt-streamed-document">streamed input
-                     document</termref>.</p><p><termdef id="dt-streamability-category" term="streamability category">Stylesheet
-                     functions belong to one of a number of <term>streamability categories</term>:
-                     the choice of category characterizes the way in which the function handles
-                     streamed input.</termdef></p><p>The <termref def="dt-streamability-category">category</termref> to which a
-                  function belongs is declared in the <code nobreak="false">streamability</code> attribute of the
-                     <elcode>xsl:function</elcode> declaration, and defaults to
-                     <code nobreak="false">unclassified</code>.</p><p>The streamability categories defined in this specification are:
-                     <code nobreak="false">unclassified</code>, <code nobreak="false">absorbing</code>, <code nobreak="false">inspection</code>,
-                     <code nobreak="false">filter</code>, <code nobreak="false">shallow-descent</code>, <code nobreak="false">deep-descent</code>,
-                  and <code nobreak="false">ascent</code>. It is also possible to specify the streamability category
-                  as a QName in an <termref def="dt-implementation-defined"/> namespace, in which
-                  case the streamability rules are <termref def="dt-implementation-defined"/>; a
-                  processor that does not recognize a category defined in this way
-                     <rfc2119>must</rfc2119> analyze the function as if
-                     <code nobreak="false">streamability="unclassified"</code> were specified. </p><imp-def-feature id="idf-ext-streamingcategories">Additional <termref def="dt-streamability-category">streamability categories</termref> for
-                  stylesheet functions may be defined by an implementation.</imp-def-feature><p>A stylesheet function is <termref def="dt-declared-streamable"/> if the
-                     <elcode>xsl:function</elcode> declaration has a <code nobreak="false">streamability</code>
-                  attribute with a value other than <code nobreak="false">unclassified</code>.</p><p>The only <termref def="dt-streamability-category">category</termref> permitted for
-                  a zero-arity function (one with no arguments) is <code nobreak="false">unclassified</code>. All
-                  function calls to zero-arity stylesheet functions are <termref def="dt-grounded"/>
-                  and <termref def="dt-motionless"/>.</p><p>In general (subject to more detailed rules below), a node belonging to a <termref def="dt-streamed-document"/> can be present within the value of an argument of
-                  a call on a <xtermref spec="XT40" ref="dt-stylesheet-function"/> only if one of the following
-                  conditions is true:</p><olist><item><p>The stylesheet function is <termref def="dt-declared-streamable"/>, and the
-                        argument in question is the first argument of the function call.</p></item><item><p>The corresponding <xtermref spec="XT40" ref="dt-function-parameter"/> is declared with a
-                           <xtermref spec="XT40" ref="dt-required-type"/> that triggers 
-                       <xtermref spec="XT40" ref="dt-atomization">atomization</xtermref> of any supplied node.</p></item></olist><p><termdef id="dt-streaming-parameter" term="streaming parameter">The first 
-                 <xtermref spec="XT40" ref="dt-function-parameter">parameter</xtermref> of a 
-                 <termref def="dt-declared-streamable"/>
-                     <xtermref spec="XT40" ref="dt-stylesheet-function"/> is referred to as a <term>streaming
-                        parameter</term>.</termdef></p><note><p>If a stylesheet function returns streamed nodes, then these nodes can only
-                     derive from streamed nodes passed in an argument to the function. This is
-                     because streamed nodes cannot be bound to global variables, and they cannot be
-                     returned by an <elcode>xsl:source-document</elcode> instruction within the function body
-                     (the result of <elcode>xsl:source-document</elcode> is always grounded).</p></note><p>The choice of <termref def="dt-streamability-category">category</termref> places
-                  constraints on the function body, and also on calls to the function. These constraints
-                  are defined below, separately for each category. A function is <termref def="dt-guaranteed-streamable"/> only if the constraints are satisfied,
-                and a static function call is
-               guaranteed-streamable only if the function is guaranteed-streamable and the
-               function call itself satisfies the constraints for the chosen category.</p><p>Dynamic function calls are <termref def="dt-guaranteed-streamable"/> only
-   in trivial cases, for example where the function signature indicates that an argument is required to
-   be a text node or an attribute node. For details, see <specref ref="streamability-of-dynamic-function-calls"/>.</p><p>The constraints on the function body are expressed in terms of the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of the function result. The
-                     <termref def="dt-posture"/> and <termref def="dt-sweep"/> of the function
-                  result are the <termref def="dt-type-adjusted-posture-and-sweep"/> of the <xtermref spec="XT40" ref="dt-sequence-constructor"/> contained within the
-                     <elcode>xsl:function</elcode> element, given the declared return type of the
-                  function, which defaults to <code nobreak="false">item()*</code>.</p><note><p>Determining the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of
-                     the function result requires first determining the <termref def="dt-posture"/>
-                     and <termref def="dt-sweep"/> of the contained <xtermref spec="XT40" ref="dt-sequence-constructor"/>, which is done according to the rules in
-                        <specref ref="classifying-sequence-constructors"/>. This in turn will
-                     usually involve examination of variable references that are bound to the
-                     function’s parameters. The analysis of these variable references is described
-                     in <specref ref="streamability-of-variable-references"/>.</p></note><p>If the function is <termref def="dt-declared-streamable"/> but does not satisfy
-                  the constraints that make it <termref def="dt-guaranteed-streamable"/>, the
-                  consequences are explained in <specref ref="streamability-guarantees"/>.</p><p>If a stylesheet function is overridden in another package (using
-                     <elcode>xsl:override</elcode>), then the overriding stylesheet function must
-                  belong to the same <termref def="dt-streamability-category"/> as the function that
-                  it overrides. This ensures that overriding a function cannot affect the
-                  streamability of calls to that function.</p><p>The rules for each <termref def="dt-streamability-category"/> are given in the
-                  following sections.</p><div4 id="category-unclassified"><head>Streamability Category: unclassified</head><p><term>Informal description:</term> Functions in this category cannot be called
-                     with streamed nodes supplied in an argument, unless the function signature
-                     causes such nodes to be atomized.</p><p><term>Rules for the function signature:</term> there are no constraints.</p><p><term>Rules for the function body:</term> there are no constraints.</p><p><term>Rules for references to the streaming
-                        parameter:</term> not applicable, because there is no streaming
-                     parameter.</p><p><term>Rules for function calls:</term> the <termref def="dt-general-streamability-rules"/> apply. The operands are the
-                     expressions appearing in the argument list of the function call, with the
-                        <termref def="dt-operand-usage"/> of each operand being the <termref def="dt-type-determined-usage"/> based on the declared type of the
-                     corresponding parameter in the function signature. </p><example><head>An unclassified stylesheet function that accepts nodes</head><p>The <termref def="dt-streamability-category"/> is
-                        <code nobreak="false">unclassified</code>.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:exclude-first" as="node()*"&gt;
-  &lt;xsl:param name="nodes" as="node()*"/&gt;
-  &lt;xsl:sequence select="$nodes[not(node-name() = preceding-sibling::*/node-name())]"/&gt;
-&lt;/xsl:function&gt;  
-                        </eg><p>The effect of the rules is that a call to this function is guaranteed
-                        streamable if and only if the sequence supplied as the value of the
-                           <code nobreak="false">$nodes</code> argument is <termref def="dt-grounded"/> (that is, it
-                        contains no streamed nodes).</p></example><example><head>An unclassified stylesheet function that accepts atomic items</head><p>The <termref def="dt-streamability-category"/> is
-                        <code nobreak="false">unclassified</code>.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:min" as="xs:integer"&gt;
-  &lt;xsl:param name="arg0" as="xs:integer"/&gt;
-  &lt;xsl:param name="arg1" as="xs:integer"/&gt;
-  &lt;xsl:sequence select="min(($arg0, $arg1))"/&gt;
-&lt;/xsl:function&gt;  
-                        </eg><p>The effect of the rules is that a call to this function is streamable under
-                        similar circumstances to those that apply to a binary operator such as
-                           <code nobreak="false">+</code>. For example, a call is streamable if two atomic items
-                        are supplied, or if two attribute nodes are supplied, whether from streamed
-                        or unstreamed documents. The main constraint is that it is not permitted for
-                        both arguments to be consuming; for example, if the context node is a node
-                        in a streamed document, then the function call <code nobreak="false">f:min((price,
-                           discount))</code> would not be guaranteed streamable.</p></example></div4><div4 id="category-absorbing"><head>Streamability Category: absorbing</head><p><term>Informal description:</term> Functions in this category typically read
-                     the subtrees rooted at the node or nodes supplied in the first argument. These
-                     subtrees must not overlap each other. The function must not return any streamed
-                     nodes.</p><p><term>Rules for the function signature:</term> there are no constraints.</p><p><term>Rules for the function body:</term> 
-                     For the function to be <termref def="dt-guaranteed-streamable"/>, the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
-                     the function body with respect to the declared return type must be <termref def="dt-grounded"/>, and the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
-                     with respect to the declared return type must be <termref def="dt-motionless"/> or <termref def="dt-consuming"/>.</p><p><term>Rules for references to the streaming
-                        parameter:</term> If the declared type of the <termref def="dt-streaming-parameter"/> permits more than one node, then a variable
-                     reference referring to the streaming parameter is <termref def="dt-striding"/>
-                     and <termref def="dt-consuming"/>. Otherwise such a variable reference is
-                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> If the first argument is <termref def="dt-crawling"/> then the function call is <termref def="dt-roaming"/>
-                     and <termref def="dt-free-ranging"/>; otherwise the <termref def="dt-general-streamability-rules"/> apply. The operands are the
-                     expressions appearing in the argument list of the function call. The <termref def="dt-operand-usage"/> of the first argument is <termref def="dt-absorption"/>; the operand usage of other arguments is the <termref def="dt-type-determined-usage"/> based on the declared type of the
-                     corresponding <xtermref spec="XT40" ref="dt-parameter"/> in the function signature. </p><note><p>Absorbing functions perform an operation analogous to atomization on their
-                        supplied arguments, in that they typically use information from the subtree
-                        rooted at a node to compute atomic items. Atomization can be seen as a
-                        special case of absorption. Calls on absorbing functions are therefore, from
-                        a streamability point of view, equivalent to calls on functions that
-                        implicitly atomize the supplied nodes.</p><p>An important difference, however, is that whereas atomization can be applied
-                        to any argument of a function call, absorption applies only to the first
-                        argument.</p><p>Another difference is that atomization is allowed on a sequence of nodes in
-                           <termref def="dt-crawling"/> posture, whereas generalized absorption is
-                        not. Within a sequence, there may be nodes whose subtrees overlap, and the
-                        code for atomization is expected to handle this, but more general absorption
-                        operations are not. To write a function that accepts streamed nodes and
-                        atomizes them, it is better to use the streamability category
-                           <code nobreak="false">unclassified</code>, and to declare the first argument with an
-                        atomic type, rather than using the category <code nobreak="false">absorbing</code> which
-                        allows more general processing, but restricts what can be supplied in the
-                        argument to the function call.</p></note><example><head>An absorbing stylesheet function</head><p>The following function is declared as absorbing, and the function body meets
-                        the rules for this category because it makes downward selections only, and
-                        returns an atomic item.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:count-descendants" as="xs:integer" streamability="absorbing"&gt;
-  &lt;xsl:param name="input" as="node()*"/&gt;
-  &lt;xsl:sequence select="count($input//*)"/&gt;
-&lt;/xsl:function&gt;  
-                        </eg><p>The effect of the rules is that a call to this function is <termref def="dt-guaranteed-streamable"/> provided that the sequence supplied as
-                        the value of the <code nobreak="false">$input</code> argument is <termref def="dt-motionless"/> or <termref def="dt-consuming"/>, and is either
-                           <termref def="dt-grounded"/> or <termref def="dt-striding"/>.</p></example><example><head>An absorbing stylesheet function with two arguments</head><p>The following function is declared as absorbing, and the function body meets
-                        the rules for this category because it makes downward selections only from
-                        the node supplied as the first argument, and returns an atomic item.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:compare-size" as="xs:integer" streamability="absorbing"&gt;
-  &lt;xsl:param name="input0" as="node()"/&gt;
-  &lt;xsl:param name="input1" as="node()"/&gt;
-  &lt;xsl:sequence select="count($input0//*) - count($input1//*)"/&gt;
-&lt;/xsl:function&gt;</eg><p>This function takes two nodes as its arguments. Some examples of function
-                        calls include: </p><ulist><item><p>Streamable: <code nobreak="false">f:compare-size(a, b)</code> where <code nobreak="false">a</code> is
-                              an element in a streamed document and <code nobreak="false">b</code> is an element in
-                              an unstreamed document</p></item><item><p>Streamable: <code nobreak="false">f:compare-size(a, b)</code> where <code nobreak="false">a</code> and
-                                 <code nobreak="false">b</code> are both elements in unstreamed documents</p></item><item><p>Not streamable: <code nobreak="false">f:compare-size(a, b)</code> where <code nobreak="false">a</code>
-                              is an element in an unstreamed document and <code nobreak="false">b</code> is an
-                              element in a streamed document</p></item></ulist><p>The reason for the asymmetry is that for the first
-                     argument the <termref def="dt-operand-usage"/> is <termref def="dt-absorption"/>,
-                     while for the second argument it is <termref def="dt-navigation"/>. It is a consequence
-                     of the <termref def="dt-general-streamability-rules"/> that when streamed nodes are
-                     supplied to an operand with usage navigation, the resulting expression is
-                     <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></example><example><head>A recursive absorbing stylesheet function</head><p>The following function is declared as absorbing, and the function body meets
-                        the rules for this category. Analysis of the function body reveals that it
-                        is grounded and consuming; to establish this, it is necessary to analyze the
-                        recursive call <code nobreak="false">f:outline(*)</code>, and this is possible because it is
-                        known to be a call on an absorbing stylesheet function.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:outline" as="xs:string" streamability="absorbing"&gt;
-  &lt;xsl:param name="input" as="element()*"/&gt;
-  &lt;xsl:value-of select="$input ! (name() || '(' || f:outline(*) || ')')" 
-                separator=", "/&gt;
-&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
-                        streamable in the typical case where the sequence supplied as the value of
-                        the <code nobreak="false">$input</code> argument is <termref def="dt-striding"/> and
-                           <termref def="dt-consuming"/>.</p></example></div4><div4 id="category-inspection"><head>Streamability Category: inspection</head><p><term>Informal description:</term> Functions in this category typically return
-                     properties of the node supplied in the first argument, where these properties
-                     can be determined without advancing the input stream. This allows access to
-                     properties such as the name and type of each node, and also to its ancestors,
-                     attributes, and namespaces. </p><p><term>Rules for the function signature:</term> If
-                     the declared type of the streaming parameter permits more than one node,
-                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term>
-                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
-                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
-                     the function body with respect to the declared return type must be <termref def="dt-grounded"/>, and the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
-                     with respect to the declared return type must be <termref def="dt-motionless"/>.</p><p><term>Rules for references to the streaming
-                        parameter:</term> Such a variable reference is
-                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> the <termref def="dt-general-streamability-rules"/> apply. The operands are the
-                     expressions appearing in the argument list of the function call. The <termref def="dt-operand-usage"/> of the first argument is <termref def="dt-inspection"/>; the operand usage of other arguments is the <termref def="dt-type-determined-usage"/> based on the declared type of the
-                     corresponding argument in the function signature. </p><note><p>The <termref def="dt-streaming-parameter"/> is restricted to be a single
-                        node because if <code nobreak="false">$input</code> were a sequence of nodes, then an
-                        expression such as <code nobreak="false">($input/name(), $input/@id)</code> would not be
-                        streamable.</p></note><example><head>Example of an inspection stylesheet function</head><p>The following function is declared with category <code nobreak="false">inspection</code>,
-                        and the function body meets the rules for this category because all
-                        references to the supplied node are motionless.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:depth" as="xs:integer" streamability="inspection"&gt;
-  &lt;xsl:param name="input" as="node()"/&gt;
-  &lt;xsl:sequence select="count($input/ancestor-or-self::*)"/&gt;
-&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
-                        streamable provided that the expression supplied as the value of the
-                           <code nobreak="false">$input</code> argument is <termref def="dt-motionless"/> or
-                           <termref def="dt-consuming"/>.</p></example><example><head>Example of an inspection stylesheet function with two arguments</head><p>The following function is declared with category <code nobreak="false">inspection</code>,
-                        and the function body meets the rules for this category because the function
-                        signature ensures that the second argument cannot be a node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:get-attribute-value" as="xs:string"&gt;
-  &lt;xsl:param name="element" as="node()"/&gt;
-  &lt;xsl:param name="attribute-name" as="xs:string"/&gt;
-  &lt;xsl:sequence select="string($element/@*[local-name() = $attribute-name])"/&gt;
-&lt;/xsl:function&gt;</eg><p>Although the normal usage of this function might be to supply an element
-                        from a streamed document as the first argument, and a literal string as the
-                        second, it is also permissible (and guaranteed streamable) to supply an
-                        unstreamed element as the first argument, and an element node from a
-                        streamed document as the second. When applying the general streamability
-                        rules in this case, the first operand is grounded and motionless, while the
-                        second is grounded and consuming (by virtue of the rules for type-determined
-                        usage), and this makes the function call grounded and consuming.</p></example></div4><div4 id="category-filter"><head>Streamability Category: filter</head><p><term>Informal description:</term> Functions in this category typically return
-                     either the node supplied in the first argument or nothing, depending on the
-                     values of properties that can be determined without advancing the input stream.
-                     This allows access to properties such as the name and type of each node, and
-                     also to its ancestors, attributes, and namespaces. </p><p><term>Rules for the function signature:</term> If
-                     the declared type of the streaming parameter permits more than one node,
-                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
-                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
-                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
-                     the function body with respect to the declared return type must be <termref def="dt-striding"/>, and the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
-                     with respect to the declared return type must be <termref def="dt-motionless"/>.</p><p><term>Rules for references to the streaming
-                        parameter:</term> Such a variable reference is
-                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The <termref def="dt-posture"/> and
-                        <termref def="dt-sweep"/> of a call to a function in this category are
-                     determined by applying the <termref def="dt-general-streamability-rules"/>. The
-                     operands are the expressions supplied as arguments to the function call. The
-                     first argument has <termref def="dt-operand-usage"/>
-                     <termref def="dt-transmission"/>; any further arguments have <termref def="dt-type-determined-usage"/> based on the declared type of the
-                     corresponding parameter in the function signature.</p><example><head>Example of a filtering stylesheet function</head><p>The following function is declared as filtering, and the function body meets
-                        the rules for this category because it selects nodes from the input based on
-                        motionless properties (namely, the existence of attributes).</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:large-regions" as="element(region)" streamability="filter"&gt;
-  &lt;xsl:param name="input" as="element(region)"/&gt;
-  &lt;xsl:sequence select="$input[@size gt 1000]"/&gt;
-&lt;/xsl:function&gt;</eg><p>The effect of the rules is that the posture and sweep of a function call 
-                        <code nobreak="false">f:large-regions(EXPR)</code> are the same as the posture and sweep of <code nobreak="false">EXPR</code>.</p><p>Although the name <code nobreak="false">filter</code> suggests that the result must always
-                        be a subset of the input, this is not strictly required by the rules. The
-                        function can also return atomic items, as well as attribute and namespace
-                        nodes.</p></example></div4><div4 id="category-shallow-descent"><head>Streamability Category: shallow-descent</head><p><term>Informal description:</term> Functions in this category typically return
-                     children of the nodes supplied in the first argument. They may also select
-                     deeper in the subtrees of these nodes, provided that no node in the result can
-                     possibly be an ancestor of any other node in the result. </p><p><term>Rules for the function signature:</term> If
-                     the declared type of the streaming parameter permits more than one node,
-                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
-                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
-                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
-                     the function body with respect to the declared return type must be <termref def="dt-striding"/>, and the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
-                     with respect to the declared return type must be <termref def="dt-motionless"/> or <termref def="dt-consuming"/>.</p><p><term>Rules for references to the streaming
-                        parameter:</term> Such a variable reference is
-                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The rules are as follows, in order:</p><olist><item><p>Let <var>T0</var> be the <termref def="dt-utype"/> corresponding to the
-                           declared type of the <termref def="dt-streaming-parameter"/> in the
-                           function signature (defaulting to <var>U{*}</var>).</p></item><item><p>Let <var>P0</var> and <var>S0</var> be the <termref def="dt-type-adjusted-posture-and-sweep"/> of the first argument
-                           expression, based on type <var>T0</var>.</p></item><item><p>If <var>P0</var> is not <termref def="dt-striding"/> or <termref def="dt-grounded"/>, the function call is <termref def="dt-roaming"/>
-                           and <termref def="dt-free-ranging"/>.</p></item><item><p>Consider a construct <var>C</var> whose operands are the argument
-                           expressions other than the first argument, with <termref def="dt-type-determined-usage">type-determined operand usage</termref>
-                           based on the declared type of the corresponding parameter in the function
-                           signature. Let <var>P1</var> and <var>S1</var> be the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of <var>C</var>,
-                           assessed using the <termref def="dt-general-streamability-rules"/>.</p><note><p>If there is only one argument, then <var>P1</var> is <termref def="dt-grounded"/> and <var>S1</var> is <termref def="dt-motionless"/>.</p></note></item><item><p>If <var>P1</var> is not <termref def="dt-grounded"/>, the function call
-                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>S0</var> and <var>S1</var> are both <termref def="dt-consuming"/>, or if either is <termref def="dt-free-ranging"/>, then the function
-                           call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-grounded"/>, then the <termref def="dt-posture"/> of the function call is <termref def="dt-grounded"/>, and the <termref def="dt-sweep"/> of the function call is the wider
-                           of <var>S0</var> and <var>S1</var>.</p></item><item><p>Otherwise, the <termref def="dt-posture"/> of the function call is
-                              <var>P0</var>, and the <termref def="dt-sweep"/> of the function call
-                           is as follows:</p><olist><item><p>If the intersection of <var>T0</var> with
-                                       <var>U{document-node(), element()}</var> is empty (that is,
-                                    the declared type of the first argument does not permit document
-                                    or element nodes) then <var>S0</var>.</p></item><item><p>Let <var>A</var> be the <termref def="dt-static-type"/> of the
-                                    expression supplied as the first argument. If the intersection
-                                    of <var>A</var> with <var>U{document-node(), element()}</var> is
-                                    empty (that is, the inferred type of the expression supplied as
-                                    the first argument does not permit document or element nodes)
-                                    then <var>S0</var>.</p></item><item><p>Otherwise, <termref def="dt-consuming"/>.</p></item></olist></item></olist><example><head>A shallow-descent stylesheet function</head><p>The following function is declared as shallow-descent, and the function body
-                        meets the rules for this category because it selects children of the
-                        supplied input node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:alternate-children" as="node()*" 
-                                          streamability="shallow-descent"&gt;
-  &lt;xsl:param name="input" as="element()"/&gt;
-  &lt;xsl:sequence select="$input/node()[position() mod 2 = 1]"/&gt;
-&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
-                        streamable in the typical case where the node supplied as the value of
-                        the <code nobreak="false">$input</code> argument is <termref def="dt-striding"/> and
-                           <termref def="dt-consuming"/>.</p></example></div4><div4 id="category-deep-descent"><head>Streamability Category: deep-descent</head><p><term>Informal description:</term> Functions in this category typically return
-                     descendants of the nodes supplied in the first argument. </p><p><term>Rules for the function signature:</term> If
-                     the declared type of the streaming parameter permits more than one node,
-                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
-                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
-                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
-                     the function body with respect to the declared return type must be <termref def="dt-crawling"/>, and the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
-                     with respect to the declared return type must be <termref def="dt-motionless"/> or <termref def="dt-consuming"/>.</p><p><term>Rules for references to the streaming
-                        parameter:</term> Such a variable reference is
-                        <termref def="dt-striding"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The rules are as follows, in order:</p><olist><item><p>Let <var>T0</var> be the <termref def="dt-utype"/> corresponding to the
-                           declared type of the <termref def="dt-streaming-parameter"/> in the
-                           function signature (defaulting to <var>U{*}</var>).</p></item><item><p>Let <var>P0</var> and <var>S0</var> be the <termref def="dt-type-adjusted-posture-and-sweep"/> of the first argument
-                           expression, based on type <var>T0</var>.</p></item><item><p>If <var>P0</var> is not <termref def="dt-striding"/> or <termref def="dt-grounded"/>, the function call is <termref def="dt-roaming"/>
-                           and <termref def="dt-free-ranging"/>.</p></item><item><p>Consider a construct <var>C</var> whose operands are the argument
-                           expressions other than the first argument, with <termref def="dt-type-determined-usage">type-determined operand usage</termref>
-                           based on the declared type of the corresponding parameter in the function
-                           signature. Let <var>P1</var> and <var>S1</var> be the <termref def="dt-posture"/> and <termref def="dt-sweep"/> of <var>C</var>,
-                           assessed using the <termref def="dt-general-streamability-rules"/></p><note><p>If there is only one argument, then <var>P1</var> is <termref def="dt-grounded"/> and <var>S1</var> is <termref def="dt-motionless"/>.</p></note></item><item><p>If <var>P1</var> is not <termref def="dt-grounded"/>, the function call
-                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>S0</var> and <var>S1</var> are both <termref def="dt-consuming"/>, or if either is <termref def="dt-free-ranging"/>, the function call
-                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-grounded"/>, then the <termref def="dt-posture"/> of the function call is <termref def="dt-grounded"/>, and the <termref def="dt-sweep"/> of the function call is the wider
-                           of <var>S0</var> and <var>S1</var>.</p></item><item><p>Otherwise, the <termref def="dt-posture"/> of the function call is
-                              <termref def="dt-crawling"/>, and the <termref def="dt-sweep"/> of the
-                           function call is as follows:</p><olist><item><p>If the intersection of <var>T0</var> with
-                                       <var>U{document-node(), element()}</var> is empty (that is,
-                                    the declared type of the first argument does not permit document
-                                    or element nodes) then <var>S0</var>.</p></item><item><p>Let <var>A</var> be the <termref def="dt-static-type"/> of the
-                                    expression supplied as the first argument. If the intersection
-                                    of <var>A</var> with <var>U{document-node(), element()}</var> is
-                                    empty (that is, the inferred type of the expression supplied as
-                                    the first argument does not permit document or element nodes)
-                                    then <var>S0</var>.</p></item><item><p>Otherwise, <termref def="dt-consuming"/>.</p></item></olist></item></olist><example><head>A deep-descent stylesheet function</head><p>The following function is declared as deep-descent, and the function body
-                        meets the rules for this category because it selects descendants of the
-                        supplied input node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:all-comments" as="comment()*" 
-                                    streamability="deep-descent"&gt;
-  &lt;xsl:param name="input" as="element()"/&gt;
-  &lt;xsl:sequence select="$input//comment()"/&gt;
-&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
-                        streamable in the typical case where the node supplied as the value of
-                        the <code nobreak="false">$input</code> argument is <termref def="dt-striding"/> and
-                           <termref def="dt-consuming"/>.</p></example></div4><div4 id="category-ascent"><head>Streamability Category: ascent</head><p><term>Informal description:</term> Functions in this category typically return
-                     ancestors of the nodes supplied in the first argument. </p><p><term>Rules for the function signature:</term> If
-                     the declared type of the streaming parameter permits more than one node,
-                     the function is not <termref def="dt-guaranteed-streamable"/>.</p><p><term>Rules for the function body:</term> 
-                     For the function to be <termref def="dt-guaranteed-streamable"/>, 
-                     the <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted posture</termref> of
-                     the function body with respect to the declared return type must be either 
-                     <termref def="dt-climbing"/> or <termref def="dt-grounded"/>, and the 
-                     <termref def="dt-type-adjusted-posture-and-sweep">type-adjusted sweep</termref> of the function body 
-                     with respect to the declared return type must be <termref def="dt-motionless"/>.</p><p><term>Rules for references to the streaming
-                        parameter:</term> Such a variable reference is
-                        <termref def="dt-climbing"/> and <termref def="dt-motionless"/>.</p><p><term>Rules for function calls:</term> The <termref def="dt-posture"/> and
-                        <termref def="dt-sweep"/> of a call to a function in this category are
-                     determined as follows:</p><olist><item><p>Let <var>P0</var> and <var>S0</var> be the <termref def="dt-posture"/>
-                           and <termref def="dt-sweep"/> obtained by assessing the function call
-                           using the <termref def="dt-general-streamability-rules"/>, where the
-                           operands are the arguments to the function call, with an <termref def="dt-operand-usage"/> 
-                           for the first argument of <phrase diff="chg" at="2022-01-01"><termref def="dt-transmission"/></phrase>, 
-                           and an <termref def="dt-operand-usage"/> for
-                           arguments after the first being the <termref def="dt-type-determined-usage"/> based on the declared type of the
-                           corresponding <xtermref spec="XT40" ref="dt-function-parameter"/>. 
-                           <!--<phrase diff="add" at="2022-01-01">[XSLT 3.0 Erratum E31, bug 30289]</phrase>--></p></item><item><p>If <var>P0</var> is <termref def="dt-roaming"/> or <var>S0</var> is
-                              <termref def="dt-free-ranging"/>, then the function call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>S0</var> is not <termref def="dt-motionless"/>, then the function
-                           call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-roaming"/>, then the function call
-                           is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>.</p></item><item><p>If <var>P0</var> is <termref def="dt-grounded"/>, then the function call
-                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item><item diff="add" at="2022-01-01"><p>If the declared return type of the function does not permit nodes, then the function call
-                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.<!-- [XSLT 3.0 Erratum E31, bug 30289].--></p></item><item><p>Otherwise, the function call is <termref def="dt-climbing"/> and <termref def="dt-motionless"/>.</p></item></olist><example><head>An ascending stylesheet function</head><p>The following function is declared with category <code nobreak="false">ascent</code>, and
-                        the function body meets the rules for this category because it selects
-                        ancestors of the supplied node.</p><eg role="xslt-declaration xmlns:f='f'" xml:space="preserve">
-&lt;xsl:function name="f:containing-section" as="element(section)" 
-                                          streamability="ascent"&gt;
-  &lt;xsl:param name="input" as="element(para)*"/&gt;
-  &lt;xsl:sequence select="$input/ancestor::section[last()]"/&gt;
-&lt;/xsl:function&gt;</eg><p>The effect of the rules is that a call to this function is guaranteed
-                        streamable provided that the node supplied as the value of the
-                           <code nobreak="false">input</code> argument is not <termref def="dt-roaming"/> or
-                           <termref def="dt-free-ranging"/>. There are no other constraints on the
-                        node supplied in the input sequence.</p></example></div4></div3><div3 id="streamability-of-attribute-sets"><head>Streamability of Attribute Sets</head><p>An <xtermref spec="XT40" ref="dt-attribute-set">attribute set</xtermref> may be designated as
-                  streamable by including the attribute <code nobreak="false">streamable="yes"</code> on each
-                     <elcode>xsl:attribute-set</elcode> declaration making up the attribute set. If
-                  any <elcode>xsl:attribute-set</elcode> declaration for an attribute set has the
-                  attribute <code nobreak="false">streamable="yes"</code>, then every
-                     <elcode>xsl:attribute-set</elcode> declaration for that attribute set
-                     <rfc2119>must</rfc2119> have the attribute <code nobreak="false">streamable="yes"</code>.</p><p>An <xtermref spec="XT40" ref="dt-attribute-set">attribute set</xtermref> is
-                     <termref def="dt-guaranteed-streamable"/> if all the following conditions are
-                  satisfied:</p><olist><item><p>Every <elcode>xsl:attribute-set</elcode>
-                        declaration for the attribute set has the attribute
-                           <code nobreak="false">streamable="yes"</code>.</p></item><item><p>Every <elcode>xsl:attribute-set</elcode> declaration for the attribute set
-                        is <termref def="dt-grounded"/> and <termref def="dt-motionless"/> according to the analysis in <specref ref="classifying-attribute-sets"/>.</p></item></olist><p>Specifying <code nobreak="false">streamable="yes"</code> on an
-                     <elcode>xsl:attribute-set</elcode> element declares an intent that the
-                  attribute set should be streamable, either
-                     because it is <termref def="dt-guaranteed-streamable"/>, or because it takes
-                     advantage of streamability extensions offered by a particular
-                     processor. The consequences of declaring the attribute set to be
-                  streamable when it is not in fact guaranteed streamable depend on the conformance
-                  level of the processor, and are explained in <specref ref="streamability-guarantees"/>.</p><p><error spec="XT" type="static" class="SE" code="0730"><p>If an <elcode>xsl:attribute</elcode> set element specifies
-                           <code nobreak="false">streamable="yes"</code> then every attribute set referenced in its
-                           <code nobreak="false">use-attribute-sets</code> attribute (if present) must also specify
-                           <code nobreak="false">streamable="yes"</code>.</p></error></p><note><p>It is common for attribute sets to create attributes with constant values, and
-                     such attribute sets will always be grounded and motionless and therefore streamable.
-                     Although such cases are fairly simple for a processor to detect, references to
-                     attribute sets are not guaranteed streamable unless the attribute set is
-                     declared with the attribute <code nobreak="false">streamable="yes"</code>, which should
-                     therefore be used if interoperable streaming is required.</p></note></div3><div3 id="classifying-attribute-sets"><head>Classifying Attribute Sets</head><p>The <termref def="dt-posture"/> of an <xtermref spec="XT40" ref="dt-attribute-set"/>
-               is always <termref def="dt-grounded"/> (its result can never return streamed nodes).</p><p>The <termref def="dt-sweep"/> of an <xtermref spec="XT40" ref="dt-attribute-set"/>
-                  is <termref def="dt-motionless"/> if all the following conditions hold:</p><olist><item><p>Every <elcode>xsl:attribute</elcode> instruction within the declarations comprising the attribute set
-                     is <termref def="dt-motionless"/> when assessed as described in <specref ref="streamability-of-attribute-sets"/>,
-                  using a <termref def="dt-context-posture"/> of <termref def="dt-striding"/>.</p></item><item><p>Every attribute set referenced in the <code nobreak="false">use-attribute-sets</code> attribute of an <elcode>xsl:attribute-set</elcode>
-                  declaration of the attribute set has the attribute <code nobreak="false">streamable="yes"</code>.</p></item><item><p/></item></olist><p>If the <termref def="dt-sweep"/> of an <xtermref spec="XT40" ref="dt-attribute-set"/>
-                  is not <termref def="dt-motionless"/> then it is <termref def="dt-free-ranging"/>.</p><note><p>Attribute sets will always be <termref def="dt-grounded"/>,
-                     because they return newly constructed attribute nodes.</p><p>Attribute sets will very often be <termref def="dt-motionless"/>, but if they
-                     access the context item, they may be <termref def="dt-free-ranging"/>. Although some attribute sets could theoretically be
-                  classified as <termref def="dt-consuming"/>, this option has been excluded because
-                  it is unlikely to be useful; given the requirement to create attributes whose values
-                  are obtained by reading a streamed input document, use of a streamable <xtermref spec="XT40" ref="dt-template-rule"/>
-                  is a more versatile approach.</p><p>Because attribute sets can be overridden in another <xtermref spec="XP40" ref="dt-package"/>, 
-                    the streamability of a construct such as an
-                        <elcode>xsl:element</elcode> instruction containing a
-                        <code nobreak="false">use-attribute-sets</code> attribute is based on the declared
-                     streamability of the named attribute sets, as defined by the
-                        <code nobreak="false">streamable</code> attribute of the <elcode>xsl:attribute-set</elcode>
-                     element. If <code nobreak="false">streamable="yes"</code> is specified, then there is a
-                     requirement that any overriding attribute set should also specify
-                        <code nobreak="false">streamable="yes"</code>, and a streaming processor is required to
-                     check that an attribute set containing such a declaration does in fact satisfy
-                     the streamability rules.</p></note></div3><div3 id="classifying-vts"><head>Classifying Value Templates</head><p>A <xtermref spec="XP40" ref="dt-value-template">value template</xtermref> (that is, an <xtermref spec="XP40" ref="dt-attribute-value-template"/> 
-                 or <xtermref spec="XP40" ref="dt-text-value-template"/>)
+                    of the contained <xtermref spec="XT40" ref="dt-sequence-constructor"/>.</p></div4></div3><div3 id="classifying-vts"><head>Classifying Value Templates</head><p>A <xtermref spec="XT40" ref="dt-value-template">value template</xtermref> 
+                 (that is, an <xtermref spec="XT40" ref="dt-attribute-value-template"/> 
+                 or <xtermref spec="XT40" ref="dt-text-value-template"/>)
                   is a <termref def="dt-construct"/> whose operands are the expressions contained
                   within curly brackets. The required type for this operand role is
                      <code nobreak="false">xs:string</code> and the <termref def="dt-operand-usage">usage</termref>
                   is <termref def="dt-absorption"/>.</p><p>The <termref def="dt-sweep"/> and <termref def="dt-posture"/> of a value template
                   are determined using the general rules in <specref ref="general-streamability-rules"/>.</p><p>If there are no expressions contained within curly brackets, the value template is
-                     <termref def="dt-motionless"/>.</p></div3><div3 id="classifying-expressions"><head>Classifying Expressions</head><p>XPath expressions are classified using the rules in this section.</p><p>In the analysis that follows, <xtermref spec="XP40" ref="dt-expression">expressions</xtermref>
+                     <termref def="dt-motionless"/>.</p></div3><div3 id="classifying-expressions"><head>Classifying Expressions</head><p>XPath expressions are classified using the rules in this section.</p><p>In the analysis that follows, <xtermref spec="XT40" ref="dt-expression">expressions</xtermref>
                   are classified according to the most specific production rule that they match for
                   which there is an entry in this section. A production <var>P</var> is considered
                   more specific than a production <var>Q</var> (<var>Q</var> ≠ <var>P</var>)
@@ -3008,7 +3036,7 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                               accumulator for a particular streamed node, the post-descent values of
                               accumulators for that node are not available.</p></item><item><p>This rule states that the post-descent value of an accumulator is
                               allowed to depend on the post-descent values of other accumulators for
-                              the same node. There is a rule preventing cycles <errorref spec="XT" class="DE" code="3400"/>.</p></item><item><p>This rule prevents the use of the function (when applied to a streamed
+                              the same node. There is a rule preventing cycles <xerrorref spec="XT" class="DE" code="3400"/>.</p></item><item><p>This rule prevents the use of the function (when applied to a streamed
                               node) in contexts like the <code nobreak="false">use</code> attribute of
                                  <elcode>xsl:key</elcode>. It
                                  allows its use in the attributes of an <xtermref spec="XT40" ref="dt-instruction"/> or <xtermref spec="XT40" ref="dt-literal-result-element"/>, 
@@ -3383,7 +3411,7 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
     &lt;xsl:apply-templates mode="s"/&gt;
   &lt;/div&gt;
 &lt;/xsl:template&gt;</eg><p>The processor is required to establish that this template meets the streamability
-                  rules. Specifically, as stated in <xtermref spec="XT40" ref="streamable-templates"/>, it must
+                  rules. Specifically, as stated in <specref ref="streamable-templates"/>, it must
                   satisfy three conditions:</p><olist><item><p>The match pattern must be <termref def="dt-motionless"/>.</p></item><item><p>The body of the template rule must be <termref def="dt-grounded"/>.</p></item><item><p>The initializers of any template parameters must be <termref def="dt-motionless"/>.</p></item></olist><p>The third condition is satisfied trivially because there are no parameters.</p><p>The first rule depends on the rules for assessing patterns, which are given in
                      <specref ref="classifying-patterns"/>. This pattern is motionless because (a)
                   it does not contain a <code nobreak="false">RootedPath</code>, and (b) it contains no
@@ -3469,7 +3497,7 @@ return ($m?price - $m?discount)</eg><p>Analysis:</p><olist><item><p>Because the 
                      <code nobreak="false">streamable="yes"</code>:</p><eg role="xslt-declaration" xml:space="preserve">
 &lt;xsl:template match="transactions[@currency='USD']" mode="s"&gt;
   &lt;total&gt;&lt;xsl:value-of select="sum(transaction/@value)"/&gt;&lt;/total&gt;
-&lt;/xsl:template&gt;</eg><p>Again, as stated in <xspecref spec="XT40" ref="streamable-templates"/>, it must satisfy three
+&lt;/xsl:template&gt;</eg><p>Again, as stated in <specref ref="streamable-templates"/>, it must satisfy three
                   conditions:</p><olist><item><p>The match pattern must be <termref def="dt-motionless"/>.</p></item><item><p>The body of the template rule must be <termref def="dt-grounded"/>.</p></item><item><p>The initializers of any template parameters must be <termref def="dt-motionless"/>.</p></item></olist><p>The third condition is satisfied trivially because there are no parameters.</p><p>The first rule depends on the rules for assessing patterns, which are given in
                      <specref ref="classifying-patterns"/>. This pattern is motionless because (a)
                   it is not a <code nobreak="false">RootedPath</code>, and (b) every predicate is <termref def="dt-motionless"/> and <termref def="dt-non-positional-predicate">non-positional</termref>. The analysis that proves the predicate is motionless
