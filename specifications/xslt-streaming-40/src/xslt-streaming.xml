@@ -1854,26 +1854,162 @@ Michael Sperberg-McQueen (1954–2024).</p>
             </div2>
       </div1>
   
-       <div1 id="keys-and-streaming">
-            <head>Keys and Streaming</head>
-            <p>Keys are not applicable to streamed documents.</p>
-            <p>This is ensured by the rules for the streamability of the <function>key</function> function 
-               (see <specref ref="classifying-built-in-functions"/>). These rules make the <termref def="dt-operand-usage"/> of the
-               third argument <termref def="dt-navigation"/>, which has the consequence that when the <function>key</function> function
-            is applied to a streamed input document, the call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>, which effectively makes
-            the containing construct non-streamable.</p>
+  <div1 id="streamable-merging">
+            <head>Streamable Merging</head>
+            <p>Any input to a merging operation, provided it is selected
+               by means of the <elcode>xsl:merge-source</elcode> element with a
+                  <code>for-each-source</code> attribute, may be designated as streamable by
+               including the attribute <code>streamable="yes"</code> on the
+                  <elcode>xsl:merge-source</elcode> element. </p>
+
+            <p>When <code>streamable="yes"</code> is specified on an
+                  <elcode>xsl:merge-source</elcode> element, then (whether or not streamed
+               processing is actually used, and whether or not the processor supports streaming) the
+               expression appearing in the <code>select</code> attribute is implicitly used as the
+               argument of a call on the <function>snapshot</function> function, which means that
+               merge keys for each selected node are computed with reference to this snapshot, and
+               the <function>current-merge-group</function> function, when used within the
+                  <elcode>xsl:merge-action</elcode> sequence constructor, delivers snapshots of the
+               selected nodes.</p>
+
+            <note>
+               <p>There are therefore no constraints on the navigation
+                  that may be performed in computing the merge key, or in the course of evaluating
+                  the <elcode>xsl:merge-action</elcode> body. An attempt to navigate outside the
+                  portion of the source document delivered by the <function>snapshot</function>
+                  function will typically not cause an error, but will return empty results.</p>
+               <p>There is no
+                  rule to prevent the <code>select</code> expression returning atomic items, or grounded nodes from a
+                  different source document, or newly constructed nodes, but they are still
+                  processed using the <function>snapshot</function> function.</p>
+               <p>Because the <function>snapshot</function> copies
+                  accumulator values as described in <xspecref spec="XT40" ref="copying-accumulators"/>, the
+                  functions <function>accumulator-before</function> and
+                     <function>accumulator-after</function> may be used to gain access to
+                  information that is not directly available in the nodes that are present within
+                  each snapshot (for example, information in a header section of the merge input
+                  document).</p>
+            </note>
+
+            <p>An <elcode>xsl:merge-source</elcode> element is <termref def="dt-guaranteed-streamable"/> if it satisfies all the following conditions:</p>
+
+
+            <olist>
+               <item>
+                  <p>The <elcode>xsl:merge-source</elcode> element has the 
+                     attribute value <code>streamable="yes"</code>;</p>
+               </item>
+               <item>
+                  <p>The <code>for-each-source</code> attribute is
+                     present on that <elcode>xsl:merge-source</elcode> element;</p>
+               </item>
+               <item>
+                  <p>The expression in the <code>select</code> attribute of that
+                        <elcode>xsl:merge-source</elcode> element, assessed with a
+                  <termref def="dt-context-posture"/> of <termref def="dt-striding"/>
+                  and a <termref def="dt-context-item-type"/> of <var>U{document-node()}</var>,
+                  has <termref def="dt-striding"/> or <termref def="dt-grounded"/> <termref def="dt-posture"/>
+                     and <termref def="dt-motionless"/> or <termref def="dt-consuming"/> <termref def="dt-sweep"/>;
+                  </p>
+               </item>
+               <item>
+                  <p>The <code>sort-before-merge</code> attribute of that
+                        <elcode>xsl:merge-source</elcode> element is either absent or takes its
+                     default value of <code>no</code>.</p>
+               </item>
+               
+               
+            </olist>
+
+            <p>Specifying <code>streamable="yes"</code> on an
+               <elcode>xsl:merge-source</elcode> element declares an intent that the
+                  <elcode>xsl:merge</elcode> instruction should be streamable with respect to that particular source, either because it is <termref def="dt-guaranteed-streamable"/>, or because it takes advantage of
+                  streamability extensions offered by a particular processor. The
+               consequences of declaring the instruction to be streamable when it is not in fact
+               guaranteed streamable depend on the conformance level of the processor, and are
+               explained in <specref ref="streamability-guarantees"/>.</p>
+
+            <example>
+               <head>Streamed Merging</head>
+               <p>The following example merges two log files, processing each of them using
+                  streaming.</p>
+               <eg role="xslt-fragment" xml:space="preserve">
+&lt;events&gt;
+   &lt;xsl:merge&gt;
+      &lt;xsl:merge-source for-each-source="'log-file-1.xml'" 
+                        select="/events/event" 
+                        streamable="yes"&gt;
+         &lt;xsl:merge-key select="@timestamp"/&gt;
+      &lt;/xsl:merge-source&gt;
+      &lt;xsl:merge-source for-each-source="'log-files-2.xml'" 
+                        select="/log/day/record" 
+                        streamable="yes"&gt;
+         &lt;xsl:merge-key select="dateTime(../@date, time)"/&gt;
+      &lt;/xsl:merge-source&gt;
+      &lt;xsl:merge-action&gt;
+         &lt;events time="{current-merge-key()}"&gt;
+            &lt;xsl:copy-of select="current-merge-group()"/&gt;
+         &lt;/events&gt;   
+      &lt;/xsl:merge-action&gt;
+   &lt;/xsl:merge&gt;
+&lt;/events&gt;</eg>
+            </example>
+            <p>Note that the merge key for the second merge source includes data from a child
+               element of the selected element and also from an attribute of the parent element.
+               This works because the merge key is evaluated on the result of implicitly applying
+               the <function>snapshot</function> function.</p>
+            
+            <example>
+               <head>Merging XML and non-XML Data</head>
+               <p>The following example merges two log files, one in text format and one in XML format.</p>
+               <eg role="xslt-instruction" xml:space="preserve">
+&lt;events&gt;
+   &lt;xsl:merge&gt;
+      &lt;xsl:merge-source name="fax" 
+                        select="unparsed-text-lines('fax-log.txt')"&gt;
+         &lt;xsl:merge-key select="xs:dateTime(substring-before(., ' '))"/&gt;
+      &lt;/xsl:merge-source&gt;
+      &lt;xsl:merge-source name="mail"
+                        for-each-source="'mail-log.xml'" 
+                        select="/log/day/message" 
+                        streamable="yes"&gt;
+         &lt;xsl:merge-key select="dateTime(../@date, @time)"/&gt;
+      &lt;/xsl:merge-source&gt;
+      &lt;xsl:merge-action&gt;
+         &lt;messages at="{current-merge-key()}"&gt;
+            &lt;xsl:where-populated&gt;
+               &lt;fax&gt;
+                  &lt;xsl:for-each select="current-merge-group('fax')"&gt;
+                     &lt;message xsl:expand-text="true"&gt;{
+                        substring-after(., ' ')
+                     }&lt;/message&gt;
+                  &lt;/xsl:for-each&gt;   
+               &lt;/fax&gt;
+               &lt;mail&gt;
+                  &lt;xsl:sequence select="current-merge-group('mail')/*"/&gt;
+               &lt;/mail&gt;
+            &lt;/xsl:where-populated&gt;   
+         &lt;/messages&gt;   
+      &lt;/xsl:merge-action&gt;
+   &lt;/xsl:merge&gt;
+&lt;/events&gt;</eg>
+            </example>
          </div1>
+  
+       
 
       <div1 id="streamability">
-         <head>Streamability</head>
+         <head>Streamability Analysis Principles</head>
 
-         <p>This section contains rules that can be used to determine
+         <p>This section describes the principles used to determine
             properties of <termref def="dt-construct">constructs</termref> in the 
-           <xtermref spec="XT40" ref="dt-stylesheet"/> — specifically, the <termref def="dt-posture"/> and
-               <termref def="dt-sweep"/> of a construct — which enable the streamability of
+           <xtermref spec="XT40" ref="dt-stylesheet"/> that are used
+           in the analysis of streamability. Specifically, it introduces
+           the concepts of the <termref def="dt-posture"/> and
+               <termref def="dt-sweep"/> of a construct, which enable the streamability of
             the stylesheet to be assessed.</p>
 
-         <p>These properties are used to determine the streamability
+         <p>These properties are used, for example, to determine the streamability
             of:</p>
 
          <ulist>
@@ -1946,6 +2082,10 @@ Michael Sperberg-McQueen (1954–2024).</p>
             means, for example, that <code>2+2</code> is classified as an <code>AdditiveExpr</code>,
             rather than say as a <code>UnionExpr</code>; although it also satisfies the production
             rule for <code>UnionExpr</code>, <code>AdditiveExpr</code> is more specific.)</p>
+        
+        <div2 id="operand-roles">
+          <head>Operand Roles</head>
+        
 
          <p><termdef id="dt-operand-role" term="operand role">For every construct kind, there is a
                set of zero or more <term>operand roles</term>.</termdef> For example, an
@@ -2033,6 +2173,10 @@ Michael Sperberg-McQueen (1954–2024).</p>
          constructor contained in the body of an <elcode>xsl:copy</elcode> instruction that has a 
             <code>select</code> attribute. See <specref ref="streamability-xsl-copy"/> for further details.</p></note>
 
+        </div2>
+        <div2 id="id-choice-operand-groups">
+          <head>Choice Operand Groups</head>
+
          <p><termdef id="dt-choice-operand-group" term="choice operand group">For some construct
                kinds, one or more operand roles may be defined to form a <term>choice operand
                   group</term>. This concept is used where it is known that <termref def="dt-operand">operands</termref> are mutually exclusive (for example the
@@ -2072,6 +2216,11 @@ Michael Sperberg-McQueen (1954–2024).</p>
             </item>
          </olist>
          <p role="closetermdef"/>
+          
+        </div2>
+        <div2 id="type-determined-usage">
+          <head>Type-determined Usage</head>
+        
 
          <p><termdef id="dt-type-determined-usage" term="type-determined usage">The
                   <term>type-determined usage</term> of an <termref def="dt-operand"/> is as
@@ -2095,6 +2244,11 @@ Michael Sperberg-McQueen (1954–2024).</p>
                   <termref def="dt-grounded"/> and <termref def="dt-consuming"/> because of the
                implicit atomization triggered by the coercion rules.</p>
          </note>
+          
+        </div2>
+        <div2 id="streamability-properties">
+          <head>Streamability Properties</head>
+  
 
          <p>The process of determining whether a construct is streamable reduces to determining
             properties of the constructs in the construct tree. The properties in question (which
@@ -2154,7 +2308,7 @@ Michael Sperberg-McQueen (1954–2024).</p>
             construct is always the document that contains the context item for evaluation of that
                construct.</p>
 
-         
+        </div2>
 
          <div2 id="determining-static-type">
             <head>Determining the Static Type of a Construct</head>
@@ -3036,7 +3190,7 @@ Michael Sperberg-McQueen (1954–2024).</p>
 
 
 
-         <div2 id="operand-roles">
+         <div2 id="operand-roles-and-usage">
             <head>Operand Roles</head>
 
             <p>An <termref def="dt-operand-role"/> gives information about the <termref def="dt-operand">operands</termref> of a particular kind of construct. The two
@@ -3636,316 +3790,7 @@ Michael Sperberg-McQueen (1954–2024).</p>
 
          </div2>
         
-        <div2 id="maps-streaming">
-            <head>Maps and Streaming</head>
-
-            <p>Maps have many uses, but their introduction to XSLT 3.0 was strongly motivated by
-               streaming use cases. In essence, when a source document is processed in streaming
-               mode, data that is encountered in the course of processing may need to be retained in
-               variables for subsequent use, because the nodes cannot be revisited. This creates a
-               need for a flexible data structure to accommodate such temporary data, and maps were
-               designed to fulfil this need.</p>
-            
-            <p>The entries in a map are not allowed to contain references to 
-               <termref def="dt-streamed-node">streamed nodes</termref>. This is achieved by ensuring that for all constructs
-            that supply content to be included in a map (for example the third argument of <function>map:put</function>, and
-               the <code>select</code> attribute of <elcode>xsl:map-entry</elcode>),
-            the relevant operand is defined to have operand usage <termref def="dt-navigation"/>. Because maps cannot
-               contain references to streamed nodes, they are effectively <termref def="dt-grounded"/>, and can therefore
-               be used freely in contexts (such as parameters to functions or templates) where only grounded operands
-               are permitted.</p>
-
-            <p>The <elcode>xsl:map</elcode> instruction, and the XPath <code>MapConstructor</code>
-               construct, are exceptions to the general rule that during streaming, only one
-               downward selection (one consuming subexpression) is permitted. They share this
-               characteristic with <elcode>xsl:fork</elcode>. As with <elcode>xsl:fork</elcode>, a
-               streaming processor is expected to be able to construct the map during a single pass
-               of the streamed input document, which may require multiple expressions to be
-               evaluated in parallel.</p>
-
-            <p>In the case of the <elcode>xsl:map</elcode> instruction, this exemption applies only in the
-               case where the instruction consists exclusively of <elcode>xsl:map-entry</elcode>
-               (and <elcode>xsl:fallback</elcode>) children, and not in more complex cases where the
-               map entries are constructed dynamically (for example using a control flow implemented
-               using <elcode>xsl:choose</elcode>, <elcode>xsl:for-each</elcode>, or
-                  <elcode>xsl:call-template</elcode>). Such cases may, of course, be streamable
-               if they only have a single consuming subexpression.</p>
-
-            <p>For example, the following XPath expression is streamable, despite making two
-               downward selections:</p>
-
-            <eg role="non-xml" xml:space="preserve">
-let $m := { 'price': xs:decimal(price), 'discount': xs:decimal(discount) } 
-return ($m?price - $m?discount)</eg>
-
-            <p>Analysis:</p>
-            <olist>
-               <item>
-                  <p>Because the <code>return</code> clause is motionless, the <termref def="dt-sweep"/> of the <code>let</code> expression is the sweep of the map
-                     expression (the expression in curly brackets).</p>
-               </item>
-               <item>
-                  <p>The sweep of a map expression is the maximum sweep of its key/value pairs.</p>
-               </item>
-               <item>
-                  <p>For both key/value pairs, the key is <termref def="dt-motionless"/> and the
-                     value is <termref def="dt-consuming"/>.</p>
-               </item>
-               <item>
-                  <p>The expression carefully atomizes both values, because
-                     retaining references to streamed nodes in a map is not permitted.</p>
-               </item>
-               <item>
-                  <p>Therefore the map expression, and hence the expression as a whole, is <termref def="dt-grounded"/> and <termref def="dt-consuming"/>.</p>
-               </item>
-            </olist>
-
-             <p>The streamability of the <elcode>xsl:record</elcode> instruction is determined
-                 by analysing the streamability of the equivalent <elcode>xsl:map</elcode> instruction 
-                 as described in the definition of <elcode>xsl:record</elcode> above.</p>
-            <p>See also: <specref ref="streamability-of-map-constructors"/>, <specref ref="streamability-xsl-map"/>,
-                <specref ref="streamability-xsl-map-entry"/>, <specref ref="streamability-xsl-record"/></p>
-
-         </div2>
-         
-         <div2 id="streamability-of-accumulators">
-               <head>Streamability of Accumulators</head>
-               
-              
-
-               <p>An accumulator is <termref def="dt-guaranteed-streamable"/> if
-                  it satisfies all the following
-                  conditions:</p>
-               <olist>
-                  <item>
-                     <p>The <elcode>xsl:accumulator</elcode> declaration has the attribute
-                           <code>streamable="yes"</code>.</p>
-                  </item>
-                  
-                  <item>
-                     <p>In every contained <elcode>xsl:accumulator-rule</elcode>, the 
-                       <xtermref spec="XT40" ref="dt-pattern">pattern</xtermref> in the <code>match</code> attribute is
-                        a <termref def="dt-motionless"/> pattern (see <specref ref="classifying-patterns"/>).</p>
-                  </item>
-                  <item>
-                     <p>The <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the
-                           <code>initial-value</code> attribute is <termref def="dt-grounded"/> and
-                           <termref def="dt-motionless"/>.</p>
-                  </item>
-                  <item>
-                     <p><phrase diff="add" at="issue211">In an <elcode>xsl:accumulator-rule</elcode> with 
-                        <code>phase="start"</code> (the default value),</phrase>
-                        the <termref def="dt-type-adjusted-posture-and-sweep"/> of
-                        the <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the <code>select</code> attribute or the contained
-                           <xtermref spec="XT40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
-                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p>
-                  </item>
-                  <item diff="add" at="issue211">
-                     <p>In an <elcode>xsl:accumulator-rule</elcode> with 
-                        <code>phase="end"</code>, one of the
-                        following conditions holds:</p>
-                     <olist>
-                        <item><p>The rule has <code>capture="no"</code> (the default value),
-                           and the <termref def="dt-type-adjusted-posture-and-sweep"/> of
-                           the <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the <code>select</code> attribute or the contained
-                           <xtermref spec="XT40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
-                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item>
-                        <item><p diff="chg" at="issue731">The rule has <code>capture="yes"</code>.</p></item>
-                     </olist>
-                  </item>
-                  
-                  
-
-               </olist>
-
-
-               <p>Specifying <code>streamable="yes"</code> on an
-                     <elcode>xsl:accumulator</elcode> element declares an intent that the
-                  accumulator should be streamable, either
-                     because it is <termref def="dt-guaranteed-streamable"/>, or because it takes
-                     advantage of streamability extensions offered by a particular
-                     processor. The consequences of declaring the accumulator to be
-                  streamable when it is not in fact guaranteed streamable depend on the conformance
-                  level of the processor, and are explained in <specref ref="streamability-guarantees"/>.</p>
-
-
-
-               <p>When an accumulator is declared to be streamable, the
-                  stylesheet author must ensure that the accumulator function
-                     <function>accumulator-after</function> is only called at appropriate points in
-                  the processing, as explained in <specref ref="streamability-fn-accumulator-after"/>.</p>
-           
-           <p>For constructs that use accumulators to be
-                        <termref def="dt-guaranteed-streamable"/>:</p>
-               <ulist>
-                  <item>
-                     <p>The <function>accumulator-before</function> function for a streamed node can
-                        be called at any time the node is available (it behaves like other
-                        properties of the node such as <xfunction>name</xfunction> or
-                           <xfunction>base-uri</xfunction>).</p>
-                  </item>
-                  <item>
-                     <p>The <function>accumulator-after</function> function, however, is restricted
-                            to appear after any instruction that reads the descendants
-                        of the node in question. The constraints are expressed as static rules: see
-                           <specref ref="streamability-fn-accumulator-after"/> for more details.</p>
-                  </item>
-               </ulist>
-
-
-
-            </div2>
-         <div2 id="grounded-consuming-constructs">
-            <head>Grounded Consuming Constructs</head>
-            
-            <p>A construct is grounded if the items it delivers do not include nodes from a 
-               streamed document; it is consuming if evaluation of the construct reads nodes 
-               from a streamed input in a way that requires advancing the current position in the input.
-            </p>
-            
-            <p>Grounded consuming constructs play an important role in streaming, and this 
-               section discusses some of their characteristics.
-            </p>
-            <p>Examples of grounded consuming constructs (assuming the context item is a streamed node) include:
-            </p>
-            
-            <ulist>
-               <item><p><code>sum(.//transaction/@value)</code></p></item>
-               <item><p><code>copy-of(./account/history/event)</code></p></item>
-               <item><p><code>distinct-values(./account/@account-nr)</code></p></item>
-               <item><p><code>&lt;xsl:for-each select="transaction"&gt;&lt;t&gt;&lt;xsl:value-of select="@value"/&gt;&lt;/t&gt;&lt;/xsl:for-each&gt;</code></p></item>
-            </ulist>
-            
-            <p>XSLT 3.0 provides the two functions <function>copy-of</function> and <code>snapshot</code>
-               with the explicit purpose of creating a sequence of grounded nodes, that can be processed
-               one-by-one without the usual restrictions that apply to streamed processing, such as the
-               rule permitting at most one downward selection. The processing style that exploits these
-               functions is often called “windowed streaming”.</p>
-            
-            <p>In general the result of a grounded consuming construct is a sequence. Depending on how 
-               this sequence is used, it may or may not be necessary for the processor to allocate sufficient 
-               memory to hold the entire sequence. The streamability rules in this specification place few 
-               constraints on how a grounded sequence is used. This is deliberate, because it gives users 
-               control: by creating a grounded sequence (for example, by use of the copy-of function) 
-               stylesheet authors create the possibility to process data in arbitrary ways (for example, 
-               by sorting the sequence), and accept the possibility that this may consume memory.
-            </p>
-            
-            <p>Pipelined evaluation of a sequence is analogous to streamed processing of a source document. 
-               Pipelined evaluation occurs when the items in a sequence can be processed one-by-one, without 
-               materializing the entire sequence in memory. Pipelining is a common optimization technique in 
-               all functional programming languages. Operations for which pipelined evaluation is commonly 
-               performed include filtering (<code>$transactions[@value gt 1000]</code>), mapping 
-               (<code>$transactions!(@value - @processing-fee)</code>), and aggregation 
-               (<code>sum($transactions)</code>). Operations that cannot be pipelined (because, 
-               for example, the first item in the result sequence cannot be computed without knowing 
-               the last item in the input sequence) include those that change the order of items 
-               (<code>reverse()</code>, <code>sort()</code>). Other operations such as <code>distinct-values()</code> 
-               allow the input to be processed one item at a time, but require memory that potentially 
-               increases as the sequence length increases. Saving a grounded sequence in a variable is 
-               also likely in many cases to require allocation of memory to hold the entire sequence.
-            </p>
-            <p>When the input to an operation is a grounded consuming sequence (more accurately, 
-               a sequence resulting from the evaluation of a grounded consuming construct), this specification 
-               does not attempt to dictate whether the operation is pipelined or not. The goal of interoperable 
-               streaming in finite memory can therefore only be achieved if stylesheet authors take care to avoid 
-               constructing grounded sequences that occupy large amounts of memory. In practice, however, users 
-               can expect that many grounded consuming constructs will be pipelined where the semantics permit this.
-            </p>
-            
-            <note><p>Some processors may recognize an opportunity for pipelining only if the expression
-            is written in a particular way. For example the constructs <code>copy-of(/a/b/c)</code> and
-            <code>/a/b/c/copy-of(.)</code> are to all intents and purposes equivalent, but some processors
-            might recognize the second form more easily as suitable for pipelining.</p>
-            <p>(There is one minor difference between these expressions: the order of nodes in <code>copy-of(/a/b/c)</code>
-            is required to reflect the document order of the nodes in <code>/a/b/c</code>, while the result
-            of <code>/a/b/c/copy-of(.)</code> can be in any order, in consequence of the rule that document order
-            for nodes in different trees is implementation-dependent.)</p></note>
-            
-            <p>The use of the <xfunction>last</xfunction> function requires particular care because of
-               its effect on pipelining.  The streamability rules prevent the use of <code>last()</code> in 
-               conjunction with an expression that returns streamed nodes (because it would require look-ahead 
-               in the stream), but there is no similar constraint for grounded sequences. So for example it 
-               is not permitted (in a context that requires streaming) to write
-            </p>
-            <eg role="xslt-instruction" xml:space="preserve">&lt;xsl:for-each select="transaction"&gt;
-  &lt;xsl:value-of select="position(), ' of ', last()"/&gt;
-&lt;/xsl:for-each&gt;</eg>
-            
-            <p>but it is quite permissible to write</p>
-            
-            <eg role="xslt-instruction" xml:space="preserve">&lt;xsl:for-each select="transaction/copy-of()"&gt;
-  &lt;xsl:value-of select="position(), ' of ', last()"/&gt;
-&lt;/xsl:for-each&gt;</eg>
-            
-            <p>because the call on <function>copy-of</function> makes the sequence grounded. This construct
-               cannot be pipelined because computing the first item in the result sequence depends on knowing
-               the length of the input sequence; in consequence, a processor might be obliged to buffer all
-               the transactions (or their copies) in memory.
-               In this simple example the impact of the call on <xfunction>last</xfunction> is easily detected 
-               both by the human reader and by the XSLT processor, but there are other cases where the effect 
-               is less obvious. For example if the stylesheet executes the instruction
-            </p>
-            <eg role="xslt-instruction" xml:space="preserve">&lt;xsl:apply-templates select="transaction/copy-of(.)"/&gt;</eg>
-               
-               <p>then the presence of a call on <xfunction>last</xfunction> in one of the template rules 
-                  that gets invoked might not be easily spotted; yet the effect is exactly the same 
-                  in preventing the result being computed by processing input items strictly one at 
-                  a time. Avoiding such effects is entirely the responsibility of the stylesheet author.
-               </p> 
-            
-            <p>By contrast, there is no intrinsic reason why use of the <xfunction>position</xfunction> should
-            prevent pipelined processing: all it requires is for the processor to count how many items have been
-            processed so far. Processors may also be able to handle the construct <code>position() = last()</code>
-            without storing the entire sequence in memory; rather than actually evaluating the numeric values of
-            <code>position()</code> and <code>last()</code>, this can be done by testing whether the context item
-            is the last item in the sequence, which only requires a one-item lookahead.</p>
-         </div2>
-
-
-         <div2 id="classifying-constructs">
-            <head>Classifying Constructs</head>
-
-            <p>This section defines the properties of every kind of <termref def="dt-construct"/>
-               that may appear in a <xtermref spec="XT40" ref="dt-stylesheet"/>. It identifies the <termref def="dt-operand-role">operand roles</termref> and their <termref def="dt-operand-usage">usage</termref>, and it gives the rules that define the
-                  <termref def="dt-posture"/> and <termref def="dt-sweep"/> of the construct. In
-               cases where the <termref def="dt-general-streamability-rules"/> apply, there is still
-               an entry for the construct in order to define its <termref def="dt-operand">operands</termref> and their usages, since this information is needed by the
-               general rules.</p>
-
-
-            <p>The following sections describe this categorization for each kind of construct:</p>
-
-            <ulist>
-               <item>
-                  <p>Sequence constructors: see <specref ref="classifying-sequence-constructors"/></p>
-               </item>
-               <item>
-                  <p>Instructions: see <specref ref="classifying-instructions"/></p>
-               </item>
-               <item>
-                  <p>Stylesheet functions: see <specref ref="streamable-stylesheet-functions"/></p>
-               </item>
-               <item>
-                  <p>Attribute sets: see <specref ref="classifying-attribute-sets"/></p>
-               </item>
-               <item>
-                  <p>Value templates: see <specref ref="classifying-vts"/></p>
-               </item>
-               <item>
-                  <p>Expressions: see <specref ref="classifying-expressions"/></p>
-               </item>
-               <item>
-                  <p>Patterns: see <specref ref="classifying-patterns"/></p>
-               </item>
-               <item>
-                  <p>Calls to built-in functions: see <specref ref="classifying-built-in-functions"/></p>
-               </item>
-            </ulist>
-
-
-
-            <div3 id="general-streamability-rules">
+        <div2 id="general-streamability-rules">
                <head>General Rules for Streamability</head>
 
                <p><termdef id="dt-general-streamability-rules" term="general streamability rules">Many <termref def="dt-construct">constructs</termref> share the same
@@ -4221,8 +4066,8 @@ return ($m?price - $m?discount)</eg>
                   but the subset of the nodes that are streamed will always be in document order.</p>
                </note>
 
-            </div3>
-            <div3 id="general-streamability-examples">
+            </div2>
+            <div2 id="general-streamability-examples">
                <head>Examples of the General Streamability Rules</head>
 
                <p>This section provides some examples of how the general streamability rules
@@ -4375,10 +4220,335 @@ return ($m?price - $m?discount)</eg>
 
 
 
-            </div3>
+            </div2>
 
 
 
+        
+      </div1>
+  
+  <div1 id="streamability-of-constructs">
+    <head>Streamability of Specific Constructs</head>
+        <div2 id="maps-streaming">
+            <head>Maps and Streaming</head>
+
+            <p>Maps have many uses, but their introduction to XSLT 3.0 was strongly motivated by
+               streaming use cases. In essence, when a source document is processed in streaming
+               mode, data that is encountered in the course of processing may need to be retained in
+               variables for subsequent use, because the nodes cannot be revisited. This creates a
+               need for a flexible data structure to accommodate such temporary data, and maps were
+               designed to fulfil this need.</p>
+            
+            <p>The entries in a map are not allowed to contain references to 
+               <termref def="dt-streamed-node">streamed nodes</termref>. This is achieved by ensuring that for all constructs
+            that supply content to be included in a map (for example the third argument of <function>map:put</function>, and
+               the <code>select</code> attribute of <elcode>xsl:map-entry</elcode>),
+            the relevant operand is defined to have operand usage <termref def="dt-navigation"/>. Because maps cannot
+               contain references to streamed nodes, they are effectively <termref def="dt-grounded"/>, and can therefore
+               be used freely in contexts (such as parameters to functions or templates) where only grounded operands
+               are permitted.</p>
+
+            <p>The <elcode>xsl:map</elcode> instruction, and the XPath <code>MapConstructor</code>
+               construct, are exceptions to the general rule that during streaming, only one
+               downward selection (one consuming subexpression) is permitted. They share this
+               characteristic with <elcode>xsl:fork</elcode>. As with <elcode>xsl:fork</elcode>, a
+               streaming processor is expected to be able to construct the map during a single pass
+               of the streamed input document, which may require multiple expressions to be
+               evaluated in parallel.</p>
+
+            <p>In the case of the <elcode>xsl:map</elcode> instruction, this exemption applies only in the
+               case where the instruction consists exclusively of <elcode>xsl:map-entry</elcode>
+               (and <elcode>xsl:fallback</elcode>) children, and not in more complex cases where the
+               map entries are constructed dynamically (for example using a control flow implemented
+               using <elcode>xsl:choose</elcode>, <elcode>xsl:for-each</elcode>, or
+                  <elcode>xsl:call-template</elcode>). Such cases may, of course, be streamable
+               if they only have a single consuming subexpression.</p>
+
+            <p>For example, the following XPath expression is streamable, despite making two
+               downward selections:</p>
+
+            <eg role="non-xml" xml:space="preserve">
+let $m := { 'price': xs:decimal(price), 'discount': xs:decimal(discount) } 
+return ($m?price - $m?discount)</eg>
+
+            <p>Analysis:</p>
+            <olist>
+               <item>
+                  <p>Because the <code>return</code> clause is motionless, the <termref def="dt-sweep"/> of the <code>let</code> expression is the sweep of the map
+                     expression (the expression in curly brackets).</p>
+               </item>
+               <item>
+                  <p>The sweep of a map expression is the maximum sweep of its key/value pairs.</p>
+               </item>
+               <item>
+                  <p>For both key/value pairs, the key is <termref def="dt-motionless"/> and the
+                     value is <termref def="dt-consuming"/>.</p>
+               </item>
+               <item>
+                  <p>The expression carefully atomizes both values, because
+                     retaining references to streamed nodes in a map is not permitted.</p>
+               </item>
+               <item>
+                  <p>Therefore the map expression, and hence the expression as a whole, is <termref def="dt-grounded"/> and <termref def="dt-consuming"/>.</p>
+               </item>
+            </olist>
+
+             <p>The streamability of the <elcode>xsl:record</elcode> instruction is determined
+                 by analysing the streamability of the equivalent <elcode>xsl:map</elcode> instruction 
+                 as described in the definition of <elcode>xsl:record</elcode> above.</p>
+            <p>See also: <specref ref="streamability-of-map-constructors"/>, <specref ref="streamability-xsl-map"/>,
+                <specref ref="streamability-xsl-map-entry"/>, <specref ref="streamability-xsl-record"/></p>
+
+         </div2>
+         
+        <div2 id="keys-and-streaming">
+            <head>Keys and Streaming</head>
+            <p>Keys are not applicable to streamed documents.</p>
+            <p>This is ensured by the rules for the streamability of the <function>key</function> function 
+               (see <specref ref="classifying-built-in-functions"/>). These rules make the <termref def="dt-operand-usage"/> of the
+               third argument <termref def="dt-navigation"/>, which has the consequence that when the <function>key</function> function
+            is applied to a streamed input document, the call is <termref def="dt-roaming"/> and <termref def="dt-free-ranging"/>, which effectively makes
+            the containing construct non-streamable.</p>
+         </div2>     
+    
+    <div2 id="streamability-of-accumulators">
+               <head>Streamability of Accumulators</head>
+               
+              
+
+               <p>An accumulator is <termref def="dt-guaranteed-streamable"/> if
+                  it satisfies all the following
+                  conditions:</p>
+               <olist>
+                  <item>
+                     <p>The <elcode>xsl:accumulator</elcode> declaration has the attribute
+                           <code>streamable="yes"</code>.</p>
+                  </item>
+                  
+                  <item>
+                     <p>In every contained <elcode>xsl:accumulator-rule</elcode>, the 
+                       <xtermref spec="XT40" ref="dt-pattern">pattern</xtermref> in the <code>match</code> attribute is
+                        a <termref def="dt-motionless"/> pattern (see <specref ref="classifying-patterns"/>).</p>
+                  </item>
+                  <item>
+                     <p>The <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the
+                           <code>initial-value</code> attribute is <termref def="dt-grounded"/> and
+                           <termref def="dt-motionless"/>.</p>
+                  </item>
+                  <item>
+                     <p><phrase diff="add" at="issue211">In an <elcode>xsl:accumulator-rule</elcode> with 
+                        <code>phase="start"</code> (the default value),</phrase>
+                        the <termref def="dt-type-adjusted-posture-and-sweep"/> of
+                        the <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the <code>select</code> attribute or the contained
+                           <xtermref spec="XT40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
+                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p>
+                  </item>
+                  <item diff="add" at="issue211">
+                     <p>In an <elcode>xsl:accumulator-rule</elcode> with 
+                        <code>phase="end"</code>, one of the
+                        following conditions holds:</p>
+                     <olist>
+                        <item><p>The rule has <code>capture="no"</code> (the default value),
+                           and the <termref def="dt-type-adjusted-posture-and-sweep"/> of
+                           the <xtermref spec="XT40" ref="dt-expression">expression</xtermref> in the <code>select</code> attribute or the contained
+                           <xtermref spec="XT40" ref="dt-sequence-constructor"/>, with respect to the declared type of the accumulator,
+                           is <termref def="dt-grounded"/> and <termref def="dt-motionless"/>.</p></item>
+                        <item><p diff="chg" at="issue731">The rule has <code>capture="yes"</code>.</p></item>
+                     </olist>
+                  </item>
+                  
+                  
+
+               </olist>
+
+
+               <p>Specifying <code>streamable="yes"</code> on an
+                     <elcode>xsl:accumulator</elcode> element declares an intent that the
+                  accumulator should be streamable, either
+                     because it is <termref def="dt-guaranteed-streamable"/>, or because it takes
+                     advantage of streamability extensions offered by a particular
+                     processor. The consequences of declaring the accumulator to be
+                  streamable when it is not in fact guaranteed streamable depend on the conformance
+                  level of the processor, and are explained in <specref ref="streamability-guarantees"/>.</p>
+
+
+
+               <p>When an accumulator is declared to be streamable, the
+                  stylesheet author must ensure that the accumulator function
+                     <function>accumulator-after</function> is only called at appropriate points in
+                  the processing, as explained in <specref ref="streamability-fn-accumulator-after"/>.</p>
+           
+           <p>For constructs that use accumulators to be
+                        <termref def="dt-guaranteed-streamable"/>:</p>
+               <ulist>
+                  <item>
+                     <p>The <function>accumulator-before</function> function for a streamed node can
+                        be called at any time the node is available (it behaves like other
+                        properties of the node such as <xfunction>name</xfunction> or
+                           <xfunction>base-uri</xfunction>).</p>
+                  </item>
+                  <item>
+                     <p>The <function>accumulator-after</function> function, however, is restricted
+                            to appear after any instruction that reads the descendants
+                        of the node in question. The constraints are expressed as static rules: see
+                           <specref ref="streamability-fn-accumulator-after"/> for more details.</p>
+                  </item>
+               </ulist>
+
+
+
+            </div2>
+         <div2 id="grounded-consuming-constructs">
+            <head>Grounded Consuming Constructs</head>
+            
+            <p>A construct is grounded if the items it delivers do not include nodes from a 
+               streamed document; it is consuming if evaluation of the construct reads nodes 
+               from a streamed input in a way that requires advancing the current position in the input.
+            </p>
+            
+            <p>Grounded consuming constructs play an important role in streaming, and this 
+               section discusses some of their characteristics.
+            </p>
+            <p>Examples of grounded consuming constructs (assuming the context item is a streamed node) include:
+            </p>
+            
+            <ulist>
+               <item><p><code>sum(.//transaction/@value)</code></p></item>
+               <item><p><code>copy-of(./account/history/event)</code></p></item>
+               <item><p><code>distinct-values(./account/@account-nr)</code></p></item>
+               <item><p><code>&lt;xsl:for-each select="transaction"&gt;&lt;t&gt;&lt;xsl:value-of select="@value"/&gt;&lt;/t&gt;&lt;/xsl:for-each&gt;</code></p></item>
+            </ulist>
+            
+            <p>XSLT 3.0 provides the two functions <function>copy-of</function> and <code>snapshot</code>
+               with the explicit purpose of creating a sequence of grounded nodes, that can be processed
+               one-by-one without the usual restrictions that apply to streamed processing, such as the
+               rule permitting at most one downward selection. The processing style that exploits these
+               functions is often called “windowed streaming”.</p>
+            
+            <p>In general the result of a grounded consuming construct is a sequence. Depending on how 
+               this sequence is used, it may or may not be necessary for the processor to allocate sufficient 
+               memory to hold the entire sequence. The streamability rules in this specification place few 
+               constraints on how a grounded sequence is used. This is deliberate, because it gives users 
+               control: by creating a grounded sequence (for example, by use of the copy-of function) 
+               stylesheet authors create the possibility to process data in arbitrary ways (for example, 
+               by sorting the sequence), and accept the possibility that this may consume memory.
+            </p>
+            
+            <p>Pipelined evaluation of a sequence is analogous to streamed processing of a source document. 
+               Pipelined evaluation occurs when the items in a sequence can be processed one-by-one, without 
+               materializing the entire sequence in memory. Pipelining is a common optimization technique in 
+               all functional programming languages. Operations for which pipelined evaluation is commonly 
+               performed include filtering (<code>$transactions[@value gt 1000]</code>), mapping 
+               (<code>$transactions!(@value - @processing-fee)</code>), and aggregation 
+               (<code>sum($transactions)</code>). Operations that cannot be pipelined (because, 
+               for example, the first item in the result sequence cannot be computed without knowing 
+               the last item in the input sequence) include those that change the order of items 
+               (<code>reverse()</code>, <code>sort()</code>). Other operations such as <code>distinct-values()</code> 
+               allow the input to be processed one item at a time, but require memory that potentially 
+               increases as the sequence length increases. Saving a grounded sequence in a variable is 
+               also likely in many cases to require allocation of memory to hold the entire sequence.
+            </p>
+            <p>When the input to an operation is a grounded consuming sequence (more accurately, 
+               a sequence resulting from the evaluation of a grounded consuming construct), this specification 
+               does not attempt to dictate whether the operation is pipelined or not. The goal of interoperable 
+               streaming in finite memory can therefore only be achieved if stylesheet authors take care to avoid 
+               constructing grounded sequences that occupy large amounts of memory. In practice, however, users 
+               can expect that many grounded consuming constructs will be pipelined where the semantics permit this.
+            </p>
+            
+            <note><p>Some processors may recognize an opportunity for pipelining only if the expression
+            is written in a particular way. For example the constructs <code>copy-of(/a/b/c)</code> and
+            <code>/a/b/c/copy-of(.)</code> are to all intents and purposes equivalent, but some processors
+            might recognize the second form more easily as suitable for pipelining.</p>
+            <p>(There is one minor difference between these expressions: the order of nodes in <code>copy-of(/a/b/c)</code>
+            is required to reflect the document order of the nodes in <code>/a/b/c</code>, while the result
+            of <code>/a/b/c/copy-of(.)</code> can be in any order, in consequence of the rule that document order
+            for nodes in different trees is implementation-dependent.)</p></note>
+            
+            <p>The use of the <xfunction>last</xfunction> function requires particular care because of
+               its effect on pipelining.  The streamability rules prevent the use of <code>last()</code> in 
+               conjunction with an expression that returns streamed nodes (because it would require look-ahead 
+               in the stream), but there is no similar constraint for grounded sequences. So for example it 
+               is not permitted (in a context that requires streaming) to write
+            </p>
+            <eg role="xslt-instruction" xml:space="preserve">&lt;xsl:for-each select="transaction"&gt;
+  &lt;xsl:value-of select="position(), ' of ', last()"/&gt;
+&lt;/xsl:for-each&gt;</eg>
+            
+            <p>but it is quite permissible to write</p>
+            
+            <eg role="xslt-instruction" xml:space="preserve">&lt;xsl:for-each select="transaction/copy-of()"&gt;
+  &lt;xsl:value-of select="position(), ' of ', last()"/&gt;
+&lt;/xsl:for-each&gt;</eg>
+            
+            <p>because the call on <function>copy-of</function> makes the sequence grounded. This construct
+               cannot be pipelined because computing the first item in the result sequence depends on knowing
+               the length of the input sequence; in consequence, a processor might be obliged to buffer all
+               the transactions (or their copies) in memory.
+               In this simple example the impact of the call on <xfunction>last</xfunction> is easily detected 
+               both by the human reader and by the XSLT processor, but there are other cases where the effect 
+               is less obvious. For example if the stylesheet executes the instruction
+            </p>
+            <eg role="xslt-instruction" xml:space="preserve">&lt;xsl:apply-templates select="transaction/copy-of(.)"/&gt;</eg>
+               
+               <p>then the presence of a call on <xfunction>last</xfunction> in one of the template rules 
+                  that gets invoked might not be easily spotted; yet the effect is exactly the same 
+                  in preventing the result being computed by processing input items strictly one at 
+                  a time. Avoiding such effects is entirely the responsibility of the stylesheet author.
+               </p> 
+            
+            <p>By contrast, there is no intrinsic reason why use of the <xfunction>position</xfunction> should
+            prevent pipelined processing: all it requires is for the processor to count how many items have been
+            processed so far. Processors may also be able to handle the construct <code>position() = last()</code>
+            without storing the entire sequence in memory; rather than actually evaluating the numeric values of
+            <code>position()</code> and <code>last()</code>, this can be done by testing whether the context item
+            is the last item in the sequence, which only requires a one-item lookahead.</p>
+         </div2>
+
+
+         <div2 id="classifying-constructs">
+            <head>Classifying Constructs</head>
+
+            <p>This section defines the properties of every kind of <termref def="dt-construct"/>
+               that may appear in a <xtermref spec="XT40" ref="dt-stylesheet"/>. It identifies the <termref def="dt-operand-role">operand roles</termref> and their <termref def="dt-operand-usage">usage</termref>, and it gives the rules that define the
+                  <termref def="dt-posture"/> and <termref def="dt-sweep"/> of the construct. In
+               cases where the <termref def="dt-general-streamability-rules"/> apply, there is still
+               an entry for the construct in order to define its <termref def="dt-operand">operands</termref> and their usages, since this information is needed by the
+               general rules.</p>
+
+
+            <p>The following sections describe this categorization for each kind of construct:</p>
+
+            <ulist>
+               <item>
+                  <p>Sequence constructors: see <specref ref="classifying-sequence-constructors"/></p>
+               </item>
+               <item>
+                  <p>Instructions: see <specref ref="classifying-instructions"/></p>
+               </item>
+               <item>
+                  <p>Stylesheet functions: see <specref ref="streamable-stylesheet-functions"/></p>
+               </item>
+               <item>
+                  <p>Attribute sets: see <specref ref="classifying-attribute-sets"/></p>
+               </item>
+               <item>
+                  <p>Value templates: see <specref ref="classifying-vts"/></p>
+               </item>
+               <item>
+                  <p>Expressions: see <specref ref="classifying-expressions"/></p>
+               </item>
+               <item>
+                  <p>Patterns: see <specref ref="classifying-patterns"/></p>
+               </item>
+               <item>
+                  <p>Calls to built-in functions: see <specref ref="classifying-built-in-functions"/></p>
+               </item>
+            </ulist>
+
+
+
+            
 
             <div3 id="classifying-sequence-constructors">
                <head>Classifying Sequence Constructors</head>
@@ -8336,147 +8506,7 @@ return ($m?price - $m?discount)</eg>
             </div3>
          </div2>
         
-        <div2 id="streamable-merging">
-            <head>Streamable Merging</head>
-            <p>Any input to a merging operation, provided it is selected
-               by means of the <elcode>xsl:merge-source</elcode> element with a
-                  <code>for-each-source</code> attribute, may be designated as streamable by
-               including the attribute <code>streamable="yes"</code> on the
-                  <elcode>xsl:merge-source</elcode> element. </p>
-
-            <p>When <code>streamable="yes"</code> is specified on an
-                  <elcode>xsl:merge-source</elcode> element, then (whether or not streamed
-               processing is actually used, and whether or not the processor supports streaming) the
-               expression appearing in the <code>select</code> attribute is implicitly used as the
-               argument of a call on the <function>snapshot</function> function, which means that
-               merge keys for each selected node are computed with reference to this snapshot, and
-               the <function>current-merge-group</function> function, when used within the
-                  <elcode>xsl:merge-action</elcode> sequence constructor, delivers snapshots of the
-               selected nodes.</p>
-
-            <note>
-               <p>There are therefore no constraints on the navigation
-                  that may be performed in computing the merge key, or in the course of evaluating
-                  the <elcode>xsl:merge-action</elcode> body. An attempt to navigate outside the
-                  portion of the source document delivered by the <function>snapshot</function>
-                  function will typically not cause an error, but will return empty results.</p>
-               <p>There is no
-                  rule to prevent the <code>select</code> expression returning atomic items, or grounded nodes from a
-                  different source document, or newly constructed nodes, but they are still
-                  processed using the <function>snapshot</function> function.</p>
-               <p>Because the <function>snapshot</function> copies
-                  accumulator values as described in <xspecref spec="XT40" ref="copying-accumulators"/>, the
-                  functions <function>accumulator-before</function> and
-                     <function>accumulator-after</function> may be used to gain access to
-                  information that is not directly available in the nodes that are present within
-                  each snapshot (for example, information in a header section of the merge input
-                  document).</p>
-            </note>
-
-            <p>An <elcode>xsl:merge-source</elcode> element is <termref def="dt-guaranteed-streamable"/> if it satisfies all the following conditions:</p>
-
-
-            <olist>
-               <item>
-                  <p>The <elcode>xsl:merge-source</elcode> element has the 
-                     attribute value <code>streamable="yes"</code>;</p>
-               </item>
-               <item>
-                  <p>The <code>for-each-source</code> attribute is
-                     present on that <elcode>xsl:merge-source</elcode> element;</p>
-               </item>
-               <item>
-                  <p>The expression in the <code>select</code> attribute of that
-                        <elcode>xsl:merge-source</elcode> element, assessed with a
-                  <termref def="dt-context-posture"/> of <termref def="dt-striding"/>
-                  and a <termref def="dt-context-item-type"/> of <var>U{document-node()}</var>,
-                  has <termref def="dt-striding"/> or <termref def="dt-grounded"/> <termref def="dt-posture"/>
-                     and <termref def="dt-motionless"/> or <termref def="dt-consuming"/> <termref def="dt-sweep"/>;
-                  </p>
-               </item>
-               <item>
-                  <p>The <code>sort-before-merge</code> attribute of that
-                        <elcode>xsl:merge-source</elcode> element is either absent or takes its
-                     default value of <code>no</code>.</p>
-               </item>
-               
-               
-            </olist>
-
-            <p>Specifying <code>streamable="yes"</code> on an
-               <elcode>xsl:merge-source</elcode> element declares an intent that the
-                  <elcode>xsl:merge</elcode> instruction should be streamable with respect to that particular source, either because it is <termref def="dt-guaranteed-streamable"/>, or because it takes advantage of
-                  streamability extensions offered by a particular processor. The
-               consequences of declaring the instruction to be streamable when it is not in fact
-               guaranteed streamable depend on the conformance level of the processor, and are
-               explained in <specref ref="streamability-guarantees"/>.</p>
-
-            <example>
-               <head>Streamed Merging</head>
-               <p>The following example merges two log files, processing each of them using
-                  streaming.</p>
-               <eg role="xslt-fragment" xml:space="preserve">
-&lt;events&gt;
-   &lt;xsl:merge&gt;
-      &lt;xsl:merge-source for-each-source="'log-file-1.xml'" 
-                        select="/events/event" 
-                        streamable="yes"&gt;
-         &lt;xsl:merge-key select="@timestamp"/&gt;
-      &lt;/xsl:merge-source&gt;
-      &lt;xsl:merge-source for-each-source="'log-files-2.xml'" 
-                        select="/log/day/record" 
-                        streamable="yes"&gt;
-         &lt;xsl:merge-key select="dateTime(../@date, time)"/&gt;
-      &lt;/xsl:merge-source&gt;
-      &lt;xsl:merge-action&gt;
-         &lt;events time="{current-merge-key()}"&gt;
-            &lt;xsl:copy-of select="current-merge-group()"/&gt;
-         &lt;/events&gt;   
-      &lt;/xsl:merge-action&gt;
-   &lt;/xsl:merge&gt;
-&lt;/events&gt;</eg>
-            </example>
-            <p>Note that the merge key for the second merge source includes data from a child
-               element of the selected element and also from an attribute of the parent element.
-               This works because the merge key is evaluated on the result of implicitly applying
-               the <function>snapshot</function> function.</p>
-            
-            <example>
-               <head>Merging XML and non-XML Data</head>
-               <p>The following example merges two log files, one in text format and one in XML format.</p>
-               <eg role="xslt-instruction" xml:space="preserve">
-&lt;events&gt;
-   &lt;xsl:merge&gt;
-      &lt;xsl:merge-source name="fax" 
-                        select="unparsed-text-lines('fax-log.txt')"&gt;
-         &lt;xsl:merge-key select="xs:dateTime(substring-before(., ' '))"/&gt;
-      &lt;/xsl:merge-source&gt;
-      &lt;xsl:merge-source name="mail"
-                        for-each-source="'mail-log.xml'" 
-                        select="/log/day/message" 
-                        streamable="yes"&gt;
-         &lt;xsl:merge-key select="dateTime(../@date, @time)"/&gt;
-      &lt;/xsl:merge-source&gt;
-      &lt;xsl:merge-action&gt;
-         &lt;messages at="{current-merge-key()}"&gt;
-            &lt;xsl:where-populated&gt;
-               &lt;fax&gt;
-                  &lt;xsl:for-each select="current-merge-group('fax')"&gt;
-                     &lt;message xsl:expand-text="true"&gt;{
-                        substring-after(., ' ')
-                     }&lt;/message&gt;
-                  &lt;/xsl:for-each&gt;   
-               &lt;/fax&gt;
-               &lt;mail&gt;
-                  &lt;xsl:sequence select="current-merge-group('mail')/*"/&gt;
-               &lt;/mail&gt;
-            &lt;/xsl:where-populated&gt;   
-         &lt;/messages&gt;   
-      &lt;/xsl:merge-action&gt;
-   &lt;/xsl:merge&gt;
-&lt;/events&gt;</eg>
-            </example>
-         </div2>
+        
         
          <div2 id="streamability-analysis-examples">
             <head>Examples of Streamability Analysis</head>
