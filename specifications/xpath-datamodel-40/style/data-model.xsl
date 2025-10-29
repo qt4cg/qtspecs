@@ -218,8 +218,8 @@
 	  <xsl:variable name="pick-item"
 			select="gitem[string(label) = string($the-item/label)]"/>
 	  <dt>
-	    <a href="#{ancestor::div2/@id}">
-	      <xsl:value-of select="ancestor::div2/head"/>
+	    <a href="#{ancestor::div3/@id}">
+	      <xsl:value-of select="ancestor::div3/head"/>
 	    </a>
 	  </dt>
 	  <dd>
