@@ -49,6 +49,7 @@ defaultTasks 'publish'
 task publish(dependsOn: ["publish-xpath-functions-40",
                          "publish-xquery-40",
                          "publish-xslt-40",
+                         "publish-xslt-streaming-40",
                          "publish-datamodel-40",
                          "publish-xslt-xquery-serialization-40",
                          "publish-expath-40"]) {
@@ -98,6 +99,8 @@ task "publish-xquery-40"(dependsOn: ["xquery_40", "xpath_40"]) {
 task "publish-xpath-functions-40"(dependsOn: ["xpath_functions_40", 'xpath_keyword_tests']) {
 }
 task "publish-xslt-40"(dependsOn: ["xslt_40"]) {
+}
+task "publish-xslt-streaming-40"(dependsOn: ["xslt_streaming_40"]) {
 }
 task "publish-datamodel-40"(dependsOn: ["datamodel_40"]) {
 }
@@ -1208,8 +1211,117 @@ task serialization_resources(
 
 // ============================================================
 
+String streaming_src =
+  "${projectDir}/specifications/xslt-streaming-40/src/xslt-streaming.xml"
+
+task xslt_streaming_40(
+  group: "Specifications",
+  description: "Build the XSLT Streaming 4.0 specification",
+  dependsOn: ["streaming_xml", "streaming_html",
+              "streaming_resources"]
+) {
+  // Just somewhere to hang dependencies
+}
+
+task streaming_xml(
+  group: "Spec XML",
+  description: "Create the XML version of the specification",
+  dependsOn: ["saxon_config"]
+) {
+  inputs.dir "${projectDir}/specifications/xslt-streaming-40/src"
+  inputs.dir "${projectDir}/specifications/xslt-streaming-40/style"
+  inputs.file "${projectDir}/style/identity.xsl"
+  outputs.file "${buildDir}/www/xslt-streaming-40/xslt-streaming-40.xml"
+
+  doLast {
+    xmlvalidate(streaming_src)
+  }
+
+  doLast {
+    transform(streaming_src,
+              "${projectDir}/style/identity.xsl",
+              "${streaming_xml.outputs.getFiles().getSingleFile()}")
+  }
+}
+
+task streaming_html(
+  group: "Spec HTML",
+  dependsOn: ["streaming_xml", "setup_crossref_indexes", "saxon_config"],
+  description: "Create the HTML and XHTML versions of the specification"
+) {
+  inputs.dir "${projectDir}/style"
+  inputs.dir "${projectDir}/specifications/xslt-streaming-40/style"
+  inputs.file streaming_src
+  outputs.file "${buildDir}/www/xslt-streaming-40/Overview.xml"
+  outputs.file "${buildDir}/www/xslt-streaming-40/Overview.html"
+
+  doLast {
+    transform(streaming_src,
+              "${projectDir}/specifications/xslt-streaming-40/style/streaming.xsl",
+              "${buildDir}/www/xslt-streaming-40/Overview.xml")
+  }
+
+  doLast {
+    fixupHtml("${buildDir}/www/xslt-streaming-40/Overview.xml",
+              "${buildDir}/www/xslt-streaming-40/Overview.html")
+  }
+}
+
+task streaming_resources(
+  description: "Copy static resources for publication"
+) {
+  doFirst {
+    mkdir "${buildDir}/www/xslt-streaming-40"
+  }
+
+  doLast {
+    copy {
+      from "${projectDir}/specifications/xslt-streaming-40/src"
+      into "${buildDir}/www/xslt-streaming-40"
+      //include "schema-for-serialization-parameters.xsd"
+    }
+  }
+
+  doLast {
+    copy {
+      from "${projectDir}/specifications/css"
+      into "${buildDir}/www/xslt-streaming-40/css"
+      include "w3c-base.css"
+      include "qtspecs.css"
+      include "xslt-streaming-40.css"
+    }
+  }
+
+  doLast {
+    copy {
+      from "${projectDir}/specifications/js"
+      into "${buildDir}/www/xslt-streaming-40/js"
+      include "toc.js"
+    }
+  }
+
+  doLast {
+    // The W3C uses index files called Overview.html, so that's what the
+    // build produces. But everyone else, including the GitHub pages that
+    // back qt4cg.org, uses index.html. So redirect.
+    PrintStream index = new PrintStream(new File("${buildDir}/www/xslt-streaming-40/index.html"));
+    index.println("<!DOCTYPE html>")
+    index.println("<html xmlns='http://www.w3.org/1999/xhtml'>")
+    index.println("<head>");
+    index.println("<meta http-equiv='refresh' content='0; url=Overview.html' />");
+    index.println("</head>");
+    index.println("<body>");
+    index.println("<p>See <a href='Overview.html'>Overview</a>.</p>");
+    index.println("</body>");
+    index.println("</html>");
+    index.close();
+  }
+}
+
+// ============================================================
+
 task setup_crossref_indexes(
-  dependsOn: ["etc_copy", "etc_DM40", "etc_FO40", "etc_XT40", "etc_SE40",
+  dependsOn: ["etc_copy", "etc_DM40", "etc_FO40", "etc_XT40", "etc_SG40", "etc_SE40",
               "etc_XP40", "etc_XQ40", 
               "etc_BIN40", "etc_FILE40"]
 ) {
@@ -1304,6 +1416,24 @@ task etc_XT40(
               etc_XT40.outputs.getFiles().getSingleFile().toString(),
               ["specdoc": "XQXP",
                "uri": "https://qt4cg.org/specifications/xslt-40/"])
+  }
+}
+
+task etc_SG40(
+  dependsOn: ["saxon_config"],
+  description: "Build the etc/SG40.xml index"
+) {
+  inputs.file "${projectDir}/style/extract.xsl"
+  //inputs.file xslt_streaming_40.outputs.getFiles().getSingleFile()
+  outputs.file "${buildDir}/etc/SG40.xml"
+
+  doLast {
+    transform(//xslt_merge_catalog.outputs.getFiles().getSingleFile().toString(),
+              "${projectDir}/specifications/xslt-streaming-40/src/xslt-streaming.xml",
+              "${projectDir}/style/extract.xsl",
+              etc_SG40.outputs.getFiles().getSingleFile().toString(),
+              ["specdoc": "STRM",
+               "uri": "https://qt4cg.org/specifications/xslt-streaming-40/"])
   }
 }
 
