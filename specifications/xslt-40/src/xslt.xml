@@ -20363,7 +20363,7 @@ return $tree =?> depth()]]></eg>
                      <elcode>xsl:on-non-empty</elcode>, <elcode>xsl:when</elcode>,
                      <elcode>xsl:otherwise</elcode>, <elcode>xsl:matching-substring</elcode>,
                      <elcode>xsl:non-matching-substring</elcode>, <elcode>xsl:map</elcode>,
-                     <elcode>xsl:map-entry</elcode>, <elcode>xsl:array</elcode>,
+                     <elcode>xsl:map-entry</elcode>, <elcode>xsl:array</elcode>, <elcode>xsl:array-member</elcode>,
                      and <elcode>xsl:result-document</elcode>,
                      it is a <termref def="dt-static-error">static error</termref> if the
                         <code>select</code> attribute is present
@@ -28600,43 +28600,143 @@ the same group, and the-->
             
             <p>The instruction <elcode>xsl:array</elcode> constructs and returns a new array.</p>
             <?element xsl:array?>
+            <?element xsl:array-member?>
             
+            <p>There are three typical ways an array might be constructed.</p>
+            
+            <olist>
+               <item>
+                  <p>An array whose members are all single items can be constructed using
+                  an instruction such as:</p>
+                  <eg><![CDATA[<xsl:array select="'Mon', 'Tues', 'Weds', 'Thurs', 'Fri'"/>]]></eg>
+                  <p>This constructs an array of five strings: <code>['Mon', 'Tues', "Weds', "Thurs', 'Fri']</code></p>
+                  <p>The values, of course, do not need to be literals.</p>
+               </item>
+               <item>
+                  <p>An array whose members can be computed by applying a mapping to a sequence of items 
+                     can be constructed using
+                  an instruction such as:</p>
+                  <eg><![CDATA[<xsl:array for-each="'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'"
+       select="(., substring(., 1, 3))"/>]]></eg>
+                  <p>This constructs an array with five members, each being a sequence of two
+                     strings: <code>[('Monday', 'Mon'), ('Tuesday', 'Tue'), ('Wednesday', 'Wed'), ('Thursday', 'Thu'), ('Friday', 'Fri')]</code></p>
+                  <p>The values, of course, do not need to be literals.</p>
+                  <p>A more complex example might be:</p>
+                  <eg><![CDATA[<xsl:array for-each="unparsed-text-lines('data.txt')"
+       select="tokenize(.)"/>]]></eg>
+                  <p>which creates an array with one member for each line of an input file, the relevant member
+                  being a sequence of words appearing on that line.</p>
+               </item>
+               <item>An array with arbitrary content, that cannot readily be derived algorithmically
+               from the items in a sequence. For example:</item>
+               <eg><![CDATA[<xsl:array>
+   <xsl:array-member select="1"/>
+   <xsl:array-member select="1, 2"/>
+   <xsl:array-member select="1, 3"/>
+   <xsl:array-member select="1, 2, 4"/>
+   <xsl:array-member select="1, 5"/>
+   <xsl:array-member select="1, 2, 3, 6"/>
+   <xsl:array-member select="1, 7"/>
+   <xsl:array-member select="1, 2, 4, 8"/>
+   <xsl:array-member select="1, 3, 9"/>
+   <xsl:array-member select="1, 2, 5, 10"/>
+   <xsl:array-member select="1, 11"/>
+   <xsl:array-member select="1, 2, 3, 4, 6, 12"/>
+</xsl:array>]]></eg>
+               <p>This returns an array of twelve members, each being a sequence of integers, for example the last
+               member is the sequence <code>(1, 2, 3, 4, 6, 12)</code>.</p>
+               <p>Another example might be:</p>
+               <eg><![CDATA[<xsl:array>
+   <xsl:for-each-group select="1 to 10" split-when="$next mod 5 lt $next mod 3">
+     <xsl:array-member select="current-group()"/>
+   </xsl:for-each-group>
+</xsl:array>]]></eg>
+               <p>This returns the array <code>[ (1, 2, 3, 4), (5, 6, 7, 8, 9), 10 ]</code>.</p>
+               
+            </olist>
+            
+            <p>The detailed rules follow.</p>
+            
+            <olist>
+               <item><p>If the <code>select</code> attribute is present then the instruction must
+              have empty content, except for <elcode>xsl:fallback</elcode> instructions which an
+               XSLT 4.0 processor ignores.</p>
+               <p>The result then depends on whether there is a <code>for-each</code> attribute.</p>
+                  
+               <olist>
+                  <item><p>If the <code>for-each</code> attribute is absent,
+                  the result of the instruction is an array containing one singleton
+                  member for each item in the sequence selected by the <code>select</code> expression,
+                  retaining order.</p></item>
+                  <item><p>If the <code>for-each</code> attribute is present, then it is evaluated:
+                     let the result be <var>R</var>.
+               For each item <var>M</var> in <var>R</var>, one array member is constructed, the value of that member
+               being the result of evaluating the <code>select</code> expression with a <termref def="dt-focus"/>
+                  in which the <termref def="dt-context-item"/> is <var>M</var>, the <termref def="dt-context-position"/>
+                     is the 1-based position of <var>M</var> within <var>R</var>, and the <termref def="dt-context-size"/>
+                     is the number of items in <var>R</var>. 
+               </p></item>
+               </olist>   
+               
+               </item>
+               
+               <item>
+                  <p>If the <code>select</code> attribute is absent, then the contained sequence constructor
+                  is used in its place. The effect depends on whether the <code>for-each</code> 
+                  attribute is present.</p>
+                  
+                  <olist>
+                     <item><p>If the <code>for-each</code> attribute is absent, then the sequence
+                     constructor is evaluated. The result must be a sequence of zero or more zero-arity
+                     function items (typically but not necessarily constructed using the <elcode>xsl:array-member</elcode>
+                     instruction described below).</p>
+                     <p>The result of the <elcode>xsl:array</elcode> instruction contains one member
+                     for each of these zero-arity function items, the value of the array member being
+                     the result of evaluating the corresponding function item.</p></item>
+                     
+                     <item><p>If the <code>for-each</code> attribute is present, then it is evaluated:
+                     let the result be <var>R</var>.
+                     For each item <var>M</var> in <var>R</var>, one array member is constructed, the value of that member
+                     being the result of evaluating the contained sequence constructor with a <termref def="dt-focus"/>
+                  in which the <termref def="dt-context-item"/> is <var>M</var>, the <termref def="dt-context-position"/>
+                     is the 1-based position of <var>M</var> within <var>R</var>, and the <termref def="dt-context-size"/>
+                     is the number of items in <var>R</var>.</p></item>
+                  </olist>
+                  
+               </item>
+               
+               
+               
+            </olist>
+            
+            <p>The effect of the <elcode>xsl:array-member</elcode> instruction is to return a zero-arity function
+            whose result, when called, is the result of evaluating either the <code>select</code> attribute
+            or the contained <termref def="dt-sequence-constructor"/>, as appropriate.</p>
+            
+            <note><p>The content of an array is effectively a sequence of sequences, which the XDM data
+            model does not permit. Representing the value as a sequence of zero-arity functions provides
+            a convenient workaround. When the <code>select</code> and <code>for-each</code> attributes
+            are both absent, the result of the <termref def="dt-sequence-constructor"/> must be a sequence
+            of zero-arity functions, each of which encapsulates the value of one member of the array.
+            The <elcode>xsl:array-member</elcode> instruction provides a convenient and readable way
+            of constructing the required zero-arity functions, but it is not necessary to use this
+            instruction for the purpose; neither is <elcode>xsl:array-member</elcode> restricted
+            to being used only for array construction.</p>
+            
+            <p><emph>As a general rule, <elcode>xsl:array-member</elcode> should be used
+            if and only if the <code>select</code> and <code>for-each</code> attributes
+            of <code>xsl:array</code> are both absent.</emph></p></note>
             
             <p>If the <elcode>xsl:array</elcode> instruction has a <code>select</code> attribute then
             the sequence constructor must be empty, except for any <elcode>xsl:fallback</elcode> instructions
             (which an XSLT 4.0 processor ignores) <errorref spec="XT" class="SE" code="3185"/>.</p>
             
+            <p>If the <elcode>xsl:array-member</elcode> instruction has a <code>select</code> attribute then
+            the sequence constructor must be empty, except for any <elcode>xsl:fallback</elcode> instructions
+            (which an XSLT 4.0 processor ignores) <errorref spec="XT" class="SE" code="3185"/>.</p>
             
-            <p>The content of the array is constructed by the following steps:</p>
             
-            <olist>
-               <item><p>If the <code>for-each</code> attribute is present:</p>
-               <olist>
-                  <item><p>The expression in the <code>for-each</code> attribute of the <elcode>xsl:array</elcode>
-                  instruction is evaluated: call the resulting sequence <var>S</var>.</p></item>
-                  <item><p>The <elcode>xsl:array</elcode> instruction delivers an array that contains
-                  one member for each item in <var>S</var>.</p></item>
-                  <item><p>The value of this array member is obtained by evaluating the expression
-                  in the <code>select</code> attribute, or (in the absence of a <code>select</code> attribute)
-                  the contained sequence constructor, with a focus
-                  in which the context item is the corresponding item in <var>S</var>, the context position
-                  is the position of that item in <var>S</var>, and the context size is the number
-                  of items in <var>S</var>.</p></item>
-               </olist>
-               </item>
-               <item><p>If the <code>for-each</code> attribute is absent:</p>
-                  <olist>
-                  <item><p>The expression in the <code>select</code> attribute of the <elcode>xsl:array</elcode>
-                  instruction is evaluated, or (in the absence of a <code>select</code> attribute)
-                  the contained sequence constructor: call the resulting sequence <var>S</var>.</p></item>
-                  <item><p>The <elcode>xsl:array</elcode> instruction delivers an array that contains
-                  one single-item member for each item in <var>S</var>, the member being that item.</p></item>
-                  </olist>
-               
-               
-               </item>
-            </olist>
-               
+            
             
             
             <example>
@@ -28651,44 +28751,33 @@ the same group, and the-->
                <p>The following example constructs an array containing items computed using nested instructions:</p>
                <eg><![CDATA[<xsl:array>
    <xsl:for-each-group select="0 to 19" group-adjacent=". idiv 4">
-     <xsl:sequence select="string-join(current-group(), '-')"/>
+     <xsl:array-member select="string-join(current-group(), '-')"/>
    </xsl:for-each-group>
 </xsl:array>]]></eg>
                <p>The result is the array <code>[ "0-1-2-3", "4-5-6-7", "8-9-10-11", "12-13-14-15", "16-17-18-19" ]</code>.</p>
             </example>
             
             <example>
-               <head>Constructing an array whose members are arbitrary sequences</head>
+               <head>Constructing an array whose members are derived from the items in an input sequence</head>
                <p>The following example constructs an array whose members are sequences:</p>
                <eg><![CDATA[<xsl:array for-each="para" select="distinct-values(tokenize(.))"/>]]></eg>
                <p>This returns an array with one member for each child paragraph, the content
                of the array member being the list of distinct words appearing in that paragraph.</p>
-               <!--<p>The following example constructs an array in which the members are obtained
+               <p>The following example constructs an array in which the members are obtained
                by applying templates to the children of the context item:</p>
-               <eg><![CDATA[<xsl:array for-each="*">
+               <eg><![CDATA[<xsl:array for-each="*">                 
    <xsl:apply-templates select="."/>
-</xsl:array>]]></eg>-->
+</xsl:array>]]></eg>
                <p>The following example constructs a heterogeneous array containing a number
                of properties of the context node, some of which are sequence-valued:</p>
-               <eg><![CDATA[<xsl:array for-each="1 to 5">
-   <xsl:switch select=".">
-     <xsl:when test="1" select="local-name($node)"/>
-     <xsl:when test="2" select="namespace-uri($node)"/>
-     <xsl:when test="3" select="base-uri($node)"/>
-     <xsl:when test="4" select="$node/namespace::*/string()"/>
-     <xsl:when test="5" select="$node/@*/string()"/>
-   </xsl:switch>   
+               <eg><![CDATA[<xsl:array>
+     <xsl:array-member select="local-name($node)"/>
+     <xsl:array-member select="namespace-uri($node)"/>
+     <xsl:array-member select="base-uri($node)"/>
+     <xsl:array-member select="$node/namespace::*/string()"/>
+     <xsl:array-member select="$node/@*/string()"/>  
 </xsl:array>]]></eg>
-               <p>In practice, this last example is probably better handled with an XPath
-               array constructor, for example:</p>
-               <eg><![CDATA[<xsl:select>
-   [ local-name($node),
-     namespace-uri($node),
-     base-uri($node),
-     $node/namespace::*/string(),
-     $node/@*/string() 
-   ]
-</xsl:select>]]></eg>
+               
                         
             </example>
             
