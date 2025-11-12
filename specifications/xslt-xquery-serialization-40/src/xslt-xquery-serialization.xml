@@ -691,6 +691,9 @@ nodes.</p></note></div1>
     <change issue="1471" date="2024-10-15">
       Added the <code>json-lines</code> parameter for JSON serialization.
     </change>
+    <change issue="2198" date="2025-11-12">
+      Added the <code>pi-for-cdata</code> parameter for XML and XHTML serialization.
+    </change>
   </changes>
 <p>There are a number of parameters that influence how serialization
 is performed. <termref def="host-language">Host languages</termref> <rfc2119>MAY</rfc2119> allow users to specify any or all of these parameters, but
@@ -828,6 +831,9 @@ output method; its behavior is not specified by this document.</td>
          <code>NMTOKEN</code>.</td></tr>
 <tr><td rowspan="1" colspan="1" valign="top"><code>omit-xml-declaration</code></td>
   <td rowspan="1" colspan="1">A boolean value, <code>true</code> or <code>false</code>.
+</td></tr>
+  <tr><td rowspan="1" colspan="1" valign="top"><code>pi-for-cdata</code></td>
+  <td rowspan="1" colspan="1">Either a string in the form of an NCName, or absent.
 </td></tr>
 <tr><td rowspan="1" colspan="1" valign="top"><code>standalone</code></td>
   <td rowspan="1" colspan="1">Either a boolean value, <code>true</code> or <code>false</code>, or the value
@@ -1414,8 +1420,14 @@ this phase also produces the following:</p>
 <item><p>empty element tags (except for the attribute
 values);</p></item>
 </ulist>
-<p>
-In the case of the text output method,
+
+  
+  <p>A processing instruction node whose name matches the value of the <code>pi-for-cdata</code>
+    parameter is treated as if it were a text node (having the same string value) whose parent
+    is listed in the <code>cdata-section-elements</code> parameter, and is processed as described
+    in rule 3(b) below.</p>
+  
+<p>In the case of the text output method,
 this phase replaces the single
 document node produced by <termref def="sequence-normalization">sequence
 normalization</termref> with a new document node that has exactly one child,
@@ -1462,6 +1474,10 @@ Attributes are not considered to be URI attributes simply because they are names
 If the node is a text node whose parent element is selected by the rules of the 
 <code>cdata-section-elements</code> parameter for the applicable output method, 
 create CDATA sections as described below, and skip rules c-e. Otherwise, continue with rule c.
+</p>
+  <p>
+A processing instruction node whose name matches the value of the 
+<code>pi-for-cdata</code> parameter is handled in the same way.
 </p>
 <p>Apply the following two processes in sequence to create CDATA sections</p>
 <olist><item><p><termref def="unicode-normalization">Unicode Normalization</termref> if requested by the <code>normalization-form</code> parameter.</p></item>
@@ -1579,6 +1595,8 @@ described above, then it will contain an extra <code>doc</code>
 element as the document element.</p></item>
 <item><p>The order of attribute and namespace nodes in the two trees <rfc2119>MAY</rfc2119> be
 different.</p></item>
+  <item><p>Processing instructions that have been rendered as CDATA sections by virtue
+  of the <code>pi-for-cdata</code> property are not reinstated.</p></item>
 <item><p>
 The following properties of corresponding nodes
 in the two trees <rfc2119>MAY</rfc2119> be different:</p>
@@ -1940,20 +1958,39 @@ be based on whitespace stripped from either the source document or the
 stylesheet (in the case of XSLT), or
 guided by other means that might depend on the <termref def="host-language">host language</termref>,
   in the case of an <termref def="dt-input-tree"/> created using some other process.</p></note></div3>
-<div3 id="XML_CDATA-SECTION-ELEMENTS"><head>XML Output Method: the <code>cdata-section-elements</code> Parameter</head><p>The <code>cdata-section-elements</code> parameter contains a list
+    
+<div3 id="XML_CDATA-SECTION-ELEMENTS"><head>XML Output Method: the <code>cdata-section-elements</code> 
+  and <code>pi-for-cdata</code> Parameters</head>
+  
+  <changes><change issue="2198" date="2025-11-12">
+      Added the <code>pi-for-cdata</code> parameter for XML and XHTML serialization. This enables arbitrary
+    text to be output as CDATA sections, under application control. For example, a stylesheet might choose
+    to use CDATA sections only for text nodes whose string value includes special characters; this can
+    be achieved by outputting the selected text in the form of a processing instruction with the chosen name.
+    For example, <code>pi-for-cdata="CDATA"</code> causes the result of the XSLT instruction
+    <code>&lt;xsl:processing-instruction name="CDATA" select=">>>"/></code> to be serialized
+    as <code>&lt;![CDATA[>>>]]&gt;</code>.
+    </change></changes>
+  
+  <p>The <code>cdata-section-elements</code> parameter contains a list
 of expanded QNames. If the expanded QName of the parent of a text node
 is a member of the list, then the text node
 
 <rfc2119>MUST</rfc2119> be output as a
 CDATA section, except in those circumstances
 described below.</p>
-<p>If the text node contains the sequence of characters
+  
+  <p>Similarly, if the name of a processing instruction node matches the value of the <code>pi-for-cdata</code>
+  parameter, then the string value of the processing instruction node <rfc2119>MUST</rfc2119> be output as
+  a CDATA section.</p>
+  
+<p>If the relevant text contains the sequence of characters
 <code>]]&gt;</code>, then the currently open CDATA section
 
 <rfc2119>MUST</rfc2119> be
 closed following the <code>]]</code> and a new CDATA section opened
 before the <code>&gt;</code>.</p>
-<p>If the text node contains characters that are not
+<p>If the relevant text contains characters that are not
 representable in the character encoding being used 
   <phrase diff="chg" at="2023-11-01">in the serialized output</phrase>, 
   then the currently open CDATA section
@@ -1966,12 +2003,14 @@ character references or entity references, and a new CDATA
 section
 
 <rfc2119>MUST</rfc2119> be opened for any further
-characters in the text node.</p>
+characters in the text.</p>
 <p>CDATA sections 
 <rfc2119>MUST NOT</rfc2119> be used except where they
 have been explicitly requested by the user, either by using the
-<code>cdata-section-elements</code> parameter, or by using some other
-<termref def="impdef">implementation-defined</termref> mechanism.</p><note><p>This is phrased to permit an implementer to provide an option that
+<code>cdata-section-elements</code> or <code>pi-for-cdata</code> parameters, or by using some other
+<termref def="impdef">implementation-defined</termref> mechanism.</p>
+  
+  <note><p>This is phrased to permit an implementer to provide an option that
 attempts to preserve CDATA sections present in the source
 document.</p></note><imp-def-feature>A <termref def="serializer">serializer</termref> <rfc2119>MAY</rfc2119> provide an <termref def="impdef">implementation-defined</termref> mechanism to place CDATA sections in the <termref def="result-tree">result tree</termref>.</imp-def-feature></div3>
 <div3 id="XML_OMIT-XML-DECLARATION"><head>XML Output Method: the <code>omit-xml-declaration</code> and <code>standalone</code> Parameters</head><p>The XML output method
@@ -2283,11 +2322,7 @@ declare function local:copy($n as node()) {
 local:copy(.)
 ]]></eg>
 -->
-<!--
-<edtext>Serialization has always referred
-to the XHTML namespace (and the XML namespace, for that matter), but has
-never provided a definition or reference.  Must rectify that.</edtext></ednote>
--->
+
 <ulist><item>
 <p><termdef term="EMPTY" id="XHTMLEMPTY">The following XHTML elements have an <term>EMPTY</term> content model: <code>area</code>, <code>base</code>, <code>br</code>, <code>col</code>, <code>embed</code>, <code>hr</code>, <code>img</code>, <code>input</code>, <code>link</code>, <code>meta</code>, <code>basefont</code>, <code>frame</code>,  <code>isindex</code>, and <code>param</code>.</termdef>
 <termdef term="void" id="XHTMLVOID">The
@@ -2511,7 +2546,12 @@ would render the output, assuming the serialized document does
 not refer to any HTML style sheets.</p>
       <!--End of text replaced by erratum E9--><p>The HTML definition of whitespace is different from the XML
   definition: see section 9.1 of  <bibref ref="html401"/> 4.01 specification.</p></note></div3>
-<div3 id="XHTML_CDATA-SECTION-ELEMENTS"><head>XHTML Output Method: the <code>cdata-section-elements</code> Parameter</head><p>The behavior for <code>cdata-section-elements</code> parameter for the XHTML output method is described in <specref ref="XML_CDATA-SECTION-ELEMENTS"/>.</p></div3>
+    
+<div3 id="XHTML_CDATA-SECTION-ELEMENTS"><head>XHTML Output Method: the <code>cdata-section-elements</code> and <code>pi-for-cdata</code> Parameters</head>
+  <p>The behavior for <code>cdata-section-elements</code> and <code>pi-for-cdata</code> parameters 
+    for the XHTML output method is 
+    described in <specref ref="XML_CDATA-SECTION-ELEMENTS"/>.</p></div3>
+    
 <div3 id="XHTML_OMIT-XML-DECLARATION"><head>XHTML Output Method: the <code>omit-xml-declaration</code> and <code>standalone</code> Parameters</head><p>The behavior for <code>omit-xml-declaration</code> and  <code>standalone</code> parameters for the XHTML output method is described in <specref ref="XML_OMIT-XML-DECLARATION"/>.</p><note><p>As with the XML output method, the XHTML
 output method specifies that an XML declaration will be output unless it is suppressed using
 the <code>omit-xml-declaration</code> parameter. Appendix C.1 of 
