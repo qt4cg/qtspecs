@@ -15,6 +15,23 @@
       <fos:variable id="v-item1" name="item1" select="$po/line-item[1]"/>
       <fos:variable id="v-item2" name="item2" select="$po/line-item[2]"/>
       <fos:variable id="v-item3" name="item3" select="$po/line-item[3]"/>
+	  <fos:variable id="v-gen2toInf" name="gen2ToInf"
+	     select="f:generator(initialized := true(), end-reached := false(), 
+                              get-current := fn($this as f:generator){$this?last +1},
+                              move-next := fn($this as f:generator)
+                              {
+                                if(not($this?initialized))
+                                  then map:put($this, 'initialized', true())
+                                  else map:put($this, 'last', $this?last + 1)
+                              }
+                             ) => map:put('last', 1)"
+	    />
+	  <fos:variable id="v-genN" name="genN" select="$gen2ToInf => gn:for-each(fn($n) {$n - 1})" />
+	  <fos:variable id="v-gen0toInf" name="gen0toInf" select="$gen2ToInf => gn:for-each(fn($n) {$n - 2})" />
+	  <fos:variable id="v-double" name="$double" select="fn($n) {2*$n}" />
+ 	  <fos:variable id="v-sum2" name="$sum2" select="fn($m, $n) {$m + $n}" />
+ 	  <fos:variable id="v-product" name="$product" select="fn($m, $n) {$m * $n}" />
+ 	  <fos:variable id="v-factorial" name="$factorial" select="fn($n) {fold-left(1 to $n, 1, $product)}" />
    </fos:global-variables>
    
    <!--<fos:record-type id="key-value-pair" extensible="true">
@@ -474,9 +491,7 @@
    
    <fos:record-type id="generator" extensible="true">
 	 <fos:summary>
-	   <p>This record type is used as a tool for implementing deferred evaluation upon collections of values. The user has to maintain the first four record fields, provided below. 
-	   The remaining fields are generator record methods implemented by the XPath processor. 
-	   These methods can be used on any generator instance. They are defined later in this section.
+	   <p>This record type is used as a tool for implementing deferred evaluation upon collections of values. The user has to maintain the four record fields, provided below. 
 	   The generator type is extensible thus the user can add any additional fields as appropriate.
 	   </p>
 	   <p>Fields of <code>fn:generator</code> :</p>
@@ -489,7 +504,7 @@
 			error <errorref class="GR" code="0001"/>.
 			In such case, in order to get the first value of the represented collection, the caller must call <code>$gen =?> move-next()</code> 
 			and the <code>move-next()</code> method should produce a new generator, whose <code>initialized</code> field is <code>true()</code>
-		 </p>
+		 </p>v
 	   </fos:meaning>	   
 	 </fos:field>	 
 	 <fos:field name="end-reached" type="xs:boolean" required="true">
@@ -518,11 +533,6 @@
 			however if after the call this field of the produced generator-instance is still <code>false()</code>, then calling <code>get-current()</code>) 
 			on the resulting generator instance produces the "next value" of the generator.
 		 </p>
-	   </fos:meaning>	   
-	 </fos:field>	 
-	 <fos:field name="various generator methods..." required="true" >
-	   <fos:meaning>
-	     <p>These methods are specified further in the section.</p>
 	   </fos:meaning>	   
 	 </fos:field>	 
    </fos:record-type>
@@ -814,6 +824,1396 @@
 	   </fos:meaning>
 	 </fos:field>   
    </fos:record-type>
+   
+   	<fos:function name="at" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="at" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="k" type="xs:positiveInteger"/>
+			</fos:proto>
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>
+		</fos:properties>
+		<fos:summary>
+			<p>
+				Returns the <code>$k</code>-th value from the yield of the <code>$generator</code>
+			</p>
+		</fos:summary>
+		<fos:rules>
+			<p>
+				If <code>$k</code> is greater than the number of items contained in the generator's yield,
+				error <errorref class="GR" code="0002"/>  is raised.
+			</p>
+		</fos:rules>
+		<fos:equivalent style="xpath-expression">
+			gn:subrange($generator, $k, $k) =?> get-current()
+		</fos:equivalent>		
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:at(1)</fos:expression>
+					<fos:result>2</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:at(5)</fos:expression>
+					<fos:result>6</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$gen2ToInf => take(5) => gn:at(6)</fos:expression>
+					<fos:error-result error-code="FOGR0002"/>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+	</fos:function>
+	
+	<fos:function name="contains" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="contains" return-type="xs:boolean">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="value" type="item()*"/>
+			</fos:proto>
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>
+		<fos:summary>
+			<p>
+				Returns <code>true()</code> if the <code>$value</code> is contained in the yield of the generator, and <code>false()</code> otherwise.
+				The comparisons are done using <code>fn:deep-equal</code>.
+			</p>
+		</fos:summary>
+		<fos:rules>
+			<p>
+				The comparisons are done using <code>fn:deep-equal</code>.
+			</p>
+		</fos:rules>
+		<fos:equivalent style="xpath-expression">
+let $gen := if(not($gen?initialized)) then  $gen =?> move-next()
+              else $gen
+ return
+  if($gen?end-reached) then false()
+   else
+     let $current := $gen =?> get-current()
+       return
+          if(deep-equal($current, $value)) then true()
+            else gn:contains($gen =?> move-next(), $value) 
+		</fos:equivalent>	
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+					<fos:expression>$genN => gn:take(10) => gn:contains(3)</fos:expression>
+					<fos:result>true()</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$genN => gn:take(10) => gn:contains(20)</fos:expression>
+					<fos:result>false()</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$genN => gn:take(10) => gn:contains(0)</fos:expression>
+					<fos:result>false()</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$genN => gn:take(10) => gn:contains(11)</fos:expression>
+					<fos:result>false()</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$genN => gn:contains(15)</fos:expression>
+					<fos:result>true()</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+    </fos:function>
+	<fos:function name="first-where" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="first-where" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="predicate" type="fn(item()*) as xs:boolean"/>
+			</fos:proto>
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>
+		<fos:summary>
+			<p>
+				Returns the first <code>$value</code> in the yield of the generator for which <code>$predicate($value)</code> is <code>true()</code>. 
+		        If the generator's yield doesn't contain any such item, error <errorref class="GR" code="0002"/> is raised.
+			</p>
+		</fos:summary>	
+		<fos:rules>
+			<p>
+				The <code>$predicate</code> function is applied consecutively on every value in the yield of the <code>$generator</code>
+				until it returns <code>true()</code>. This value is then returned as the result.
+			</p>
+		</fos:rules>		
+		<fos:equivalent style="xpath-expression">$gen => gn:skip-while(fn($x as item()*){not($pred($x))}) => gn:head()</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:first-where(fn($n){$n gt 10})</fos:expression>
+					<fos:result>11</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:chunk(10)  
+           =>  gn:first-where(
+                    fn($arr as array(*))
+                    {$arr(1) le 33 and $arr(10) ge 33})</fos:expression>
+					<fos:result>[32,33,34,35,36,37,38,39,40,41]</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+	</fos:function>
+	<fos:function name="fold-left" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="fold-left" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="init" type="item()*"/>
+				<fos:arg name="action" type="fn(item()*, item()*) as item()*) as item()*"/>
+			</fos:proto>
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>
+		<fos:summary>		
+		  <p>Processes consecutively the values of the yield of the supplied generator, applying the supplied function repeatedly to each value in turn, together with an accumulated result value.</p>
+		</fos:summary>
+		<fos:rules>
+		    <p>Let the yield of the <code>$generator</code> contains <code>N</code> values. Let us denote these <code>N</code> values as <var>V/1</var>, <var>V/2</var>, ..., <var>V/N</var>.</p>
+			<p>
+				If <code>N eq 0</code> the function returns <code>$init</code>.
+			</p>
+			<p>
+				If <code>N gt 0</code> the function calls <code>$action($init, <var>V/1</var>)</code> returning a value <var>A/1</var>.
+			</p>
+			<p>
+				If the yield of the <code>$generator</code> contains a second value, the function then calls <code>$action(<var>A/1</var>, <var>V/2</var>)</code> returning a value <var>A2</var>. 
+				To process the <var>k/th</var> value it calls <code>$action(<var>A/k-1</var>, <var>V/k</var>)</code>
+			</p>
+			<p>This continues in the same way until the end of the yield of the<code>$generator</code>; the final result is
+         the result of the last call on <code>$action</code>.</p>
+		</fos:rules>
+		<fos:equivalent style="xquery-function">
+declare function gn:fold-left($generator, 
+                              $init as item()*,  
+                              $action as fn(item()*, item()*) as item()*) as item()*
+{
+  if($generator?end-reached) then $init
+    else gn:fold-left(gn:tail($generator), 
+                      $action($init, $gen =?> get-current()), 
+                      $action)		
+}
+		</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:take(5) => gn:fold-left(0, fn($x, $y){$x + $y})</fos:expression>
+					<fos:result>20</fos:result>
+				</fos:test>
+			</fos:example>				
+			<fos:example>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:empty-generator() 
+    => gn:fold-left(54321, fn($x, $y){$x + $y})</fos:expression>
+					<fos:result>54321</fos:result>
+				</fos:test>
+				<fos:test>
+					<fos:expression>$gen0toInf 
+    => gn:for-each(fn($n){(2 * $n + 1) 
+                          div $factorial(2*xs:decimal($n)})
+    => gn:take(8) 
+    => gn:fold-left(0, fn($x, $y){$x + $y})</fos:expression>
+					<fos:result>2.718281828458229747</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>	
+	
+	<fos:function name="fold-right" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="fold-right" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="init" type="item()*"/>
+				<fos:arg name="action" type="fn(item()*, item()*) as item()*) as item()*"/>
+			</fos:proto>
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>
+		<fos:summary>		
+		  <p>Processes consecutively from right to left the values of the yield of the supplied generator, applying the supplied function repeatedly to each value in turn, together with an accumulated result value.</p>
+		</fos:summary>
+		<fos:rules>
+		    <p>Let the yield of the <code>$generator</code> contains <code>n</code> values. Let us denote these <code>n</code> values as <var>V/1</var>, <var>V/2</var>, ..., <var>V/n</var>.</p>
+			<p>
+				If <code>n eq 0</code> the function returns <code>$init</code>.
+			</p>
+			<p>
+				If <code>n gt 0</code> the function calls <code>$action(<var>V/n</var>, $init)</code> returning a value <var>A/n-1</var>.
+			</p>
+			<p>
+				If the yield of the <code>$generator</code> contains a previous value, the function then calls <code>$action(<var>V/n-1</var>, <var>A/n-1</var>)</code> returning a value <var>A/n-2</var>. 
+				To process the <var>k/th</var> value it calls <code>$action(<var>V/k</var>, <var>A/k-1</var>)</code>
+			</p>
+			<p>This continues in the same way until the starting value of the yield of the<code>$generator</code> is reached; the final result is
+         the result of the last call on <code>$action</code>, that is <var>A/0</var>.</p>
+		</fos:rules>
+		<fos:equivalent style="xquery-function">
+declare function gn:fold-right($generator, 
+                              $init as item()*,  
+                              $action as fn(item()*, item()*) as item()*) as item()*
+{
+  if($generator?end-reached) then $init
+    else $action(gn:head($generator), 
+	             gn:fold-right(gn:tail($generator), $init, $action))		
+}
+		</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+<fos:expression>$gen2ToInf => gn:take(5) => gn:fold-right(0, fn($x, $y){$x + $y})</fos:expression><fos:result>20</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+					<fos:expression>$gen2ToInf => gn:empty-generator()
+    => gn:fold-right(12345, fn($x, $y){$x + $y})</fos:expression>
+					<fos:result>12345</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>	
+
+	<fos:function name="fold-lazy" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="fold-lazy" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="init" type="item()*"/>
+				<fos:arg name="action" type="fn(item()*, item()*) as item()*) as item()*"/>
+				<fos:arg name="short-circuit-detector" type="fn(*) as item()*"/>
+			</fos:proto>
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Produces the same result as gn:fold-right on the entire yield of the <code>$generator</code> with the operation specified by <code>$action</code> 
+		  but also performs short-circuiting if detected by the <code>$short-circuit-detector</code> function.</p>
+		</fos:summary>	
+        <fos:rules>
+		  <p>If the yield of the <code>$generator</code> doesn't contain any value, <code>$init</code> is returned.</p>
+		  <p>Otherwise, the same processing as done with gn:fold-right is performed, but on each step of the traversal of the yield of the <code>$generator</code>  
+		     the function <code>$short-circuit-detector</code> is called, passing to it two arguments: 
+			 the current value of the <code>$generator</code>'s yield and the value of <code>$init</code>. </p>
+		  <p>The result of applying <code>$short-circuit-detector</code> on these two arguments is a function. 
+		     If the arity of the returned function is <code>0</code>, this means that short-circuiting has been detected. 
+			 In this case the folding process ends and the result of applying this 0-arity function is returned.
+			 For example, if <code>$action</code> is multiplication, a suitable <code>$short-circuit-detector</code> function 
+			 returns <code>fn() {0}</code> if one of the two arguments passed to it is <code>0</code>.
+		  </p>
+		  <note>
+		    <p>Detecting the possibility of a short-circuiting makes it possible to fold the contents of an infinite-yield generator - for example 
+			computing the product of the infinite sequence of integers in [-3, ∞].</p>
+		  </note>
+		</fos:rules>	
+        <fos:equivalent style="xquery-function">
+declare function gn:fold-lazy($generator as f:generator, 
+                              $init as item()*, 
+                              $action as fn(*), 
+                              $short-circuit-detector as function(*)) as item()*
+{
+  if($generator?end-reached) then $init
+  else
+   let $current := $generator =?> get-current()
+     return
+       if(function-arity($short-circuit-detector($current, $init)) eq 0)
+         then $short-circuit-detector($current, $init)()
+         else $action($current, gn:fold-lazy($generator =?> move-next(), 
+					     $init, 
+					     $action, 
+					     $short-circuit-detector))
+}</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+<fos:expression>let $multShortCircuitProvider := fn($x, $y)
+        {
+          if($x eq 0) then fn(){0}
+            else fn($z) {$x * $z}
+        },
+        $gen-5ToInf := $gen2ToInf => gn:for-each(fn($n){$n -7})
+     return
+     (
+       $gen2ToInf => gn:take(5) 
+                  => gn:fold-lazy(1, $product, $multShortCircuitProvider),
+				  
+       $gen-5ToInf => gn:fold-lazy(1, $product, $multShortCircuitProvider)</fos:expression><fos:result>(720, 0)</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>
+	
+	<fos:function name="head" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="head" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+			</fos:proto>
+		</fos:signatures>	
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Produces the first value (an item() or a sequence), contained in the yield of the <code>$generator</code>.</p>
+		</fos:summary>
+		<fos:rules>
+		 <p>If the generator's yield doesn't contain any value, error <errorref class="GR" code="0002"/> is raised.</p>
+		</fos:rules>
+        <fos:equivalent style="xpath-expression">gn:take($generator, 1) =?> get-current()</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:head()</fos:expression>
+				  <fos:result>2</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:tail() => gn:head()</fos:expression>
+				  <fos:result>3</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() => gn:head()</fos:expression>
+				  <fos:error-result error-code="FOGR0002"/>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+	</fos:function>	
+
+	<fos:function name="some" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="some" return-type="xs:boolean">
+				<fos:arg name="generator" type="fn:generator"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Returns <code>true()</code> if the generator is initialized and its yield contains values. Otherwise, <code>false()</code> is returned.</p>
+		</fos:summary>	
+		<fos:rules>
+		  <p>This function produces <code>true()</code> if the generator is initialized (<code>$generator?initialized eq true()</code>)
+		  and its yield contains values (<code>$generator?end-reached eq false()</code>).</p>
+		  <p>Otherwise, the function returns <code>false()</code></p>
+		</fos:rules>	
+		<fos:equivalent style="xpath-expression">$generator?initialized and not($generator?end-reached)</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:some()</fos:expression>
+				  <fos:result><code>true()</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() => gn:some()</fos:expression>
+				  <fos:result><code>false()</code></fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>		
+	
+	<fos:function name="some-where" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="some-where" return-type="xs:boolean">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="predicate" type="function(item()*) as xs:boolean"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Returns <code>true()</code> if the generator is initialized and its yield contains any value, 
+		  upon which evaluating the supplied predicate returns <code>true()</code>. Otherwise, <code>false()</code> is returned.</p>
+		</fos:summary>	
+		<fos:rules>
+		  <p>This function produces <code>true()</code> if the generator is initialized (<code>$generator?initialized eq true()</code>)
+		  and when filtered with the given predicate, the yield of the produced generator contains values:</p>
+		  <p><code>$generator => gn:filter($predicate) => gn:some()</code> .</p>
+		  <p>Otherwise, the function returns <code>false()</code></p>
+		</fos:rules>	
+		<fos:equivalent style="xpath-expression">gn:some(gn:filter($generator, $predicate))</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(5) => gn:some-where(fn($n){$n ge 7})</fos:expression>
+				  <fos:result><code>false()</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(5) => gn:some-where(fn($n){$n ge 6})</fos:expression>
+				  <fos:result><code>true()</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:some-where(fn($n){$n ge 100})</fos:expression>
+				  <fos:result><code>true()</code></fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>	
+
+	<fos:function name="value" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="value" return-type="item()*">
+				<fos:arg name="generator" type="fn:generator"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Produces the value contained in this generator-instance.</p>
+		</fos:summary>
+		<fos:rules>
+		 <p>If the generator's yield doesn't contain any value, error <errorref class="GR" code="0002"/> is raised.</p>
+		 <p>Otherwise returns the value obtained from the current generator-instance (<code>$generator</code>)</p>
+		 <note>
+		   <p>This function is a synonym for the generator method <code>get-current</code>. 
+		      The goal is to free the end user from the nuisance of having to enter additional parentheses within an expression
+			  due to the different precedence of the <code>=?></code> and <code>=></code> operators.
+			  Thus, instead of having to write: </p>
+			  <p>
+			  <code>($myGenerator => gn:take(5)) =?> get-current()</code>, one simply writes: </p>
+			  <p>
+			    <code>$myGenerator => gn:take(5) => gn:value()</code>
+		      </p>
+		 </note>
+		</fos:rules>	
+		<fos:equivalent style="xpath-expression">$generator =?> get-current()</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:value()</fos:expression>
+				  <fos:result><code>2</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(3) => gn:skip(2) => gn:value(),</fos:expression>
+				  <fos:result><code>4</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() => gn:value()</fos:expression>
+				  <fos:error-result error-code="FOGR0002"/>
+				</fos:test>
+			</fos:example>
+		</fos:examples>				
+	</fos:function>	
+	
+	<fos:function name="append" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="append" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="value" type="item()*"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Creates from a given <code>$generator</code> a new one, whose yield is the yield of the original generator 
+		     with the supplied <code>$value</code> appended to it.</p>
+		</fos:summary>
+		<fos:rules>
+		 <p>A new generator <var>Gen/2</var> is created, whose yield has a single value: <code>$value</code>.</p>
+		 <p>The function returns the result of applying <code>gn:concat</code> on the original <code>$generator</code> and the generator <var>Gen/2</var>.</p>
+		</fos:rules>	
+		<fos:equivalent style="xpath-expression">
+let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+              else $generator,
+    $genSingle := $gen => map:put("get-current", fn($this as f:generator){$value})
+                       => map:put("move-next", fn($this as f:generator)
+                                                 {gn:empty-generator($gen)})
+                       => map:put("end-reached", false())
+ return
+   gn:concat($gen, $genSingle) 		
+		</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:append(101) instance of f:generator</fos:expression>
+				  <fos:result><code>true()</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(5) => gn:append(101) => gn:to-array()</fos:expression>
+				  <fos:result><code>[2,3,4,5,6,101]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() => gn:append(101) => gn:to-array()</fos:expression>
+				  <fos:result>[101]</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>				
+	</fos:function>	
+
+	<fos:function name="next" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="next" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>		
+		  <p>Produces the next state/generator-instance obtained from the current generator-instance <code>$generator</code>.</p>
+		</fos:summary>
+		<fos:rules>
+		 <p>If the generator's yield doesn't contain any value, error <errorref class="GR" code="0002"/> is raised.</p>
+		 <p>Otherwise returns the next state/generator-instance obtained from the current generator-instance <code>$generator</code></p>
+		 <note>
+		   <p>This function is a synonym for the generator method <code>move-next</code>. 
+		      The goal is to free the end user from the nuisance of having to enter additional parentheses within an expression
+			  due to the different precedence of the <code>=?></code> and <code>=></code> operators.
+			  Thus, instead of having to write: </p>
+			  <p>
+			  <code>($myGenerator => gn:take(5)) =?> move-next() => gn:head()</code>, one simply writes: </p>
+			  <p>
+			    <code>$myGenerator => gn:take(5) => gn:next() => gn:head()</code>
+		      </p>
+		 </note>
+		</fos:rules>	
+        <fos:equivalent style="xpath-expression">$generator =?> move-next()</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:next()  instance of f:generator</fos:expression>
+				  <fos:result>true()</fos:result>
+				</fos:test>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:next()  => gn:head()</fos:expression>
+				  <fos:result>3</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:next()  => gn:next()  => gn:head()</fos:expression>
+				  <fos:result>4</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf =>  gn:empty-generator() => gn:next()</fos:expression>
+				  <fos:error-result error-code="FOGR0002"/>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>		
+	
+	<fos:function name="chunk" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="next" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="size" type="xs:positiveInteger"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>	
+          <p> Returns a new generator with yield, each of whose values, but the last one, is an array of the supplied <code>$size</code>,  
+		      and having as members the corresponding consecutive "chunk" of <code>$size</code> number of values of the yield of 
+			  the original <code>$generator</code>, with  the last "chunk" having the last, remaining values - possibly less
+			  in number than <code>$size</code>.
+		  </p>		
+		</fos:summary>		
+		<fos:rules>
+		 <p>If the generator's yield doesn't contain any value, an empty generator (with empty yield) is returned.</p>
+		 <p>Otherwise returns a new generator: <var>G/next</var>, whose current-value is:</p>
+		 <p><code>$generator => gn:take($size) => gn:to-array()</code>,
+		    and upon which the function <code>gn:next(<var>G/next</var>)</code> produces the same generator as:</p>
+		 <p><code>$generator => gn:skip($size) => gn:chunk($size)</code>.
+		 </p>
+		</fos:rules>
+
+        <fos:equivalent style="xpath-expression">let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+                else $generator
+   return
+     if($gen?end-reached) then gn:empty-generator($gen)
+     else
+       let $thisChunk := gn:to-array(gn:take($gen, $size)),
+           $cutGen := gn:skip($gen, $size),
+           $resultGen := $gen => map:put("get-current", fn($this as f:generator){$thisChunk})
+                              => map:put("move-next",   
+                                         fn($this as f:generator){gn:chunk($cutGen, $size)})
+        return $resultGen</fos:equivalent>
+
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() 
+          => gn:chunk(20) => gn:some()</fos:expression>
+				  <fos:result><code>false()</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:chunk(10) => gn:value()</fos:expression>
+				  <fos:result><code>[2,3,4,5,6,7,8,9,10,11]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:chunk(10) => gn:next() => gn:value()</fos:expression>
+				  <fos:result>[12,13,14,15,16,17,18,19,20,21]</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(10) 
+            => gn:chunk(4) => gn:to-array()</fos:expression>
+				  <fos:result>[[2,3,4,5],[6,7,8,9],[10,11]]</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(10) => gn:chunk(4) 
+            => gn:for-each(fn($arr)
+                      {array:size($arr)}) => gn:to-array()</fos:expression>
+				  <fos:result>[4,4,2]</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+	</fos:function>		
+	
+	<fos:function name="concat" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="concat" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="generator2" type="fn:generator"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>	
+		<fos:summary>
+		  <p> Returns a new generator whose yield is the concatenation of the yield of <code>$generator</code> with the yield of <code>$generator2</code>.
+		  </p>
+		</fos:summary>
+		<fos:rules>
+		  <p>This function produces a new generator whose yield is the concatenation of the yield of <code>$generator</code> with the yield of <code>$generator2</code>.</p>
+		  <p>Thus, if the yield of <code>$generator</code> contains <code>$M</code> values, and the yield of <code>$generator2</code> contains <code>$N</code> values.</p>
+		  <p>The yield of the generator returned by the function: <code>$result-generator</code> contains <code>$M + $N</code> values, and:</p>
+		  <p><code>$result-generator => gn:take($M)</code> is a generator that has the same yield as <code>$generator</code>, and:</p>
+		  <p><code>$result-generator => gn:skip($N)</code> is a generator that has the same yield as <code>$generator2</code>.
+		  </p>
+		</fos:rules>
+		<fos:equivalent style="xpath-expression">
+let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+			else $generator,
+    $gen2 := if(not($gen2?initialized)) then $gen2 =?> move-next()
+             else $gen2,
+    $resultGen := if($gen?end-reached) then $gen2
+                    else if($gen2?end-reached) then $gen
+                         else
+                           $gen  => map:put("move-next", 
+                                            fn($this as f:generator)
+                                              {
+                                               let $nextGen := $gen =?> move-next()
+                                                return 
+                                                  gn:concat($nextGen, $gen2)
+                                              }
+                                           )                                   
+ return 
+   $resultGen		
+		</fos:equivalent>		
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:subrange(10, 15) 
+            => gn:concat($gen2ToInf => gn:subrange(1, 9)) 
+            => gn:to-array()</fos:expression>
+				  <fos:result>[11,12,13,14,15,16,
+ 2,3,4,5,6,7,8,9,10]</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() 
+            => gn:concat($gen2ToInf => gn:empty-generator()) 
+            => gn:to-array()</fos:expression>
+				  <fos:result><code>[]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() 
+            => gn:concat($gen2ToInf => gn:take(1)) 
+            => gn:to-array()</fos:expression>
+				  <fos:result><code>[2]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:take(1) 
+            => gn:concat($gen2ToInf => gn:empty-generator()) 
+            => gn:to-array()</fos:expression>
+				  <fos:result><code>[2]</code></fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+	</fos:function>		
+
+	<fos:function name="distinct" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="distinct" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>
+		<fos:summary>
+		  <p>Returns a new generator whose yield contains only the distinct values from the original generator, in their original order.</p>
+		</fos:summary>
+		<fos:rules>
+		  <p>If the yield of <code>$generator</code> contains no values, that is: <code>$generator => gn:some()</code> is <code>false()</code>, then
+		     <code>$generator => gn:empty-generator()</code> is returned.
+		  </p>
+		  <p>Otherwise, a generator is returned, the first value (<code>$v1</code>) of whose yield is the same as the first value of <code>$generator</code>,
+		     and the remaining values are the distinct value of the yield of the generator <code>$generator => gn:filter(fn($x){not(deep-equal($v1, $x))})</code>
+		  </p>
+		</fos:rules>
+		<fos:equivalent style="xpath-expression">
+let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+              else $generator
+ return
+   if($gen?end-reached) then $gen
+   else
+     let $priorValue := $gen =?> get-current()
+       return
+         $gen => map:put("move-next", 
+                         fn($this as f:generator)
+                         {gn:distinct(gn:remove-where(gn:tail($gen), 
+                                      fn($x){deep-equal($priorValue, $x)}
+                                      ))})		
+		</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:make-generator-from-sequence((1, 3, 1, 2, 1, 5, 3, 2))  
+            => gn:distinct() => gn:to-array()</fos:expression>
+				  <fos:result>[1,3,2,5]</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf  
+            => gn:for-each(fn($n){$n idiv 10}) 
+            => gn:take(50) => gn:distinct() => gn:to-array()</fos:expression>
+				  <fos:result><code>[0,1,2,3,4,5]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf  
+            => gn:for-each(fn($n){$n idiv 10}) 
+            => gn:take(100) => gn:distinct() => gn:to-array()</fos:expression>
+				  <fos:result><code>[0,1,2,3,4,5,
+6,7,8,9,10]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf  
+            => gn:for-each(fn($n){$n idiv 10}) 
+            => => gn:distinct() => gn:take(12) => gn:to-array()</fos:expression>
+				  <fos:result><code>[0,1,2,3,4,5,
+6,7,8,9,10,11]</code></fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() 
+            => gn:distinct() => gn:to-array() </fos:expression>
+				  <fos:result><code>[]</code></fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>		
+	</fos:function>		
+
+   <fos:function name="empty-generator" prefix="gn">
+	<fos:signatures>
+		<fos:proto name="empty-generator" return-type="fn:generator">
+			<fos:arg name="generator" type="fn:generator"/>
+		</fos:proto>	
+	</fos:signatures>
+	<fos:properties>
+		<fos:property>deterministic</fos:property>
+		<fos:property>context-independent</fos:property>
+		<fos:property>focus-independent</fos:property>	
+	</fos:properties>
+	<fos:summary>
+	  <p>Returns a new generator whose yield does not contain any values.</p>
+	</fos:summary>
+	<fos:rules>
+	  <p>Returns a new generator whose yield does not contain any values.</p>
+	  <p>The <code>initialized</code> and <code>end-reached</code> fields of the result are both set to <code>true()</code>.</p>
+	</fos:rules>
+	<fos:equivalent style="xpath-expression">
+$gen => map:put("initialized", true()) 
+     => map:put("end-reached", true())
+     => map:put("get-current",   
+                fn($this as f:generator) 
+                {error((),"get-current() called on an empty-generator")})
+     => map:put("move-next",
+                fn($this as f:generator) 
+                {error((),"move-next()) called on an empty-generator")})
+	</fos:equivalent>
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>gen2ToInf => gn:empty-generator() => gn:to-array()</fos:expression>
+			  <fos:result>[]</fos:result>
+			</fos:test>
+		</fos:example>	
+		<fos:example>
+			<fos:test>
+			  <fos:expression>gen2ToInf => gn:empty-generator() => gn:to-array() => gn:some()</fos:expression>
+			  <fos:result>false()</fos:result>
+			</fos:test>
+		</fos:example>	
+	</fos:examples>
+   </fos:function>	
+
+  <fos:function name="filter" prefix="gn">
+	<fos:signatures>
+		<fos:proto name="filter" return-type="fn:generator">
+			<fos:arg name="generator" type="fn:generator"/>
+			<fos:arg name="predicate" type="fn(item()*) as xs:boolean"/>
+		</fos:proto>	
+	</fos:signatures>
+	<fos:properties>
+		<fos:property>deterministic</fos:property>
+		<fos:property>context-independent</fos:property>
+		<fos:property>focus-independent</fos:property>	
+	</fos:properties>  
+	<fos:summary>
+	  <p>Returns a new generator whose yield contains exactly those values from the yield of the original order, 
+	     upon which the supplied predicate returns <code>true()</code>, in their original order.</p>
+	</fos:summary>
+	<fos:rules>
+	  <p>If the supplied generator's yield is empty, this same generator is returned.</p>
+	  <p>If none of the values of the supplied generator's yield satisfies the <code>$predicate</code>, a generator with empty yield is returned.</p>
+	  <p>Otherwise returns the concatenation of: a generator whose yield contains exactly one value - the first satisfying the predicate value (<code><var>V/1</var></code>),
+	   and the second generator to be concatenated: the result of filtering with the same <code>$predicate</code> the generator 
+	   whose yield has the same values as the original generator, but with all values preceding and including <var>V/1</var> - removed.</p>
+	</fos:rules>
+	<fos:equivalent style="xquery-function">
+declare function gn:filter($gen as f:generator, $pred as function(item()*) as xs:boolean) 
+                    as f:generator
+{
+ if($gen?initialized and $gen?end-reached) then gn:empty-generator($gen)
+  else
+    let $getNextGoodGen := function($gen as map(*), 
+                                    $pred as function(item()*) as xs:boolean)
+       {
+          if($gen?end-reached) then gn:empty-generator($gen)
+          else
+            let $mapResult := 
+                  while-do(
+                           $gen,
+                           function($x) { not($x?end-reached) 
+                                         and not($pred($x =?> get-current()))},
+                           function($x) { $x =?> move-next() }
+                           )   
+            return 
+              if($mapResult?end-reached) then gn:empty-generator($gen)
+               else $mapResult                  
+       },
+       
+       $gen := if($gen?initialized) then $gen 
+                 else $gen =?> move-next(),
+       $nextGoodGen := $getNextGoodGen($gen, $pred)
+    return
+      if($nextGoodGen?end-reached) then gn:empty-generator($gen)
+      else
+        $nextGoodGen  
+	   => map:put("inputGen", $nextGoodGen)
+	   => map:put("move-next", 
+		      fn($this as f:generator) 
+		      {
+		        let $nextGoodGen := $getNextGoodGen($this?inputGen =?> move-next(), 
+		                                            $pred)
+		         return
+		           if($nextGoodGen?end-reached) then gn:empty-generator($nextGoodGen)
+		             else
+		               $nextGoodGen => map:put("move-next",   
+						       fn($this as f:generator) 
+							{gn:filter($nextGoodGen 
+							             =?> move-next(), $pred)})
+					    => map:put("inputGen", $nextGoodGen)
+		      }
+			  )
+  }	
+	</fos:equivalent>
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:filter(fn($n){$n mod 2 eq 1}) => gn:value()</fos:expression>
+			  <fos:result>3</fos:result>
+			</fos:test>
+		</fos:example>	
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:filter(fn($n){$n mod 2 eq 1}) 
+          => gn:next() => gn:value()</fos:expression>
+			  <fos:result>5</fos:result>
+			</fos:test>
+		</fos:example>	
+		<fos:example>
+			<fos:test>
+			  <fos:expression>
+$gen2ToInf => gn:filter(fn($n){$n mod 2 eq 1}) 
+               => gn:take(7) => gn:to-array()</fos:expression>
+			  <fos:result>[3,5,7,9,
+11, 13,15]</fos:result>
+			</fos:test>
+		</fos:example>	
+		<fos:example>
+			<fos:test>
+			  <fos:expression>
+$gen2ToInf => gn:take(10) => gn:filter(fn($n){$n gt 12}) 
+                 => gn:to-array()</fos:expression>
+			  <fos:result>[]</fos:result>
+			</fos:test>
+		</fos:example>	
+		<fos:example>
+			<fos:test>
+			  <fos:expression>
+$gen2ToInf => gn:empty-generator() 
+                 => gn:filter(fn($n){$n eq $n}) => gn:to-array()</fos:expression>
+			  <fos:result>[]</fos:result>
+			</fos:test>
+		</fos:example>	
+	</fos:examples>	
+ </fos:function>	
+ 
+   <fos:function name="for-each" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="for-each" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="action" type="fn(item()*) as item()*"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>  
+		<fos:summary>
+		  <p>Produces a new generator, in the yield of which each value is the result of applying the function item <code>$action</code> 
+		     on the corresponding value of the yield of the original <code>$generator</code>, in their original order.</p>
+		</fos:summary>
+		<fos:rules>
+		  <p>If the yield of <code>$generator</code> has no values, then a generator, whose yield has no values, is returned.</p>
+		  <p>Otherwise a generator is returned, whose current value is <code>$generator => gn:value() => $action()</code>, 
+		     and whose <code>move-next</code> method produces <code>$generator => gn:skip(1) => gn:for-each($action)</code>.
+		  </p>
+		</fos:rules>
+	<fos:equivalent style="xpath-expression">
+let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+			else $generator        
+return
+ if($gen?end-reached) then gn:empty-generator($gen)
+  else
+   let $current := $fun($gen =?> get-current()),
+       $newResultGen := map:put($gen, 
+                                "get-current",
+                                fn($this as f:generator){$current}),
+       $nextGen := $gen =?> move-next()
+    return
+	  if($nextGen?end-reached) then $newResultGen
+	   else
+	     let $newResultGen2 :=  map:put($newResultGen, "move-next",   
+	                                    fn($this as f:generator) 
+	                                    {gn:for-each($nextGen, $action)}) 
+		   return
+		     $newResultGen2 	
+	</fos:equivalent>
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:subrange(1, 5) => gn:for-each($double) => gn:to-array()</fos:expression>
+			  <fos:result>[4,6,8,10,12]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:for-each($double) => gn:take(5) => gn:to-array()</fos:expression>
+			  <fos:result>[4,6,8,10,12]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:empty-generator() => gn:for-each($double) => gn:to-array()</fos:expression>
+			  <fos:result>[]</fos:result>
+			</fos:test>
+		</fos:example>
+	</fos:examples>
+	</fos:function>
+	
+   <fos:function name="for-each-pair" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="for-each-pair" return-type="fn:generator">
+				<fos:arg name="generator1" type="fn:generator"/>
+				<fos:arg name="generator2" type="fn:generator"/>
+				<fos:arg name="action" type="fn(item()*, item()*) as item()*"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>  
+		<fos:summary>
+		  <p>Produces a new generator, in the yield of which each value is the result of applying the function item <code>$action</code> 
+		     on the corresponding values of the yields of <code>$generator1</code> and <code>$generator2</code>, in their original order.</p>
+		</fos:summary>
+		<fos:rules>
+		  <p>If one or both provided generators has an empty yield (yield that contains no values), then the result is a generator that has an empty yield. Otherwise:</p>
+		  <p>If the yield of <code>$generator1</code> is: <var>V/11</var>, <var>V/12</var>, ..., <var>V/1n</var>, and the yield of <code>$generator2</code> is: <var>V/21</var>, <var>V/22</var>, ..., <var>V/2m</var>, </p>
+          <p>then the result is a generator with yield that contains <code>k  = min(m, n)</code> values:</p>
+		  <p><code>$action(<var>V/11</var>, <var>V/21</var>), $action(<var>V/12</var>, <var>V/22</var>), ..., $action(<var>V/1k</var>, <var>V/2k</var>)))</code></p>
+		</fos:rules>
+		<fos:equivalent style="xpath-expression">
+let $gen := if(not($generator1?initialized)) then $generator1 =?> move-next()
+            else $generator1,
+    $gen2 := if(not($generator2?initialized)) then $generator2 =?> move-next()
+             else $generator2
+return
+  if($gen?end-reached or $gen2?end-reached) then gn:empty-generator($gen) 
+   else  
+	 let $current := $fun($gen =?> get-current(), $gen2 =?> get-current()),
+	     $newResultGen := map:put($gen, "get-current", 
+	                              fn($this as f:generator){$current}),
+	     $nextGen1 := $gen =?> move-next(),
+	     $nextGen2 := $gen2 =?> move-next()
+	  return
+	    if($nextGen1?end-reached or $nextGen2?end-reached) then $newResultGen
+	     else
+	      let $newResultGen2 := map:put($newResultGen, "move-next",
+                                            fn($this as f:generator)
+                                            {gn:for-each-pair($nextGen1, $nextGen2, $action)})
+	          return
+	            $newResultGen2 		
+		</fos:equivalent>
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:subrange(1, 5) 
+               => gn:for-each-pair($gen2ToInf => gn:subrange(6, 10), $sum2) 
+               => gn:to-array()</fos:expression>
+			  <fos:result>[9,11,13,15,17]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:for-each-pair($gen2ToInf, $sum2) 
+               => gn:take(5) => gn:to-array()</fos:expression>
+			  <fos:result>[4,6,8,10,12]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:empty-generator() 
+               => gn:for-each-pair($gen2ToInf => gn:subrange(6, 10), $sum2) 
+               => gn:to-array()</fos:expression>
+			  <fos:result>[]</fos:result>
+			</fos:test>
+		</fos:example>
+	</fos:examples>		
+	</fos:function>	
+   <fos:function name="insert-at" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="insert-at" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="position" type="xs:positiveInteger"/>
+				<fos:arg name="value" type="item()*"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties>     
+      <fos:summary>
+         <p>Returns a generator whose yield  contains the first <code>$position - 1</code> values of the yield of <code>$generator</code>,
+		    followed by the supplied <code>$value</code>, and then followed by all the values of the yield of <code>$generator</code>
+			starting from position <code>$position</code>.</p>
+      </fos:summary>	
+      <fos:rules>
+	    <p>If the yield of the <code>$generator</code> contains less that <code>$position - 1</code> values, error <errorref class="GR" code="0002"/> is raised.</p>
+		<p>If the supplied <code>$position</code> is <code>1</code> then the function returns a generator whose yield 
+		   is that of the supplied <code>$generator</code>, prepended by the provided  <code>$value</code>.</p>
+		<p>Otherwise, the function returns a generator in whose yield the values at position from 1 to <code>$position - 1</code> are 
+		   the values from the yield of the original <code>$generator</code> at the same positions, the value at position <code>$position</code>
+		   in the returned generator's yield is the supplied <code>$value</code>, and the values in this yield after position <code>$position</code>
+		   are the same as the remaining values in the supplied <code>$generator</code>'s yield starting at position <code>$position</code>.
+		</p>
+	  </fos:rules>	 
+	  <fos:equivalent style="xpath-expression">
+let $genTail := gn:skip-strict($generator, $position - 1, true())
+ return
+   if($position gt 1)
+     then $generator => gn:take($position -1) => gn:append($value) => gn:concat($genTail)
+     else $genTail => prepend($value)	  
+	  </fos:equivalent>
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:insert-at(3, "XYZ") 
+               => gn:take(10) => gn:to-array()</fos:expression>
+			  <fos:result>[2,3,"XYZ",4,5,6,7,8,9,10]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+               => gn:insert-at(1, "ABC") => gn:to-array()</fos:expression>
+			  <fos:result>["ABC",2,3,4,5,6,7,8,9,10,11]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+               => gn:insert-at(11, "PQR") 
+               => gn:to-array()</fos:expression>
+			  <fos:result>[2,3,4,5,6,7,8,9,10,11,"PQR"]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+               => gn:insert-at(12, "GHI") 
+               => gn:to-array()</fos:expression>
+			  <fos:error-result error-code="FOGR0002"/>
+			</fos:test>
+		</fos:example>
+	</fos:examples>			  
+	</fos:function>
+	
+   <fos:function name="prepend" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="prepend" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="value" type="item()*"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties> 
+		<fos:summary>
+		 <p>Returns a generator, the first value of whose yield is the supplied <code>$value</code>,
+		    and the next values in this yield are all the values from the yield of the original <code>$generator</code>.
+		 </p>
+		</fos:summary>
+       <fos:rules>
+	     <p>A generator <var>G/0</var>, whose yield contains a single value: <code>$value</code> is constructed.</p>
+		 <p>Then the result of the concatenation of <var>G/0</var> and the supplied <code>$generator</code> is returned.</p>
+	   </fos:rules>
+	  <fos:equivalent style="xpath-expression">
+let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+            else $generator,
+    $genSingle := $gen => gn:empty-generator() => gn:append($value)
+ return
+    gn:concat($genSingle, $gen)
+	  </fos:equivalent>	
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:subrange(1, 5) 
+            => gn:prepend(101) => gn:to-array()</fos:expression>
+			  <fos:result>[101,2,3,4,5,6]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:prepend(999) 
+            => gn:take(5) => gn:to-array()</fos:expression>
+			  <fos:result>[999,2,3,4,5]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:empty-generator()
+            => gn:prepend(777) => gn:to-array()</fos:expression>
+			  <fos:result>[777]</fos:result>
+			</fos:test>
+		</fos:example>
+	</fos:examples>		  
+   </fos:function>	
+   
+   <fos:function name="remove-at" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="remove-at" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="position" type="xs:positiveInteger"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties> 
+		<fos:summary>
+		 <p>Returns a generator, whose yield is the result of removing from 
+		    the yield of the supplied <code>$generator</code> the <code>$position</code>th value.
+		 </p>
+		</fos:summary>   
+		<fos:rules>
+		  <p>If <code>$position</code> is greater than the number of values in the yield of the <code>$generator</code>, 
+		     error FOGR0002 is raised.</p>
+		 <p>Otherwise, returns the concatenation of two generators: one whose yield contains the first <code>$position -1</code> values
+		    from the yield of the supplied <code>$generator</code>, and the second: whose yield contains all values at positions greater than <code>$position</code>
+			from the yield of the supplied <code>$generator</code>.</p>			 
+		</fos:rules>
+	  <fos:equivalent style="xpath-expression">
+let $genTail := gn:skip-strict($generator, $position, true())
+  return
+	if($position gt 1)
+	  then gn:concat(gn:take($generator, $position - 1), $genTail)
+	  else $genTail
+	  </fos:equivalent>			
+	<fos:examples>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+            => gn:remove-at(3) => gn:to-array()</fos:expression>
+			  <fos:result>[2,3,5,6,7,8,9,10,11]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+            => gn:remove-at(1) => gn:to-array()</fos:expression>
+			  <fos:result>[3,4,5,6,7,8,9,10,11]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+            => gn:remove-at(10) => gn:to-array()</fos:expression>
+			  <fos:result>[2,3,4,5,6,7,8,9,10]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:remove-at(3) 
+            => gn:take(10) => gn:to-array()</fos:expression>
+			  <fos:result>[2,3,5,6,7,8,9,10,11,12]</fos:result>
+			</fos:test>
+		</fos:example>
+		<fos:example>
+			<fos:test>
+			  <fos:expression>$gen2ToInf => gn:take(10) 
+            => gn:remove-at(11) => gn:to-array()</fos:expression>
+			  <fos:error-result error-code="FOGR0002"/>
+			</fos:test>
+		</fos:example>
+	</fos:examples>		  
+ </fos:function>	
+ 
+    <fos:function name="remove-where" prefix="gn">
+		<fos:signatures>
+			<fos:proto name="remove-where" return-type="fn:generator">
+				<fos:arg name="generator" type="fn:generator"/>
+				<fos:arg name="predicate" type="function(item()*) as xs:boolean"/>
+			</fos:proto>	
+		</fos:signatures>
+		<fos:properties>
+			<fos:property>deterministic</fos:property>
+			<fos:property>context-independent</fos:property>
+			<fos:property>focus-independent</fos:property>	
+		</fos:properties> 
+		<fos:summary>
+		 <p>Returns a generator, whose yield is the result of removing from 
+		    the yield of the supplied <code>$generator</code> all values upon which the supplied 
+			<code>$predicate</code> is <code>true()</code>.
+		 </p>
+		</fos:summary>
+		<fos:rules>
+		<p>If the yield of the supplied <code>$generator</code> is empty, then this same generator is returned.</p>
+		<p>Otherwise a generator is returned whose yield is the result of filtering the yield of the supplied <code>$generator</code>
+		   with a function that returns <code>true()</code> exactly when the provided <code>$predicate</code> returns <code>false()</code>.
+		</p>
+		</fos:rules>
+	  <fos:equivalent style="xpath-expression">let $gen := if(not($generator?initialized)) then $generator =?> move-next()
+             else $generator
+  return
+    gn:filter($gen, fn($x){not($predicate($x))})
+	</fos:equivalent>
+		<fos:examples>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:remove-where(fn($x){$x mod 3 eq 0}) 
+            => gn:take(10) => gn:to-array()</fos:expression>
+				  <fos:result>[2,4,5,7,8,10,11,13,14,16]</fos:result>
+				</fos:test>
+			</fos:example>
+			<fos:example>
+				<fos:test>
+				  <fos:expression>$gen2ToInf => gn:empty-generator() 
+            => gn:remove-where(fn($x){$x mod 3 eq 0})
+            => gn:to-array()</fos:expression>
+				  <fos:result>[]</fos:result>
+				</fos:test>
+			</fos:example>
+		</fos:examples>
+    </fos:function>
    
    <fos:function name="node-name" prefix="fn">
       <fos:signatures>
