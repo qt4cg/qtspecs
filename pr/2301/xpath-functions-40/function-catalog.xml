@@ -2,6 +2,7 @@
 <fos:functions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
    xsi:schemaLocation="http://www.w3.org/xpath-functions/spec/namespace fos.xsd"
    xmlns:fos="http://www.w3.org/xpath-functions/spec/namespace">
+         
    <fos:global-variables>
       <fos:variable id="v-po" name="po" as="element()"
          >&lt;PurchaseOrder&gt; &lt;line-item&gt;
@@ -2968,11 +2969,11 @@ compare($N * $arg2, 0) eq compare($arg1, 0).</eg>
                   <char>U+03C3</char><!--#x3C3 <code>σ</code>-->, because the latter is the nineteenth item in the sequence of 
                   lowercase Greek letters in Unicode (the sequence is interrupted because of the final 
                   form of the sigma, <char>U+03C2</char><!--#x3C2 &#x3C2;-->). Because Greek never had a final capital sigma, 
-                  Unicode has marked U+03A2, the eighteenth codepoint in the sequence of Greek capital 
+                  Unicode has marked <char>U+03A2</char>, the eighteenth codepoint in the sequence of Greek capital 
                   letters, as reserved, to ensure that every Greek uppercase letter is always 32 codepoints 
                   less than its lowercase counterpart. Therefore, someone writing 
                   <code>format-integer(18, "Α;a")</code> might expect the eighteenth Greek capital letter, 
-                  <char>U+03A3</char><!--#x3A3 <code>Σ</code>-->, but an implementation might return U+03A2, 
+                  <char>U+03A3</char><!--#x3A3 <code>Σ</code>-->, but an implementation might return <char>U+03A2</char>, 
                   the eighteenth position 
                   in the sequence of Greek capital letters, but unassigned to any character. </p>
             </item>
@@ -5702,12 +5703,25 @@ return normalize-unicode(concat($v1, $v2))</eg>
             >codepoint</termref>
             greater than 65535 counts as one character, not two.</p>
          <p>There are situations where <code>fn:string-length()</code> has a different effect
-            from <code>fn:string-length(.)</code>. For example, if the context value
+            from <code>fn:string-length(.)</code>. These situations all involve nodes with
+            non-trivial type annotations. For example:</p>
+         <ulist><item><p>If the context value
          is an attribute node typed as an <code>xs:integer</code> with the string value <code>000001</code>,
          then <code>fn:string-length()</code> returns <code>6</code>
             (the length of the string value of the node), while 
-            <code>fn:string-length(.)</code> raises a type error (because the result of atomization
-            is not an <code>xs:string</code>).</p>
+            <code>fn:string-length(.)</code> returns 1 (the length of the string that results from converting
+            the typed value (1) to a string). In earlier versions of this specification this call would have
+            failed with a type error.</p></item>
+            <item><p>If the context value is the element node <code><![CDATA[<e> NN </e>]]></code>, and has the
+            type annotation <code>xs:NCName</code>, then <code>fn:string-length()</code> returns
+            4 (the length of the string value of the element node), while <code>fn:string-length(.)</code>
+            returns 2 (the length of the typed value of the element node).</p></item>
+            <item><p>If the context value is the attribute node <code>ref="A B C"</code>, and has the
+            type annotation <code>xs:IDREFS</code>, then <code>fn:string-length()</code> returns
+            5 (the length of the string value of the attribute node), while <code>fn:string-length(.)</code>
+            raises an error, because the atomized value of the attribute is a sequence of strings,
+            and calling the <code>fn:string</code> function on a sequence of strings fails.</p></item>
+         </ulist>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -5789,6 +5803,36 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <p>
             <code>S ::= (#x20 | #x9 | #xD | #xA)+</code>
          </p>
+         
+         
+         <p>There are situations where <code>fn:normalize-space()</code> has a different effect
+            from <code>fn:normalize-space(.)</code>. These situations all involve nodes with
+            non-trivial type annotations. For example:</p>
+         <ulist><item><p>If the context value
+         is an attribute node typed as an <code>xs:integer</code> with the string value <code>000001</code>,
+         then <code>fn:normalize-space()</code> returns <code>"000001"</code>
+            (the string value of the node, whitespace-normalized), while 
+            <code>fn:normalize-space(.)</code> returns <code>"1"</code> (the typed value of the node,
+            converted to a string and then normalized).</p></item>
+            <item><p>If the context value is the attribute node <code>ref=" A  B C "</code>, and has the
+            type annotation <code>xs:IDREFS</code>, then <code>fn:normalize-space()</code> returns
+            <code>"A B C"</code> (the string value of the attribute node, whitespace-normalized), 
+               while <code>fn:normalize-space(.)</code>
+            raises an error, because the typed value of the attribute is a sequence of strings,
+            and calling the <function>fn:string</function> function on a sequence of strings fails.</p></item>
+         </ulist>
+         
+         <p>The effect of <code>fn:normalize-space</code> is exactly the same as the effect of
+         the <code>whitespace=collapse</code> facet in XSD. Since this facet is implicit for most
+         XSD data types (with the notable exception of <code>xs:string</code> itself), nodes that are
+         validated against types other than <code>xs:string</code> will tend to be implicitly
+         in the form that <function>normalize-string</function> generates. Confusingly,
+         the XSD type <code>xs:normalizedString</code> uses the facet <code>whitespace=replace</code>,
+         which does <emph>not</emph> have the same effect as the <function>normalize-space</function>
+         function: it replaces all whitespace characters by <char>U+0020</char>, but does not remove
+         leading or trailing spaces, nor does it merge adjacent spaces.</p>
+         
+         
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -18636,11 +18680,13 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
             of the <xtermref spec="XP40" ref="dt-executable-base-uri">executable base URI</xtermref> property 
             from the dynamic context of the caller. The resulting absolute URI is
             promoted to an <code>xs:string</code>.</p>
-         <p>If the <term>available documents</term> described in <xspecref spec="XP40"
-
-               ref="eval_context"
-            /> provides a mapping from this string to a document node, the
+         <p>If the <xtermref spec="XP40" ref="dt-available-documents"/> provides 
+            a mapping from this string to a document node, the
             function returns that document node.</p>
+         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
+         
          <p>The URI may include a fragment identifier.</p>
          
          <p>The <code>$options</code> argument, if present and non-empty, defines the detailed behavior of the
@@ -18648,6 +18694,23 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
          are as follows:</p>
          
          <fos:options>
+            <fos:option key="trusted">
+               <fos:meaning>Indicates whether processing the document may cause other
+                  external resources to be fetched (including, for example, external entities, an external DTD,
+                  or documents referenced using <code>xsi:schemaLocation</code> or
+                  XInclude elements).</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The document may include references to other external
+                     resources.
+                  </fos:value>
+                  <fos:value value="false">The document must not include references to other
+                     external resources unless access to these resources has been explicitly
+                     enabled.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
             <fos:option key="dtd-validation">
                <fos:meaning>Determines whether DTD validation takes place.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
@@ -18988,6 +19051,9 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
                class="DC" code="0003"/>.</p>
          <p>There is no requirement that <phrase>any nodes in the result</phrase> should be in document order, nor is
             there a requirement that the result should contain no duplicates.</p>
+         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
 
 
       </fos:rules>
@@ -19063,6 +19129,9 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
          <p>There is no requirement that the URIs returned by this function should all be distinct,
             and no assumptions can be made about the order of URIs in the sequence, unless the
             implementation defines otherwise.</p>
+         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="DC" code="0002"
@@ -19251,6 +19320,9 @@ return tokenize(normalize-space($s), ' ')[. castable as xs:IDREF]</eg>
 
          <p>The result of the function is a string containing the string representation of the
             resource retrieved using the URI, decoded according to the effective encoding.</p>
+         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="UT" code="1170"
@@ -19421,6 +19493,9 @@ return $lines[not(position() = last() and . = '')]
             zero-length string will be returned to represent the empty line; but if the external
             resource ends with a newline sequence, the result will be as if this final
             line ending were not present.</p>
+         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
       </fos:rules>
       <fos:errors>
          <p>Error conditions are the same as for the <function>fn:unparsed-text</function> function.</p>
@@ -19478,6 +19553,10 @@ return $lines[not(position() = last() and . = '')]
             results of a call on <function>fn:unparsed-text-available</function>
             <rfc2119>must</rfc2119> be consistent with the results of a subsequent call on
                <code>unparsed-text</code> with the same arguments.</p>
+         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
+         
       </fos:rules>
       <fos:notes>
          <p>This function was introduced before XQuery and XSLT allowed errors to be caught;
@@ -19496,7 +19575,8 @@ return $lines[not(position() = last() and . = '')]
             exactly the same circumstances as <function>fn:unparsed-text</function>, the
                <function>fn:unparsed-text-available</function> function may equally be used to test
             whether a call on <function>fn:unparsed-text-lines</function> would succeed.</p>
-         <p></p>
+         
+         
 
       </fos:notes>
       <fos:changes>
@@ -19548,7 +19628,8 @@ return $lines[not(position() = last() and . = '')]
             containing the binary representation of the
             resource retrieved using the URI.</p>
          
-         
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
          
       </fos:rules>
       <fos:errors>
@@ -19695,6 +19776,7 @@ return { "width": $int16-at($loc + 5),
                def="execution-scope"
             >execution scope</termref>, with the same arguments, it must return the same
             result.</p>
+        
       </fos:rules>
       <fos:notes>
          <p>On many platforms, the term “environment variable” has a natural meaning in terms of
@@ -19719,8 +19801,9 @@ return { "width": $int16-at($loc + 5),
             machines). In such circumstances implementations <rfc2119>may</rfc2119> choose to
             provide access to the environment variables associated with the process in which the
             query or stylesheet processing was initiated.</p>
-         <p>Security advice: Queries from untrusted sources should not be permitted unrestricted
-            access to environment variables. For example, the name of the account under which the
+         <p>Security advice: <xtermref spec="XP40" ref="dt-untrusted">Untrusted</xtermref> 
+            applications should not be permitted unrestricted
+            access to environment variables. For example, the name of the account under which a
             query is running may be useful information to a would-be intruder. An implementation may
             therefore choose to restrict access to the environment, or may provide a facility to
             make <function>fn:environment-variable</function> always return the empty sequence.</p>
@@ -19929,6 +20012,23 @@ return { "width": $int16-at($loc + 5),
                   <fos:value value="false">All whitespace-only text nodes are preserved,
                   unless either (a) DTD validation marks them as ignorable, or (b) XSD validation recognizes
                   the containing element as having element-only or empty content.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+             <fos:option key="trusted">
+               <fos:meaning>Indicates whether processing the supplied document may cause 
+                  external resources to be fetched (including, for example, external entities, an external DTD,
+                  or documents referenced using <code>xsi:schemaLocation</code> or
+                  XInclude elements).</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The document may include references to external
+                     resources.
+                  </fos:value>
+                  <fos:value value="false">The document must not include references to 
+                     external resources unless access to these resources has been explicitly
+                     enabled.
                   </fos:value>
                </fos:values>
             </fos:option>
@@ -20273,6 +20373,24 @@ return { "width": $int16-at($loc + 5),
          
          
          <fos:options>
+            <fos:option key="trusted">
+               <fos:meaning>Indicates whether the validation process may cause 
+                  external resources to be fetched (including, for example, documents 
+                  referenced using the <code>schema-location</code>
+                  property, or <code>xsi:schemaLocation</code> attributes within
+                  the document being validated).</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The validation process may retrieve external
+                     resources.
+                  </fos:value>
+                  <fos:value value="false">The validation process must not retrieve any 
+                     external resources unless access to these resources has been explicitly
+                     enabled.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
             <fos:option key="use-imported-schema">
                <fos:meaning>If true, the schema to be used for validation includes the schema components
                   available in the static context of the function call. If false, these components
@@ -20296,7 +20414,11 @@ return { "width": $int16-at($loc + 5),
             </fos:option>
             <fos:option key="schema-location">
                <fos:meaning>A list of locations of XSD schema documents to be used to assemble a schema.
-               Any relative URIs are resolved relative to the base URI of the function call.</fos:meaning>
+               Any relative URIs are resolved relative to the base URI of the function call.
+               Access to the schema documents at these locations is allowed regardless of the value
+               of the <code>trusted</code> option; access to indirectly referenced schema documents
+               (for example, using <code>xs:include</code> is allowed only if the <code>trusted</code>
+               option is set to <code>true</code>.</fos:meaning>
                <fos:type>xs:anyURI*</fos:type>
                <fos:default>()</fos:default>
             </fos:option>
@@ -20718,6 +20840,18 @@ return $typed-result instance of element(distance, xs:decimal)
                </tr>
                <tr>
                   <td>
+                     <code>canonical</code>
+                  </td>
+                  <td>
+                     <code>xs:boolean?</code>
+                  </td>
+                  <td><code>true()</code> means <code>"yes"</code>, <code>false()</code> means <code>"no"</code></td>
+                  <td>
+                     <code>no</code>
+                  </td>
+               </tr>
+               <tr>
+                  <td>
                      <code>cdata-section-elements</code>
                   </td>
                   <td>
@@ -21091,6 +21225,12 @@ serialize(
             </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:changes>
+         <fos:change PR="2259" date="2025-11-03" issue="938">
+            <p>A new parameter <code>canonical</code> is available to give control
+            over serialization of XML, XHTML, and JSON.</p>
+         </fos:change>
+      </fos:changes>
    </fos:function>
    <fos:function name="parse-html" prefix="fn">
       <fos:signatures>
@@ -21202,8 +21342,6 @@ serialize(
          </olist>
          
          
-         <p>The resulting byte stream is then used to construct an XDM representation of the HTML
-            document in a way that is equivalent to:</p>
          <olist>
             <item>
                <p>Tokenizing the byte stream according to the HTML parsing algorithm as described in
@@ -21233,6 +21371,8 @@ serialize(
             that is, if the function is called twice with the same arguments, it is
             <termref def="implementation-dependent"/> whether the same node is returned on both
             occasions.</p>
+         
+         
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="DC" code="0011"/> if the content of
@@ -21287,6 +21427,8 @@ serialize(
          <p>The effect of the two-argument function call <code>fn:html-doc($H, $M)</code>is equivalent to the function composition
             <code>fn:unparsed-binary($H) => fn:parse-html($M)</code>.</p>
          <p>If <code>$source</code> is the empty sequence, the function returns the empty sequence.</p>
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
       </fos:rules>
       <fos:errors>
          <p>The function may raise any error defined for the <function>fn:unparsed-binary</function>
@@ -27918,6 +28060,10 @@ element-to-map-plan((<a><b/><b/></a>, <a><b/><c/></a>))
          <p>All fields are returned as <code>xs:string</code> values.</p>
          <p>Quoted fields in the input are returned without the quotes.</p>
          <p>For more discussion of the returned data, see <specref ref="csv-to-xdm-mapping"/>.</p>
+         <p>If the source of the CSV input is a resource accessible by URI, then it may be preferable
+         to use the <function>fn:csv-doc</function> function. If the source is a binary value (<code>xs:hexBinary</code>
+         or <code>xs:base64Binary</code>) then this can first be decoded as a string using the functions
+         <function>bin:infer-encoding</function> and <function>bin:decode-string</function>.</p>
       </fos:notes>
       <fos:examples>
          <fos:variable name="display" id="csv-display">fn($result) {
@@ -28170,6 +28316,8 @@ return (
          <p>The effect of the two-argument function call <code>fn:csv-doc($H, $M)</code>is equivalent to the function composition
             <code>fn:unparsed-binary($H) => fn:parse-csv($M)</code>.</p>
          <p>If <code>$source</code> is the empty sequence, the function returns the empty sequence.</p>
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
       </fos:rules>
       <fos:errors>
          <p>The function may raise any error defined for the <function>fn:unparsed-text</function>
@@ -29109,6 +29257,12 @@ return document {
                <p><code>empty-sequence()</code> for a JSON null (or for empty input)</p>
             </item>
          </ulist>
+         
+         <p>If the source of the JSON input is a resource accessible by URI, then it may be preferable
+         to use the <function>fn:json-doc</function> function. If the source is a binary value (<code>xs:hexBinary</code>
+         or <code>xs:base64Binary</code>) then this can first be decoded as a string using the functions
+         <function>bin:infer-encoding</function> and <function>bin:decode-string</function>.</p>
+         
          <p>If the input starts with a byte order mark, this function ignores it. The byte order mark may have been added
          to the data stream in order to facilitate decoding of an octet stream to a character string, but since this function
          takes a character string as input, the byte order mark serves no useful purpose.</p>
@@ -29244,6 +29398,8 @@ return document {
          
          
          <p>If <code>$source</code> is the empty sequence, the function returns the empty sequence.</p>
+         <note><p>The ability to access external resources depends on whether the
+         calling code is <xtermref spec="XP40" ref="dt-trusted"/>.</p></note>
       </fos:rules>
       <fos:errors>
          <p>The function may raise any error defined for the <function>fn:unparsed-text</function> or <function>fn:parse-json</function>
@@ -30711,9 +30867,9 @@ $array
       <fos:equivalent style="xpath-expression">
 array:of-members(
   for-each(array:members($array), 
-  fn($member, $pos) {
-    { 'value': $action($member, $pos) }
-  })
+           fn($member, $pos) {
+              { 'value': $action(map:get($member, 'value'), $pos) }
+           })
 )
       </fos:equivalent>
       <fos:examples>
@@ -31802,7 +31958,21 @@ declare function array:flatten(
          <p>The <code>$options</code> argument can be used to control the way in which the function operates. 
             The <termref
                def="option-parameter-conventions">option parameter conventions</termref> apply.</p>
-
+         
+         <p>If the query module is retrieved as an external resource, this is subject to
+         the <xtermref spec="XP40" ref="dt-trusted">trust level</xtermref> of the
+         calling code. In addition, the ability of the loaded query module to access
+         additional resources is subject to the value of the supplied <code>trusted</code>
+         option.</p>
+         
+         <note>
+            <p>Versions of XQuery prior to 4.0 do not define any constraints on access to
+            external resources. Many XQuery implementations, however, provide such
+            mechanisms. An implementation of <code>fn:load-xquery-module</code> that allows
+            execution of an <xtermref spec="XP40" ref="dt-untrusted">untrusted</xtermref>
+            query <rfc2119>must</rfc2119> ensure that the ability of that query to access resources
+            is appropriately restricted, regardless of the version of XQuery in use.</p>
+         </note>
 
          <fos:options>
             <fos:option key="xquery-version">
@@ -31813,6 +31983,27 @@ declare function array:flatten(
                   <termref
                      def="implementation-defined"
                   >implementation-defined</termref> if this is absent.</fos:default-description>
+            </fos:option>
+            <fos:option key="trusted">
+               <fos:meaning>Indicates whether the returned query module is 
+                  trusted to access external resources. This applies both to resources
+               statically referenced in the query module (such as imported schemas and
+               imported library modules), and to resources accessed dynamically by
+               invoking functions in the retrieved module, for example by use of the
+               <function>fn:doc</function> function.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The loaded query has the same level of trust
+                     as the caller, and may therefore access all external resources
+                     available to the caller.
+                  </fos:value>
+                  <fos:value value="false">The functions and variables in the returned
+                     XQuery module are <xtermref spec="XP40" ref="dt-untrusted">untrusted</xtermref>, and
+                     are therefore unable to access external resources unless these have been made
+                     explicitly available by a trusted caller.
+                  </fos:value>
+               </fos:values>
             </fos:option>
             <fos:option key="location-hints">
                <fos:meaning>A sequence of URIs (in the form of <code>xs:string</code> values) which may be used or ignored in an
@@ -32062,6 +32253,21 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
          then the processor will operate in backwards compatibility mode; if the same processor is selected and the stylesheet
          specifies <code>version="3.0"</code>, the processor will operate in forwards compatibility mode.</p>
 
+         <p>If the stylesheet to be executed is retrieved as an external resource, this is subject to
+         the <xtermref spec="XP40" ref="dt-trusted">trust level</xtermref> of the
+         calling code. In addition, the ability of the loaded stylesheet to access
+         additional resources is subject to the value of the supplied <code>trusted</code>
+         option.</p>
+         
+         <note>
+            <p>Versions of XSLT prior to 4.0 do not define any constraints on access to
+            external resources. Many XSLT implementations, however, provide such
+            mechanisms. An implementation of <code>fn:transform</code> that allows
+            an XSLT processor to execute an <xtermref spec="XP40" ref="dt-untrusted">untrusted</xtermref>
+            stylesheet <rfc2119>must</rfc2119> ensure that the ability of that stylesheet to access resources
+            is appropriately restricted, regardless of the version of XSLT.</p>
+         </note>
+
          <p>The combinations of options that are relevant to each version of XSLT, other than <code>xslt-version</code> 
             itself, are listed below. This is followed by a table giving the meaning of each option.</p>
 
@@ -32103,6 +32309,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                         <sitem><code>serialization-params</code> (defaults to an empty map)</sitem>
                         <sitem><code>enable-messages</code> (default is implementation-defined)</sitem>
                         <sitem><code>requested-properties</code> (default is an empty map)</sitem>
+                        <sitem><code>trusted</code> (default is <code>false</code>)</sitem>
                         <sitem><code>vendor-options</code> (defaults to an empty map)</sitem>
                         <sitem><code>cache</code> (default is implementation-defined)</sitem>
                      </slist>
@@ -32161,6 +32368,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                         <sitem><code>enable-messages</code> (default is implementation-defined)</sitem>
                         <sitem><code>enable-trace</code> (default is implementation-defined)</sitem>
                         <sitem><code>requested-properties</code> (default is an empty map)</sitem>
+                        <sitem><code>trusted</code> (default is <code>false</code>)</sitem>
                         <sitem><code>vendor-options</code> (defaults to an empty map)</sitem>
                         <sitem><code>cache</code> (default is implementation-defined)</sitem>
                      </slist>
@@ -32168,7 +32376,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                </olist>
             </item>
             <item>
-               <p>For invocation of an XSLT 3.0 processor (see <bibref ref="xslt-40"
+               <p>For invocation of an XSLT 3.0 or 4.0 processor (see <bibref ref="xslt-40"
                      />), 
                   the supplied options must include all of the following <phrase
                      diff="chg" at="E">(if anything else is present, it is ignored)</phrase>:</p>
@@ -32281,6 +32489,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                         <sitem><code>enable-messages</code> (default is implementation-defined)</sitem>
                         <sitem><code>enable-trace</code> (default is implementation-defined)</sitem>
                         <sitem><code>requested-properties</code> (default is an empty map)</sitem>
+                        <sitem><code>trusted</code> (default is <code>false</code>)</sitem>
                         <sitem><code>vendor-options</code> (defaults to an empty map)</sitem>
                         <sitem><code>cache</code> (default is implementation-defined)</sitem>
                      </slist>
@@ -32294,7 +32503,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
          <fos:options>
 
             <fos:option key="base-output-uri">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The URI of the principal result document; also used as the base URI for
             resolving relative URIs of secondary result documents. If the value is a relative 
 
@@ -32311,7 +32520,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
             stylesheet, or the current working directory. </fos:default-description>
             </fos:option>
             <fos:option key="cache">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>This option has no effect on the result of the transformation but may affect
             efficiency. The value <code>true</code> indicates an expectation that the same
             stylesheet is likely to be used for more than one transformation; the value
@@ -32321,7 +32530,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default>true</fos:default>
             </fos:option>
             <fos:option key="delivery-format">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The manner in which the transformation results should be delivered. Applies both to the
             principal result document and to secondary result documents created using
                 <code>xsl:result-document</code>.</fos:meaning>
@@ -32352,14 +32561,14 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
 
             </fos:option>
             <fos:option key="enable-assertions">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>Indicates whether any <code>xsl:assert</code> instructions in the stylesheet
             are to be evaluated.</fos:meaning>
                <fos:type>xs:boolean</fos:type>
                <fos:default>false</fos:default>
             </fos:option>
             <fos:option key="enable-messages">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>Indicates whether any <code>xsl:message</code> instructions in the stylesheet
             are to be evaluated. The destination and formatting of any such messages is
             implementation-defined.</fos:meaning>
@@ -32367,7 +32576,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description><termref def="implementation-defined">Implementation-defined</termref>.</fos:default-description>
             </fos:option>
             <fos:option key="enable-trace">
-               <fos:applies-to>2.0, 3.0</fos:applies-to>
+               <fos:applies-to>2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>Indicates whether any <function>fn:trace</function> functions in the stylesheet are to
             generate diagnostic messages. The destination and formatting of any such messages is
             implementation-defined.</fos:meaning>
@@ -32375,7 +32584,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description><termref def="implementation-defined">Implementation-defined</termref>.</fos:default-description>
             </fos:option>
             <fos:option key="function-params">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>An array of values to be used as the arguments to the initial function call.
             The value is converted to the required type of the declared parameter using the function
             conversion rules.</fos:meaning>
@@ -32383,13 +32592,13 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default>Empty array</fos:default>
             </fos:option>
             <fos:option key="global-context-item">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The value of the global context item, as defined in XSLT 3.0</fos:meaning>
                <fos:type>item()</fos:type>
                <fos:default-description>The value of <code>source-node</code></fos:default-description>
             </fos:option>
             <fos:option key="initial-function">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The name of the initial function to be called for call-function invocation. The
             arity of the function is inferred from the length of
             <code>function-params</code>.</fos:meaning>
@@ -32397,47 +32606,47 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="initial-match-selection">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The value of the initial match selection, as defined in XSLT 3.0</fos:meaning>
                <fos:type>item()*</fos:type>
                <fos:default-description>The value of <code>source-node</code></fos:default-description>
             </fos:option>
             <fos:option key="initial-mode">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The name of the initial processing mode.</fos:meaning>
                <fos:type>xs:QName</fos:type>
                <fos:default-description>none</fos:default-description>
             </fos:option>
             <fos:option key="initial-template">
-               <fos:applies-to>2.0, 3.0</fos:applies-to>
+               <fos:applies-to>2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The name of a named template in the stylesheet to act as the initial entry
             point.</fos:meaning>
                <fos:type>xs:QName</fos:type>
                <fos:default>xsl:initial-template</fos:default>
             </fos:option>
             <fos:option key="package-name">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The name of the top-level stylesheet package to be invoked (an absolute
             URI)</fos:meaning>
                <fos:type>xs:string</fos:type>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="package-location">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The location of the top-level stylesheet package, as a relative or absolute
             URI</fos:meaning>
                <fos:type>xs:string</fos:type>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="package-node">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>A document or element node containing the top-level stylesheet
             package</fos:meaning>
                <fos:type>node()</fos:type>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="package-text">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The top-level stylesheet package in the form of unparsed lexical
             XML.</fos:meaning>
                <fos:type>xs:string</fos:type>
@@ -32445,13 +32654,13 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
             </fos:option>
 
             <fos:option key="package-version">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The version of the top-level stylesheet package to be invoked.</fos:meaning>
                <fos:type>xs:string</fos:type>
                <fos:default>"*" (any version)</fos:default>
             </fos:option>
             <fos:option key="post-process">
-               <fos:applies-to>1.0 2.0 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>A function that is used to post-process each result document of
                   the transformation (both the principal result and secondary results), in whatever
                   form it would otherwise be delivered (document, serialized, or raw). The first 
@@ -32490,7 +32699,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default>fn($a, $b) { $b }</fos:default>
             </fos:option>
             <fos:option key="requested-properties">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The keys in the map are QNames that could legitimately be supplied in a call to
             the XSLT <code>system-property</code> function; the values in the map are the requested
             settings of the corresponding property. The boolean values <code>true</code> and
@@ -32518,7 +32727,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default>Empty map</fos:default>
             </fos:option>
             <fos:option key="serialization-params">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>Serialization parameters for the principal result document. The supplied map
             follows the same rules that apply to a map supplied as the second argument of
                 <function>fn:serialize</function>. <ulist>
@@ -32538,7 +32747,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default>Empty map</fos:default>
             </fos:option>
             <fos:option key="source-node">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>When <code>source-node</code> is supplied then the
                 <code>global-context-item</code> (the context item for evaluating global variables)
             is the root of the tree containing the supplied node. In addition, for apply-templates
@@ -32550,7 +32759,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
             </fos:option>
 
             <fos:option key="static-params">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The values of static parameters defined in the stylesheet; the keys are the
             names of the parameters, and the associated values are their values. The value is
             converted to the required type of the declared parameter using the coercion
@@ -32559,7 +32768,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default>Empty map</fos:default>
             </fos:option>
             <fos:option key="stylesheet-base-uri">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>A string intended to be used as the static base URI of the principal stylesheet
             module. This value <rfc2119>must</rfc2119> be used if no other static base URI is
             available. If the supplied stylesheet already has a base URI (which will generally be
@@ -32576,7 +32785,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="stylesheet-location">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>URI that can be used to locate the principal stylesheet module. If relative, it
 
             is resolved against the <xtermref spec="XP40" ref="dt-executable-base-uri">executable base URI</xtermref> 
@@ -32587,7 +32796,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="stylesheet-node">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>Root of the tree containing the principal stylesheet module, as a document or
             element node. The base URI of the node acts as the default for
             stylesheet-base-uri.</fos:meaning>
@@ -32595,7 +32804,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="stylesheet-params">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>A map holding values to be supplied for stylesheet parameters. The keys are the
             parameter names; the values are the corresponding parameter values. The values are
             converted if necessary to the required type using the coercion rules. The
@@ -32605,14 +32814,14 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
             </fos:option>
 
             <fos:option key="stylesheet-text">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The principal stylesheet module in the form of unparsed lexical
             XML.</fos:meaning>
                <fos:type>xs:string</fos:type>
                <fos:default-description>n/a</fos:default-description>
             </fos:option>
             <fos:option key="template-params">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The values of non-tunnel parameters to be supplied to the initial template,
             used with both apply-templates and call-template invocation. Each value is converted to
             the required type of the declared parameter using the coercion
@@ -32621,7 +32830,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:default-description>none</fos:default-description>
             </fos:option>
             <fos:option key="tunnel-params">
-               <fos:applies-to>3.0</fos:applies-to>
+               <fos:applies-to>3.0, 4.0</fos:applies-to>
                <fos:meaning>The values of tunnel parameters to be supplied to the initial template, used
             with both apply-templates and call-template invocation. Each value is converted to the
             required type of the declared parameter using the coercion
@@ -32629,9 +32838,31 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
                <fos:type>map(xs:QName, item()*)</fos:type>
                <fos:default>Empty map</fos:default>
             </fos:option>
+            
+            <fos:option key="trusted">
+               <fos:meaning>Indicates whether the target stylesheet is 
+                  trusted to access external resources. This applies both to resources
+               statically referenced by the stylesheet (for example using
+               <code>xsl:include</code>, <code>xsl:import</code>, <code>xsl:use-package</code>,
+                  or <code>xsl:import-schema</code>), and to resources accessed dynamically by
+               executing the retrieved stylesheet, for example by use of the
+               <function>fn:doc</function> or <function>unparsed-text</function> function.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The loaded stylesheet has the same level of trust
+                     as the caller, and may therefore access all external resources
+                     available to the caller.
+                  </fos:value>
+                  <fos:value value="false">The loaded stylesheet is <xtermref spec="XP40" ref="dt-untrusted">untrusted</xtermref>, and
+                     is therefore unable to access external resources unless these have been made
+                     explicitly available by a trusted caller.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
 
             <fos:option key="vendor-options">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>Values for vendor-defined configuration options for the XSLT processor used to
             process the request. The key is the name of an option, expressed as a QName: the
             namespace URI of the QName <rfc2119>should</rfc2119> be a URI controlled by the vendor
@@ -32645,7 +32876,7 @@ return $variables( #Q{http://example.com/dyn}value )</eg></fos:expression>
             </fos:option>
 
             <fos:option key="xslt-version">
-               <fos:applies-to>1.0, 2.0, 3.0</fos:applies-to>
+               <fos:applies-to>1.0, 2.0, 3.0, 4.0</fos:applies-to>
                <fos:meaning>The minimum level of the XSLT language that the processor must support.</fos:meaning>
                <fos:type>xs:decimal</fos:type>
                <fos:default-description>The <code>[xsl:]version</code> attribute at the outermost level of the
