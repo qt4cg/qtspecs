@@ -2043,16 +2043,15 @@
   <xsl:template match="changes">
     <div class="changes">
       <p class="changesHeading">
-        <xsl:text>Changes in 4.0</xsl:text>
         <xsl:variable name="next" select="../(following::*|descendant::*)[child::changes][1]"/>
-        <xsl:if test="$next">
-          <xsl:text>&#xa0;</xsl:text>
-          <a href="#{$next/@id}">⬇</a>
-        </xsl:if>
         <xsl:variable name="prior" select="../(preceding::*|ancestor::*)[child::changes][last()]"/>
-        <xsl:if test="$prior">
-          <xsl:text>&#xa0;</xsl:text>
-          <a href="#{$prior/@id}">⬆</a>
+        Changes in 4.0
+        <xsl:if test="$next or $prior">
+          <xsl:text>(</xsl:text>
+          <xsl:if test="$next"><a href="#{$next/@id}">next</a></xsl:if>
+          <xsl:if test="$next and $prior"> | </xsl:if>
+          <xsl:if test="$prior"><a href="#{$prior/@id}">previous</a></xsl:if>
+          <xsl:text>)</xsl:text>
         </xsl:if>
       </p>
       <ol>
