@@ -240,7 +240,7 @@
 	
 	<xsl:template match="processing-instruction('record-description-index')" expand-text="yes">
 		<ulist>
-		<xsl:for-each select="$fosdoc/fos:functions/fos:record-type">
+		<xsl:for-each select="$fosdoc/fos:functions/fos:record-type[not(starts-with(@id, 'ignore-'))]">
 			<xsl:sort select="@id"/>
 			<item>
 				<p>Record <loc href="#{@id}">{@id}</loc></p>
