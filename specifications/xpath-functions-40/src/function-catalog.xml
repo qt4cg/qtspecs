@@ -36077,4 +36077,117 @@ return $array / descendant::*[. > 25][1] / ancestor-or-self::* =!> jnode-content
       </fos:examples>
    </fos:function>
    
+   <fos:function name="generate-sequence" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="generate-sequence" return-type="item()*">
+            <fos:arg name="initial-state" type="item()" usage="navigation"/>
+            <fos:arg name="step" type="function(item()) as item()?" usage="inspection"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Delivers a potentially unbounded sequence based on a supplied initial state, together
+         with a function for computing the next state.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The first item in the returned sequence is <code>$initial-state</code>; the
+         second item is the result of <code>$initial-state => $step()</code>; the third item
+         is the result of <code>$initial-state => $step() => step()</code>, and so on.</p>
+         
+         <p>If the <code>$step</code> function returns an empty sequence, this marks the end
+         of the generated sequence. However, the generated sequence is potentially unbounded,
+         and the specification defines that certain operations on sequences are <termref def="dt-pipelined"/>,
+         ensuring that unbounded sequences can be processed without exhausting available resources.</p>
+         
+         <p>For example, the function call:</p>
+            
+            <eg>generate-sequence(random-number-generator($seed), fn{?next}) ? number => slice(end=1000)</eg>
+            
+         <p>returns an sequence of one thousand random numbers. The reason this works is that the lookup
+            operator (<code>?</code>) and the <function>slice</function> function are both defined to be
+            pipelined, which guarantees that the operation is capable of handling an unbounded input
+            sequence.
+         </p>   
+            
+            
+      </fos:rules>
+      <fos:notes>
+         <p>The evaluation technique used to implement pipelined operation is often called
+         <term>lazy evaluation</term>. This specification does not mandate any particular
+         implementation technique, it only requires that the evaluation of pipelined operations
+         is not constrained by available memory. For example, a processor with access to SIMD
+         hardware is free to take advantage of this. This has the practical implication that
+         an application cannot assume there will be zero lookahead in the pipeline, nor that
+         such lookahead will be error-free.</p>
+         <p>The <function>generate-sequence</function> function delivers a sequence of items
+         representing succesive states. There is no constraint on how states are represented; in many cases it will be useful
+         to represent states as records with a method conventionally named <code>next</code> that delivers
+         the next state in the sequence (as in the example using <function>fn:random-number-generator</function>).</p>
+         <p>Although <function>generate-sequence</function> is designed to be capable of delivering an unbounded
+         sequence, it can also be a convenient way of generating a finite sequence. For example,</p>
+         <eg>generate-sequence(., fn{..})</eg>
+         <p>returns the ancestors of a node, ending at the root of the containing tree.</p>
+         <p>An implementation is allowed to place limits on the number of items in a sequence. Even though
+         some operations are defined to be pipelined, there may be constraints such as a limit on the
+         size of the integer returned by <function>fn:position</function>.</p>
+         <p>Operations that consume a sequence in its entirety should be avoided if the sequence
+         might be unbounded. Examples of such operations include:</p>
+         
+         <ulist>
+            <item><p>Aggregation functions such as <function>count</function>, <function>sum</function>, 
+                  <function>string-join</function>, or <function>distinct-values</function>.</p></item>
+            <item><p>Reordering operations, such as <function>sort-by</function>, <function>reverse</function>,
+            the <code>permute</code> method of <function>random-number-generator</function>, or the
+            implicit sort into document order performed by the <code>/</code>, <code>union</code>,
+            <code>intersect</code>, and <code>except</code> operators.</p></item>
+            <item><p>The function <function>last</function>.</p></item>
+            <item><p>Searching operations, such as predicates, <function>index-of</function>,
+            <function>filter</function>, and <function>some</function>,
+                  unless the user has good reason to believe these will always find a match.</p></item>
+            <item><p>Binding an unbounded sequence to a variable.</p></item>
+         </ulist>
+         
+         <p>Using such operations on an unbounded sequence may result in catastrophic failure (for example, running out of memory),
+         or in non-termination.</p>
+         
+         <p>There are a number of ways of reliably processing a bounded subsequence of an unbounded input sequence:</p>
+         
+         <ulist>
+            <item><p>Use of the functions <function>subsequence</function> or <function>slice</function>
+            with a defined end point.</p></item>
+            <item><p>Use of numeric predicates, for example <code>$in[100]</code> or <code>$in[1 to 100]</code>.</p></item>
+            <item><p>Use of the function <function>starts-with-subsequence</function>.</p></item>
+         </ulist>
+      </fos:notes>
+
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>let $array := [1, 3, 4.5, 7, "eight", 10]
+return $array / child::type(xs:integer) =!> jnode-selector()</eg></fos:expression>
+               <fos:result>1, 2, 4, 6</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>let $map := {'Mo': 'Monday', 'Tu': 'Tuesday', 'We': 'Wednesday'}
+return $map / child::get(("Mo", "We", "Fr", "Su")) =!> jnode-selector()</eg></fos:expression>
+               <fos:result>"Mo", "We"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>let $array := [[4, 18], [30, 4, 22]]
+return $array / descendant::*[. > 25] / ancestor-or-self::* =!> jnode-selector()</eg></fos:expression>
+               <fos:result>2, 1</fos:result>
+            </fos:test>
+         </fos:example>
+         
+      </fos:examples>
+      
+      <fos:changes>
+         <fos:change issue="2025" PR="2031" date="2025-06-12"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
 </fos:functions>
