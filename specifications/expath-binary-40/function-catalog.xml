@@ -810,13 +810,121 @@ $value =!> bin:to-octets() => bin:from-octets()
             </fos:example>
         </fos:examples>
     </fos:function>
+    
+    <fos:function name="infer-encoding" prefix="bin">
+        <fos:signatures>
+            <fos:proto name="infer-encoding" return-type="record(encoding as xs:string, offset as xs:integer)">
+                <fos:arg name="value" type="(xs:hexBinary | xs:base64Binary)"/>
+                <fos:arg name="encoding" type="xs:string?" default="()"/>
+            </fos:proto>
+        </fos:signatures>
+        <fos:properties>
+            <fos:property>deterministic</fos:property>
+            <fos:property>context-independent</fos:property>
+            <fos:property>focus-independent</fos:property>
+        </fos:properties>
+        <fos:summary>
+            <p>Examines a binary value that encodes a string, to determine the encoding and the start offset of the content.</p>
+        </fos:summary>
+        <fos:rules>
+            <p>The value for the supplied encoding <var>S</var> is <code>$encoding</code>,
+               or an empty sequence if it is not supplied.</p>
+            <p>The value for the encoding candidate <var>C</var> is determined as follows:</p>
+            <olist>
+                <item><p><code>utf-8</code> if the initial octets are <code>xEF</code>, <code>xBB</code> then <code>xBF</code>;</p></item>
+                <item><p><code>utf-16le</code> if the initial octets are <code>xFF</code> then <code>xFE</code>;</p></item>
+                <item><p><code>utf-16be</code> if the initial octets are <code>xFE</code> then <code>xFF</code>;</p></item>
+                <item><p>otherwise, an encoding that a processor <rfc2119>may</rfc2119> choose,
+                   and that is known to succeed;</p></item>
+                <item><p>otherwise, an empty sequence.</p></item>
+            </olist>
+
+            <p>The effective encoding is chosen as follows:</p>
+            <ulist>
+                <item><p><code>utf-8</code> if both <var>S</var> and <var>C</var> are empty;</p></item>
+                <item><p>otherwise, <var>S</var> if <var>C</var> is empty;</p></item>
+                <item><p>otherwise, <var>C</var> if <var>S</var> is empty,
+                   <var>S</var> equals <var>C</var>, or
+                   <var>S</var> is <code>utf-16</code> and <var>C</var> is <code>utf-16le</code> or
+                   <code>utf-16be</code>.</p></item>
+            </ulist>
+
+            <p>If no effective encoding could be chosen, an error is raised.</p>
+            
+            <p>The effective start position is zero, unless the initial octets represent a byte order mark, in which
+                case the effective start position is the zero-based offset (counting in octets) at which the byte 
+                order mark ends.</p>
+
+            <p>The function returns a record with two fields:</p>
+            
+            <ulist>
+                <item><p><code>encoding</code> contains the effective encoding.</p></item>
+                <item><p><code>offset</code> contains the effective start position.</p></item>
+            </ulist>
+        </fos:rules>
+        <fos:errors>
+            <p><errorref spec="BIN40" code="invalid-encoding"/> is raised if <code>$encoding</code> is
+                invalid for the given input.</p>
+            <p><errorref spec="BIN40" code="unknown-encoding"/> is raised if <code>$encoding</code> is
+                invalid or not supported by the implementation.</p>
+        </fos:errors>
+        <fos:notes>
+            <p>The function is designed to be used in conjunction with <function>bin:decode-string</function>.
+            Having established an encoding and a start offset, these can be used as arguments to the
+            <function>bin:decode-string</function> function to decode the data.</p>
+            <p>Unlike functions such as <function>fn:unparsed-text</function>, this function does
+            not have access to external data such as HTTP headers that might assist in establishing the encoding.</p>
+        </fos:notes>
+            
+        <fos:examples>
+            <fos:example>
+                <fos:test>
+                    <fos:expression>bin:infer-encoding(bin:hex('41 42 43'))</fos:expression>
+                    <fos:result>{ "encoding":"utf-8", "offset":0 }</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:infer-encoding(bin:hex('EFBBBF 41 42 43'))</fos:expression>
+                    <fos:result>{ "encoding":"utf-8", "offset":3 }</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:infer-encoding(bin:hex('FEFF 0041 0042 0043'))</fos:expression>
+                    <fos:result>{ "encoding":"utf-16be", "offset":2 }</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:infer-encoding(bin:hex('0041 0042 0043', "utf-16be"))</fos:expression>
+                    <fos:result>{ "encoding":"utf-16be", "offset": }</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:infer-encoding(bin:hex('FFFE 4100 4200 4300'))</fos:expression>
+                    <fos:result>{ "encoding":"utf-16le", "offset":2 }</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:infer-encoding(bin:hex('FFFE 4100 4200 4300'), 'utf-16')</fos:expression>
+                    <fos:result>{ "encoding":"utf-16le", "offset":2 }</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression><eg>let $input := bin:hex('FFFE 4100 4200 4300')
+let ${$encoding, $offset} := bin:infer-encoding($input)
+return bin:decode-string($input, $encoding, $offset)</eg></fos:expression>
+                    <fos:result>"ABC"</fos:result>
+                </fos:test>
+                
+            </fos:example>
+
+        </fos:examples>
+        <fos:changes>
+            <fos:change issue="2278" date="2025-11-12">
+                <p>New in 4.0</p>
+            </fos:change>
+        </fos:changes>
+    </fos:function>
 
     <fos:function name="decode-string" prefix="bin">
         <fos:signatures>
             <fos:proto name="decode-string" return-type="xs:string?">
                 <fos:arg name="value" type="(xs:hexBinary | xs:base64Binary)?"/>
                 <fos:arg name="encoding" type="xs:string?" default="()"/>
-                <fos:arg name="offset" type="xs:integer?" default="0"/>
+                <fos:arg name="offset" type="xs:integer?" default="()"/>
                 <fos:arg name="size" type="xs:integer?" default="()"/>
             </fos:proto>
         </fos:signatures>
@@ -829,44 +937,29 @@ $value =!> bin:to-octets() => bin:from-octets()
             <p>Decodes a binary value as a string.</p>
         </fos:summary>
         <fos:rules>
-            <p>If the value of <code>$value</code> is the empty sequence, the function returns an empty
-                sequence.</p>
-            <p>The encoding candidate <var>E</var> is the value of the <code>$encoding</code> argument,
-               if present.
-               The values for this option follow the same rules as for the <code>encoding</code> attribute
-               in an XML declaration. The values which an implementation is <rfc2119>required</rfc2119>
-               to recognize are <code>utf-8</code>, <code>utf-16</code>, <code>utf-16le</code>,
-               and <code>utf-16be</code>.</p>
+            <p>If the value of <code>$value</code> is the empty sequence, the function returns an
+                empty sequence.</p>
+            <p>If <code>$offset</code> or <code>$size</code> is non-empty, the effective value is
+               computed by invoking <code>bin:part($value, $offset otherwise 0, $size)</code>.
+               Otherwise, it is <code>$value</code>.</p>
 
-            <p>The effective encoding is determined as follows:</p>
-            <olist>
-               <item><p>If an <code>$offset</code> other than <code>0</code> is provided:</p>
-                   <olist>
-                       <item><p>If <var>E</var> is present and is not <code>utf-16</code>, then <var>E</var>;</p></item>
-                       <item><p>If <var>E</var> is present and is <code>utf-16</code>, then <code>utf-16be</code>;</p></item>
-                       <item><p>If <var>E</var> is absent, then <code>utf-8</code>;</p></item>
-                   </olist>
-               </item>
-               <item><p>Otherwise, it is chosen as described for <code>fn:unparsed-text</code> in
-                  <bibref ref="xpath-functions-40"/>. If a UTF encoding is determined,
-                  a byte order mark at the beginning of the input is ignored.</p></item>
-            </olist>
+            <p>The <code>$encoding</code> argument, if present, follows the same rules as for the
+               <code>encoding</code> attribute in an XML declaration. The values which an
+               implementation is <rfc2119>required</rfc2119> to recognize are <code>utf-8</code>,
+               <code>utf-16</code>, <code>utf-16le</code>, and <code>utf-16be</code>.</p>
 
-            <p>If <code>$offset</code> and <code>$size</code> are provided, the <code>$size</code>
-                octets from <code>$offset</code> are decoded.
-                <code>$offset</code> is zero based. If <code>$offset</code> alone is
-                provided, octets from <code>$offset</code> to the end are decoded.
-                If present, the values <rfc2119>must</rfc2119> be non-negative integers.
-                If neither <code>$offset</code> nor <code>$size</code> is provided, the
-                entire octet sequence is decoded.</p>
-
-            <p>The result of the function is a string representation of the binary value,
-               decoded according to the effective encoding.</p>
+            <p>The effective encoding and start position is determined by invoking
+               <function>bin:infer-encoding</function> with the effective value and
+               <code>$encoding</code>.</p>
+            <p>The result of the function is a string representation of the effective value,
+               starting at the effective offset, and decoded according to the effective encoding.</p>
         </fos:rules>
         <fos:errors>
             <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$offset</code> is
                 negative or <code>$offset + $size</code> is larger than the size of the binary data
                 of <code>$value</code>.</p>
+            <p><errorref spec="BIN40" code="invalid-encoding"/> is raised if <code>$encoding</code> is
+                invalid for the given input.</p>
             <p><errorref spec="BIN40" code="negative-size"/> is raised if <code>$size</code> is
                 negative.</p>
             <p><errorref spec="BIN40" code="unknown-encoding"/> is raised if <code>$encoding</code> is
@@ -889,10 +982,6 @@ $value =!> bin:to-octets() => bin:from-octets()
                     <fos:result>"ABC"</fos:result>
                 </fos:test>
                 <fos:test>
-                    <fos:expression>bin:decode-string(bin:hex('FEFF 0041 0042 0043'))</fos:expression>
-                    <fos:result>"ABC"</fos:result>
-                </fos:test>
-                <fos:test>
                     <fos:expression>bin:decode-string(bin:hex('FFFE 4100 4200 4300'))</fos:expression>
                     <fos:result>"ABC"</fos:result>
                     <fos:postamble>Little-endian byte order is used because of the BOM at the start
@@ -907,21 +996,11 @@ $value =!> bin:to-octets() => bin:from-octets()
                     <fos:result>"B"</fos:result>
                 </fos:test>
                 <fos:test>
-                    <fos:expression>bin:decode-string(bin:hex('41 42 43 44'), (), 3)</fos:expression>
-                    <fos:result>"D"</fos:result>
-                </fos:test>
-                <fos:test>
                     <fos:expression>bin:decode-string(bin:hex('41 42 43 44'), 'utf-8', 3)</fos:expression>
                     <fos:result>"D"</fos:result>
                 </fos:test>
                 <fos:test>
                     <fos:expression>bin:decode-string(bin:hex('EFBBBF 41 42 43 44'), (), 3)</fos:expression>
-                    <fos:result>"ABCD"</fos:result>
-                    <fos:postamble>If a non-zero offset is provided, the byte order mark is
-                       ignored.</fos:postamble>
-                </fos:test>
-                <fos:test>
-                    <fos:expression>bin:decode-string(bin:hex('EFBBBF 41 42 43 44'), 'utf-8', 3)</fos:expression>
                     <fos:result>"ABCD"</fos:result>
                 </fos:test>
             </fos:example>
@@ -933,8 +1012,8 @@ $value =!> bin:to-octets() => bin:from-octets()
             </fos:example>
         </fos:examples>
         <fos:changes>
-            <fos:change issue="2217" PR="2222" date="2025-10-27">
-                <p>The encoding rules have been aligned with <code>fn:unparsed-text</code>.</p>
+            <fos:change issue="2217" PR="2222" date="2025-12-01">
+                <p>The revised encoding rules take byte order marks into account.</p>
             </fos:change>
         </fos:changes>
     </fos:function>
