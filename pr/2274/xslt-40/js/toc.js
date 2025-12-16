@@ -24,12 +24,12 @@
     let inner = "";
     if (added) {
       if (changed) {
-        inner = "<span style='font-size: 120%'>\u202F✚✭</span>";
+        inner = "&#xa0;<span style='font-size: 120%'>\u202F✚✭</span>";
       } else {
-        inner = "<span style='font-size: 120%'>\u202F✚</span>";
+        inner = "&#xa0;<span style='font-size: 120%'>\u202F✚</span>";
       }
     } else if (changed) {
-      inner = "<span style='font-size: 120%'>\u202F✭</span>";
+      inner = "&#xa0;<span style='font-size: 120%'>\u202F✭</span>";
     }
     target.innerHTML = inner;
   }
