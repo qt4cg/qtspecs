@@ -1479,6 +1479,7 @@
       <xsl:otherwise>
         <xsl:call-template name="unwrap-p">
           <xsl:with-param name="content" select="$content[position() gt 1]"/>
+          <xsl:with-param name="atts" select="$atts"/>
           <xsl:with-param name="accumulator" select="($accumulator, $content[1])"/>
         </xsl:call-template>
       </xsl:otherwise>
