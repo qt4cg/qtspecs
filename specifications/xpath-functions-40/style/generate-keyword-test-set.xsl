@@ -37,6 +37,7 @@
          <xsl:comment>Generated using generate-keyword-test-set.xsl from function-catalog.xml at {current-dateTime()}</xsl:comment>
          <environment name="ka">
             <namespace prefix="math" uri="http://www.w3.org/2005/xpath-functions/math"/>
+            <namespace prefix="output" uri="http://www.w3.org/2010/xslt-xquery-serialization"/>
             <decimal-format name="data" decimal-separator="." grouping-separator=","/>
             <source role="." file="BuiltInKeywords/simple-doc.xml"/>
          </environment>
