@@ -44,7 +44,7 @@
 
   <xsl:key name="error" match="error" use="concat(@class,@code)"/>
   <xsl:key name="bibrefs" match="bibref" use="@ref"/>
-
+  <xsl:key name="loc" match="loc" use="@href"/>
 
   <xsl:param name="specdoc" select="'XX'"/>
 
@@ -2116,6 +2116,25 @@
     </ol>
   </xsl:template>
   
- 
+  <xsl:template match="processing-instruction('at-risk')" expand-text="yes">
+    <xsl:if test="key('loc', '#at-risk')">
+      <p id='at-risk'>As the Community Group moves towards publishing dated,
+      stable drafts, some features that the group thinks may likely be
+      removed or substantially changed are marked “at risk” in their changes
+      section. In this draft:</p>
+      <ul>
+        <xsl:for-each select="key('loc', '#at-risk')">
+          <xsl:variable
+              name="div"
+              select="(ancestor::div1|ancestor::div2|ancestor::div3|ancestor::div4|ancestor::div5)[last()]"/>
+          <li>
+            <a href="#{$div/@id}">
+              <xsl:apply-templates select="$div/head/node()"/>
+            </a>
+          </li>
+        </xsl:for-each>
+      </ul>
+    </xsl:if>
+  </xsl:template>
 
 </xsl:stylesheet>
