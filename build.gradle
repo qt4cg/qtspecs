@@ -141,8 +141,10 @@ task saxon_config(
       cfg.println("               edition='EE'")
       cfg.println("               licenseFileLocation='${projectDir}/lib/saxon-license.lic'/>")
     } else {
+      // We request EE even if we don't have a license; the fos.scm file
+      // is compiled such that it can be used without a license file
       cfg.println("<configuration xmlns='http://saxon.sf.net/ns/configuration'")
-      cfg.println("               edition='HE'/>")
+      cfg.println("               edition='EE'/>")
     }
     cfg.close();
   }
@@ -184,14 +186,24 @@ task "publish-expath-40"(dependsOn: ["binary_40", "file_40"]) {
   def expanded = "${buildDir}/expanded/$shortName/$shortName-functions-40.xml" 
   def wwwDir = "${buildDir}/www/expath-$shortName-40"
   def specName = ("$shortName" == "binary") ? "BIN40" : "FILE40"
-   
+
+  task "validate_${shortName}_function_catalog"(
+    type: JavaExec
+  ) {   
+    // Validate the function catalog
+    classpath = configurations.transform
+    mainClass = "com.saxonica.Validate"
+    args "-xsd:${projectDir}/specifications/xpath-functions-40/src/fos.scm",
+      "-s:${projectDir}/specifications/EXPath/${shortName}/src/function-catalog.xml"
+  }
+
   task "${shortName}_40"(
     group: "Specifications",
     description: "Build the EXPath ${shortName} 4.0 specification",
     dependsOn: ["${shortName}_xml", "${shortName}_html",
+                "validate_${shortName}_function_catalog",
                 "${shortName}_resources", "${shortName}_generate_tests"]
   ) {
-    // Just somewhere to hang dependencies
   }
   
   task "etc_${specName}"(
@@ -343,12 +355,22 @@ task "publish-expath-40"(dependsOn: ["binary_40", "file_40"]) {
 
 // ============================================================
 
+task "validate_xpath_functions_function_catalog"(
+  type: JavaExec
+) {   
+  // Validate the function catalog
+  classpath = configurations.transform
+  mainClass = "com.saxonica.Validate"
+  args "-xsd:${projectDir}/specifications/xpath-functions-40/src/fos.scm",
+    "-s:${projectDir}/specifications/xpath-functions-40/src/function-catalog.xml"
+}
+
 task xpath_functions_40(
   group: "Specifications",
   description: "Build the XPath Functions and Operators 4.0 specification",
-  dependsOn: ["fo_xml", "fo_html", "fo_resources", "fo_generate_tests"]
+  dependsOn: ["validate_xpath_functions_function_catalog", 
+              "fo_xml", "fo_html", "fo_resources", "fo_generate_tests"]
 ) {
-  // Just somewhere to hang dependencies
 }
 
 task common_sources(
@@ -519,13 +541,22 @@ task grammar_40(
 
 // ============================================================
 
+task "validate_xslt_function_catalog"(
+  type: JavaExec
+) {   
+  // Validate the function catalog
+  classpath = configurations.transform
+  mainClass = "com.saxonica.Validate"
+  args "-xsd:${projectDir}/specifications/xpath-functions-40/src/fos.scm",
+    "-s:${projectDir}/specifications/xslt-40/src/function-catalog.xml"
+}
+
 task xslt_40(
   group: "Specifications",
   description: "Build the XSLT 4.0 specification",
   dependsOn: ["xslt_grammar", "xslt_merge_catalog", "xslt_resources",
-              "xslt_html", "xslt_xml"]
+              "validate_xslt_function_catalog", "xslt_html", "xslt_xml"]
 ) {
-  // Just somewhere to hang dependencies
 }
 
 task xslt_grammar(
@@ -1448,6 +1479,21 @@ task etc_SE40(
   }
 }
 
+
+// ============================================================
+
+// You need a Saxon license key with the DMK feature to usefully run this task.
+task "updateSEF"(
+  type: JavaExec,
+  dependsOn: ["saxon_config"]
+) {
+  classpath = configurations.transform
+  mainClass = "com.saxonica.Validate"
+  args "-config:${buildDir}/config.xml",
+    "-xsd:${projectDir}/specifications/xpath-functions-40/src/fos.xsd",
+    "-export:${projectDir}/specifications/xpath-functions-40/src/fos.scm"
+}
+
 // ============================================================
 
 public void transform(String input, String stylesheet, String output) {
@@ -1533,14 +1579,6 @@ public void xmlvalidate(String input) {
     classpath = configurations.transform
     mainClass = "com.nwalsh.parsers.XJParse"
     args "-v", input
-  }
-}
-
-// ============================================================
-
-task helloWorld() {
-  doLast {
-    println("Hello, world.")
   }
 }
 
