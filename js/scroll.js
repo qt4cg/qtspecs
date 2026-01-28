@@ -213,7 +213,7 @@ class DXmlView {
   view_both() {
     this.restore_view();
     this.all_diff.forEach(span => {
-      let displayType= this.displayType(span);
+      let displayType = this.displayType(span);
       if (this.new_classes.includes(span.className)) {
         span.style.display = displayType;
         span.style.background = ADDED
@@ -364,10 +364,10 @@ class DXmlView {
   }
 
   tidy_change_markup(node, depth) {
-    //console.log(`WALK: ${node.nodeName} ${depth}`);
-
     let status = node.classList.contains("deltaxml-new") ? "new"
       : (node.classList.contains("deltaxml-old") ? "old" : "undecided")
+
+    //console.log(`WALK: ${node.nodeName} ${depth} ${status}`);
 
     if (status == "undecided") {
       for (const child of node.children) {
@@ -382,7 +382,20 @@ class DXmlView {
         //console.log(`  ?? ${node.nodeName}: ${markOld}/${markNew}`)
       }
 
-      if (markOld && markNew) {
+      let propagateUp = true
+      for (const child of node.childNodes) {
+        if (child.nodeType == Node.ELEMENT_NODE) {
+          if (!child.classList.contains("deltaxml-new") && !child.classList.contains("deltaxml-old")) {
+            propagateUp = false;
+            break;
+          }
+        } else {
+          propagateUp = false;
+          break;
+        }          
+      }
+
+      if (!propagateUp || (markOld && markNew)) {
         status = "undecided";
       } else if (markOld) {
         status = "old";
