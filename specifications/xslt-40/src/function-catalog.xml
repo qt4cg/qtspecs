@@ -1114,7 +1114,7 @@
       <fos:signatures>
          <fos:proto name="document" return-type="node()*">
             <fos:arg name="uri-sequence" type="item()*" usage="absorption"/>
-            <fos:arg name="base-node" type="node()?" default="()" usage="inspection"/>
+            <fos:arg name="options" type="(map(*)|node())?" default="map{}" usage="inspection"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties arity="1">
@@ -1133,9 +1133,167 @@
       <fos:rules>
          <p>The <function>document</function> function allows access to XML documents identified by
             a URI.</p>
-         <p>The first argument contains a sequence of URI references. The second argument, if
-            present, is a node whose base URI is used to resolve any relative URI references
+         <p>The first argument contains a sequence of URI references. These are resolved
+            as described below.</p>
+               
+         <p>The second argument, if present, may be either a node, or an options map. 
+            Supplying a node is allowed for backwards compatibility: the effect of supplying a node <code>$N</code>
+            is the same as supplying the map <code>{"base-uri": fn:base-uri($N)}</code>.
+            The effect is that the base URI of the node is used to resolve any relative URI references
             contained in the first argument.</p>
+               
+         <p>If the second argument is supplied as a map, then the 
+            <xtermref spec="FO40" ref="option-parameter-conventions"/> apply. The options available are as follows, and
+         apply to each of the documents constructed by the function:</p>
+                  
+         
+         <fos:options>
+            <fos:option key="base-uri">
+                  <fos:meaning>Determines the base URI used to resolve any relative URI supplied
+                     in the first argument. This in turn affects the base URI of the constructed
+                     document.
+                  </fos:meaning>
+                  <fos:type>xs:anyURI</fos:type>
+                  <fos:default>Where the first argument supplies a node, the base URI property of that node is used
+                     to resolve the URI. Where the first argument supplies an atomic value,
+                     the static base URI of the function call is used.</fos:default>
+            </fos:option>
+            <fos:option key="trusted">
+               <fos:meaning>Indicates whether processing the document may cause other
+                  external resources to be fetched (including, for example, external entities, an external DTD,
+                  or documents referenced using <code>xsi:schemaLocation</code> or
+                  XInclude elements).</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false()</fos:default>
+               <fos:values>
+                  <fos:value value="true">The document may include references to other external
+                     resources.
+                  </fos:value>
+                  <fos:value value="false">The document must not include references to other
+                     external resources unless access to these resources has been explicitly
+                     enabled.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="dtd-validation">
+               <fos:meaning>Determines whether DTD validation takes place.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="true">The input is parsed using a validating XML parser.
+                  The input must contain a <code>DOCTYPE</code> declaration to identify
+                  the DTD to be used for validation. The DTD may be internal or external.
+                  </fos:value>
+                  <fos:value value="false">DTD validation does not take place. However, if a
+                     <code>DOCTYPE</code> declaration is present, then it is read, for example
+                     to perform entity expansion.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="stable">
+               <fos:meaning>Determines whether two calls on the <function>document</function> function,
+               with the same URI, the same options, and the same context, are guaranteed to return
+               the same document node. The default value is <code>true</code>, but this may be overridden
+               by implementation-defined configuration options.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>true</fos:default>
+               <fos:values>
+                  <fos:value value="true">Given the same explicit and implicit arguments, multiple
+                     calls return the same document node: that is, the function is <termref def="dt-deterministic"/>.
+                  </fos:value>
+                  <fos:value value="false">Multiple calls with the same explicit and implicit arguments
+                     may return the same document node or different document nodes at the discretion of
+                     the implementation.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="strip-space">
+               <fos:meaning>Determines whether whitespace-only text nodes are removed
+                  from the resulting document.
+               </fos:meaning>
+               <fos:type>xs:boolean?</fos:type>
+               <fos:default>true</fos:default>
+               <fos:values>
+                  <fos:value value="true">Whitespace stripping is to take place according 
+                     to the <elcode>xsl:strip-space</elcode>
+                  and <elcode>xsl:preserve-space</elcode> declarations of the containing <termref def="dt-package"/>:
+                     see <specref ref="strip"/>.
+                  </fos:value>
+                  <fos:value value="false">All whitespace-only text nodes are preserved,
+                  unless either (a) DTD validation marks them as ignorable, or (b) XSD validation recognizes
+                  the containing element as having element-only or empty content.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="xinclude">
+               <fos:meaning>Determines whether any <code>xi:include</code> elements in the input
+                  are to be processed using an XInclude processor.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="true">Any <code>xi:include</code> elements are expanded. If there are
+                     <code>xi:include</code> elements and no XInclude processor is available then 
+                     a dynamic error is raised.
+                  </fos:value>
+                  <fos:value value="false">Any <code>xi:include</code> elements are handled as
+                     ordinary elements without expansion.
+                  </fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="xsd-validation">
+               <fos:meaning>Determines whether XSD validation takes place, using the
+                  schema definitions present in the static context. The effect of requesting
+               validation is the same as invoking the <function>document</function> function without
+               validation, and then applying the instruction <elcode>xsl:copy-of</elcode> to the result,
+               with corresponding <code>validation</code> and <code>type</code> options,
+               using the schema identified in the <code>schema</code> option if specified.</fos:meaning>
+               <fos:type>xs:string</fos:type>
+               <fos:default>"skip"</fos:default>
+               <fos:values>
+                  <fos:value value="strict">Strict XSD validation takes place</fos:value>
+                  <fos:value value="lax">Lax XSD validation takes place</fos:value>
+                  <fos:value value="skip">No XSD validation takes place</fos:value>
+                  <fos:value value="type Q{uri}local">XSD validation takes place against the
+                  schema-defined type, present in the selected schema, that has the given URI
+                  and local name.</fos:value>
+               </fos:values>
+            </fos:option>
+            <fos:option key="use-xsi-schema-location">
+               <fos:meaning>When XSD validation takes place, determines whether
+                  schema components referenced using <code>xsi:schemaLocation</code> or <code>xsi:noNamespaceSchemaLocation</code>
+                  attributes within the source document are to be used. The option is ignored
+                  if XSD validation does not take place.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>false</fos:default>
+               <fos:values>
+                  <fos:value value="true">XSD validation uses the schema components referenced 
+                  using <code>xsi:schemaLocation</code> or <code>xsi:noNamespaceSchemaLocation</code>
+                  attributes in addition to the schema components present in the static context;
+                  these components must be compatible as described in <xspecref spec="DM40" ref="schema-consistency"/>.</fos:value>
+                  <fos:value value="false">Any <code>xsi:schemaLocation</code> and <code>xsi:noNamespaceSchemaLocation</code>
+                  attributes in the document are ignored.</fos:value>
+                 
+               </fos:values>
+            </fos:option>
+            <fos:option key="schema">
+               <fos:meaning>When XSD validation takes place, identifies the schema to be used for validation.
+               If supplied, the value must match the <code>role</code> attribute of an <elcode>xsl:import-schema</elcode>
+                  declaration in the containing <termref def="dt-package"/>. A zero-length string refers to the
+                  schema imported using an <elcode>xsl:import-schema</elcode> declaration with no <code>role</code>
+                  attribute.
+               </fos:meaning>
+               <fos:type>xs:NCName</fos:type>
+               <fos:default>The schema in the static context of the fn:document
+               function call (determined by the innermost element with an [xsl:]schema-role
+                  attribute if present).</fos:default>
+               
+            </fos:option>
+         </fos:options>      
+               
+            
+               
+               
+               
          <p>A sequence of absolute URI references is obtained as follows.</p>
          <ulist>
             <item>
@@ -1143,15 +1301,18 @@
                      <code>xs:string</code>, <code>xs:anyURI</code>, or
                      <code>xs:untypedAtomic</code>, the value is cast to <code>xs:anyURI</code>. If
                   the resulting URI reference is an absolute URI reference then it is used <emph>as
-                     is</emph>. If it is a relative URI reference, then it is resolved as follows:</p>
+                     is</emph>. If it is a relative URI reference <var>R</var>, then it is resolved as follows:</p>
                <olist>
                   <item>
-                     <p>If <code>$base-node</code> is supplied 
-                        <phrase diff="add" at="2023-02-16">(that is, if the argument is present and non-empty)</phrase>, 
-                        then it is resolved against the base URI of <code>$base-node</code>.</p>
+                     <p>If the second argument <code>$options</code> is an XNode, 
+                        then <var>R</var> is resolved against the base URI of that node.</p>
                   </item>
                   <item>
-                     <p>Otherwise it is resolved against the static base URI from the static context of the
+                     <p>If <code>$options</code> is supplied as a map and includes a value for the
+                     <code>base-uri</code> option, then <var>R</var> is resolved against that URI.</p>
+                  </item>
+                  <item>
+                     <p>Otherwise <var>R</var> is resolved against the static base URI from the static context of the
                   expression containing the call to the <function>document</function> function. In cases where the source
                   code of the stylesheet is available at execution time, this will typically be the location of the
                   relevant stylesheet module.</p>
@@ -1160,13 +1321,28 @@
      
             </item>
             <item>
-               <p>For an item in <code>$uri-sequence</code> that is a node, the node is <termref def="dt-atomization">atomized</termref>. The result <rfc2119>must</rfc2119> be
+               <p>For an item in <code>$uri-sequence</code> that is a node <var>N</var>, 
+                  the node is <termref def="dt-atomization">atomized</termref>. The result <rfc2119>must</rfc2119> be
                   a sequence whose items are all instances of <code>xs:string</code>,
                      <code>xs:anyURI</code>, or <code>xs:untypedAtomic</code>. Each of these values
                   is cast to <code>xs:anyURI</code>, and if the resulting URI reference is an
                   absolute URI reference then it is used <emph>as is</emph>. If it is a relative URI
-                  reference, then it is resolved against the base URI of <code>$base-node</code> if
-                  supplied, or against the base URI of the node that contained it otherwise.</p>
+                  reference <var>R</var>, then it is resolved as follows:</p>
+               
+               <olist>
+                  <item>
+                     <p>If the second argument <code>$options</code> is an XNode, 
+                        then <var>R</var> is resolved against the base URI of that node.</p>
+                  </item>
+                  <item>
+                     <p>If <code>$options</code> is supplied as a map and includes a value for the
+                     <code>base-uri</code> option, then <var>R</var> is resolved against that URI.</p>
+                  </item>
+                  <item>
+                     <p>Otherwise <var>R</var> is resolved against the base URI of <var>N</var>.</p>
+                  </item>
+               </olist>
+               
             </item>
             <item>
                <p>A relative URI is resolved against a base URI using the rules of the <xfunction>resolve-uri</xfunction>
@@ -1179,7 +1355,7 @@
                      <code>xs:untypedAtomic</code> then a type error is raised <xerrorref spec="XP40" class="TY" code="0004"/>. </p>
             </item>
          </ulist>
-
+            
          <p>Each of these absolute URI references is then processed as follows. Any fragment
             identifier that is present in the URI reference is removed, and the resulting absolute
             URI is cast to a string and then passed to the <xfunction>doc</xfunction> function
@@ -1249,6 +1425,9 @@
             sequence of nodes may be supplied, and the first node in the sequence will be used.</p>
 
       </fos:notes>
+      <fos:changes>
+         <fos:change issue="2292"><p>An options parameter has been added.</p></fos:change>
+      </fos:changes>
    </fos:function>
 
    <fos:function name="unparsed-entity-uri">
