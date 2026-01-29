@@ -9,7 +9,7 @@
                 expand-text="yes"
                 version="3.0">
 
-<xsl:output method="xml" encoding="utf-8" indent="no"/>
+<xsl:output method="html" version="5.0" encoding="utf-8" indent="no"/>
 <xsl:strip-space elements="*"/>
 
 <xsl:param name="grammar" as="xs:string" select="'xpath40'"/>
@@ -37,9 +37,16 @@
       <link rel="stylesheet" href="grammar.css"/>
     </head>
     <body>
-      <h1>{$display-name} Grammar</h1>
+      <div class="ribbon">
+        <nav>
+          <a href="../index.html">Grammar Explorer</a>
+        </nav>
+      </div>
+      <main>
+        <h1>{$display-name} Grammar</h1>
 
-      <xsl:apply-templates select="$xml-grammar"/>
+        <xsl:apply-templates select="$xml-grammar"/>
+      </main>
     </body>
   </html>
 </xsl:template>
@@ -58,6 +65,7 @@
     <tbody>
       <xsl:apply-templates select="$productions[@name=$name]"/>
       <xsl:for-each select="distinct-values($productions/@name/string())">
+        <!-- Q: group character classes and append to the end of the list? -->
         <xsl:sort select="upper-case(.)"/>
         <xsl:if test=". != $name">
           <xsl:variable name="pname" select="."/>
@@ -72,22 +80,20 @@
   <xsl:variable name="name" select="@name/string()"/>
 
   <tr>
-    <td>
+    <td class="rule">
       <code id="{$name}">
         <a href="{$name}.html">
           <xsl:value-of select="$name"/>
         </a>
       </code>
     </td>
-    <td>
+    <td class="assign">
       <code>::=</code>
     </td>
-    <td>
-      <span class="rhs">
-        <xsl:call-template name="m:sequence">
-          <xsl:with-param name="parens" select="false()"/>
-        </xsl:call-template>
-      </span>
+    <td class="rhs">
+      <xsl:call-template name="m:sequence">
+        <xsl:with-param name="parens" select="false()"/>
+      </xsl:call-template>
     </td>
   </tr>
 
@@ -98,28 +104,29 @@
         <link rel="stylesheet" href="grammar.css"/>
       </head>
       <body>
-        <nav>
-          <a href="index.html#{$name}">Grammar</a>
-        </nav>
+        <div class="ribbon">
+          <nav>
+            <a href="index.html#{$name}">Grammar</a>
+          </nav>
+        </div>
         <header>
           <h1>{$display-name} <code><xsl:value-of select="$name"/></code></h1>
         </header>
+        <main>
         <table>
           <tbody>
             <tr>
-              <td>
+              <td class="rule">
                 <code>
                   <xsl:value-of select="$name"/>
                 </code>
               </td>
-              <td>::=</td>
-              <td>
-                <span class="rhs">
-                  <xsl:call-template name="m:sequence">
-                    <xsl:with-param name="parens" select="false()"/>
-                    <xsl:with-param name="relative" select="false()" tunnel="true"/>
-                  </xsl:call-template>
-                </span>
+              <td class="assign"><code>::=</code></td>
+              <td class="rhs">
+                <xsl:call-template name="m:sequence">
+                  <xsl:with-param name="parens" select="false()"/>
+                  <xsl:with-param name="relative" select="false()" tunnel="true"/>
+                </xsl:call-template>
               </td>
             </tr>
           </tbody>
@@ -154,6 +161,7 @@
             </div>
           </xsl:for-each>
         </xsl:if>
+        </main>
       </body>
     </html>
   </xsl:result-document>
@@ -200,9 +208,9 @@
 
 <xsl:template match="g:choice">
   <span class="choice">
-    <span class="paren oparen">(</span>
+    <span class="paren opening">(</span>
     <xsl:call-template name="m:choice"/>
-    <span class="paren cparen">)</span>
+    <span class="paren closing">)</span>
   </span>
 </xsl:template>
 
@@ -229,7 +237,7 @@
 </xsl:template>
 
 <xsl:template match="g:charClass">
-  <code>
+  <code class="bracket opening">
     <xsl:text>[</xsl:text>
     <xsl:if test="../g:complement">
       <xsl:text>^</xsl:text>
@@ -238,7 +246,7 @@
   <span class="charClass">
     <xsl:apply-templates/>
   </span>
-  <code>]</code>
+  <code class="bracket closing">]</code>
 </xsl:template>
 
 <xsl:template match="g:char">
@@ -267,15 +275,15 @@
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@minValue"/>
       <xsl:text>;</xsl:text>
+      <xsl:sequence select="f:show-char(@minValue)"/>
     </code>
-    <xsl:sequence select="f:show-char(@minValue)"/>
     <xsl:text>-</xsl:text>
     <code>
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@maxValue"/>
       <xsl:text>;</xsl:text>
+      <xsl:sequence select="f:show-char(@maxValue)"/>
     </code>
-    <xsl:sequence select="f:show-char(@maxValue)"/>
   </span>
   <xsl:text> </xsl:text>
 </xsl:template>
@@ -309,7 +317,7 @@
   <xsl:param name="parens" as="xs:boolean" select="true()"/>
 
   <xsl:if test="$parens and count(*) gt 1">
-    <span class="paren oparen">(</span>
+    <span class="paren opening">(</span>
   </xsl:if>
 
   <xsl:for-each select="*">
@@ -320,7 +328,7 @@
   </xsl:for-each>
 
   <xsl:if test="$parens and count(*) gt 1">
-    <span class="paren cparen">)</span>
+    <span class="paren closing">)</span>
   </xsl:if>
 </xsl:template>
 
@@ -352,8 +360,8 @@
   <xsl:param name="spechref" as="xs:string" tunnel="yes"/>
 
   <!-- The XSLT spec has an un-headed div2; so special case... -->
-  <xsl:variable name="current" select="(scrap/prod[lhs=$name]
-                                       |scrap/prodgroup/prod[lhs=$name]
+  <xsl:variable name="current" select="( scrap/prod[lhs=$name]
+                                       | scrap/prodgroup/prod[lhs=$name]
                                        | div1[not(head)]//prod[lhs=$name]
                                        | div2[not(head)]//prod[lhs=$name]
                                        | div3[not(head)]//prod[lhs=$name]
