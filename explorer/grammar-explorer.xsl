@@ -54,7 +54,7 @@
   <xsl:variable name="productions"
                 select="$xml-grammar/g:production|$xml-grammar/g:token"/>
 
-  <table>
+  <table class="grammar">
     <tbody>
       <xsl:apply-templates select="$productions[@name=$name]"/>
       <xsl:for-each select="distinct-values($productions/@name/string())">
@@ -255,7 +255,9 @@
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@value"/>
       <xsl:text>;</xsl:text>
+      <xsl:sequence select="f:show-char(@value)"/>
     </code>
+    <xsl:text> </xsl:text>
   </span>
 </xsl:template>
 
@@ -266,13 +268,16 @@
       <xsl:value-of select="@minValue"/>
       <xsl:text>;</xsl:text>
     </code>
+    <xsl:sequence select="f:show-char(@minValue)"/>
     <xsl:text>-</xsl:text>
     <code>
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@maxValue"/>
       <xsl:text>;</xsl:text>
     </code>
+    <xsl:sequence select="f:show-char(@maxValue)"/>
   </span>
+  <xsl:text> </xsl:text>
 </xsl:template>
 
 <xsl:template match="g:charRange">
@@ -488,6 +493,259 @@
   <xsl:param name="element" as="element()"/>
   <xsl:sequence select="(empty($element/@if) or contains-token($element/@if, $grammar))
                         and not(contains-token($element/@not-if, $grammar))"/>
+</xsl:function>
+
+<xsl:function name="f:hex-to-decimal" as="xs:integer">
+  <xsl:param name="hex" as="xs:string"/>
+
+  <xsl:variable name="zero" select="string-to-codepoints('0')"/>
+  <xsl:variable name="nine" select="string-to-codepoints('9')"/>
+  <xsl:variable name="A" select="string-to-codepoints('A')"/>
+
+  <xsl:iterate select="reverse(string-to-codepoints(upper-case($hex)))">
+    <xsl:param name="decimal" select="0" as="xs:integer"/>
+    <xsl:param name="power" select="1"/>
+
+    <xsl:on-completion select="$decimal"/>
+    
+    <xsl:variable name="digit" select="if (. gt $nine) then (. - $A + 10) else . - $zero"/>
+
+    <xsl:next-iteration>
+      <xsl:with-param name="decimal" select="$decimal + ($digit * $power)"/>
+      <xsl:with-param name="power" select="$power * 16"/>
+    </xsl:next-iteration>
+  </xsl:iterate>
+</xsl:function>
+
+<xsl:function name="f:show-char">
+  <xsl:param name="hex" as="xs:string"/>
+
+  <xsl:variable name="decimal" select="f:hex-to-decimal($hex)"/>
+  <xsl:if test="f:show($decimal)">
+    <span class="ch">
+      <xsl:value-of select="codepoints-to-string($decimal)"/>
+    </span>
+  </xsl:if>
+</xsl:function>
+
+<xsl:function name="f:show" as="xs:boolean">
+  <xsl:param name="decimal" as="xs:integer"/>
+
+  <!-- What a hack! But it was easy to generate. -->
+  <xsl:choose>
+    <!-- Avoid "not a character" and other specials -->
+    <xsl:when test="$decimal = (65529, 65530, 65531, 65532, 65533, 65534, 65535)">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <!-- Avoid combining characters -->
+    <xsl:when test="$decimal = (1471, 1476, 1648, 2364, 2381, 2492, 2494,
+                                2495, 2519, 2562, 2620, 2622, 2623, 2748, 2876,
+                                3031, 3415, 3633, 3761, 3893, 3895, 3897, 3902,
+                                3903, 3991, 4025, 8417, 12441, 12442)">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 768 and $decimal le 837">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 864 and $decimal le 865">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1155 and $decimal le 1158">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1425 and $decimal le 1441">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1443 and $decimal le 1465">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1467 and $decimal le 1469">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1473 and $decimal le 1474">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1611 and $decimal le 1618">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1750 and $decimal le 1756">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1757 and $decimal le 1759">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1760 and $decimal le 1764">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1767 and $decimal le 1768">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 1770 and $decimal le 1773">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2305 and $decimal le 2307">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2366 and $decimal le 2380">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2385 and $decimal le 2388">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2402 and $decimal le 2403">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2433 and $decimal le 2435">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2496 and $decimal le 2500">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2503 and $decimal le 2504">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2507 and $decimal le 2509">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2530 and $decimal le 2531">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2624 and $decimal le 2626">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2631 and $decimal le 2632">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2635 and $decimal le 2637">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2672 and $decimal le 2673">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2689 and $decimal le 2691">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2750 and $decimal le 2757">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2759 and $decimal le 2761">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2763 and $decimal le 2765">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2817 and $decimal le 2819">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2878 and $decimal le 2883">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2887 and $decimal le 2888">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2891 and $decimal le 2893">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2902 and $decimal le 2903">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 2946 and $decimal le 2947">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3006 and $decimal le 3010">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3014 and $decimal le 3016">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3018 and $decimal le 3021">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3073 and $decimal le 3075">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3134 and $decimal le 3140">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3142 and $decimal le 3144">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3146 and $decimal le 3149">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3157 and $decimal le 3158">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3202 and $decimal le 3203">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3262 and $decimal le 3268">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3270 and $decimal le 3272">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3274 and $decimal le 3277">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3285 and $decimal le 3286">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3330 and $decimal le 3331">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3390 and $decimal le 3395">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3398 and $decimal le 3400">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3402 and $decimal le 3405">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3636 and $decimal le 3642">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3655 and $decimal le 3662">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3764 and $decimal le 3769">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3771 and $decimal le 3772">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3784 and $decimal le 3789">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3864 and $decimal le 3865">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3953 and $decimal le 3972">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3974 and $decimal le 3979">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3984 and $decimal le 3989">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 3993 and $decimal le 4013">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 4017 and $decimal le 4023">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 8400 and $decimal le 8412">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:when test="$decimal ge 12330 and $decimal le 12335">
+      <xsl:sequence select="false()"/>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:sequence select="true()"/>
+    </xsl:otherwise>
+  </xsl:choose>
 </xsl:function>
 
 <!-- ============================================================ -->
