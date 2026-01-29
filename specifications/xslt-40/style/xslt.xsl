@@ -22,7 +22,7 @@
 <!--<xsl:param name="color-changes" select="'yes'"/>-->
 
 <!-- publication date in yyyy-mm-dd format -->
-<xsl:param name="date" select="'2000-01-01'"/>
+<xsl:param name="date" select="'2026-01-28'"/>
 <xsl:variable name="pubdate" as="xs:date" select="if ($date='2000-01-01') then current-date() else xs:date($date)"/>
 
 <!-- cutoff date for closed issues -->
