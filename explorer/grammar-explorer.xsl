@@ -169,20 +169,18 @@
 
 <xsl:template match="g:ref">
   <xsl:param name="relative" as="xs:boolean?" tunnel="true"/>
-  <code>
     <xsl:choose>
       <xsl:when test="$relative = false()">
-        <a href="{@name}.html">
+        <a class="ref" href="{@name}.html">
           <xsl:value-of select="@name"/>
         </a>
       </xsl:when>
       <xsl:otherwise>
-        <a href="#{@name}">
+        <a class="ref relative" href="#{@name}">
           <xsl:value-of select="@name"/>
         </a>
       </xsl:otherwise>
     </xsl:choose>
-  </code>
 </xsl:template>
 
 <xsl:template match="g:optional">
@@ -259,7 +257,7 @@
 
 <xsl:template match="g:charCode">
   <span class="charCode">
-    <code>
+    <code class="char">
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@value"/>
       <xsl:text>;</xsl:text>
@@ -271,14 +269,14 @@
 
 <xsl:template match="g:charCodeRange">
   <span class="charCodeRange">
-    <code>
+    <code class="char">
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@minValue"/>
       <xsl:text>;</xsl:text>
       <xsl:sequence select="f:show-char(@minValue)"/>
     </code>
-    <xsl:text>-</xsl:text>
-    <code>
+    <code class="rangeDash"><xsl:text>–</xsl:text></code>
+    <code class="char">
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@maxValue"/>
       <xsl:text>;</xsl:text>
@@ -290,11 +288,11 @@
 
 <xsl:template match="g:charRange">
   <span class="charCodeRange">
-    <code>
+    <code class="char">
       <xsl:value-of select="@minChar"/>
     </code>
-    <xsl:text>-</xsl:text>
-    <code>
+    <code class="rangeDash"><xsl:text>–</xsl:text></code>
+    <code class="char">
       <xsl:value-of select="@maxChar"/>
     </code>
   </span>
@@ -334,7 +332,7 @@
 
 <xsl:template name="m:choice">
   <xsl:for-each select="*">
-    <xsl:if test="position() gt 1"> | </xsl:if>
+    <xsl:if test="position() gt 1"><code class="choicePipe"> | </code></xsl:if>
     <xsl:apply-templates select="."/>
   </xsl:for-each>
 </xsl:template>
