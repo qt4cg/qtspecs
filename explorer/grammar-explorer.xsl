@@ -186,29 +186,29 @@
 <xsl:template match="g:optional">
   <span class="optional">
     <xsl:call-template name="m:sequence"/>
-    <span class="occur">?</span>
+    <code class="occur">?</code>
   </span>
 </xsl:template>
 
 <xsl:template match="g:zeroOrMore">
   <span class="zeroOrMore">
     <xsl:call-template name="m:sequence"/>
-    <span class="occur">*</span>
+    <code class="occur">*</code>
   </span>
 </xsl:template>
 
 <xsl:template match="g:oneOrMore">
   <span class="oneOrMore">
     <xsl:call-template name="m:sequence"/>
-    <span class="occur">+</span>
+    <code class="occur">+</code>
   </span>
 </xsl:template>
 
 <xsl:template match="g:choice">
   <span class="choice">
-    <span class="paren opening">(</span>
+    <code class="paren opening">(</code>
     <xsl:call-template name="m:choice"/>
-    <span class="paren closing">)</span>
+    <code class="paren closing">)</code>
   </span>
 </xsl:template>
 
@@ -235,24 +235,19 @@
 </xsl:template>
 
 <xsl:template match="g:charClass">
-  <code class="bracket opening">
-    <xsl:text>[</xsl:text>
-    <xsl:if test="../g:complement">
-      <xsl:text>^</xsl:text>
-    </xsl:if>
-  </code>
   <span class="charClass">
-    <xsl:apply-templates/>
+    <code class="bracket opening">[</code>
+    <span class="chars">
+      <xsl:apply-templates/>
+    </span>
+    <code class="bracket closing">]</code>
   </span>
-  <code class="bracket closing">]</code>
 </xsl:template>
 
 <xsl:template match="g:char">
-  <span class="char">
-    <code>
-      <xsl:apply-templates/>
-    </code>
-  </span>
+  <code class="char">
+    <xsl:apply-templates/>
+  </code>
 </xsl:template>
 
 <xsl:template match="g:charCode">
@@ -315,7 +310,7 @@
   <xsl:param name="parens" as="xs:boolean" select="true()"/>
 
   <xsl:if test="$parens and count(*) gt 1">
-    <span class="paren opening">(</span>
+    <code class="paren opening">(</code>
   </xsl:if>
 
   <xsl:for-each select="*">
@@ -326,7 +321,7 @@
   </xsl:for-each>
 
   <xsl:if test="$parens and count(*) gt 1">
-    <span class="paren closing">)</span>
+    <code class="paren closing">)</code>
   </xsl:if>
 </xsl:template>
 
