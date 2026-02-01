@@ -186,28 +186,27 @@
 <xsl:template match="g:optional">
   <span class="optional">
     <xsl:call-template name="m:sequence"/>
-    <code class="occur">?</code>
   </span>
 </xsl:template>
 
 <xsl:template match="g:zeroOrMore">
   <span class="zeroOrMore">
     <xsl:call-template name="m:sequence"/>
-    <code class="occur">*</code>
   </span>
 </xsl:template>
 
 <xsl:template match="g:oneOrMore">
   <span class="oneOrMore">
     <xsl:call-template name="m:sequence"/>
-    <code class="occur">+</code>
   </span>
 </xsl:template>
 
 <xsl:template match="g:choice">
   <span class="choice">
     <code class="paren opening">(</code>
-    <xsl:call-template name="m:choice"/>
+      <span class="choices">
+        <xsl:call-template name="m:choice"/>
+      </span>
     <code class="paren closing">)</code>
   </span>
 </xsl:template>
@@ -313,12 +312,14 @@
     <code class="paren opening">(</code>
   </xsl:if>
 
-  <xsl:for-each select="*">
-    <xsl:if test="position() gt 1">
-      <xsl:text> </xsl:text>
-    </xsl:if>
-    <xsl:apply-templates select="."/>
-  </xsl:for-each>
+  <span class="sequenceItems">
+    <xsl:for-each select="*">
+      <xsl:if test="position() gt 1">
+        <xsl:text> </xsl:text>
+      </xsl:if>
+      <xsl:apply-templates select="."/>
+    </xsl:for-each>
+  </span>
 
   <xsl:if test="$parens and count(*) gt 1">
     <code class="paren closing">)</code>
