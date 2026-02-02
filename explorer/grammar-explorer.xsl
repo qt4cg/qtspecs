@@ -106,11 +106,11 @@
       <body>
         <div class="ribbon">
           <nav>
-            <a href="index.html#{$name}">Grammar</a>
+            <a href="index.html#{$name}">{$display-name} Grammar</a>
           </nav>
         </div>
         <header>
-          <h1>{$display-name} <code><xsl:value-of select="$name"/></code></h1>
+          <h1><code><xsl:value-of select="$name"/></code></h1>
         </header>
         <main>
         <table>
