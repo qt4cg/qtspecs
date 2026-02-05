@@ -106,11 +106,11 @@
       <body>
         <div class="ribbon">
           <nav>
-            <a href="index.html#{$name}">Grammar</a>
+            <a href="index.html#{$name}">{$display-name} Grammar</a>
           </nav>
         </div>
         <header>
-          <h1>{$display-name} <code><xsl:value-of select="$name"/></code></h1>
+          <h1><code><xsl:value-of select="$name"/></code></h1>
         </header>
         <main>
         <table>
@@ -169,48 +169,45 @@
 
 <xsl:template match="g:ref">
   <xsl:param name="relative" as="xs:boolean?" tunnel="true"/>
-  <code>
     <xsl:choose>
       <xsl:when test="$relative = false()">
-        <a href="{@name}.html">
+        <a class="ref" href="{@name}.html">
           <xsl:value-of select="@name"/>
         </a>
       </xsl:when>
       <xsl:otherwise>
-        <a href="#{@name}">
+        <a class="ref relative" href="#{@name}">
           <xsl:value-of select="@name"/>
         </a>
       </xsl:otherwise>
     </xsl:choose>
-  </code>
 </xsl:template>
 
 <xsl:template match="g:optional">
   <span class="optional">
     <xsl:call-template name="m:sequence"/>
-    <span class="occur">?</span>
   </span>
 </xsl:template>
 
 <xsl:template match="g:zeroOrMore">
   <span class="zeroOrMore">
     <xsl:call-template name="m:sequence"/>
-    <span class="occur">*</span>
   </span>
 </xsl:template>
 
 <xsl:template match="g:oneOrMore">
   <span class="oneOrMore">
     <xsl:call-template name="m:sequence"/>
-    <span class="occur">+</span>
   </span>
 </xsl:template>
 
 <xsl:template match="g:choice">
   <span class="choice">
-    <span class="paren opening">(</span>
-    <xsl:call-template name="m:choice"/>
-    <span class="paren closing">)</span>
+    <code class="paren opening">(</code>
+      <span class="choices">
+        <xsl:call-template name="m:choice"/>
+      </span>
+    <code class="paren closing">)</code>
   </span>
 </xsl:template>
 
@@ -237,29 +234,24 @@
 </xsl:template>
 
 <xsl:template match="g:charClass">
-  <code class="bracket opening">
-    <xsl:text>[</xsl:text>
-    <xsl:if test="../g:complement">
-      <xsl:text>^</xsl:text>
-    </xsl:if>
-  </code>
   <span class="charClass">
-    <xsl:apply-templates/>
+    <code class="bracket opening">[</code>
+    <span class="chars">
+      <xsl:apply-templates/>
+    </span>
+    <code class="bracket closing">]</code>
   </span>
-  <code class="bracket closing">]</code>
 </xsl:template>
 
 <xsl:template match="g:char">
-  <span class="char">
-    <code>
-      <xsl:apply-templates/>
-    </code>
-  </span>
+  <code class="char">
+    <xsl:apply-templates/>
+  </code>
 </xsl:template>
 
 <xsl:template match="g:charCode">
   <span class="charCode">
-    <code>
+    <code class="char">
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@value"/>
       <xsl:text>;</xsl:text>
@@ -271,14 +263,14 @@
 
 <xsl:template match="g:charCodeRange">
   <span class="charCodeRange">
-    <code>
+    <code class="char">
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@minValue"/>
       <xsl:text>;</xsl:text>
       <xsl:sequence select="f:show-char(@minValue)"/>
     </code>
-    <xsl:text>-</xsl:text>
-    <code>
+    <code class="rangeDash"><xsl:text>–</xsl:text></code>
+    <code class="char">
       <xsl:text>&amp;#x</xsl:text>
       <xsl:value-of select="@maxValue"/>
       <xsl:text>;</xsl:text>
@@ -290,11 +282,11 @@
 
 <xsl:template match="g:charRange">
   <span class="charCodeRange">
-    <code>
+    <code class="char">
       <xsl:value-of select="@minChar"/>
     </code>
-    <xsl:text>-</xsl:text>
-    <code>
+    <code class="rangeDash"><xsl:text>–</xsl:text></code>
+    <code class="char">
       <xsl:value-of select="@maxChar"/>
     </code>
   </span>
@@ -317,24 +309,26 @@
   <xsl:param name="parens" as="xs:boolean" select="true()"/>
 
   <xsl:if test="$parens and count(*) gt 1">
-    <span class="paren opening">(</span>
+    <code class="paren opening">(</code>
   </xsl:if>
 
-  <xsl:for-each select="*">
-    <xsl:if test="position() gt 1">
-      <xsl:text> </xsl:text>
-    </xsl:if>
-    <xsl:apply-templates select="."/>
-  </xsl:for-each>
+  <span class="sequenceItems">
+    <xsl:for-each select="*">
+      <xsl:if test="position() gt 1">
+        <xsl:text> </xsl:text>
+      </xsl:if>
+      <xsl:apply-templates select="."/>
+    </xsl:for-each>
+  </span>
 
   <xsl:if test="$parens and count(*) gt 1">
-    <span class="paren closing">)</span>
+    <code class="paren closing">)</code>
   </xsl:if>
 </xsl:template>
 
 <xsl:template name="m:choice">
   <xsl:for-each select="*">
-    <xsl:if test="position() gt 1"> | </xsl:if>
+    <xsl:if test="position() gt 1"><code class="choicePipe"> | </code></xsl:if>
     <xsl:apply-templates select="."/>
   </xsl:for-each>
 </xsl:template>
