@@ -533,7 +533,7 @@
       </fos:field>
    </fos:record-type>
    
-   <fos:record-type id="generator" extensible="true">
+   <fos:record-type id="generator" extensible="false">
 	 <fos:summary>
 	   <p>This record type is used as a tool for implementing deferred evaluation upon collections of values. The user has to maintain the four record fields, provided below. 
 	   The generator type is extensible thus the user can add any additional fields as appropriate.
@@ -579,6 +579,15 @@
 		 </p>
 	   </fos:meaning>	   
 	 </fos:field>	 
+	 <fos:field name="state" type="map(*)" required="true">
+	   <fos:meaning>
+	     <p>This map can be used, if necessary, to access data
+ 		    by both <code>move-next()</code> and <code>get-current()</code>. The function <code>move-next()</code>
+			can set the entries of this map in the result of this function (the next generator-instance) so that they are accesible from it.
+		 </p>
+	   </fos:meaning>	   
+	 </fos:field>	 
+	 
    </fos:record-type>
    
    	<fos:function name="at" prefix="gn">
@@ -1477,6 +1486,7 @@ f:generator(initialized := true(), end-reached := true(),
             move-next := fn($this as f:generator)
                            {error(QName('http://www.w3.org/2005/xqt-errors', 'err:FOGR0002'),
                             "move-next() called on an empty-generator")},
+                            state := map{}
             )</fos:equivalent>
 	<fos:examples>
 		<fos:example>
@@ -1522,50 +1532,21 @@ declare function gn:filter($generator as f:generator,
                            $predicate as function(item()*) as xs:boolean) 
                     as f:generator
 {
- if($generator?initialized and $generator?end-reached) 
-  then gn:empty-generator()
+ if($generator?initialized and $generator?end-reached) then gn:empty-generator()
   else
     let $getNextGoodGen := function($gen as map(*), 
                                     $pred as function(item()*) as xs:boolean)
-       {
-          if($gen?end-reached) then gn:empty-generator()
-          else
-            let $mapResult := 
-                  while-do(
-                           $gen,
-                           function($x) { not($x?end-reached) 
-                                         and not($pred($x =?> get-current()))},
-                           function($x) { $x =?> move-next() }
-                           )   
-            return 
-              if($mapResult?end-reached) then gn:empty-generator()
-               else $mapResult                  
-       },
-       
-       $gen := if($generator?initialized) then $generator 
-                 else $generator =?> move-next(),
-       $nextGoodGen := $getNextGoodGen($gen, $pred)
+                           {gn:skip-while($gen, fn($x){not($pred($x))})},
+        $gen := if($generator?initialized) then $generator 
+                  else $generator =?> move-next(),
+        $nextGoodGen := $getNextGoodGen($gen, $predicate)                           
     return
       if($nextGoodGen?end-reached) then gn:empty-generator()
-      else
-        $nextGoodGen  
-	   => map:put("inputGen", $nextGoodGen)
-	   => map:put("move-next", 
-		      fn($this as f:generator) 
-		      {
-		        let $nextGoodGen := $getNextGoodGen($this?inputGen =?> move-next(), 
-		                                            $pred)
-		         return
-		           if($nextGoodGen?end-reached) then gn:empty-generator()
-		             else
-		               $nextGoodGen => map:put("move-next",   
-						       fn($this as f:generator) 
-							{gn:filter($nextGoodGen 
-							             =?> move-next(), $pred)})
-					    => map:put("inputGen", $nextGoodGen)
-		      }
-			  )
-  }	
+        else
+          $nextGoodGen => map:put("move-next", 
+                                  fn($this as f:generator) 
+                                  {gn:filter($nextGoodGen => gn:skip(1), $predicate)})
+}	
 	</fos:equivalent>
 	<fos:examples>
 		<fos:example>
@@ -2825,27 +2806,30 @@ let $gen := if(not($generator?initialized)) then $generator =?> move-next()
     $nextProviderState := $providerResult(1),
     $nextDataItemHolder := $providerResult(2)
  return
-    let $nextGen := if(array:empty($nextDataItemHolder)) 
-                      then gn:empty-generator()  
-                      else gn:empty-generator()
-                      => map:put("providerState", $nextProviderState)
-                      => map:put("current", $nextDataItemHolder(1))
-                      => map:put("end-reached", false())
-                      => map:put("get-current", fn($this as f:generator) {$this?current})
-                      => map:put("move-next",  
-                                 fn($this as f:generator) 
-                                 {
-                                  let $nextProviderResult := $provider($this?providerState),
-                                      $nextDataItemHolder := $nextProviderResult(2)
-                                    return
-                                      if(array:empty($nextDataItemHolder)) 
-                                        then gn:empty-generator()
-                                        else
-                                          $this => map:put("current", $nextDataItemHolder(1))
-                                                => map:put("providerState", 
-                                                           $nextProviderResult(1))
-                                 }
-                                )
+    let $nextGen := 
+	       if(array:empty($nextDataItemHolder)) 
+                 then gn:empty-generator()  
+                 else gn:empty-generator()
+                 => map:put("state", map{"providerState": $nextProviderState,
+                                         "current": $nextDataItemHolder(1) 
+                                      })
+                 => map:put("end-reached", false())
+                 => map:put("get-current", fn($this as f:generator) {$this?state?current})
+                 => map:put("move-next",  
+                            fn($this as f:generator) 
+                            {
+                             let $nextProviderResult := $provider($this?state?providerState),
+                                 $nextDataItemHolder := $nextProviderResult(2)
+                              return
+                                 if(array:empty($nextDataItemHolder)) 
+                                   then gn:empty-generator()
+                                   else
+                                     $this 
+                                       => map:put("state", 
+                                                  map{"current": $nextDataItemHolder(1), 
+                                                     "providerState": $nextProviderResult(1)})
+                            }
+                           )
                              
     return $nextGen   	
 	</fos:equivalent>
