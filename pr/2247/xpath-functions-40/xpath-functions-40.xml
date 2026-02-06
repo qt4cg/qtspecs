@@ -13444,7 +13444,12 @@ return $result
 			however if after the call this field of the produced generator-instance is still <code nobreak="false">false()</code>, then calling <code nobreak="false">get-current()</code>) 
 			on this resulting generator-instance produces the "next value" of the generator.
 		 </p>
-	   <ulist><item><p><term>Type: </term><code nobreak="false">fn($this as f:generator) as f:generator</code></p></item></ulist></td></tr><tr><td rowspan="1" colspan="1"><p><code nobreak="false">*</code></p></td><td rowspan="1" colspan="1"><p>The record type is extensible (it may contain additional fields beyond those listed).</p></td></tr></tbody></table></div2><div2 id="generator-functions"><head>Functions on generators</head><p>The functions defined in this section use a conventional namespace prefix "gn", which is assumed 
+	   <ulist><item><p><term>Type: </term><code nobreak="false">fn($this as f:generator) as f:generator</code></p></item></ulist></td></tr><tr><td rowspan="1" colspan="1"><p><code nobreak="false">state</code></p></td><td class="fos-thin" rowspan="1" colspan="1">
+	     <p>This map can be used, if necessary, to access data
+ 		    by both <code nobreak="false">move-next()</code> and <code nobreak="false">get-current()</code>. The function <code nobreak="false">move-next()</code>
+			can set the entries of this map in the result of this function (the next generator-instance) so that they are accesible from it.
+		 </p>
+	   <ulist><item><p><term>Type: </term><code nobreak="false">map(*)</code></p></item></ulist></td></tr></tbody></table></div2><div2 id="generator-functions"><head>Functions on generators</head><p>The functions defined in this section use a conventional namespace prefix "gn", which is assumed 
 			     to be bound to the namespace URI http://www.w3.org/2005/xpath-functions/generator.
 			     They are listed under the following categories, based on the type of the function result:</p><ulist><item><p>Functions returning a specific value: an <code nobreak="false">item()</code> or a sequence.</p></item><item><p>Functions that produce another generator from existing generators.</p></item><item><p>Functions that produce a generator from data by a data-provider.</p></item><item><p>Functions that produce an XPath collection from the yield of a generator.</p></item></ulist><p>These functions do not evaluate eagerly the yield of any of their generator-operands. 
 			   A value from a yield is produced only if explicitly requested by evaluating the methods 
@@ -13454,17 +13459,19 @@ return $result
 			   used to hold such unnecessary value at any point in the computation.
 			   This is why the evaluation of the functions defined here is referred to as "Deferred Evaluation".
 			</p><note><p>Most of the examples in this section depend on the definition of the following variables:</p><example><eg xml:space="preserve">
-$gen2ToInf := f:generator(initialized := true(), end-reached := false(), 
-                              get-current := fn($this as f:generator){$this?last +1},
-                              move-next := fn($this as f:generator)
-                              {
-                                if(not($this?initialized))
-                                  then map:put($this, "initialized", true())
-                                  else map:put($this, "last", $this?last + 1)
-                              }
-                             ) =&gt; map:put("last", 1),
-    $genN := $gen2ToInf =&gt; map:put("last", 0),
-    $gen0toInf := $gen2ToInf =&gt; map:put("last", -1),
+$gen2ToInf := f:generator(initialized := true(), 
+                      end-reached := false(), 
+                      get-current := fn($this as f:generator){$this?state?last +1},
+                      move-next := fn($this as f:generator)
+                      {
+                       if(not($this?initialized))
+                         then map:put($this, "initialized", true())
+                         else map:put($this, "state", map{"last": $this?state?last + 1})
+                      },
+                      state := map{"last" : 1}
+                          ),
+    $genN := $gen2ToInf =&gt; map:put("state", map{"last": 0}),
+    $gen0toInf := $gen2ToInf =&gt; map:put("state", map{"last": -1}),
     $double := fn($n) {2*$n},
     $sum2 := fn($m, $n) {$m + $n},
     $product := fn($m, $n) {$m * $n},
@@ -13714,50 +13721,21 @@ $gen2ToInf := f:generator(initialized := true(), end-reached := false(),
                            $predicate as function(item()*) as xs:boolean) 
                     as f:generator
 {
- if($generator?initialized and $generator?end-reached) 
-  then gn:empty-generator()
+ if($generator?initialized and $generator?end-reached) then gn:empty-generator()
   else
     let $getNextGoodGen := function($gen as map(*), 
                                     $pred as function(item()*) as xs:boolean)
-       {
-          if($gen?end-reached) then gn:empty-generator()
-          else
-            let $mapResult := 
-                  while-do(
-                           $gen,
-                           function($x) { not($x?end-reached) 
-                                         and not($pred($x =?&gt; get-current()))},
-                           function($x) { $x =?&gt; move-next() }
-                           )   
-            return 
-              if($mapResult?end-reached) then gn:empty-generator()
-               else $mapResult                  
-       },
-       
-       $gen := if($generator?initialized) then $generator 
-                 else $generator =?&gt; move-next(),
-       $nextGoodGen := $getNextGoodGen($gen, $pred)
+                           {gn:skip-while($gen, fn($x){not($pred($x))})},
+        $gen := if($generator?initialized) then $generator 
+                  else $generator =?&gt; move-next(),
+        $nextGoodGen := $getNextGoodGen($gen, $predicate)                           
     return
       if($nextGoodGen?end-reached) then gn:empty-generator()
-      else
-        $nextGoodGen  
-	   =&gt; map:put("inputGen", $nextGoodGen)
-	   =&gt; map:put("move-next", 
-		      fn($this as f:generator) 
-		      {
-		        let $nextGoodGen := $getNextGoodGen($this?inputGen =?&gt; move-next(), 
-		                                            $pred)
-		         return
-		           if($nextGoodGen?end-reached) then gn:empty-generator()
-		             else
-		               $nextGoodGen =&gt; map:put("move-next",   
-						       fn($this as f:generator) 
-							{gn:filter($nextGoodGen 
-							             =?&gt; move-next(), $pred)})
-					    =&gt; map:put("inputGen", $nextGoodGen)
-		      }
-			  )
-  }</eg></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Expression</th><th rowspan="1" colspan="1">Result</th></tr></thead><tbody><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) =&gt; gn:value()</code></eg></td><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">3</code></p></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) 
+        else
+          $nextGoodGen =&gt; map:put("move-next", 
+                                  fn($this as f:generator) 
+                                  {gn:filter($nextGoodGen =&gt; gn:skip(1), $predicate)})
+}</eg></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Expression</th><th rowspan="1" colspan="1">Result</th></tr></thead><tbody><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) =&gt; gn:value()</code></eg></td><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">3</code></p></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) 
           =&gt; gn:next() =&gt; gn:value()</code></eg></td><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">5</code></p></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">
 $gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) 
                =&gt; gn:take(7) =&gt; gn:to-array()</code></eg></td><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">[3,5,7,9,
@@ -14089,6 +14067,7 @@ return
             move-next := fn($this as f:generator)
                            {error(QName('http://www.w3.org/2005/xqt-errors', 'err:FOGR0002'),
                             "move-next() called on an empty-generator")},
+                            state := map{}
             )</eg></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Expression</th><th rowspan="1" colspan="1">Result</th></tr></thead><tbody><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">gn:empty-generator() =&gt; gn:to-array()</code></eg></td><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">[]</code></p></td></tr><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">gn:empty-generator() =&gt; gn:to-array() =&gt; array:empty()</code></eg></td><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">true()</code></p></td></tr></tbody></table></def></gitem></glist></div4><div4 id="generator-make-generator"><head>gn:make-generator</head><glist><gitem><label>Summary</label><def><p>Returns a generator, the values of whose yield are obtained by consecutive calls to a supplied <code nobreak="false">$provider</code> function.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="gn" name="make-generator" return-type="fn:generator" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="provider" type="function(array(*)) as array(*)"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>The <code nobreak="false">$provider</code> function is called to get the first value of the yield of the result-generator. 
 	    It accepts as argument an array, that contains data, referred to as "state-data" here, necessary to identify and return its next result.
 		On the first call to the <code nobreak="false">$provider</code>, an empty array is passed as the state-data.</p><p>The <code nobreak="false">$provider</code> returns an array with two members. The first member is the state-data to be passed to it 
@@ -14106,27 +14085,30 @@ return
     $nextProviderState := $providerResult(1),
     $nextDataItemHolder := $providerResult(2)
  return
-    let $nextGen := if(array:empty($nextDataItemHolder)) 
-                      then gn:empty-generator()  
-                      else gn:empty-generator()
-                      =&gt; map:put("providerState", $nextProviderState)
-                      =&gt; map:put("current", $nextDataItemHolder(1))
-                      =&gt; map:put("end-reached", false())
-                      =&gt; map:put("get-current", fn($this as f:generator) {$this?current})
-                      =&gt; map:put("move-next",  
-                                 fn($this as f:generator) 
-                                 {
-                                  let $nextProviderResult := $provider($this?providerState),
-                                      $nextDataItemHolder := $nextProviderResult(2)
-                                    return
-                                      if(array:empty($nextDataItemHolder)) 
-                                        then gn:empty-generator()
-                                        else
-                                          $this =&gt; map:put("current", $nextDataItemHolder(1))
-                                                =&gt; map:put("providerState", 
-                                                           $nextProviderResult(1))
-                                 }
-                                )
+    let $nextGen := 
+	       if(array:empty($nextDataItemHolder)) 
+                 then gn:empty-generator()  
+                 else gn:empty-generator()
+                 =&gt; map:put("state", map{"providerState": $nextProviderState,
+                                         "current": $nextDataItemHolder(1) 
+                                      })
+                 =&gt; map:put("end-reached", false())
+                 =&gt; map:put("get-current", fn($this as f:generator) {$this?state?current})
+                 =&gt; map:put("move-next",  
+                            fn($this as f:generator) 
+                            {
+                             let $nextProviderResult := $provider($this?state?providerState),
+                                 $nextDataItemHolder := $nextProviderResult(2)
+                              return
+                                 if(array:empty($nextDataItemHolder)) 
+                                   then gn:empty-generator()
+                                   else
+                                     $this 
+                                       =&gt; map:put("state", 
+                                                  map{"current": $nextDataItemHolder(1), 
+                                                     "providerState": $nextProviderResult(1)})
+                            }
+                           )
                              
     return $nextGen</eg></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><thead><tr><th rowspan="1" colspan="1">Expression</th><th rowspan="1" colspan="1">Result</th></tr></thead><tbody><tr><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve"><code nobreak="false">
 gn:make-generator(fn($state as array(*))

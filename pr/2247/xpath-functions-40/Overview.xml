@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?><html lang="EN"><head><title>XPath and XQuery Functions and Operators 4.0 </title><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/><link rel="stylesheet" type="text/css" href="css/w3c-base.css"/><link rel="stylesheet" href="css/qtspecs.css"/><link rel="stylesheet" href="css/xpath-functions-40.css"/><script src="js/fo-datalist.js"/></head><body><div class="head"><p><a href="https://www.w3.org/"><img src="https://www.w3.org/StyleSheets/TR/2016/logos/W3C" alt="W3C" height="48" width="72"/></a></p>
 <h1><a id="title"/>XPath and XQuery Functions and Operators 4.0 </h1>
-<h2><a id="w3c-doctype"/>W3C Editor's Draft 5 February 2026</h2><dl><dt>This version:</dt><dd><a href="https://qt4cg.org/pr/2247/xpath-functions-40//">https://qt4cg.org/pr/2247/xpath-functions-40/</a></dd><dt>Latest version of XPath and XQuery Functions and Operators 4.0:</dt><dd>
+<h2><a id="w3c-doctype"/>W3C Editor's Draft 6 February 2026</h2><dl><dt>This version:</dt><dd><a href="https://qt4cg.org/pr/2247/xpath-functions-40//">https://qt4cg.org/pr/2247/xpath-functions-40/</a></dd><dt>Latest version of XPath and XQuery Functions and Operators 4.0:</dt><dd>
             <a href="https://qt4cg.org/specifications/xpath-functions-40/">https://qt4cg.org/specifications/xpath-functions-40/</a>
         </dd><dt>Most recent Recommendation of XPath and XQuery Functions and Operators:</dt><dd>
     <a href="https://www.w3.org/TR/2017/REC-xpath-functions-31-20170321/">https://www.w3.org/TR/2017/REC-xpath-functions-31-20170321/</a>
@@ -14225,7 +14225,12 @@ return $result</pre></div></td></tr><tr><th style="vertical-align:top">Result:</
 			however if after the call this field of the produced generator-instance is still <code>false()</code>, then calling <code>get-current()</code>) 
 			on this resulting generator-instance produces the "next value" of the generator.
 		 </p>
-	   <ul><li><p><b>Type: </b><code>fn($this as f:generator) as f:generator</code></p></li></ul></td></tr><tr><td><p><code>*</code></p></td><td><p>The record type is extensible (it may contain additional fields beyond those listed).</p></td></tr></tbody></table></div><div class="div2">
+	   <ul><li><p><b>Type: </b><code>fn($this as f:generator) as f:generator</code></p></li></ul></td></tr><tr><td><p><code>state</code></p></td><td class="fos-thin">
+	     <p>This map can be used, if necessary, to access data
+ 		    by both <code>move-next()</code> and <code>get-current()</code>. The function <code>move-next()</code>
+			can set the entries of this map in the result of this function (the next generator-instance) so that they are accesible from it.
+		 </p>
+	   <ul><li><p><b>Type: </b><code>map(*)</code></p></li></ul></td></tr></tbody></table></div><div class="div2">
 <h3><a id="generator-functions"/>18.4 <a href="#generator-functions" style="text-decoration: none">Functions on generators</a></h3><p>The functions defined in this section use a conventional namespace prefix "gn", which is assumed 
 			     to be bound to the namespace URI http://www.w3.org/2005/xpath-functions/generator.
 			     They are listed under the following categories, based on the type of the function result:</p><ul><li><p>Functions returning a specific value: an <code>item()</code> or a sequence.</p></li><li><p>Functions that produce another generator from existing generators.</p></li><li><p>Functions that produce a generator from data by a data-provider.</p></li><li><p>Functions that produce an XPath collection from the yield of a generator.</p></li></ul><p>These functions do not evaluate eagerly the yield of any of their generator-operands. 
@@ -14236,17 +14241,19 @@ return $result</pre></div></td></tr><tr><th style="vertical-align:top">Result:</
 			   used to hold such unnecessary value at any point in the computation.
 			   This is why the evaluation of the functions defined here is referred to as "Deferred Evaluation".
 			</p><div class="note"><p class="prefix"><b>Note:</b></p><p>Most of the examples in this section depend on the definition of the following variables:</p><div class="example"><div class="exampleInner"><pre class="small">
-$gen2ToInf := f:generator(initialized := true(), end-reached := false(), 
-                              get-current := fn($this as f:generator){$this?last +1},
-                              move-next := fn($this as f:generator)
-                              {
-                                if(not($this?initialized))
-                                  then map:put($this, "initialized", true())
-                                  else map:put($this, "last", $this?last + 1)
-                              }
-                             ) =&gt; map:put("last", 1),
-    $genN := $gen2ToInf =&gt; map:put("last", 0),
-    $gen0toInf := $gen2ToInf =&gt; map:put("last", -1),
+$gen2ToInf := f:generator(initialized := true(), 
+                      end-reached := false(), 
+                      get-current := fn($this as f:generator){$this?state?last +1},
+                      move-next := fn($this as f:generator)
+                      {
+                       if(not($this?initialized))
+                         then map:put($this, "initialized", true())
+                         else map:put($this, "state", map{"last": $this?state?last + 1})
+                      },
+                      state := map{"last" : 1}
+                          ),
+    $genN := $gen2ToInf =&gt; map:put("state", map{"last": 0}),
+    $gen0toInf := $gen2ToInf =&gt; map:put("state", map{"last": -1}),
     $double := fn($n) {2*$n},
     $sum2 := fn($m, $n) {$m + $n},
     $product := fn($m, $n) {$m * $n},
@@ -14512,50 +14519,21 @@ $gen2ToInf := f:generator(initialized := true(), end-reached := false(),
                            $predicate as function(item()*) as xs:boolean) 
                     as f:generator
 {
- if($generator?initialized and $generator?end-reached) 
-  then gn:empty-generator()
+ if($generator?initialized and $generator?end-reached) then gn:empty-generator()
   else
     let $getNextGoodGen := function($gen as map(*), 
                                     $pred as function(item()*) as xs:boolean)
-       {
-          if($gen?end-reached) then gn:empty-generator()
-          else
-            let $mapResult := 
-                  while-do(
-                           $gen,
-                           function($x) { not($x?end-reached) 
-                                         and not($pred($x =?&gt; get-current()))},
-                           function($x) { $x =?&gt; move-next() }
-                           )   
-            return 
-              if($mapResult?end-reached) then gn:empty-generator()
-               else $mapResult                  
-       },
-       
-       $gen := if($generator?initialized) then $generator 
-                 else $generator =?&gt; move-next(),
-       $nextGoodGen := $getNextGoodGen($gen, $pred)
+                           {gn:skip-while($gen, fn($x){not($pred($x))})},
+        $gen := if($generator?initialized) then $generator 
+                  else $generator =?&gt; move-next(),
+        $nextGoodGen := $getNextGoodGen($gen, $predicate)                           
     return
       if($nextGoodGen?end-reached) then gn:empty-generator()
-      else
-        $nextGoodGen  
-	   =&gt; map:put("inputGen", $nextGoodGen)
-	   =&gt; map:put("move-next", 
-		      fn($this as f:generator) 
-		      {
-		        let $nextGoodGen := $getNextGoodGen($this?inputGen =?&gt; move-next(), 
-		                                            $pred)
-		         return
-		           if($nextGoodGen?end-reached) then gn:empty-generator()
-		             else
-		               $nextGoodGen =&gt; map:put("move-next",   
-						       fn($this as f:generator) 
-							{gn:filter($nextGoodGen 
-							             =?&gt; move-next(), $pred)})
-					    =&gt; map:put("inputGen", $nextGoodGen)
-		      }
-			  )
-  }</pre></div></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><thead><tr><th>Expression</th><th>Result</th></tr></thead><tbody><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) =&gt; gn:value()</code></pre></div></td><td style="vertical-align:top"><p><code>3</code></p></td></tr><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) 
+        else
+          $nextGoodGen =&gt; map:put("move-next", 
+                                  fn($this as f:generator) 
+                                  {gn:filter($nextGoodGen =&gt; gn:skip(1), $predicate)})
+}</pre></div></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><thead><tr><th>Expression</th><th>Result</th></tr></thead><tbody><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) =&gt; gn:value()</code></pre></div></td><td style="vertical-align:top"><p><code>3</code></p></td></tr><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>$gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) 
           =&gt; gn:next() =&gt; gn:value()</code></pre></div></td><td style="vertical-align:top"><p><code>5</code></p></td></tr><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>
 $gen2ToInf =&gt; gn:filter(fn($n){$n mod 2 eq 1}) 
                =&gt; gn:take(7) =&gt; gn:to-array()</code></pre></div></td><td style="vertical-align:top"><div class="exampleInner"><pre>[3,5,7,9,
@@ -14908,6 +14886,7 @@ return
             move-next := fn($this as f:generator)
                            {error(QName('http://www.w3.org/2005/xqt-errors', 'err:FOGR0002'),
                             "move-next() called on an empty-generator")},
+                            state := map{}
             )</pre></div></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><thead><tr><th>Expression</th><th>Result</th></tr></thead><tbody><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>gn:empty-generator() =&gt; gn:to-array()</code></pre></div></td><td style="vertical-align:top"><p><code>[]</code></p></td></tr><tr><td style="vertical-align:top"><div class="exampleInner"><pre><code>gn:empty-generator() =&gt; gn:to-array() =&gt; array:empty()</code></pre></div></td><td style="vertical-align:top"><p><code>true()</code></p></td></tr></tbody></table></div></dd></dl></div><div class="div4">
 <h5><a id="generator-make-generator"/>18.4.3.2 <a href="#generator-make-generator" style="text-decoration: none">gn:make-generator</a></h5><dl><dt class="label">Summary</dt><dd><p>Returns a generator, the values of whose yield are obtained by consecutive calls to a supplied <code>$provider</code> function.</p></dd><dt class="label">Signature</dt><dd><div class="proto"><table class="proto" border="0"><tr class="name"><td colspan="3"><code class="function">gn:make-generator</code>(</td></tr><tr class="arg"><td><code>$provider</code></td><td><code class="as">as </code><code class="type"><code>function(array(*)) as array(*)</code></code></td><td/></tr><tr class="return-type"><td colspan="3">)<code class="as"> as </code><code><code>fn:generator</code></code></td></tr></table></div></dd><dt class="label">Properties</dt><dd><p>This function is <a title="deterministic" class="termref" href="#dt-deterministic">deterministic</a>, <a title="context-independent" class="termref" href="#dt-context-independent">context-independent</a>,  and <a title="focus-dependent" class="termref" href="#dt-focus-independent">focus-independent</a>. </p></dd><dt class="label">Rules</dt><dd><p>The <code>$provider</code> function is called to get the first value of the yield of the result-generator. 
 	    It accepts as argument an array, that contains data, referred to as "state-data" here, necessary to identify and return its next result.
@@ -14926,27 +14905,30 @@ return
     $nextProviderState := $providerResult(1),
     $nextDataItemHolder := $providerResult(2)
  return
-    let $nextGen := if(array:empty($nextDataItemHolder)) 
-                      then gn:empty-generator()  
-                      else gn:empty-generator()
-                      =&gt; map:put("providerState", $nextProviderState)
-                      =&gt; map:put("current", $nextDataItemHolder(1))
-                      =&gt; map:put("end-reached", false())
-                      =&gt; map:put("get-current", fn($this as f:generator) {$this?current})
-                      =&gt; map:put("move-next",  
-                                 fn($this as f:generator) 
-                                 {
-                                  let $nextProviderResult := $provider($this?providerState),
-                                      $nextDataItemHolder := $nextProviderResult(2)
-                                    return
-                                      if(array:empty($nextDataItemHolder)) 
-                                        then gn:empty-generator()
-                                        else
-                                          $this =&gt; map:put("current", $nextDataItemHolder(1))
-                                                =&gt; map:put("providerState", 
-                                                           $nextProviderResult(1))
-                                 }
-                                )
+    let $nextGen := 
+	       if(array:empty($nextDataItemHolder)) 
+                 then gn:empty-generator()  
+                 else gn:empty-generator()
+                 =&gt; map:put("state", map{"providerState": $nextProviderState,
+                                         "current": $nextDataItemHolder(1) 
+                                      })
+                 =&gt; map:put("end-reached", false())
+                 =&gt; map:put("get-current", fn($this as f:generator) {$this?state?current})
+                 =&gt; map:put("move-next",  
+                            fn($this as f:generator) 
+                            {
+                             let $nextProviderResult := $provider($this?state?providerState),
+                                 $nextDataItemHolder := $nextProviderResult(2)
+                              return
+                                 if(array:empty($nextDataItemHolder)) 
+                                   then gn:empty-generator()
+                                   else
+                                     $this 
+                                       =&gt; map:put("state", 
+                                                  map{"current": $nextDataItemHolder(1), 
+                                                     "providerState": $nextProviderResult(1)})
+                            }
+                           )
                              
     return $nextGen</pre></div></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><thead><tr><th>Expression</th><th>Result</th></tr></thead><tbody><tr><td style="vertical-align:top"><div class="exampleInner"><pre class="small"><code>
 gn:make-generator(fn($state as array(*))
@@ -16029,7 +16011,7 @@ There is no constructor function for <code>xs:NOTATION</code>. Constructors are 
                   union types defined in a schema.</p><p>Special rules apply to constructor functions for namespace-sensitive types, that is,
                             atomic types derived from <code>xs:QName</code> and <code>xs:NOTATION</code>, list types that have
    a namespace-sensitive item type, and union types that have a namespace-sensitive member type. See <a href="#constructor-qname-notation"><b>23.2 Constructor functions for xs:QName and xs:NOTATION</b></a>.</p><div class="example">
-<div class="exampleHeader"><a id="d5e89766"/>Example: Using a Constructor Function for a User-Defined Atomic Type</div><p>Consider a situation where the static context contains an atomic type
+<div class="exampleHeader"><a id="d5e89784"/>Example: Using a Constructor Function for a User-Defined Atomic Type</div><p>Consider a situation where the static context contains an atomic type
                     called <code>hatSize</code> defined in a schema whose target namespace is bound
                     to the prefix <code>eg</code>. In such a case the following constructor function is available to users:</p><div class="proto"><table class="proto" border="0"><tr class="name"><td colspan="3"><code class="function">eg:hatSize</code>(</td></tr><tr class="arg"><td><code>$value</code></td><td><code class="as">as </code><code class="type"><code>xs:anyAtomicType</code></code></td><td/></tr><tr class="return-type"><td colspan="3">)<code class="as"> as </code><code><code>my:hatSize</code>?</code></td></tr></table></div><p>The resulting function may be used in an expression such as <code>eg:hatSize("10½")</code>.</p></div><div class="note"><p class="prefix"><b>Note:</b></p><p> To construct an instance of a user-defined type 
                   that is not in a namespace, it is possible to use an
