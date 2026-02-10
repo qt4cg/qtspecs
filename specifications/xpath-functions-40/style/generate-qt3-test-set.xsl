@@ -130,6 +130,10 @@
               </xsl:otherwise>
             </xsl:choose>           
           </xsl:when>
+          <xsl:when test="fos:result[@narrative]">
+            <!-- In this case the generated test must compile and execute, but the result is not tested -->
+            <assert>true()</assert>
+          </xsl:when>
           <xsl:when test="fos:result[@approx]">
             <assert>abs($result - {fos:result}) lt 1e-5</assert>
           </xsl:when>
