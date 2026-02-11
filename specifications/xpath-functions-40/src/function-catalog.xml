@@ -36300,4 +36300,213 @@ return $array / descendant::*[. > 25][1] / ancestor-or-self::* =!> jnode-content
       </fos:changes>
    </fos:function>
    
+   <fos:function name="generate" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="generate" return-type="item()*">
+            <fos:arg name="init" type="item()" usage="navigation"/>
+            <fos:arg name="step" type="function(item(), xs:integer) as item()?" usage="inspection"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Delivers a potentially unbounded sequence based on a supplied initial value, together
+         with a function for computing the next value.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>The first item in the returned sequence is <code>$init</code>; the
+         second item is the result of <code>$initial-state => $step(1)</code>; the third item
+         is the result of <code>$initial-state => $step(1) => step(2)</code>, and so on.</p>
+         
+         <p>The <code>$step</code> function is called with two arguments, the current state, and
+         the sequential position of the current state (starting at 1). The coercion rules allow
+         an arity-1 function to be supplied if the second argument is not required.</p>
+         
+         <p>If the <code>$step</code> function returns an empty sequence, this marks the end
+         of the generated sequence. However, the generated sequence is potentially unbounded,
+         and the specification defines that certain operations on sequences are 
+            <termref def="dt-incremental-evaluation">incrementally evaluated</termref>,
+         ensuring that unbounded sequences can be processed without exhausting available resources.</p>
+         
+         
+            
+      </fos:rules>
+      
+      <fos:equivalent style="xquery-function">
+declare function generate(
+  $init   as item(),
+  $step as function(item(), xs:integer) as item()?
+) as item()* {
+  generate-helper($init, $step, 1)
+};
+declare %private function generate-helper (
+  $init   as item(),
+  $step as function(item(), xs:integer) as item()?,
+  $position as xs:integer
+) as item()* {
+  let $next := $step($init, $position)
+  while exists($next)
+  return ($next, generate-helper($next, $step, $position+1))
+};
+      </fos:equivalent>
+      <fos:notes>
+         <p>The evaluation technique used to implement pipelined operation is often called
+         <term>lazy evaluation</term>. This specification does not mandate any particular
+         implementation technique, it only requires that the evaluation of pipelined operations
+         is not constrained by available memory. For example, a processor with access to SIMD
+         hardware is free to take advantage of this. This has the practical implication that
+         an application cannot assume there will be zero lookahead in the pipeline, nor that
+         such lookahead will be error-free.</p>
+         <p>The <function>generate</function> function delivers a sequence of items
+         representing succesive states. There is no constraint on how states are represented; in many cases it will be useful
+         to represent states as records with a method conventionally named <code>next</code> that delivers
+         the next state in the sequence (as in the example using <function>fn:random-number-generator</function>).</p>
+         <p>Although <function>generate</function> is designed to be capable of delivering an unbounded
+         sequence, it can also be a convenient way of generating a finite sequence. For example,</p>
+         <eg>generate(., fn{..})</eg>
+         <p>returns the ancestors of a node, ending at the root of the containing tree.</p>
+         <p>An implementation is allowed to place limits on the number of items in a sequence. Even though
+         some operations are defined to be incrementally evaluated, there may be constraints such as a limit on the
+         size of the integer returned by <function>fn:position</function>.</p>
+         <p>Operations that consume a sequence in its entirety should be avoided if the sequence
+         might be unbounded. Examples of such operations include:</p>
+         
+         <ulist>
+            <item><p>Aggregation functions such as <function>count</function>, <function>sum</function>, 
+                  <function>string-join</function>, or <function>distinct-values</function>.</p></item>
+            <item><p>Reordering operations, such as <function>sort-by</function>, <function>reverse</function>,
+            the <code>permute</code> method of <function>random-number-generator</function>, or the
+            implicit sort into document order performed by the <code>/</code>, <code>union</code>,
+            <code>intersect</code>, and <code>except</code> operators.</p></item>
+            <item><p>The function <function>last</function>.</p></item>
+            <item><p>Searching operations, such as predicates, <function>index-of</function>,
+            <function>filter</function>, and <function>some</function>,
+                  unless the user has good reason to believe these will always find a match.</p></item>
+            <item><p>Binding an unbounded sequence to a variable.</p></item>
+         </ulist>
+         
+         <p>Using such operations on an unbounded sequence may result in catastrophic failure (for example, running out of memory),
+         or in non-termination.</p>
+         
+         <p>There are a number of ways of reliably processing a bounded subsequence of an unbounded input sequence:</p>
+         
+         <ulist>
+            <item><p>Use of the functions <function>subsequence</function> or <function>slice</function>
+            with a defined end point.</p></item>
+            <item><p>Use of numeric predicates, for example <code>$in[100]</code> or <code>$in[1 to 100]</code>.</p></item>
+            <item><p>Use of the function <function>starts-with-subsequence</function>.</p></item>
+         </ulist>
+      </fos:notes>
+
+      <fos:examples>
+         <fos:example>
+            <p><emph>An infinite sequence of even numbers</emph></p>
+            <p>The expression </p>
+            <eg>generate(0, fn{.+2})</eg>
+            <p>Produces an infinite sequence of even numbers: <code>0, 2, 4, 6, 8, ...</code>.</p>
+            <p>Operations that attempt to process this entire sequence (for example, <code>count</code>
+            or <code>sum</code>) will inevitably fail (either by running out of resources, or by failing
+            to terminate). However, operations that only need access to the start of the sequence, for 
+            example <code>generate(0, fn{.+2})[20]</code> will typically succeed, evaluating
+            the infinite sequence only as far as is needed to deliver a result. Such operations are guaranteed
+            to succeed if the operation in question is guaranteed to perform <termref def="dt-incremental-evaluation"/>
+            of its operand.</p>
+            <p>Some operations, such as:</p>
+            <eg>index-of(generate(0, fn{.+2}), $n)[1]</eg>
+            <p>may or may not succeed, depending on the actual content of the data (in this case, depending on whether
+            <code>$n</code> is odd or even).</p>
+         </fos:example>
+         <fos:example>
+            <p><emph>An infinite sequence of random doubles</emph></p>
+            <p>The function call:</p>
+            
+           <eg>generate(random-number-generator($seed), fn{?next}) 
+   [1 to 1000] ? number</eg>
+            
+         <p>returns an sequence of one thousand random numbers. The call to <function>generate</function>
+            supplies as initial value a random number generator with a given seed. The <code>$step</code>
+            function calls the <code>next</code> method of <function>fn:random-number-generator</function>
+            to produce a new random number generator. The result of the call to <function>generate</function> 
+            is thus an unbounded sequence of random number generators. The filter predicate <code>1 to 1000</code>
+            then reduces this sequence to the first 1000 items: this works because a filter expression is
+            guaranteed to perform <termref def="dt-incremental-evaluation"/> of its base expression.
+            The final <code>? number</code> operation then extracts the number delivered by each of the 
+            random number generator objects.
+         </p>   
+         </fos:example>
+         <fos:example>
+            <p><emph>Generating the Fibonnaci sequence</emph></p>
+            <p>The expression:</p>
+            <eg>generate([1,1], fn{[?2, ?1+?2]})?1</eg>
+            <p>delivers an infinite sequence of integers, specifically the Fibonacci sequence:</p>
+            <eg>1, 1, 2, 3, 5, 8, 13, 21, 34, 55...</eg>
+            <p>This example illustrates that <function>generate</function> produces a sequence of states,
+            which in turn can be used to deliver the actual values that are needed. In this case the state
+            is represented by an array containing two consecutive Fibonacci numbers, which is sufficient
+            information to compute the next state. The final <code>?1</code> is used to extract the actual
+            wanted number from the array used to represent the state.</p>
+         </fos:example> 
+         <fos:example>
+            <p><emph>Markov simulation</emph></p>
+            <p>The <function>generate</function> function can be useful in simulations of Markov processes.
+            A trivial example of such a process is the “drunkard's walk”: a sequence of integers in which
+            each integer is either one greater or one less than the previous integer, with equal probability.
+            </p>
+            
+            <eg>
+  generate({'val':0, 'rg':random-number-generator(current-dateTime())},
+           fn{ {'val': ?val + head(?rg?permute((-1, +1))),
+                'rg': ?rg?next() } } )
+            </eg>
+            <p>In one sample run of the simulation, this produced the sequence 
+               <code>0 1 0 -1 -2 -1 0 1 0 -1 -2 -3 -4 -3 -2 -3 ...</code></p>
+            
+         </fos:example>
+         
+         <fos:example>
+            <p><emph>A finite state automaton</emph></p>
+            <p>Validating a text against a grammar often involves production of a finite state automaton.
+            Each state in such an automaton has a set of possible transitions, which is a mapping from the
+            next token in the input to the next state in the automaton. For example, the grammar
+            <code>(ab)*</code> has two states: state <var>S1</var> has a single transition that maps the token
+            <code>"a"</code> to the state <var>S2</var>, while state <var>S2</var> has a single transition that maps the token
+            <code>"b"</code> to state <var>S1</var>. State <var>S1</var> is both the initial state and the required final state,
+            so an input string is valid against the grammar if a sequence of transitions ends with state <var>S1</var>.</p>
+            <p>This finite state automaton might be represented by the data structure:</p>
+            <eg>{
+  "S1": { "final":true(),  "transitions": {"a": "S2" } },
+  "S2": { "final":false(), "transitions": {"b": "S1" } }
+}</eg>
+            <p>If this data structure is bound to the variable <code>$fsa</code>, and the input (as a sequence of string tokens)
+               is bound to the variable <code>$input</code>. The following function call:</p>
+            
+            <eg>
+generate("S1", fn($state, $i) {
+    if ($i le count($input)) {
+       $fsa ? $state ? transitions ? ($input[$i])
+         otherwise error(`Unexpected token "{$input[$i]}"`)
+    }) [last()] ? final
+            </eg>
+            <p>returns <code>true</code> if and only if the input matches the grammar corresponding to the automaton.</p>
+            <p>The way this works is that the sequence of states of the generator (which correspond to states of the
+            finite state automaton) advances by matching successive tokens from the input against the valid transitions
+            for that state. If a valid transition is found, the generator moves to the next state; if no transition
+            is found, an error is reported. When the stream of tokens is exhausted, the step function returns an empty
+            sequence to indicate completion. Finally the expression returns true if the last state is a final
+            state, or false otherwise.</p>
+         </fos:example>
+         
+            
+
+         
+      </fos:examples>
+      
+      <fos:changes>
+         <fos:change issue="708" PR="2350" date="2025-12-17"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   
 </fos:functions>
