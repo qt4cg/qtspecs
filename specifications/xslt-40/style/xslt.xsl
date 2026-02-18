@@ -11,6 +11,7 @@
 >
 <xsl:import href="../../../style/xsl-query-2016.xsl"/>
 <xsl:import href="../../../style/funcproto.xsl"/>
+<xsl:import href="../../../style/records.xsl"/>
 
 <xsl:output method="xml" indent="no" encoding="utf-8"/>
 <xsl:output name="xml" method="xml" indent="no" encoding="utf-8"/>
@@ -872,7 +873,11 @@ constructor. These elements are:</p>
   <xsl:apply-templates select="proto"/>
 </xsl:template>
 
-
+<xsl:template match="example[@role='record']" priority="10">
+  <div>
+    <xsl:apply-templates/>
+  </div>
+</xsl:template>
 
 <xsl:template match="proto">
   <xsl:variable name="prefix">
