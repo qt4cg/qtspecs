@@ -487,6 +487,15 @@ Michael Sperberg-McQueen (1954–2024).</p>
                      <code>fn</code> namespace.</p>
                </item>                 
                <item>
+                  <p><code>http://www.w3.org/2005/xpath-functions/generators</code>
+                     for functions &#x2014; associated with <code>generators</code>. </p>
+                  <p>This namespace is used for some functions that manipulate generators (see
+                     <specref ref="generator-functions"/>). The namespace
+                     prefix used in this document for these functions is <code>gn</code>.
+                     These functions are available to users in exactly the same way as those in the
+                     <code>fn</code> namespace.</p>
+               </item>                 
+               <item>
                   <p><code>http://www.w3.org/2005/xqt-errors</code> &#x2014; associated with
                             <code>err</code>. </p>
                   <p>There are no functions in this namespace; it is used for error codes.</p>
@@ -10563,6 +10572,395 @@ return <table>
           </div1>
       
 
+      <div1 id="lazy-evaluation">
+	      <head>Deferred evaluation</head>
+		  <p>Deferred-evaluation is achieved in a user-controlled way, using the system-defined <code>fn:generator</code> record.</p>
+		  <p>Deferred-evaluation is particularly useful when solving any problem, where data sources of unknown or unpredictable size 
+		    must be handled, and only one or a few values from these are needed at any time during the processing. </p>
+		  <div2 id="generator-use-cases">
+		    <head>Major use-cases</head>
+			<p>The <code>f:generator</code> record is a tool for solutions needed for the following use-cases: </p>
+			   <olist>
+			     <item><p>Processing a huge data-source whose values may not all be needed. A generator produces
+				          only the next value from the data-source and only on demand basis.</p>
+				 </item>
+			     <item><p>Handling a data-source providing unknown or infinite number of values. 
+				          When requested for the next value of the data-source the generator always produces it, if the data-source still contains any values. 
+						  It is the responsibility of the caller to issue only the necessary number of requests for the really needed next values.</p>
+				 </item>
+			   </olist>
+			   <p>What is achieved in these two cases:
+			     <ulist>
+				   <item><p>A (next) value is produced only on request. No time is spent on producing all values of the collection.</p></item>
+				   <item><p>A (next) value is produced only on request. No memory is consumed to store all values of the collection.</p></item>
+				 </ulist>
+			   </p>
+			  </div2>
+			  <div2 id="generator-definitions">
+			    <head>Definitions</head>
+
+			     <p>The following terms are defined:</p>
+				 <example>
+				 <ulist>
+				   <item>
+				   <p>
+				   <termdef id="gr-collection-data-source" term="generator-collection-data-source">
+					 An <phrase><term>XPath collection</term></phrase> or just <phrase><term>collection</term></phrase> has nothing to do with the <code>f:collection</code> function. 
+					 An <phrase><term>XPath collection</term></phrase> can be a sequence, an array or a map.
+				   </termdef>
+				   </p>
+				   </item>
+				   <item>
+				   <p>
+				   <termdef id="gr-value" term="generator-value">
+				     Generator <phrase><term>value</term></phrase> - a "value" produced by a call to the generator method <code>get-current</code> can be 
+					 either an individual XPath <code>item()</code> or an XPath sequence.
+				   </termdef>
+				   </p>
+				   </item>
+				   <item>
+				   <p>
+				   <termdef id="gr-instance" term="generator-instance">
+				     Generator <phrase><term>instance</term></phrase> - a given instance of the <code>f:generator</code> record or the result produced by a chain of one or more 
+					 applications of the <code>move-next</code> method starting from a given <code>f:generator</code> instance.
+				   </termdef>
+				   </p>
+				   </item>
+				   <item>
+				   <p>
+				   <termdef id="gr-next-value" term="generator-next-value">
+				     The term <phrase><term>the next value of a generator</term></phrase> denotes the value returned from the <code>get-current()</code> method
+					   applied on the generator-instance produced by the <code>move-next()</code> method, if
+					   the <code>end-reached</code> field of this next generator-instance is <code>false()</code>. This is also the next value in the generator's 
+					   <phrase><term>yield</term></phrase> - see below.
+				   </termdef>
+				   </p>
+				   </item>
+				   
+				   <item>
+				   <p>
+				   <termdef id="gr-contents" term="generator-yield">
+				     The term <phrase><term>yield</term> (of a generator)</phrase> denotes the consecutive values returned from calling the 
+					   <code>move-next()</code>  and then the <code>get-current</code> method 
+					   starting from the current generator instance, and on each generator instance thus produced, by applying the <code>move-next()</code> method
+					   and then the <code>get-current</code> method
+					   until <code>move-next()</code> produces a generator instance whose <code>end-reached</code> field is <code>true()</code>.
+					   <note>
+					     <olist>
+						   <item>
+					    <p>Thus, if the consecutive generator instances produced by continuously applying the <code>move-next()</code> method 
+						   on each of them, starting from the initialized <code>$G1</code> generator is:</p>
+
+					      <p><code>$G2, $G3, ... , $Gn,  ...</code>, then the yield of the generator $G1 is exactly these consecutive generator values:</p> 
+						  <p><code>$G1 =?> get-current(), $G2 =?> get-current(), ..., $Gn =?> get-current(), ... </code></p>
+						  </item>
+						  <item>
+						   <p>If the sequence of the generator instances thus produced is finite (for the final produced generator <code>$Gm</code>, 
+						   <code>$Gm?end-reached eq true()</code>,
+                           then the yield is:</p>
+						   <p><code>$G1 =?> get-current(), $G2 =?> get-current(), ..., $Gm-1 =?> get-current()</code></p>
+						  </item>
+						  
+						  <item>
+						  <p>If the <code>$G1</code> generator is not initialized (<code>$G1?initialized eq false())</code>, then
+						  the yield of this generator is the same as the yield of the (first initialized in the chain) <code>$G2</code> generator:</p>
+						  <p><code>$G2 =?> get-current(), $G3 =?> get-current(), ..., $Gn =?> get-current(), ... </code></p>
+						  </item>
+						  <item>
+						     <p>The yield is empty, if <code>$G1?end-reached eq true</code> and the yield is infinite if neither <code>$G1?end-reached eq true()</code> 
+							    nor any of the consecutive applications of <code>move-next</code> produces a generator <code>$Gx</code>, 
+								such that <code>$Gx?end-reached eq true()</code>.
+							 </p>
+						  </item>
+						</olist>						  
+					   </note>
+				   </termdef>				   
+				   </p>
+				   </item>
+				   <item>
+				    <p>
+				   <termdef id="gr-empty-generator" term="generator-empty">
+				     A generator is <phrase><term>empty</term></phrase> if and only if its field <code>end-reached</code> has the effective boolean value <code>true()</code>.
+					 An <phrase><term>empty generator-instance</term></phrase> reached in the chain produced by successive evaluations of the <code>move-next</code> method
+					 signifies that the yield of a starting generator-instance has been fully traversed. It has the following properties:
+					 <olist>
+					   <item>
+					     <p><code>get-current</code>'s evaluation raises an error.</p>
+					   </item>
+					   <item>						 
+					     <p><code>move-next</code>'s evaluation raises an error.</p>
+					   </item>
+					 </olist>
+					 <note>
+					   <p>Empty generators may arise in two ways:</p>
+					   <olist>
+					     <item>
+						   <p>Produced by the function <code>gn:empty-generator</code>.</p>
+						 </item>
+						 <item>
+						   <p>Termination of a chain of generator instances - the final value of repeated application of the <code>move-next</code> method
+						     is an empty generator instance.</p>
+						  <p>Generators with infinite yield never reach an empty-generator instance in this process.</p>
+						 </item>
+					   </olist>
+					 </note>
+				   </termdef>
+				   </p>				   
+				   </item>
+
+				   </ulist>
+				   </example>
+				   <p>The fields of the <code>f:generator</code> record, including its methods are defined in the next sections.</p>	   
+		  </div2>
+		  <div2 id="generator">
+		    <head><?record-description generator?></head>
+		  </div2>
+ 
+		  <div2 id="generator-functions">
+		    <head>Functions on generators</head>
+			  <p>The functions defined in this section use a conventional namespace prefix "gn", which is assumed 
+			     to be bound to the namespace URI http://www.w3.org/2005/xpath-functions/generator.
+			     They are listed under the following categories, based on the type of the function result:</p>
+				 		    <ulist>
+              <item><p>Functions returning a specific value: an <code>item()</code> or a sequence.</p></item>
+              <item><p>Functions that produce another generator from existing generators.</p></item>			  
+              <item><p>Functions that produce a generator from data by a data-provider.</p></item>
+              <item><p>Functions that produce an XPath collection from the yield of a generator.</p></item>			  
+            </ulist> 
+			
+			<p>These functions do not evaluate eagerly the yield of any of their generator-operands. 
+			   A value from a yield is produced only if explicitly requested by evaluating the methods 
+			   <code>move-next</code> and <code>get-current</code>. At no point in the computation it is 
+			   necessary to have all values of a yield available. In most cases a function would only need one or a few
+			   values from a yield. No unnecessary computation of a value from a yield is done and no memory is
+			   used to hold such unnecessary value at any point in the computation.
+			   This is why the evaluation of the functions defined here is referred to as "Deferred Evaluation".
+			</p>
+			
+			<note>
+			<p>Most of the examples in this section depend on the definition of the following variables:</p>
+			<example>			  
+			  <eg>
+$gen2ToInf := f:generator(initialized := true(), 
+                      end-reached := false(), 
+                      get-current := fn($this as f:generator){$this?state?last +1},
+                      move-next := fn($this as f:generator)
+                      {
+                       if(not($this?initialized))
+                         then map:put($this, "initialized", true())
+                         else map:put($this, "state", map{"last": $this?state?last + 1})
+                      },
+                      state := map{"last" : 1}
+                          ),
+    $genN := $gen2ToInf => map:put("state", map{"last": 0}),
+    $gen0toInf := $gen2ToInf => map:put("state", map{"last": -1}),
+    $double := fn($n) {2*$n},
+    $sum2 := fn($m, $n) {$m + $n},
+    $product := fn($m, $n) {$m * $n},
+    $factorial := fn($n) {fold-left(1 to $n, 1, $product)}			  
+			  </eg>
+			</example>
+			<p> The examples use three generators with infinite yields:
+			  <ulist>
+			    <item>
+			      <p><code>$gen2ToInf</code> with yield -  all integers in the interval from 2 to Infinity ([2, ∞])</p>
+                </item>
+			    <item>
+			      <p><code>$genN</code> with yield - the sequence of all natural numbers: all integers in [1, ∞]</p>
+                </item>
+			    <item>
+			      <p><code>$gen0toInf </code> with yield -  the sequence of all non-negative numbers: all integers in [0, ∞]</p>
+                </item>
+			  </ulist>
+			</p>
+			<p>And four functions:
+			  <ulist>
+			    <item>
+				  <p><code>$double</code> returns its argument, multiplied by <code>2</code>.</p>
+				</item>
+			    <item>
+				  <p><code>$sum2</code> returns the sum of its two arguments.</p>
+				</item>
+			    <item>
+				  <p><code>$product</code> returns the product of its two arguments.</p>
+				</item>
+			    <item>
+				  <p><code>$factorial</code> given a non-negative argument <code>$n</code> returns its factorial <code>($n)!</code>.</p>
+				</item>
+			  </ulist>
+			</p>			
+			</note>
+			<div3 id="generator-functions-getting-value">
+			    <head>Functions returning a specific value</head>
+				<p>This group of functions returns a single value computed from the yield of a supplied generator. 
+				   Each function inspects the yield only as far as necessary to obtain that value.</p>
+				<?local-function-index?>
+				<div4 id="generator-at">
+				  <head><?function gn:at?></head>
+				</div4>			
+				<div4 id="generator-contains">
+				  <head><?function gn:contains?></head>
+				</div4>			
+				<div4 id="generator-first-where">
+				  <head><?function gn:first-where?></head>
+				</div4>			
+				<div4 id="generator-fold-left">
+				  <head><?function gn:fold-left?></head>
+				</div4>		
+				<div4 id="generator-fold-right">
+				  <head><?function gn:fold-right?></head>
+				</div4>						
+				<div4 id="generator-fold-lazy">
+				  <head><?function gn:fold-lazy?></head>
+				</div4>						
+				<div4 id="generator-head">
+				  <head><?function gn:head?></head>
+				</div4>						
+				<div4 id="generator-some">
+				  <head><?function gn:some?></head>
+				</div4>						
+				<div4 id="generator-some-where">
+				  <head><?function gn:some-where?></head>
+				</div4>						
+				<div4 id="generator-value">
+				  <head><?function gn:value?></head>
+				</div4>						
+			</div3>
+			<div3 id="generator-functions-producing-generators">
+				<head>Functions that produce another generator from existing generators</head>
+				<p>Each of the functions in this section takes a generator as its first argument, and returns a generator. 
+				  This allows chaining of function calls to produce complex transformations of the yields of the generators that are
+				  supplied as arguments.
+				  Only the starting instance of the result-generator is produced, and only the instances of the 
+				  intermediate-result-generators that are required to compute this starting instance are produced.
+				  </p>
+				<?local-function-index?>			
+				<div4 id="generator-append">
+				  <head><?function gn:append?></head>
+				</div4>						
+				<div4 id="generator-chunk">
+				  <head><?function gn:chunk?></head>
+				</div4>						
+				<div4 id="generator-concat">
+				  <head><?function gn:concat?></head>
+				</div4>						
+				<div4 id="generator-distinct">
+				  <head><?function gn:distinct?></head>
+				</div4>						
+				<div4 id="generator-filter">
+				  <head><?function gn:filter?></head>
+				</div4>						
+				<div4 id="generator-for-each">
+				  <head><?function gn:for-each?></head>
+				</div4>						
+				<div4 id="generator-for-each-pair">
+				  <head><?function gn:for-each-pair?></head>
+				</div4>						
+				<div4 id="generator-insert-at">
+				  <head><?function gn:insert-at?></head>
+				</div4>						
+				<div4 id="generator-next">
+				  <head><?function gn:next?></head>
+				</div4>						
+				<div4 id="generator-prepend">
+				  <head><?function gn:prepend?></head>
+				</div4>						
+				<div4 id="generator-remove-at">
+				  <head><?function gn:remove-at?></head>
+				</div4>						
+				<div4 id="generator-remove-where">
+				  <head><?function gn:remove-where?></head>
+				</div4>						
+				<div4 id="generator-replace">
+				  <head><?function gn:replace?></head>
+				</div4>						
+				<div4 id="generator-reverse">
+				  <head><?function gn:reverse?></head>
+				</div4>						
+				<div4 id="generator-scan-left">
+				  <head><?function gn:scan-left?></head>
+				</div4>						
+				<div4 id="generator-scan-right">
+				  <head><?function gn:scan-right?></head>
+				</div4>						
+				<div4 id="generator-skip">
+				  <head><?function gn:skip?></head>
+				</div4>						
+				<div4 id="generator-skip-strict">
+				  <head><?function gn:skip-strict?></head>
+				</div4>						
+				<div4 id="generator-skip-while">
+				  <head><?function gn:skip-while?></head>
+				</div4>						
+				<div4 id="generator-subrange">
+				  <head><?function gn:subrange?></head>
+				</div4>						
+				<div4 id="generator-tail">
+				  <head><?function gn:tail?></head>
+				</div4>						
+				<div4 id="generator-take">
+				  <head><?function gn:take?></head>
+				</div4>						
+				<div4 id="generator-take-while">
+				  <head><?function gn:take-while?></head>
+				</div4>						
+				<div4 id="generator-zip">
+				  <head><?function gn:zip?></head>
+				</div4>						
+			</div3>
+			<div3 id="generator-functions-producing-generators-from-providers">
+				<head>Functions that produce a generator from a data provider</head>
+				<p>The functions in this section construct generators whose yield is supplied by an <phrase><term>external provider function</term></phrase>. 
+				   Providers allow generators to expose yields that are too large to fit into memory, must be computed incrementally, 
+				   or require access to external systems (such as files, databases, or web services).</p>
+				   <p>A provider function is responsible for producing, on each invocation, both:</p>
+				   <olist>
+				     <item>
+					   <p><phrase><term>state-data</term></phrase> - an array with information required for the provider to compute its next result, and</p>
+					 </item>
+				     <item>
+					   <p><phrase><term>result-data</term></phrase> - an array either containing a single yield-value or empty, signaling that the data for producing 
+					      the yield has been exhausted.</p>
+					 </item>
+				   </olist>
+				  <p>The generator returned by these functions behaves identically to any other generator: 
+				     values are not computed eagerly but are obtained only as result of evaluating the method
+					 <code>move-next()</code> followed by the evaluation of the method <code>get-current()</code>.
+				  </p>
+				<?local-function-index?>	
+				<div4 id="generator-empty-generator">
+				  <head><?function gn:empty-generator?></head>
+				</div4>						
+				<div4 id="generator-make-generator">
+				  <head><?function gn:make-generator?></head>
+				</div4>					  
+				<div4 id="generator-make-generator-from-array">
+				  <head><?function gn:make-generator-from-array?></head>
+				</div4>	
+				<div4 id="generator-make-generator-from-sequence">
+				  <head><?function gn:make-generator-from-sequence?></head>
+				</div4>	
+				<div4 id="generator-make-generator-from-map">
+				  <head><?function gn:make-generator-from-map?></head>
+				</div4>	
+			</div3>
+			<div3 id="generator-functions-producing-xpath-collections-from-generators">
+				<head>Functions that produce an XPath collection from a generator</head>
+				<p>Generators can be used to construct standard XPath collections: arrays, maps, and sequences.</p>
+				<?local-function-index?>	
+				<div4 id="generator-to-array">
+				  <head><?function gn:to-array?></head>
+				</div4>					  
+				<div4 id="generator-to-map">
+				  <head><?function gn:to-map?></head>
+				</div4>					  
+				<div4 id="generator-to-sequence">
+				  <head><?function gn:to-sequence?></head>
+				</div4>					  
+			</div3>			
+		  </div2>
+
+	  </div1>
          
       
       <div1 id="dynamic-loading">
@@ -14234,7 +14632,18 @@ ISBN 0 521 77752 6.</bibl>
 			   selects a component that is not present in a date, or if the picture string supplied to <function>fn:format-time</function> 
 			   selects a component that is not present in a time.</p>
             </error>
-
+			
+            <error class="GR" code="0001" label="Attempt to access the value of a generator that is not initialized."
+               type="dynamic">
+               <p>A dynamic error is raised if the code attempts to access the current value 
+			     of a generator whose <code>initialized</code> field is <code>false()</code>.</p>
+			</error>
+            <error class="GR" code="0002" label="Attempt to access a value beyond the end of a generator."
+               type="dynamic">
+               <p>A dynamic error is raised if the code attempts to access the current value 
+			      or move to the next state of a generator whose <code>end-reached</code> field is <code>true()</code>.</p>
+			</error>
+			
             <error class="HA" code="0001" label="Invalid algorithm." type="dynamic">
                <p>Raised by <function>fn:hash</function> if the effective value of the supplied
                algorithm is not one of the values supported by the implementation.</p>
@@ -14510,8 +14919,8 @@ ISBN 0 521 77752 6.</bibl>
          types, the names will usually be written with the prefix <code>fn</code>.</p>
          
          <?record-description-index?>
+
       </div1>
-      
       <div1 id="schemata">
          <head>Schemas</head>
          
