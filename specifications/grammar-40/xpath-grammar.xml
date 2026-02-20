@@ -1663,45 +1663,80 @@ VersionDecl ::= "xquery" (("encoding" StringLiteral) | ("version" StringLiteral
   </g:production>
   
   <g:production name="ArrowExpr">
-    <g:ref name="UnaryExpr"/>
+    <g:choice>
+      <g:ref name="ArrowExprS"/>
+      <g:ref name="UnsignedUnaryExpr"/>
+    </g:choice>
+  </g:production>
+
+  <g:production name="UnaryExpr">
+    <!-- This one is used only in XPath 4.0 prose -->
+    <g:choice>
+      <g:ref name="SignedUnaryExpr"/>
+      <g:ref name="UnsignedUnaryExpr"/>
+    </g:choice>
+  </g:production>
+
+  <g:production name="ArrowExprS">
+    <!-- always with a leading unary sign -->
+    <g:ref name="SignedUnaryExpr"/>
     <g:zeroOrMore>
-      <g:choice>
-        <g:ref name="SequenceArrowTarget"/>
-        <g:ref name="MappingArrowTarget"/>
-      </g:choice>
+      <g:ref name="ArrowTarget"/>
     </g:zeroOrMore>
   </g:production>
-  
-  <g:production name="UnaryExpr">
-    <g:zeroOrMore>
+
+  <g:production name="ArrowExprU">
+    <!-- always with one `ArrowTarget` -->
+    <!-- this works because it is an optional part of `RelativePathExprU` -->
+    <g:ref name="UnsignedUnaryExpr"/>
+    <g:ref name="ArrowTarget"/>
+  </g:production>
+
+  <g:production name="SignedUnaryExpr">
+    <g:oneOrMore>
       <g:choice>
         <g:string>-</g:string>
         <g:string>+</g:string>
       </g:choice>
-    </g:zeroOrMore>
-    <g:ref name="ValueExpr"/>
+    </g:oneOrMore>
+    <g:ref name="ValueExprS"/>
   </g:production>
-  
-  <g:production name="ValueExpr">
+
+  <g:production name="UnsignedUnaryExpr">
+    <g:ref name="ValueExprU"/>
+  </g:production>
+
+  <g:production name="ValueExprS">
+    <g:ref name="SimpleMapExprS"/>
+  </g:production>
+
+  <g:production name="ValueExprU">
     <g:choice>
       <g:ref name="ValidateExpr" if="xquery40"/>
       <g:ref name="ExtensionExpr" if="xquery40"/>
-      <g:ref name="SimpleMapExpr"/>
+      <g:ref name="SimpleMapExprU"/>
     </g:choice>
   </g:production>
-  
-  
+
+
+  <g:production name="ArrowTarget" if="xpath40 xquery40 xslt40-patterns">
+    <g:choice>
+      <g:ref name="SequenceArrowTarget"/>
+      <g:ref name="MappingArrowTarget"/>
+    </g:choice>
+  </g:production>
+
   <g:production name="SequenceArrowTarget" if="xpath40 xquery40 xslt40-patterns">
     <g:string>=></g:string>
-    <g:ref name="ArrowTarget"/>
+    <g:ref name="ArrowTargetCall"/>
   </g:production>
   
   <g:production name="MappingArrowTarget" if="xpath40 xquery40 xslt40-patterns">
     <g:string>=!></g:string>
-    <g:ref name="ArrowTarget"/>
+    <g:ref name="ArrowTargetCall"/>
   </g:production>
   
-  <g:production name="ArrowTarget" if="xpath40 xquery40 xslt40-patterns">
+  <g:production name="ArrowTargetCall" if="xpath40 xquery40 xslt40-patterns">
     <g:choice>
       <g:ref name="FunctionCall"/>
       <g:ref name="RestrictedDynamicCall"/>
@@ -1818,12 +1853,30 @@ VersionDecl ::= "xquery" (("encoding" StringLiteral) | ("version" StringLiteral
   </g:production>
 
   <g:production name="SimpleMapExpr" condition="&gt; 1" if="xpath40 xquery40  xslt40-patterns">
+    <!-- This one is used only in XPath 4.0 prose -->
+    <g:choice>
+      <g:ref name="SimpleMapExprS"/>
+      <g:ref name="SimpleMapExprU"/>
+    </g:choice>
+  </g:production>
+
+  <g:production name="SimpleMapExprS" condition="&gt; 1" if="xpath40 xquery40  xslt40-patterns">
     <g:ref name="PathExpr"/>
     <g:zeroOrMore>
       <g:string>!</g:string>
       <g:ref name="PathExpr"/>
     </g:zeroOrMore>
   </g:production>
+
+  <g:production name="SimpleMapExprU" condition="&gt; 1" if="xpath40 xquery40  xslt40-patterns">
+    <g:ref name="PathExprU"/>
+    <g:zeroOrMore>
+      <g:string>!</g:string>
+      <g:ref name="PathExpr"/>
+      <!-- NB: other operands cannot contain `ArrowExprU`, so `PathExpr` instead of `PathExprU` is used here -->
+    </g:zeroOrMore>
+  </g:production>
+
 
   <!-- ] end OrExpr etc -->
 
@@ -1835,7 +1888,15 @@ VersionDecl ::= "xquery" (("encoding" StringLiteral) | ("version" StringLiteral
       <g:ref name="RelativePathExpr"/>
     </g:choice>
   </g:production>
-  
+
+  <g:production name="PathExprU" xgc-id="leading-lone-slash">
+    <g:choice break="true" name="PathExprChoicesU">
+      <g:ref name="AbsolutePathExpr"/>
+      <g:ref name="RelativePathExprU"/>
+    </g:choice>
+  </g:production>
+
+
   <g:production name="AbsolutePathExpr">
     <g:choice>
       <g:sequence>
@@ -1855,12 +1916,26 @@ VersionDecl ::= "xquery" (("encoding" StringLiteral) | ("version" StringLiteral
   <g:production name="RelativePathExpr" node-type="void">
     <g:ref name="StepExpr"/>
     <g:zeroOrMore name="RelativePathExprTail">
-      <g:choice name="RelativePathExprStepSep">
-        <g:string>/</g:string>
-        <g:string>//</g:string>
-      </g:choice>
-      <g:ref name="StepExpr"/>
+      <g:ref name="RelativePathTarget"/>
     </g:zeroOrMore>
+  </g:production>
+
+  <g:production name="RelativePathExprU" node-type="void">
+    <g:choice>
+      <g:ref name="ArrowExprU"/>
+      <g:ref name="StepExpr"/>
+    </g:choice>
+    <g:zeroOrMore name="RelativePathExprTailU">
+      <g:ref name="RelativePathTarget"/>
+    </g:zeroOrMore>
+  </g:production>
+
+  <g:production name="RelativePathTarget">
+    <g:choice name="RelativePathExprStepSep">
+      <g:string>/</g:string>
+      <g:string>//</g:string>
+    </g:choice>
+    <g:ref name="StepExpr"/>
   </g:production>
 
   <g:production name="StepExpr" node-type="void">
