@@ -2270,14 +2270,12 @@
 
   <!-- termdef: sentence or phrase defining a term -->
   <xsl:template match="termdef">
-    <xsl:text>[</xsl:text>
     <a id="{@id}" title="{@term}">
-      <xsl:text>Definition</xsl:text>
+      <span class="definition">[Definition:&#xa0;</span>
     </a>
-    <xsl:text>: </xsl:text>
     <xsl:apply-templates/>
     <xsl:if test="not(@open='true')">
-      <xsl:text>]</xsl:text>
+      <span class="definition">]</span>
     </xsl:if>
   </xsl:template>
 
