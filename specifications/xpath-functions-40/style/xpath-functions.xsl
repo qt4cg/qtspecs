@@ -759,16 +759,17 @@
   </a>
 </xsl:template>
 
-<xsl:template match="termdef">
+<!--<xsl:template match="termdef">
   <xsl:param name="suppress-ids" tunnel="yes" as="xs:boolean" select="false()"/>
   <span class="termdef">
     <xsl:if test="not($suppress-ids)">
       <a id="{@id}"/>
     </xsl:if>
-    <xsl:text>[Definition]  </xsl:text>
+    <span class="definition">[Definition:&#xa0;</span>
     <xsl:apply-templates/>
+    <span class="definition">]</span>
   </span>
-</xsl:template>
+</xsl:template>-->
 
 <!-- ====================================================================== -->
 <!-- Special support for the casting tables -->
