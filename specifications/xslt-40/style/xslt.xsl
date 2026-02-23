@@ -109,14 +109,14 @@
 </xsl:template>
 
   <!-- termdef: sentence or phrase defining a term -->
-  <xsl:template match="termdef">
+  <!--<xsl:template match="termdef">
     <span class="definition">[Definition:&#xa0;</span>
     <a id="{@id}" title="{@term}"/>
     <xsl:apply-templates/>
     <xsl:if test="not(@open='true')">
       <span class="definition">]</span>
     </xsl:if>
-  </xsl:template>
+  </xsl:template>-->
   
   <!-- Override rendition of altlocs in xmlspec.xsl -->
   <xsl:template match="altlocs">
