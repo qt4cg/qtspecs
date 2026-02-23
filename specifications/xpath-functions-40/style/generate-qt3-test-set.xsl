@@ -108,6 +108,10 @@
           <xsl:when test="exists(fos:test-assertion)">
             <xsl:copy-of select="fos:test-assertion/*:result/*"/>           
           </xsl:when>
+          <xsl:when test="fos:result[@narrative]">
+            <!-- In this case the generated test must compile and execute, but the result is not tested -->
+            <assert>true()</assert>
+          </xsl:when>
           <xsl:when test="fos:result[matches(., '^\s*&lt;')] and not(contains(fos:expression, 'serialize'))">
             <!-- Drop leading whitespace to keep the XML parser happy -->
             <xsl:variable name="trimmed" select="replace(fos:result, '^\s+&lt;', '&lt;')"/>
@@ -129,10 +133,6 @@
                 <assert-xml ignore-prefixes="{(fos:result/@ignore-prefixes, false())[1]}">{$trimmed}</assert-xml>
               </xsl:otherwise>
             </xsl:choose>           
-          </xsl:when>
-          <xsl:when test="fos:result[@narrative]">
-            <!-- In this case the generated test must compile and execute, but the result is not tested -->
-            <assert>true()</assert>
           </xsl:when>
           <xsl:when test="fos:result[@approx]">
             <assert>abs($result - {fos:result}) lt 1e-5</assert>
