@@ -323,7 +323,7 @@
                 <xsl:if test="@note">
                   <code class="arg-note">
                     <xsl:text> (:</xsl:text>
-                    <a href="#{@note}">empty</a>
+                    <a href="#{@note}"><xsl:value-of select="@note"/></a>
                     <xsl:text>:)</xsl:text>
                   </code>
                 </xsl:if>
