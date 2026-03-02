@@ -33,7 +33,7 @@ while [ "$DONE" = "0" ]; do
 
     LAST=`cat $FN | jq ".[].number" | tail -1`
     echo $LAST
-    if [ "$LAST" = "1" ]; then
+    if [ "$LAST" = "6" ]; then
         DONE=1
     fi
 
