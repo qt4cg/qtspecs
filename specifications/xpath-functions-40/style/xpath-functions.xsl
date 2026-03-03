@@ -326,6 +326,13 @@
                   <code><xsl:sequence select="@default/string()"/></code>
                   <xsl:if test="not($last)">,</xsl:if>
                 </xsl:if>
+                <xsl:if test="@note">
+                  <code class="arg-note">
+                    <xsl:text> (:</xsl:text>
+                    <a href="#{@note}"><xsl:value-of select="@note"/></a>
+                    <xsl:text>:)</xsl:text>
+                  </code>
+                </xsl:if>
               </td>
             </tr>
           </xsl:for-each>
