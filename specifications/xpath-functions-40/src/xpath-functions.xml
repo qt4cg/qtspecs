@@ -1572,6 +1572,136 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                <head><?function fn:while-do?></head>
             </div3>
          </div2>
+         <div2 id="incremental-evaluation">
+            <head>Incremental Evaluation</head>
+            <p>Some operations, most notably the <function>generate</function> function,
+            may deliver sequences of unbounded length. Other examples include the <function>do-while</function>
+            and <code>until-do</code> functions. In addition, many functions and operators that take
+            an unbounded sequence as input may also deliver an unbounded sequence as their result: example
+            include the functions <function>filter</function>, <function>for-each</function>,
+            <function>index-of</function>, <function>index-where</function>, <function>insert-before</function>,
+            <function>remove</function>, and operations such as <code>A!B</code> and <code>for $x in X return R</code>.
+            </p>
+            <p><termdef id="dt-incremental-evaluation" term="incremental evaluation">A function or operation is said to be
+            <term>incrementally evaluated</term> with respect to one of its arguments or operands if the implementation
+            is capable of processing an unbounded value for that argument or operand without exhausting 
+            available memory.</termdef></p>
+            
+            <note><p>Other terms used for incremental evaluation include <emph>lazy evaluation</emph> and <emph>pipelining</emph>. However,
+            these terms have different meanings in other contexts. Incremental evaluation of sequences (processing the initial items
+            of a sequence without first materializing the entire sequence) is one example of a lazy evaluation
+            strategy, while the term <emph>pipelining</emph> can also be used to refer to a sequence of processing steps in which each
+            step runs to completion before the next one starts.</p></note>
+            
+            <p>Some functions and operators may accept more than one unbounded sequence among their inputs.
+               Examples are the comma operator (which performs <xtermref spec="XP40" ref="dt-sequence-concatenation"/>),
+               and the functions <code>for-each-pair</code> and <code>insert-before</code>.
+            </p>
+            <p>Incremental evaluation applies not only to sequences, but also to arrays. Although there is no
+            equivalent to <function>generate</function> that directly delivers an unbounded
+            array, the functions <function>array:build</function> and <function>array:of-members</function>
+            produce an unbounded array if supplied with an unbounded sequence as their input.</p>
+            <p>Incremental operations can be divided into a number of categories:</p>
+            
+            <ulist>
+               <item><p>Bounded input, unbounded output. This category includes <function>generate</function>,
+               <function>do-until</function>, and <function>while-do</function>.</p></item>
+               <item><p>Unbounded input, unbounded output. This category includes <function>filter</function>,
+               <function>for-each</function>, <function>index-of</function>, <function>index-where</function>, 
+               <code>for</code> expressions, and the <code>!</code> operator.</p></item>
+               <item><p>Unbounded input, guaranteed finite output. This category includes <function>subsequence</function>,
+               and <function>slice</function> (provided an end condition is supplied),
+                     <function>head</function>, <function>exists</function>, <code>empty</code>, and
+                     <function>starts-with-subsequence</function></p></item>
+               <item><p>Non-terminating: functions that will not terminate until they reach
+               the end of the input sequence. Examples are <function>count</function>, <function>sum</function>
+               <function>string-join</function>, <function>distinct-values</function>.</p></item>
+               <item><p>Potentially non-terminating: functions that may or may not terminate,
+               depending on the content of the input sequence. For example, <function>some</function>.</p></item>
+            </ulist>
+            
+            <p>For a small number of functions and operators, this specification mandates that the implementation
+            <rfc2119>must</rfc2119> be incrementally evaluated. A conformant implementation of these functions and
+            operators must not be constrained by available memory (though it may have other limits, such as a limit on 
+            the size of integer used to represent the value of <function>position</function>).</p>
+            
+            <p>For a larger class of operations, the processor <rfc2119>may</rfc2119> be able to
+            use incremental evaluation, but this is not mandated. For example, the specification
+            does not mandate that the <function>partition</function> function must be pipelined. Similarly,
+            it does not mandate that a general comparison (such as the <code>=</code> operator)
+            must be incrementally evaluated with respect to either or both of the operands.</p>
+            
+            <p>Some operations may be amenable to incremental evaluation depending on the conditions.
+            For example, the <code>union</code> and <code>intersect</code> operators can be incrementally
+            evaluated provided that the processor is able to determine that the operand sequences will always be
+            in document order (this will be the case, for example, if the operands are path expressions).
+            This analysis is outside the scope of the specification: in consequence it is
+            implementation-dependent whether, and under what circumstances, such operations are incrementally
+            evaluated.</p>
+            
+            <p>TODO: define which functions and operators are guaranteed to be incrementally evaluated.</p>
+            
+            <div3 id="pipelining-and-optimization">
+               <head>Unbounded sequences and optimization</head>
+               
+               <p>As declarative expression-based language, XPath, XSLT, and XQuery are designed to have <term>referential transparency</term>.
+                  This essentially means that any subexpression can be replaced by its value, or by a different expression
+                  having the same value. This property enables powerful optimizations through expression rewriting, including,
+                  for example:</p>
+               
+               <ulist>
+                  <item><p>Constant folding: that is, early compile-time evaluation of expressions whose value will 
+                  be the same on every execution of a program;</p></item>
+                  <item><p>Loop lifting: moving an expression out of a loop, and binding its result to a variable, to 
+                  avoid evaluating the expression repeatedly;</p></item>
+                  <item><p>Common subexpression elimination: recognising where the same expression appears more than
+                  once in the code, so that it need only be evaluated once.</p></item>
+                  <item><p>Memoization: caching the results of a function call so that subsequent attempts to
+                        evaluate the same function with the same arguments do not require the value to
+                        be recomputed.</p></item>
+               </ulist>
+               
+               <p>All these optimizations potentially become problematic when expressions evaluate to unbounded sequences.
+               The fact that the value of such an expression cannot be held in finite memory effectively undermines the
+               principle that the expression can always be replaced by its value.</p>
+               
+               <p>This is not a new problem, because previous versions of XQuery and XSLT also allowed constructs (recursive functions,
+               for example) that evaluated to unbounded sequences, and applications using such constructs might succeed on 
+               some implementations and fail on others. However, the explicit use of generators (via the 
+               <function>generate</function> function) makes it necessary to address the issues raised.</p>
+               
+               <p>The specification does not attempt a complete solution to the problem. Rather, it takes a pragmatic
+               approach, offering recommendations of good practise both to implementers and users.</p>
+               
+               <p>Recommendations for implementers:</p>
+               
+               <ulist>
+                  <item><p>When implementing constant folding or memoization, abandon the attempted optimization
+                  if the value becomes too large.</p></item>
+                  <item><p>When variables are introduced to avoid repeated evaluation of an expression, ensure that the
+                  variable itself is lazily evaluated so that evaluation does not fail when the expression is non-terminating.</p></item>
+               </ulist>
+               
+               <p>Recommendations for users:</p>
+               
+               <ulist>
+                  <item><p>Avoid binding expressions to variables if the value might be unbounded.</p></item>
+                  <item><p>Avoid using an expression whose result might be unbounded as the argument to a function call,
+                  except where the function explicitly guarantees incremental evaluation. (Note that these
+                  specifications offer no such guarantee in the case of user-defined functions, though an implementation
+                  might do so.)</p></item>
+               </ulist>
+            </div3>
+            
+            <div3 id="pipelining-and-streaming">
+               <head>Incremental evaluation and streaming</head>
+               <p>TODO: say something here about the relationship of incremental evaluation to XSLT streaming.</p>
+            </div3>
+            
+            <div3 id="func-generate">
+               <head><?function fn:generate?></head>
+            </div3>
+         </div2>
          
          
       </div1>
