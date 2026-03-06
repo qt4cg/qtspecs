@@ -203,8 +203,8 @@
 					  <xsl:if test="fos:use-two-column-format($fspec/fos:examples)">
 					    <thead>
 					      <tr>
-						<th>Expression</th>
-						<th>Result</th>
+								<th>Expression</th>
+								<th>Result</th>
 					      </tr>
 					    </thead>
 					  </xsl:if>
@@ -215,16 +215,6 @@
 				 </def>
 		    </gitem>
 		  </xsl:if>
-			<!--<xsl:if test="$fspec/fos:history">
-				<gitem>
-					<label>History</label>
-					<def role="example">
-						<p>
-							<xsl:apply-templates select="$fspec/fos:history/fos:version/node()"/>
-						</p>
-					</def>
-				</gitem>
-			</xsl:if>-->
 		</glist>
 	</xsl:template>
 	
@@ -553,6 +543,9 @@
 	
 	<xsl:template match="fos:result">
 		<xsl:choose>
+			<xsl:when test="@narrative">
+				<p><xsl:apply-templates/></p>
+			</xsl:when>
 			<xsl:when test="contains(., codepoints-to-string(10)) or ..//eg">
 				<eg><xsl:value-of select="."/></eg>
 			</xsl:when>

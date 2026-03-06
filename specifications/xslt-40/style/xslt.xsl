@@ -11,6 +11,7 @@
 >
 <xsl:import href="../../../style/xsl-query-2016.xsl"/>
 <xsl:import href="../../../style/funcproto.xsl"/>
+<xsl:import href="../../../style/records.xsl"/>
 
 <xsl:output method="xml" indent="no" encoding="utf-8"/>
 <xsl:output name="xml" method="xml" indent="no" encoding="utf-8"/>
@@ -108,14 +109,14 @@
 </xsl:template>
 
   <!-- termdef: sentence or phrase defining a term -->
-  <xsl:template match="termdef">
+  <!--<xsl:template match="termdef">
     <span class="definition">[Definition:&#xa0;</span>
     <a id="{@id}" title="{@term}"/>
     <xsl:apply-templates/>
     <xsl:if test="not(@open='true')">
       <span class="definition">]</span>
     </xsl:if>
-  </xsl:template>
+  </xsl:template>-->
   
   <!-- Override rendition of altlocs in xmlspec.xsl -->
   <xsl:template match="altlocs">
@@ -872,7 +873,11 @@ constructor. These elements are:</p>
   <xsl:apply-templates select="proto"/>
 </xsl:template>
 
-
+<xsl:template match="example[@role='record']" priority="10">
+  <div>
+    <xsl:apply-templates/>
+  </div>
+</xsl:template>
 
 <xsl:template match="proto">
   <xsl:variable name="prefix">
