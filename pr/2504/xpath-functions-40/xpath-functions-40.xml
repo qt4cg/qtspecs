@@ -13373,7 +13373,7 @@ return $result/*/@*:state = 'failed'</eg></td></tr><tr><th valign="top" rowspan=
 let $parser := invisible-xml("S=A. A='a'.", { "fail-on-error": true() })
 let $result := $parser("b")
 return $result
-</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><p>Raises error FOIX0002.</p></td></tr></tbody></table></def></gitem></glist></div3></div2><div2 id="generators"><head>Functions on generators</head><changes><change PR="2247">
+</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><p>Raises error FOIX0002.</p></td></tr></tbody></table></def></gitem></glist></div3></div2><div2 id="generators"><head>Functions on Generators</head><changes><change PR="2247">
                  New functions are available for progressive evaluation of data series via generators.
               </change></changes><p>A generator is a mechanism based upon a system-defined record <code nobreak="false">fn:generator-record</code>
            which facilitates piecemeal evaluation of a larger dataset via successive calls
@@ -13454,9 +13454,9 @@ return gn:empty($non-empty-generator)
             </eg></td></tr><tr><td colspan="2" rowspan="1"><p>The result is <code nobreak="false">false()</code>.</p></td></tr></tbody></table></def></gitem></glist></div4></div3><div3 id="generator-examples"><head>Illustrative examples of generators</head><p>The following examples aim to illustrate the utility and practicality of generators.</p><example id="generator-fibonacci"><head>An unbounded generator which yields the fibonacci sequence.</head><p>N.B. This generator, like the fibonacci sequence itself, has no upper bound.</p><eg xml:space="preserve">
 let $fib0 := fn:generator-record(
         get-current := fn($this) { $this?state(1) },
-        move-next   := fn($this) { $this =&gt;
-                                   map:put('state',
-                                           [ $this?state(2), sum($this?state?*) ])
+        move-next   := fn($this) { let $next := $this?state(1) + $this?state(2)
+                                   return map:put($this, 'state',
+                                                  [ $this?state(2), $next ])
                        },
         state       := [ 0, 1 ]
     ),
@@ -13465,16 +13465,16 @@ let $fib0 := fn:generator-record(
     $fib3 := $fib2 =?&gt; move-next(),
     $fib4 := $fib3 =?&gt; move-next()
 return array { ($fib0, $fib1, $fib2, $fib3, $fib4) =?&gt; get-current() }
-		 </eg><p>Result:</p><eg xml:space="preserve">
+                 </eg><p>Result:</p><eg xml:space="preserve">
 [ 0, 1, 1, 2, 3 ]
-		 </eg></example><example id="generator-fibonacci-bounded"><head>An arbitrarily bounded generator on the fibonacci sequence.</head><eg xml:space="preserve">
+                 </eg></example><example id="generator-fibonacci-bounded"><head>An arbitrarily bounded generator on the fibonacci sequence.</head><eg xml:space="preserve">
 let $fib0 := fn:generator-record(
         get-current := fn($this) { $this?state(1) },
-        move-next   := fn($this) { let $next := sum($this?state?*)
+        move-next   := fn($this) { let $next := $this?state(1) + $this?state(2)
                                    return if ($next gt $this?internal?upper-bound)
                                           then gn:empty-generator()
-                                          else $this =&gt;
-                                               map:put('state', [ $this?state(2), $next ])
+                                          else map:put($this, 'state',
+                                                       [ $this?state(2), $next ])
                        },
         state       := [ 0, 1 ],
         internal    := { 'upper-bound': 1000 }
@@ -13485,9 +13485,38 @@ let $fib0 := fn:generator-record(
         else ( $this =?&gt; get-current(), $recurseF($this =?&gt; move-next(), $recurseF) )
     }
 return array { $recurse($fib0, $recurse) }
-		 </eg><p>Result:</p><eg xml:space="preserve">
+                 </eg><p>Result:</p><eg xml:space="preserve">
 [ 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610 ]
-		 </eg></example></div3></div2></div1><div1 id="dynamic-loading"><head>Dynamic evaluation</head><p>The following functions allow dynamic loading and evaluation of XQuery queries, XSLT stylesheets,
+                 </eg></example><example id="generator-fibonacci-bounded-encapsulated"><head>An arbitrarily bounded generator that encapsulates the original unbounded generator.</head><eg xml:space="preserve">
+let $fib0 := fn:generator-record(
+        get-current := fn($this) { $this?state(1) },
+        move-next   := fn($this) { let $next := $this =?&gt; internal()
+                                   return map:put($this, 'state',
+                                                  [ $this?state(2), $next ])
+                       },
+        state       := [ 0, 1 ],
+        internal    := fn($this) { $this?state(1) + $this?state(2) }
+    ),
+    $boundedFib0 := fn:generator-record(
+        get-current := fn($this) { $this?state =?&gt; get-current() },
+        move-next   := fn($this) { let $next := $this?state =?&gt; internal()
+                                   return if ($next gt $this?internal?upper-bound)
+                                          then gn:empty-generator()
+                                          else map:put($this, 'state',
+                                                       $this?state =?&gt; move-next())
+                       },
+        state       := $fib0,
+        internal    := { 'upper-bound': 1000 }
+    ),
+    $recurse := fn($this as fn:generator-record, $recurseF as fn(*)) {
+        if (gn:empty($this))
+        then ()
+        else ( $this =?&gt; get-current(), $recurseF($this =?&gt; move-next(), $recurseF) )
+    }
+return array { $recurse($boundedFib0, $recurse) }
+                 </eg><p>Result:</p><eg xml:space="preserve">
+[ 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610 ]
+                 </eg></example></div3></div2></div1><div1 id="dynamic-loading"><head>Dynamic evaluation</head><p>The following functions allow dynamic loading and evaluation of XQuery queries, XSLT stylesheets,
                and XPath binary operators.</p><table class="index"><thead><tr><th rowspan="1" colspan="1">Function</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td style="white-space:nowrap; vertical-align:top" rowspan="1" colspan="1"><code style="padding-right: 10px" nobreak="false">fn:load-xquery-module</code></td><td rowspan="1" colspan="1">Provides access to the public functions and global variables of a dynamically loaded XQuery library module.</td></tr><tr><td style="white-space:nowrap; vertical-align:top" rowspan="1" colspan="1"><code style="padding-right: 10px" nobreak="false">fn:transform</code></td><td rowspan="1" colspan="1">Invokes a transformation using a dynamically loaded XSLT stylesheet.</td></tr><tr><td style="white-space:nowrap; vertical-align:top" rowspan="1" colspan="1"><code style="padding-right: 10px" nobreak="false">fn:op</code></td><td rowspan="1" colspan="1">Returns a function whose effect is to apply a supplied binary operator to two arguments.</td></tr></tbody></table><div2 id="load-xquery-module-record"><head>Record fn:load-xquery-module-record</head><p>This record type is used to hold the result of the <function>fn:load-xquery-module</function> function.</p><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Name</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="1" colspan="1"><p><code nobreak="false">variables</code></p></td><td class="fos-thin" rowspan="1" colspan="1">
                    global variable declared in the library module. The key of the
                  <p>This map (<var>V</var> ) contains one entry for each public
