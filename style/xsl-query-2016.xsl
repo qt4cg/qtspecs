@@ -1198,10 +1198,10 @@
   </xsl:template>
   
   <!-- Matching of production names within the RHS of a production rule in the document body -->
-  <!-- Added by MHK 21 Jan 2025 -->
+  <!-- Added by MHK 21 Jan 2025, modified by issue 2353 -->
   
   <xsl:template match="scrap/prod/rhs//nt">
-    <xsl:variable name="localDefn" select="ancestor::scrap/prod[lhs = current()]"/>
+    <xsl:variable name="localDefn" select="ancestor::scrap/prod[lhs = current()][1]"/>
     <xsl:choose>
       <!-- If the relevant rule appears within the same scrap -->
       <xsl:when test="exists($localDefn)">
