@@ -296,7 +296,7 @@
             <xsl:variable name="last" select="position() eq last()"/>
             <tr class="arg">
               <td>
-                <code> $<xsl:sequence select="@name/string()"/></code>
+                <code>$<xsl:sequence select="@name/string()"/></code>
                 <xsl:if test="not(@type) and not(@type-ref) and not($last)">,</xsl:if>
               </td>
               <td>
