@@ -25,6 +25,13 @@
         <xsl:map-entry key="'title'" select="'XSL Transformations (XSLT) Version 4.0'"/>
       </xsl:map>
     </xsl:map-entry>
+    <xsl:map-entry key="'xslt-streaming-40'">
+      <xsl:map>
+        <xsl:map-entry key="'dir'" select="'xslt-streaming-40'"/>
+        <xsl:map-entry key="'html'" select="'Overview.html'"/>
+        <xsl:map-entry key="'title'" select="'XSLT Streaming Version 4.0'"/>
+      </xsl:map>
+    </xsl:map-entry>
     <xsl:map-entry key="'xpath-datamodel-40'">
       <xsl:map>
         <xsl:map-entry key="'dir'" select="'xpath-datamodel-40'"/>
@@ -36,7 +43,7 @@
       <xsl:map>
         <xsl:map-entry key="'dir'" select="'xquery-40'"/>
         <xsl:map-entry key="'html'" select="'xpath-40.html'"/>
-        <xsl:map-entry key="'title'" select="'XML Path Language (XPath) 4.0'"/>
+        <xsl:map-entry key="'title'" select="'XPath 4.0'"/>
       </xsl:map>
     </xsl:map-entry>
     <xsl:map-entry key="'xquery-40'">
@@ -256,8 +263,9 @@
       <xsl:when test="$spec = 'xpath-datamodel-40'">XQuery and XPath Data Model 4.0</xsl:when>
       <xsl:when test="$spec = 'xpath-functions-40'">XPath and XQuery Functions and Operators 4.0</xsl:when>
       <xsl:when test="$html = 'xquery-40.html'">XQuery 4.0: An XML Query Language</xsl:when>
-      <xsl:when test="$html = 'xpath-40.html'">XML Path Language (XPath) 4.0</xsl:when>
+      <xsl:when test="$html = 'xpath-40.html'">XPath 4.0</xsl:when>
       <xsl:when test="$spec = 'xslt-40'">XSL Transformations (XSLT) Version 4.0</xsl:when>
+      <xsl:when test="$spec = 'xslt-streaming-40'">XSLT Streaming Version 4.0</xsl:when>
       <xsl:when test="$spec = 'xslt-xquery-serialization-40'">XSLT and XQuery Serialization 4.0</xsl:when>
       <xsl:otherwise>
       </xsl:otherwise>
@@ -269,6 +277,7 @@
       <xsl:when test="$spec = 'xpath-datamodel-40'
                       or $spec = 'xpath-functions-40'
                       or $spec = 'xslt-40'
+                      or $spec = 'xslt-streaming-40'
                       or $spec = 'xslt-xquery-serialization-40'">
         <xsl:sequence select="$html-list[@spec = $spec and @html = 'autodiff.html']"/>
       </xsl:when>
