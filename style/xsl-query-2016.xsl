@@ -832,6 +832,9 @@
           <xsl:value-of select="@spec"/>
           <xsl:text> at id=</xsl:text>
           <xsl:value-of select="(ancestor::*/@id)[last()]"/>
+          <xsl:if test="not(@ref)">
+            <xsl:text> - Missing @ref attribute </xsl:text>
+          </xsl:if>
         </xsl:message>
         <span class='markup-error'>
           <xsl:text>[TITLE OF </xsl:text>
@@ -1024,11 +1027,12 @@
           <xsl:when test="not($termdef)">
             <xsl:message>
               <xsl:text>Error: cannot resolve xtermref </xsl:text>
-              <xsl:value-of select="@ref"/>
+              <xsl:value-of select="@ref, @def"/>
               <xsl:text> in </xsl:text>
               <xsl:value-of select="@spec"/>
               <xsl:text> at id=</xsl:text>
               <xsl:value-of select="(ancestor::*/@id)[last()]"/>
+              <xsl:if test="@def and not(@ref)"> -- @def should be @ref</xsl:if>
             </xsl:message>
             <span class="markup-error">
               <xsl:text>[TERMDEF </xsl:text>
