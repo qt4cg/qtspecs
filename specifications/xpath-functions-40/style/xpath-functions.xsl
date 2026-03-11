@@ -312,7 +312,7 @@
                     <code class="as">as&#160;</code>
                     <code>
                       <a href="#{@type-ref}">
-                        <xsl:value-of select="@type-ref"/>                
+                        <xsl:value-of select="if (contains(@type-ref, ':')) then @type-ref else 'fn:' || @type-ref"/>                
                       </a>
                       <xsl:value-of select="@type-ref-occurs"/>    
                     </code>
@@ -352,7 +352,7 @@
                     </xsl:when>
                     <xsl:when test="@return-type-ref">
                       <a href="#{replace(@return-type-ref, '[*+?]$', '')}">
-                        <xsl:value-of select="@return-type-ref"/>
+                        <xsl:value-of select="if (contains(@return-type-ref, ':')) then @return-type-ref else 'fn:' || @return-type-ref"/>
                       </a>
                       <xsl:value-of select="@return-type-ref-occurs"/>
                       <xsl:if test="@returnEmptyOk='yes'">?</xsl:if>
