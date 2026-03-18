@@ -283,7 +283,7 @@
       <xsl:otherwise>
         <table class="proto" border="0">
           <tr class="name">
-	          <td colspan="3">
+            <td colspan="2">
               <code class="function">
                 <xsl:value-of select="$prefix"/>
                 <xsl:value-of select="@name"/>
@@ -319,10 +319,11 @@
                     <xsl:if test="not (@default) and not($last)">,</xsl:if>
                   </span>
                 </xsl:if>
-              </td>
-              <td>
+                <xsl:if test="@note">
+                  <code class="arg-note"> (:<a href="#{@note}"><xsl:value-of select="@note"/></a>:)</code>
+                </xsl:if>
                 <xsl:if test="@default">
-                  <code class="assign">:= </code>
+                  <code class="assign"> := </code>
                   <code><xsl:sequence select="@default/string()"/></code>
                   <xsl:if test="not($last)">,</xsl:if>
                 </xsl:if>
@@ -331,7 +332,7 @@
           </xsl:for-each>
 
           <tr class="return-type">
-	          <td colspan="3">
+            <td colspan="2">
               <xsl:text>)</xsl:text>
               <span class="rt">
                 <code class="as">&#160;as&#160;</code>

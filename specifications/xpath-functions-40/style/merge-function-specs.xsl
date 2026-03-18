@@ -331,7 +331,7 @@
 
 	<xsl:template match="fos:arg">
 		<arg>
-			<xsl:copy-of select="@name, @type, @type-ref, @type-ref-occurs, @diff, @at, @default"/>
+			<xsl:copy-of select="@name, @type, @type-ref, @type-ref-occurs, @diff, @at, @default, @note"/>
 			<xsl:if test="not(following-sibling::fos:arg) and ancestor::fos:function//fos:property = 'variadic'">
 				<xsl:attribute name="type" select="@type || ' ...'"/>
 			</xsl:if>
