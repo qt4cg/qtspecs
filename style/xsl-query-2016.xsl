@@ -832,6 +832,9 @@
           <xsl:value-of select="@spec"/>
           <xsl:text> at id=</xsl:text>
           <xsl:value-of select="(ancestor::*/@id)[last()]"/>
+          <xsl:if test="not(@ref)">
+            <xsl:text> - Missing @ref attribute </xsl:text>
+          </xsl:if>
         </xsl:message>
         <span class='markup-error'>
           <xsl:text>[TITLE OF </xsl:text>
@@ -1024,11 +1027,12 @@
           <xsl:when test="not($termdef)">
             <xsl:message>
               <xsl:text>Error: cannot resolve xtermref </xsl:text>
-              <xsl:value-of select="@ref"/>
+              <xsl:value-of select="@ref, @def"/>
               <xsl:text> in </xsl:text>
               <xsl:value-of select="@spec"/>
               <xsl:text> at id=</xsl:text>
               <xsl:value-of select="(ancestor::*/@id)[last()]"/>
+              <xsl:if test="@def and not(@ref)"> -- @def should be @ref</xsl:if>
             </xsl:message>
             <span class="markup-error">
               <xsl:text>[TERMDEF </xsl:text>
@@ -1198,10 +1202,10 @@
   </xsl:template>
   
   <!-- Matching of production names within the RHS of a production rule in the document body -->
-  <!-- Added by MHK 21 Jan 2025 -->
+  <!-- Added by MHK 21 Jan 2025, modified by issue 2353 -->
   
   <xsl:template match="scrap/prod/rhs//nt">
-    <xsl:variable name="localDefn" select="ancestor::scrap/prod[lhs = current()]"/>
+    <xsl:variable name="localDefn" select="ancestor::scrap/prod[lhs = current()][1]"/>
     <xsl:choose>
       <!-- If the relevant rule appears within the same scrap -->
       <xsl:when test="exists($localDefn)">
