@@ -29,7 +29,7 @@
       <xsl:variable name="pr" select="map:contains($issue, 'pull_request')"/>
 
       <xsl:if test="not($pr) and $issue?state='open'
-                    and f:has-label($issue, 'Propose Closing with No Action')">
+                    and f:has-label($issue, 'Propose Closing with no Action')">
         <xsl:sequence select="xs:integer($issue?number)"/>
       </xsl:if>
     </xsl:for-each>
