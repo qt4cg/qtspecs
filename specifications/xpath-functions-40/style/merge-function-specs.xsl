@@ -215,6 +215,19 @@
 				 </def>
 		    </gitem>
 		  </xsl:if>
+			
+			<xsl:if test="$fspec/fos:see-also">
+				<gitem>
+					<label>See also</label>
+					<def>
+						<slist>
+							<xsl:for-each select="$fspec/fos:see-also">
+								<sitem><function><xsl:value-of select="@prefix || ':' || @name"/></function></sitem>
+							</xsl:for-each>
+						</slist>
+					</def>
+				</gitem>
+			</xsl:if>
 		</glist>
 	</xsl:template>
 	
