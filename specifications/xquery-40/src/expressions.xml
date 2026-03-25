@@ -2751,6 +2751,132 @@ The prefix <code>xmlns</code> must not be bound to any namespace URI, and no pre
             </ulist>
          </div3>
       </div2>
+      
+      <div2 id="functional-purity">
+         <head>Functional Purity</head>
+         <changes>
+            <change issue="2549">
+               This section is new; it documents what was largely implicit in previous versions of the specification.
+            </change>
+         </changes>
+         <p>&language; is designed, as far as possible, to be a pure functional language. This means:</p>
+         <ulist>
+            <item><p>The result of evaluating an expression (or a function) depends only on the explicit
+            and implicit operands to the expression. (The expression context, described in <specref ref="context"/>,
+            is for this purpose regarded as an implicit operand.)</p></item>
+            <item><p>Repeated evaluation of the same expression with the same operands delivers the same
+            result.</p></item>
+            <item><p>Evaluation of an expression or function has no side-effects.</p></item>
+            <item><p>As a result, the language has <term>referential transparency</term>, which
+                  means that any expression can be statically replaced by any other expression
+                  that evaluates to the same result. This enables some powerful optimizations, for example:</p>
+               <ulist>
+                  <item><p>Variable inlining: a variable reference can be replaced by the variable's value.</p></item>
+                  <item><p>Function inlining: a function call can be replaced by the body of the function (having
+                        ensured that arguments are correctly bound).</p></item>
+                  <item><p>Loop lifting: an expression that is executed repeatedly can be promoted so it is
+                        only evaluated once.</p></item>
+                  <item><p>Constant folding: an expression whose value can be computed statically can
+                        be replaced by its value.</p></item>
+                  <item><p>Reordering and parallel evaluation: if there are two expressions
+                  <var>E1</var> and <var>E2</var> and neither has a functional dependency on the other,
+                  then it is possible to evaluate the two expressions in either order or in parallel.
+                  Similarly, constructs that iterate over a sequence (such as <code>A/B</code>,
+                  <code>A!B</code>, or <code>for $a in A return B</code>) can be multi-threaded,
+                  provided that the results are returned in the right order.</p></item>
+               </ulist>
+            
+            </item>
+         </ulist>
+         <p>There are a number of situations where this goal of functional purity is not fully achieved. In particular:</p>
+         <ulist>
+            <item><p>Evaluation of expressions may raise errors. The implications of this
+                  are discussed in <specref ref="errors"/>.</p></item>
+            
+            <item><p>Some expressions construct new nodes. See <specref ref="id-constructors"/>.
+            These expressions are not functionally pure, because evaluating the same expression twice
+            creates two nodes, each with distinct identity. An optimizer <rfc2119>should</rfc2119>
+            avoid rewriting such expressions in a way that changes the number of times they are evaluated.
+            However, it is not always possible to detect statically that an expression constructs new
+            nodes, for example when a dynamic function call invokes a function whose body
+            includes a node constructor. Applications <rfc2119>should</rfc2119> therefore avoid over-reliance
+            on newly constructed nodes having distinct identity.</p></item>
+            
+            <item><p>Some expressions access information in the external environment
+            Examples are calls on functions such as <function>fn:doc</function>, <function>fn:unparsed-text</function>,
+            <function>current-dateTime</function>, or <function>environment-variable</function>. This can cause
+            problems because the external environment may change while the code is executing, meaning that 
+            repeated calls can produce different results. In some cases these functions have been defined
+            to be <term>stable</term>, providing a guarantee that multiple calls with the same arguments
+            deliver the same result. However, this carries a cost, because it typically means that the results
+            of one call need to be kept in memory in case the same call is made again; it also delivers
+            no guarantee that different calls (for example a call to <function>doc</function>
+            with validation and another call supplying the same URI, but without validation) deliver
+            results that are consistent with the underlying resource not changing.</p></item>
+            
+            <item><p>Some expressions modify the external environment.</p>
+               
+            <p>In some cases the change is fairly benign: for example the <function>fn:trace</function>
+            and <function>fn:message</function> functions output diagnostic information. For usability
+            reasons optimizers <rfc2119>should</rfc2119> avoid agressive rewriting of such
+            expressions (but this also has a downside, in that it is sometimes desirable that adding
+            diagnostics should not change the underlying execution plan). In general, though, users
+            should be aware that the output of functions like <function>fn:trace</function>
+            and <function>fn:message</function> (or the <code>xsl:message</code> instruction in XSLT)
+            is to some degree <termref def="dt-implementation-dependent"/>.</p>
+               
+            <p>In other cases side-effects can substantively affect the outcome of a query or transformation.
+            This is especially true when the outcome of a sequence of operations depends on the order
+            in which they are carried out, or on the number of times that individual expressions are
+            evaluated. This applies to some of the functions in the EXPath file library (for example,
+            <code>file:append-text</code>) and it may also apply to user-written external functions
+            if these are supported by the implementation. The dangers associated with such functions
+            can be mitigated by following the guidelines below.</p>
+               
+               <olist>
+                  <item><p>Optimizers <rfc2119>should</rfc2119>:</p>
+                     <olist>
+                        <item><p>Where possible, recognize expressions that have potential side-effects.
+                        This may not be possible in cases such as dynamic function calls.</p></item>
+                        <item><p>Ensure that expressions recognized as having potential side-effects
+                        are evaluated sequentially in a predictable order. For example, given the
+                        expression <code>(<var>E1</var>, <var>E2</var>)</code>, expression <var>E1</var>
+                        should be evaluated to completion before expression <code>E2</code>;
+                        and in the expression <code><var>E1</var>!<var>E2</var></code>, <var>E2</var>
+                        should be evaluated to completion for the first item in the result of <var>E1</var>
+                        before it is evaluated for the second item.</p></item>
+                        <item><p>Avoid shortcut optimizations where an expression with potential side-effects
+                              is not evaluated because its results do not affect the final outcome.
+                        For example <code>exists((A, B, C))</code> should evaluate all three subexpressions
+                        even if the result can be determined without doing so.</p></item>
+                     </olist>
+                  
+                  </item>
+                  <item><p>Users <rfc2119>should</rfc2119>:</p>
+                     <olist>
+                        <item><p>Avoid using expressions with potential side-effects in a context
+                        where they cannot be statically recognized (for example, in a dynamic function
+                        call).</p></item>
+                        <item><p>Avoid using such expressions in contexts where the order of evaluation
+                              and/or the number of evaluations is intrinsically unpredictable (for example,
+                              when computing a sort key).</p></item>
+                     </olist>                 
+                  </item>
+               </olist>
+               <p>The bottom line is that expressions with side-effects are to some degree
+               <termref def="dt-implementation-dependent"/> and therefore best avoided.</p>
+            </item>
+            
+         </ulist>
+         
+         
+         <note><p>Everything in this section applies equally to XSLT. In the context of XSLT, the term
+         <term>expressions</term> should be taken to include instructions, and the term <term>function</term>
+         should be taken to include constructs such as named templates and template rules. 
+         Dynamical invocation of template rules using the <code>xsl:apply-templates</code> instruction is in
+         many ways similar to a dynamic function call, in that it is in general impossible for an optimizer
+         to know statically what code is being invoked.</p></note>
+      </div2>
 
       <div2 id="errors">
          <head>Error Handling</head>
