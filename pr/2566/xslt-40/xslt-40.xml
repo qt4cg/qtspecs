@@ -5881,6 +5881,9 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
                   </change><change issue="2365" PR="2413" date="2026-01-28">
                      Extensible map types are dropped; instead, the coercion rules cause undefined
                      map entries to be discarded.
+                  </change><change issue="1979" PR="2566" date="2026-03-31">
+                     Fields in a record type can no longer be optional; absent values are represented
+                     by an empty sequence.
                   </change></changes><e:element-syntax xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="record-type">
       <e:in-category name="declaration"/>
       <e:attribute name="name" required="yes">
@@ -5911,9 +5914,9 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
       <e:attribute name="as" default="'item()*'">
          <e:data-type name="sequence-type"/>
       </e:attribute>
-      <e:attribute name="required" default="'yes'">
+      <!--<e:attribute name="required" default="'yes'">
          <e:data-type name="boolean"/>
-      </e:attribute>
+      </e:attribute>-->
       <e:attribute name="default">
          <e:data-type name="expression"/>
       </e:attribute>
@@ -5921,7 +5924,7 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
       <e:allowed-parents>
          <e:parent name="record-type"/>
       </e:allowed-parents>
-   </e:element-syntax><p>An <elcode>xsl:record-type</elcode> declaration associates a name 
+   </e:element-syntax><ednote><edtext>Schema change required to drop "xsl:field/@required" attribute</edtext></ednote><p>An <elcode>xsl:record-type</elcode> declaration associates a name 
                   with a record type, and allows the record type
                   to be referenced by name throughout the stylesheet package.</p><example id="e-item-type-complex"><p>The following example declares a named record type for complex numbers, 
                      and uses it in a variable
@@ -5940,9 +5943,7 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
 </eg><p>Note how the record type declaration has implicitly declared a constructor function
                      <code nobreak="false">cx:complex</code> that can be used to create instances of the item type.</p></example><p><error spec="XT" class="SE" code="4050" type="static"><p>It is a <termref def="dt-static-error"/> 
                      if the names of the fields in an <elcode>xsl:record-type</elcode>
-                     declaration are not distinct.</p></error></p><p><error spec="XT" class="SE" code="4051" type="static"><p>It is a <termref def="dt-static-error"/> 
-                     if an <elcode>xsl:field</elcode> element has a <code nobreak="false">default</code>
-                     attribute unless it specifies <code nobreak="false">required="no"</code>.</p></error></p><p>An <elcode>xsl:record-type</elcode> declaration has two effects:</p><ulist><item><p>In the same way as <elcode>xsl:item-type</elcode>, it defines
+                     declaration are not distinct.</p></error></p><p>An <elcode>xsl:record-type</elcode> declaration has two effects:</p><ulist><item><p>In the same way as <elcode>xsl:item-type</elcode>, it defines
                   a named item type in the static context, allowing the record type to
                   be referenced by name anywhere an <code nobreak="false">ItemType</code> can appear,
                   for example in the declarations of functions and variables. Unlike
@@ -5964,10 +5965,7 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
      &lt;xsl:attribute name="as"&gt;
         &lt;xsl:text&gt;record(&lt;/xsl:text&gt;
         &lt;xsl:for-each select="xsl:field" separator=", "&gt;
-           &lt;xsl:variable name="optional"
-                         as="xs:boolean"
-                         select="normalize-space(@required) = ('no','false','0')"/&gt;
-           {@name}{'?'[$optional]} as {@as otherwise 'item()*'}
+           {@name} as {@as otherwise 'item()*'}
         &lt;/xsl:for-each&gt;
         &lt;xsl:text&gt;)&lt;/xsl:text&gt;
       &lt;/xsl:attribute&gt;  
@@ -5995,72 +5993,31 @@ Michael Sperberg-McQueen (1954–2024).</p></note></status><abstract><p>This sp
       &lt;!-- declare the parameters --&gt;
       &lt;xsl:for-each select="xsl:field"&gt;
          &lt;t:param name="{@name}"
-                  required="{@required otherwise 'yes'}"&gt;
-            &lt;xsl:attribute name="as"&gt;
-               &lt;xsl:variable name="as" 
-                             select="normalize-space(@as otherwise 'item()*')"/&gt;
-               &lt;xsl:variable name="optional" 
-                             select="normalize-space(@required) = ('no', 'false', '0')"/&gt;
-               &lt;xsl:choose&gt;
-                  &lt;xsl:when test="not($optional)" select="$as"/&gt;
-                  &lt;!-- for optional fields, amend the required type to allow () --&gt;
-                  &lt;xsl:when test="matches($as, '[?*]$')" select="$as"/&gt;
-                  &lt;xsl:when test="matches($as, '\+$')" select="replace($as, '\+$', '*')"/&gt;
-                  &lt;xsl:otherwise select="$as || '?'"/&gt;
-               &lt;/xsl:choose&gt;
-            &lt;/xsl:attribute&gt;
+                  required="{@required otherwise 'yes'}"
+                  as="{@as}"&gt;
             &lt;xsl:if test="@default"&gt;
                &lt;xsl:attribute name="select" select="@default"/&gt;
             &lt;/xsl:if&gt;   
          &lt;/t:param&gt;
       &lt;/xsl:for-each&gt;
       
-        
-      
+            
       &lt;!-- function body: construct a map --&gt;
       &lt;t:map duplicates="fn($first, $second){{$first}}"&gt;
          &lt;xsl:for-each select="xsl:field"&gt;
-            &lt;xsl:variable name="optional" 
-                          select="normalize-space(@required) = ('no', 'false', '0')"/&gt;
-            &lt;xsl:choose&gt;
-              &lt;xsl:when test="$optional and not(@default)"&gt;
-                 &lt;!-- omit map entries for optional fields if no value is supplied --&gt;
-                 &lt;t:if test="exists(${@name})"&gt;
-                    &lt;t:map-entry key="'{@name}'" select="${@name}"/&gt;
-                 &lt;/t:if&gt;
-              &lt;/xsl:when&gt;
-              &lt;xsl:otherwise&gt;
-                &lt;t:map-entry key="'{@name}'" select="${@name}"/&gt;
-              &lt;/xsl:otherwise&gt;  
-            &lt;/xsl:choose&gt;  
+             &lt;t:map-entry key="'{@name}'" select="${@name}"/&gt; 
          &lt;/xsl:for-each&gt;
-        
-
-
       &lt;/t:map&gt;
     &lt;/t:function&gt;          
 &lt;/xsl:template&gt;</eg><p>For example, the declaration:</p><eg xml:space="preserve">&lt;xsl:record-type name="cx:complex"&gt;
     &lt;xsl:field name="r" as="xs:double"/&gt;
-    &lt;xsl:field name="i" as="xs:double" required="no" default="0"/&gt;
+    &lt;xsl:field name="i" as="xs:double" default="0"/&gt;
 &lt;/xsl:record-type&gt;</eg><p>produces the equivalent function declaration:</p><eg xml:space="preserve">&lt;xsl:function name="cx:complex" as="cx:complex" visibility="private"&gt;
     &lt;xsl:param name="r" as="xs:double"/&gt;
     &lt;xsl:param name="i" as="xs:double" required="no" select="0"/&gt;
     &lt;xsl:map&gt;
        &lt;xsl:map-entry key="'r'" select="$r"/&gt;
        &lt;xsl:map-entry key="'i'" select="$i"/&gt;
-    &lt;/xsl:map&gt;
-&lt;/xsl:function&gt;</eg><p>No entry is generated in the constructed map for a field that
-               is declared as optional with no default. So the declaration:</p><eg xml:space="preserve">&lt;xsl:record-type name="cx:complex" visibility="public"&gt;
-    &lt;xsl:field name="r" as="xs:double"/&gt;
-    &lt;xsl:field name="i" as="xs:double" required="no"/&gt;
-&lt;/xsl:record-type&gt;</eg><p>produces the equivalent function declaration:</p><eg xml:space="preserve">&lt;xsl:function name="cx:complex" as="cx:complex" visibility="public"&gt;
-    &lt;xsl:param name="r" as="xs:double"/&gt;
-    &lt;xsl:param name="i" as="xs:double?" required="no"/&gt;
-    &lt;xsl:map&gt;
-       &lt;xsl:map-entry key="'r'" select="$r"/&gt;
-       &lt;xsl:if test="exists($i)"&gt;
-          &lt;xsl:map-entry key="'i'" select="$i"/&gt;
-       &lt;/xsl:if&gt;   
     &lt;/xsl:map&gt;
 &lt;/xsl:function&gt;</eg><p>This generated <elcode>xsl:function</elcode> declaration must
                meet all the constraints placed on user-written 
@@ -17903,7 +17860,56 @@ return if ($i le count($S))
 &lt;/xsl:map&gt; 
 </eg><p>This could also be written:</p><eg role="xslt-declaration" xml:space="preserve">&lt;xsl:map select="
   map:pairs($map) ! { ?key : array{ ?value } }"/&gt;
-</eg></example></div3><div3 id="record-instructions" diff="add" at="2025-03-14"><head>Record Instruction</head><changes><change issue="322" PR="1858" date="2025-03-25"> The <elcode>xsl:record</elcode> instruction is introduced
+</eg></example></div3><div3 id="duplicate-keys" diff="add" at="2022-01-01"><head>Handling of duplicate keys</head><changes><change issue="169" date="2023-11-28">
+                     A new attribute <code nobreak="false">xsl:map/@duplicates</code> is available,
+                  allowing control over how duplicate keys are handled by the <elcode>xsl:map</elcode>
+                  instruction.
+                  </change></changes><p>This section describes what happens when two or more maps in the input sequence of
+               an <elcode>xsl:map</elcode>  instruction contain duplicate keys: that is, when one of these
+               maps contains an entry with key <var>K</var>, and another contains an entry with key <var>L</var>,
+                  and <code nobreak="false">fn:atomic-equal(<var>K</var>, <var>L</var>)</code> returns <code nobreak="false">true</code>.</p><p><error spec="XT" class="DE" code="3365" type="dynamic"><p>In the absence of the <code nobreak="false">[xsl:]duplicates</code> attribute, 
+                     a <termref def="dt-dynamic-error">dynamic error</termref> occurs if the set of
+                     keys in the maps making up the input sequence
+                      <error.extra>of an <elcode>xsl:map</elcode> instruction</error.extra>
+                     contains duplicates.</p></error></p><p>The result of evaluating the <code nobreak="false">[xsl:]duplicates</code> attribute, if present, <rfc2119>must</rfc2119>
+               be either one of the strings <code nobreak="false">"use-first"</code>, <code nobreak="false">"use-last"</code>,
+                  <code nobreak="false">"use-any"</code>, <code nobreak="false">"combine"</code>, or <code nobreak="false">"reject"</code>,
+                  or a function with arity 2. These values correspond to the permitted
+                  values of the <code nobreak="false">duplicates</code> option of the 
+                  <xfunction>map:merge</xfunction> function.</p><p>The result of the <elcode>xsl:map</elcode> or <elcode>xsl:record</elcode> instruction is defined by reference to 
+               the function <xfunction>map:merge</xfunction>. Specifically, if <code nobreak="false">$maps</code>
+               is the input sequence to <elcode>xsl:map</elcode> or <elcode>xsl:record</elcode>, and <code nobreak="false">$duplicates</code>
+               is the <termref def="dt-effective-value"/> of the <code nobreak="false">[xsl:]duplicates</code>
+               attribute, then the result of the instruction is the result of the function
+               call <code nobreak="false">map:merge($maps, { "duplicates": $duplicates })</code>.</p><p>The following table shows some possible values 
+                  of the <code nobreak="false">duplicates</code> attribute, and explains their effect:</p><table border="1" cellpadding="5" width="100%"><thead><tr><th rowspan="1" colspan="1" align="left" valign="top">Attribute</th><th rowspan="1" colspan="1" align="left" valign="top">Effect</th></tr></thead><tbody><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="'use-first'"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The first of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="'use-last'"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The last of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="'combine'"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The <xtermref spec="XP40" ref="dt-sequence-concatenation"/> 
+                           of the duplicate values is used. This could
+                        also be expressed as <code nobreak="false">duplicates="op(',')"</code>.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { max(($a, $b)) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The highest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { min(($a, $b)) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The lowest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="concat(?, ', ', ?) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The comma-separated string concatenation of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="op('+')"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The sum of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { subsequence(($a, $b), 1, 4) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The first four of the duplicates are retained; any further duplicates
+                           are discarded.
+                        </td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { distinct-values(($a, $b)) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">When multiple entries have the same key, the corresponding values
+                           are retained only if they are distinct from other values having the
+                           same key.
+                        </td></tr></tbody></table><example id="map-with-duplicates-into-array"><head>Combining Duplicates into an Array</head><p>This example takes as input an XML document such as:</p><eg xml:space="preserve">&lt;data&gt;
+   &lt;event id="A23" value="12"/&gt;
+   &lt;event id="A24" value="5"/&gt;
+   &lt;event id="A25" value="9"/&gt;
+   &lt;event id="A23" value="2"/&gt;
+ &lt;/data&gt;</eg><p>and constructs a map whose JSON representation is:</p><eg xml:space="preserve">{ "A23": [ 12, 2 ], "A24": [ 5 ], "A23": [ 9 ] }</eg><p>The logic is:</p><eg xml:space="preserve">&lt;xsl:template match="data"&gt;
+   &lt;xsl:map duplicates="fn($a, $b) { array:join(($a, $b)) }"&gt;
+     &lt;xsl:for-each select="event"&gt;
+        &lt;xsl:map-entry key="@id" select="[xs:integer(@value)]"/&gt;
+     &lt;/xsl:for-each&gt;
+   &lt;/xsl:map&gt;
+   &lt;/xsl:template&gt;</eg></example><note><p>Specifying the effect by reference to <xfunction>map:merge</xfunction> has
+                  the following consequences when duplicates are combined
+                  into a merged entry:</p><ulist><item><p>The position of the merged entry in the result corresponds
+                     to the position of the first of the duplicate keys in the input.</p></item><item><p>The key used for the merged entry in the result corresponds
+                     to one of the duplicate keys in the input: it is 
+                        <termref def="dt-implementation-dependent"/> which one is chosen.
+                        This is relevant when
+                     the duplicate keys differ in some way, for example when they have
+                     different type annotations, or when they are <code nobreak="false">xs:dateTime</code>
+                     values in different timezones.</p></item></ulist></note></div3><div3 id="record-instructions" diff="add" at="2025-03-14"><head>Record Instruction</head><changes><change issue="322" PR="1858" date="2025-03-25"> The <elcode>xsl:record</elcode> instruction is introduced
                      to make construction of records simpler. </change></changes><e:element-syntax xmlns:e="http://www.w3.org/1999/XSL/Spec/ElementSyntax" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="record">
         <e:in-category name="instruction"/>
         <e:attribute name="xsl:as" required="yes">
@@ -17945,44 +17951,17 @@ return if ($i le count($S))
                      two consequences follow for such attributes:
                      <olist><item>They <rfc2119>must not</rfc2119> be considered as shadow attributes (see <specref ref="shadow-attributes"/>) 
                              as a leading underscore is a valid character within an <code nobreak="false">xs:NCName</code>.</item><item>They are not designated as <termref def="dt-attribute-value-template">attribute
-                                 value templates</termref>.</item></olist> These restrictions do not apply to attributes of <elcode>xsl:record</elcode> whose names are in namespaces.</p></note><p> Each of the map entries in
-                 <code nobreak="false">$record</code> is modified by applying the <termref def="dt-coercion-rules"/>
-                 to convert the singleton map to the type declared in the <code nobreak="false">xsl:as</code>
-                 attribute of the <elcode>xsl:record</elcode> instruction, if present. 
-                 This may contain a record type declaration or 
-                 a reference to one of the <xtermref spec="XP40" ref="dt-in-scope-named-item-types"/>, which may include record types.</p><p>The effect of this instruction, in the absence of errors, is equivalent to execution of the XSLT <elcode>xsl:map</elcode> instruction generated by the 
-                     the following source transformation of the <elcode>xsl:record</elcode> subtree</p><eg role="xslt-declaration" xml:space="preserve">
-                   &lt;xsl:namespace-alias stylesheet-prefix="t" result-prefix="xsl"/&gt;
-...
-
-&lt;xsl:mode name="record" on-no-match="shallow-copy"&gt;
-   &lt;xsl:template match="xsl:record"&gt;
-      &lt;xsl:variable name="xsl-attributes" select="@xsl:*"/&gt;
-      &lt;xsl:variable name="ncname-attributes" select="@*[empty(prefix-from-QName(node-name()))]"/&gt;
-      &lt;xsl:variable name="other-attributes"
-          select="@* except ($xsl-attributes, $ncname-attributes)"/&gt;
-      &lt;t:map&gt;
-         &lt;xsl:sequence select="$other-attributes"/&gt;
-         &lt;xsl:apply-templates select="$xsl-attributes, $ncname-attributes, node()"/&gt;
-      &lt;/t:map&gt;
-   &lt;/xsl:template&gt;
-   &lt;xsl:template match="xsl:record/@*"&gt;
-      &lt;t:map-entry key="'{name()}'" select="{.}"/&gt;
-   &lt;/xsl:template&gt;
-   &lt;xsl:template match="xsl:record/@xsl:*" priority="1"&gt;
-      &lt;xsl:attribute name="{local-name()}" select="."/&gt;
-   &lt;/xsl:template&gt;
-&lt;/xsl:mode&gt;
-                 </eg><p>which for the instruction:</p><eg xml:space="preserve"> &lt;xsl:record xsl:as="eg:book" author="string(AUTHOR)"
+                                 value templates</termref>.</item></olist> These restrictions do not apply to attributes of <elcode>xsl:record</elcode> whose names are in namespaces.</p></note><p>For example, the instruction:</p><eg xml:space="preserve"> &lt;xsl:record xsl:as="eg:book" 
+               author="string(AUTHOR)"
                title="string(TITLE)" 
                price="xs:decimal(PRICE)" 
                publisher="string(../@name)"&gt;
-   &lt;/xsl:record&gt;</eg><p>would produce</p><eg xml:space="preserve"> &lt;xsl:map as="eg:book"&gt;
-      &lt;xsl:map-entry key="'author'" select="string(AUTHOR)"/&gt;
-      &lt;xsl:map-entry key="'title'" select="string(TITLE)"/&gt;
-      &lt;xsl:map-entry key="'price'" select="xs:decimal(PRICE)"/&gt;
-      &lt;xsl:map-entry key="'publisher'" select="string(../@name)"/&gt;
-   &lt;/xsl:map&gt;</eg><example diff="add" at="2025-02-25"><head>Generating a record with <elcode>xsl:record</elcode></head><p>The following example constructs a record using <elcode>xsl:record</elcode></p><eg role="xslt-declaration" xml:space="preserve">&lt;xsl:template match="book" as="map(*)"&gt;
+   &lt;/xsl:record&gt;</eg><p>is equivalent to the call on the constructor function:</p><eg xml:space="preserve">&lt;xsl:select&gt;
+  eg:book(author := string(AUTHOR), 
+          title := string(TITLE),
+          price := xs:decimal(PRICE),
+          publisher := string(../@name))
+&lt;/xsl:select&gt;</eg><example diff="add" at="2025-02-25"><head>Generating a record with <elcode>xsl:record</elcode></head><p>The following example constructs a record using <elcode>xsl:record</elcode></p><eg role="xslt-declaration" xml:space="preserve">&lt;xsl:template match="book" as="map(*)"&gt;
    &lt;xsl:record author="string(AUTHOR)"
                title="string(TITLE)" 
                price="xs:decimal(PRICE)" 
@@ -17998,59 +17977,7 @@ return if ($i le count($S))
     &lt;PRICE&gt;123.45&lt;/PRICE&gt;
   &lt;/book&gt;
 &lt;/catalog&gt;</eg><p>will produce a resulting map:</p><eg xml:space="preserve">map{'author':'MHK', 'title': 'XSLT 4.0', 'price':123.45, 
-                     'publisher':'QT4 Community', 'private entry': true()} </eg></example></div3><div3 id="duplicate-keys" diff="add" at="2022-01-01"><head>Handling of duplicate keys</head><changes><change issue="169" date="2023-11-28">
-                     A new attribute <code nobreak="false">xsl:map/@duplicates</code> is available,
-                  allowing control over how duplicate keys are handled by the <elcode>xsl:map</elcode>
-                  instruction.
-                  </change><change issue="322" PR="1858" date="2025-03-14">
-                       Attribute <code nobreak="false">xsl:record/@xsl:duplicates</code> is added to control duplicate keys handling in the <elcode>xsl:record</elcode>
-                       instruction.
-                   </change></changes><p>This section describes what happens when two or more maps in the input sequence of
-               an <elcode>xsl:map</elcode>  instruction contain duplicate keys: that is, when one of these
-               maps contains an entry with key <var>K</var>, and another contains an entry with key <var>L</var>,
-                  and <code nobreak="false">fn:atomic-equal(<var>K</var>, <var>L</var>)</code> returns <code nobreak="false">true</code>.</p><p><error spec="XT" class="DE" code="3365" type="dynamic"><p>In the absence of the <code nobreak="false">[xsl:]duplicates</code> attribute, 
-                     a <termref def="dt-dynamic-error">dynamic error</termref> occurs if the set of
-                     keys in the maps making up the input sequence
-                      <error.extra>of an <elcode>xsl:map</elcode> or <elcode>xsl:record</elcode> instruction</error.extra>
-                     contains duplicates.</p></error></p><p>The result of evaluating the <code nobreak="false">[xsl:]duplicates</code> attribute, if present, <rfc2119>must</rfc2119>
-               be either one of the strings <code nobreak="false">"use-first"</code>, <code nobreak="false">"use-last"</code>,
-                  <code nobreak="false">"use-any"</code>, <code nobreak="false">"combine"</code>, or <code nobreak="false">"reject"</code>,
-                  or a function with arity 2. These values correspond to the permitted
-                  values of the <code nobreak="false">duplicates</code> option of the 
-                  <xfunction>map:merge</xfunction> function.</p><p>The result of the <elcode>xsl:map</elcode> or <elcode>xsl:record</elcode> instruction is defined by reference to 
-               the function <xfunction>map:merge</xfunction>. Specifically, if <code nobreak="false">$maps</code>
-               is the input sequence to <elcode>xsl:map</elcode> or <elcode>xsl:record</elcode>, and <code nobreak="false">$duplicates</code>
-               is the <termref def="dt-effective-value"/> of the <code nobreak="false">[xsl:]duplicates</code>
-               attribute, then the result of the instruction is the result of the function
-               call <code nobreak="false">map:merge($maps, { "duplicates": $duplicates })</code>.</p><p>The following table shows some possible values 
-                  of the <code nobreak="false">duplicates</code> attribute, and explains their effect:</p><table border="1" cellpadding="5" width="100%"><thead><tr><th rowspan="1" colspan="1" align="left" valign="top">Attribute</th><th rowspan="1" colspan="1" align="left" valign="top">Effect</th></tr></thead><tbody><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="'use-first'"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The first of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="'use-last'"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The last of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="'combine'"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The <xtermref spec="XP40" ref="dt-sequence-concatenation"/> 
-                           of the duplicate values is used. This could
-                        also be expressed as <code nobreak="false">duplicates="op(',')"</code>.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { max(($a, $b)) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The highest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { min(($a, $b)) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The lowest of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="concat(?, ', ', ?) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The comma-separated string concatenation of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="op('+')"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The sum of the duplicate values is used.</td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { subsequence(($a, $b), 1, 4) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">The first four of the duplicates are retained; any further duplicates
-                           are discarded.
-                        </td></tr><tr><td rowspan="1" colspan="1" align="left" valign="top"><code nobreak="false">duplicates="fn($a, $b) { distinct-values(($a, $b)) }"</code></td><td rowspan="1" colspan="1" align="left" valign="top">When multiple entries have the same key, the corresponding values
-                           are retained only if they are distinct from other values having the
-                           same key.
-                        </td></tr></tbody></table><example id="map-with-duplicates-into-array"><head>Combining Duplicates into an Array</head><p>This example takes as input an XML document such as:</p><eg xml:space="preserve">&lt;data&gt;
-   &lt;event id="A23" value="12"/&gt;
-   &lt;event id="A24" value="5"/&gt;
-   &lt;event id="A25" value="9"/&gt;
-   &lt;event id="A23" value="2"/&gt;
- &lt;/data&gt;</eg><p>and constructs a map whose JSON representation is:</p><eg xml:space="preserve">{ "A23": [ 12, 2 ], "A24": [ 5 ], "A23": [ 9 ] }</eg><p>The logic is:</p><eg xml:space="preserve">&lt;xsl:template match="data"&gt;
-   &lt;xsl:map duplicates="fn($a, $b) { array:join(($a, $b)) }"&gt;
-     &lt;xsl:for-each select="event"&gt;
-        &lt;xsl:map-entry key="@id" select="[xs:integer(@value)]"/&gt;
-     &lt;/xsl:for-each&gt;
-   &lt;/xsl:map&gt;
-   &lt;/xsl:template&gt;</eg></example><note><p>Specifying the effect by reference to <xfunction>map:merge</xfunction> has
-                  the following consequences when duplicates are combined
-                  into a merged entry:</p><ulist><item><p>The position of the merged entry in the result corresponds
-                     to the position of the first of the duplicate keys in the input.</p></item><item><p>The key used for the merged entry in the result corresponds
-                     to one of the duplicate keys in the input: it is 
-                        <termref def="dt-implementation-dependent"/> which one is chosen.
-                        This is relevant when
-                     the duplicate keys differ in some way, for example when they have
-                     different type annotations, or when they are <code nobreak="false">xs:dateTime</code>
-                     values in different timezones.</p></item></ulist></note></div3></div2><div2 id="map-examples"><head>Examples using Maps</head><p>This section gives some examples of where maps can be useful.</p><example id="maps-with-iterate"><head>Using Maps with xsl:iterate</head><p>This example uses maps in conjunction with the <elcode>xsl:iterate</elcode>
+                     'publisher':'QT4 Community', 'private entry': true()} </eg></example></div3></div2><div2 id="map-examples"><head>Examples using Maps</head><p>This section gives some examples of where maps can be useful.</p><example id="maps-with-iterate"><head>Using Maps with xsl:iterate</head><p>This example uses maps in conjunction with the <elcode>xsl:iterate</elcode>
                   instruction to find the highest-earning employee in each department, in a single
                   streaming pass of an input document containing employee records.</p><eg role="xslt-instruction" xml:space="preserve">
 &lt;xsl:source-document streamable="yes" href="employees.xml"&gt;
