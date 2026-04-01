@@ -10413,10 +10413,16 @@ and <code>version="1.0"</code> otherwise.</p>
                      Extensible map types are dropped; instead, the coercion rules cause undefined
                      map entries to be discarded.
                   </change>
+                  <change issue="1979" PR="2566" date="2026-03-31">
+                     Fields in a record type can no longer be optional; absent values are represented
+                     by an empty sequence.
+                  </change>
                </changes>
                
                <?element xsl:record-type?>
                <?element xsl:field?>
+               
+               <ednote><edtext>Schema change required to drop "xsl:field/@required" attribute</edtext></ednote>
                
                <p>An <elcode>xsl:record-type</elcode> declaration associates a name 
                   with a record type, and allows the record type
@@ -10449,11 +10455,11 @@ and <code>version="1.0"</code> otherwise.</p>
                      declaration are not distinct.</p>
                </error></p>
                
-               <p><error spec="XT" class="SE" code="4051" type="static">
+               <!--<p><error spec="XT" class="SE" code="4051" type="static">
                   <p>It is a <termref def="dt-static-error"/> 
                      if an <elcode>xsl:field</elcode> element has a <code>default</code>
                      attribute unless it specifies <code>required="no"</code>.</p>
-               </error></p>
+               </error></p>-->
                
               <p>An <elcode>xsl:record-type</elcode> declaration has two effects:</p>
                
@@ -10488,10 +10494,7 @@ and <code>version="1.0"</code> otherwise.</p>
      <xsl:attribute name="as">
         <xsl:text>record(</xsl:text>
         <xsl:for-each select="xsl:field" separator=", ">
-           <xsl:variable name="optional"
-                         as="xs:boolean"
-                         select="normalize-space(@required) = ('no','false','0')"/>
-           {@name}{'?'[$optional]} as {@as otherwise 'item()*'}
+           {@name} as {@as otherwise 'item()*'}
         </xsl:for-each>
         <xsl:text>)</xsl:text>
       </xsl:attribute>  
@@ -10532,48 +10535,20 @@ and <code>version="1.0"</code> otherwise.</p>
       <!-- declare the parameters -->
       <xsl:for-each select="xsl:field">
          <t:param name="{@name}"
-                  required="{@required otherwise 'yes'}">
-            <xsl:attribute name="as">
-               <xsl:variable name="as" 
-                             select="normalize-space(@as otherwise 'item()*')"/>
-               <xsl:variable name="optional" 
-                             select="normalize-space(@required) = ('no', 'false', '0')"/>
-               <xsl:choose>
-                  <xsl:when test="not($optional)" select="$as"/>
-                  <!-- for optional fields, amend the required type to allow () -->
-                  <xsl:when test="matches($as, '[?*]$')" select="$as"/>
-                  <xsl:when test="matches($as, '\+$')" select="replace($as, '\+$', '*')"/>
-                  <xsl:otherwise select="$as || '?'"/>
-               </xsl:choose>
-            </xsl:attribute>
+                  required="{@required otherwise 'yes'}"
+                  as="{@as}">
             <xsl:if test="@default">
                <xsl:attribute name="select" select="@default"/>
             </xsl:if>   
          </t:param>
       </xsl:for-each>
       
-        
-      
+            
       <!-- function body: construct a map -->
       <t:map duplicates="fn($first, $second){{$first}}">
          <xsl:for-each select="xsl:field">
-            <xsl:variable name="optional" 
-                          select="normalize-space(@required) = ('no', 'false', '0')"/>
-            <xsl:choose>
-              <xsl:when test="$optional and not(@default)">
-                 <!-- omit map entries for optional fields if no value is supplied -->
-                 <t:if test="exists(${@name})">
-                    <t:map-entry key="'{@name}'" select="${@name}"/>
-                 </t:if>
-              </xsl:when>
-              <xsl:otherwise>
-                <t:map-entry key="'{@name}'" select="${@name}"/>
-              </xsl:otherwise>  
-            </xsl:choose>  
+             <t:map-entry key="'{@name}'" select="${@name}"/> 
          </xsl:for-each>
-        
-
-
       </t:map>
     </t:function>          
 </xsl:template>]]></eg>
@@ -10582,7 +10557,7 @@ and <code>version="1.0"</code> otherwise.</p>
                
                <eg><![CDATA[<xsl:record-type name="cx:complex">
     <xsl:field name="r" as="xs:double"/>
-    <xsl:field name="i" as="xs:double" required="no" default="0"/>
+    <xsl:field name="i" as="xs:double" default="0"/>
 </xsl:record-type>]]></eg>
                
                <p>produces the equivalent function declaration:</p>
@@ -10596,28 +10571,7 @@ and <code>version="1.0"</code> otherwise.</p>
     </xsl:map>
 </xsl:function>]]></eg>
                
-               <p>No entry is generated in the constructed map for a field that
-               is declared as optional with no default. So the declaration:</p>
-               
-               <eg><![CDATA[<xsl:record-type name="cx:complex" visibility="public">
-    <xsl:field name="r" as="xs:double"/>
-    <xsl:field name="i" as="xs:double" required="no"/>
-</xsl:record-type>]]></eg>
-               
-               <p>produces the equivalent function declaration:</p>
-               
-               <eg><![CDATA[<xsl:function name="cx:complex" as="cx:complex" visibility="public">
-    <xsl:param name="r" as="xs:double"/>
-    <xsl:param name="i" as="xs:double?" required="no"/>
-    <xsl:map>
-       <xsl:map-entry key="'r'" select="$r"/>
-       <xsl:if test="exists($i)">
-          <xsl:map-entry key="'i'" select="$i"/>
-       </xsl:if>   
-    </xsl:map>
-</xsl:function>]]></eg>
-               
-               
+ 
                
                <p>This generated <elcode>xsl:function</elcode> declaration must
                meet all the constraints placed on user-written 
@@ -28409,155 +28363,7 @@ the same group, and the-->
 
             </div3>
 
-             <div3 id="record-instructions" diff="add" at="2025-03-14">
-                 <head>Record Instruction</head>
-                 <changes>
-                 <change issue="322" PR="1858" date="2025-03-25"> The <elcode>xsl:record</elcode> instruction is introduced
-                     to make construction of records simpler. </change>
-                 </changes>
-
-             <?element xsl:record?>
-
-             <p>(The notation <code>* = expression</code> indicates that this instruction accepts
-             any number of additional attributes in no namespace.)</p>
-             
-                 <p><ednote><edtext>There needs to be a construct available within <code>element-catalog.xml</code>
-                             to declare 'any permitted attribute of a given name type/pattern', in this case <code>xs:NCName</code>
-             
-                             </edtext></ednote></p>
-             <p>The instruction <elcode>xsl:record</elcode> constructs and returns a new
-                 record, permitting entries to be declared as attributes on the
-                 instruction. The <code>xsl:as</code> attribute is required, and its
-                value must be a record type.</p>
-                
-                <p>The instruction is intended to make writing maps where the entry keys are
-                 NCNames simpler and more concise, avoiding larger XSLT constructs using
-                 <elcode>xsl:map</elcode> and <elcode>xsl:map-entry</elcode> or
-                 <elcode>xsl:sequence</elcode> containing map-constructing XPath
-                 expressions.</p>
-                 
-                 <note>
-                     <p>Unlike all other <termref def="dt-xslt-element">XSLT elements</termref>, the names of the attributes <code>xsl:as</code> and
-                         <code>xsl:duplicates</code> as well as the <termref def="dt-standard-attributes">standard
-                             attributes</termref> (such as <code>use-when</code> or <code>xpath-default-namespace</code>) attached to the <elcode>xsl:record</elcode> instruction <rfc2119>must</rfc2119> be in the <termref def="dt-xslt-namespace">XSLT namespace</termref>, 
-                         as opposed to being in no namespace. This has been chosen to
-                         avoid reserving the names of such attributes (e.g. <code>as</code>, <code>duplicates</code>, <code>use-when</code> etc.) as potential
-                         entry keys, leaving any valid NCName as a candidate.</p>
-                 </note>
-                
-                <ednote><edtext>Need to update the schemas (XSD and RNG) for xsl:record</edtext></ednote>
-                 
-                 
-             
-             <p>The <elcode>xsl:record</elcode> instruction generates a new record: call this
-                 <code>$record</code>. For each of the attributes of the instruction whose name
-                 is an <code>xs:NCName</code> an entry is added to <code>$record</code> whose
-                 key is the name of the attribute (as an <code>xs:string</code>) and whose value is
-                 the result of evaluating the value of that attribute as an expression in the
-                 current context.</p>
-                
-                <p>The resulting record is coerced to the record type specified in the <code>xsl:as</code>
-                attribute, and acquires a type annotation to mark it as an instance of this record type.</p>
-                 <note>
-                     <p>As the values of the attributes whose names are <code>xs:NCName</code> are considered to be XPath expressions,
-                     two consequences follow for such attributes:
-                     <olist>
-                         <item>They <rfc2119>must not</rfc2119> be considered as shadow attributes (see <specref ref="shadow-attributes"/>) 
-                             as a leading underscore is a valid character within an <code>xs:NCName</code>.</item>
-                         <item>They are not designated as <termref def="dt-attribute-value-template">attribute
-                                 value templates</termref>.</item>
-                     </olist> These restrictions do not apply to attributes of <elcode>xsl:record</elcode> whose names are in namespaces.</p>
-                 </note>
-                 
-             <!--<p>After processing the applicable attributes of the instruction, any contained
-                 sequence constructor is evaluated and the result <rfc2119>must</rfc2119> be a
-                 (possibly empty) sequence of maps. The entries in these maps are merged into
-                 <code>$record</code>. By this means entries can be added whose keys are not
-                 NCNames, or conditionally generated entries can be included.</p>-->
-             <p> Each of the map entries in
-                 <code>$record</code> is modified by applying the <termref def="dt-coercion-rules"/>
-                 to convert the singleton map to the type declared in the <code>xsl:as</code>
-                 attribute of the <elcode>xsl:record</elcode> instruction, if present. 
-                 This may contain a record type declaration or 
-                 a reference to one of the <xtermref
-                     spec="XP40" ref="dt-in-scope-named-item-types"/>, which may include record types.</p>
-                 
-             <!--<p>The treatment of duplicate keys between entries defined in the attributes of
-                 <elcode>xsl:record</elcode> and any generated by a contained sequence
-                 constructor is described in <specref ref="duplicate-keys"/> below. Note that in
-                 the absence of a sequence constructor, no duplicate keys can appear, as all
-                 attributes of <elcode>xsl:record</elcode> must have a unique name within the
-                 element tag.</p>-->
-             <!--<note>-->
-                 <p>The effect of this instruction, in the absence of errors, is equivalent to execution of the XSLT <elcode>xsl:map</elcode> instruction generated by the 
-                     the following source transformation of the <elcode>xsl:record</elcode> subtree</p>
-                 <eg role="xslt-declaration" xml:space="preserve">
-                   <![CDATA[<xsl:namespace-alias stylesheet-prefix="t" result-prefix="xsl"/>
-...
-
-<xsl:mode name="record" on-no-match="shallow-copy">
-   <xsl:template match="xsl:record">
-      <xsl:variable name="xsl-attributes" select="@xsl:*"/>
-      <xsl:variable name="ncname-attributes" select="@*[empty(prefix-from-QName(node-name()))]"/>
-      <xsl:variable name="other-attributes"
-          select="@* except ($xsl-attributes, $ncname-attributes)"/>
-      <t:map>
-         <xsl:sequence select="$other-attributes"/>
-         <xsl:apply-templates select="$xsl-attributes, $ncname-attributes, node()"/>
-      </t:map>
-   </xsl:template>
-   <xsl:template match="xsl:record/@*">
-      <t:map-entry key="'{name()}'" select="{.}"/>
-   </xsl:template>
-   <xsl:template match="xsl:record/@xsl:*" priority="1">
-      <xsl:attribute name="{local-name()}" select="."/>
-   </xsl:template>
-</xsl:mode>]]>
-                 </eg>
-                 <p>which for the instruction:</p>
-                 <eg><![CDATA[ <xsl:record xsl:as="eg:book" author="string(AUTHOR)"
-               title="string(TITLE)" 
-               price="xs:decimal(PRICE)" 
-               publisher="string(../@name)">
-   </xsl:record>]]></eg>
-                 <p>would produce</p>
-                 <eg><![CDATA[ <xsl:map as="eg:book">
-      <xsl:map-entry key="'author'" select="string(AUTHOR)"/>
-      <xsl:map-entry key="'title'" select="string(TITLE)"/>
-      <xsl:map-entry key="'price'" select="xs:decimal(PRICE)"/>
-      <xsl:map-entry key="'publisher'" select="string(../@name)"/>
-   </xsl:map>]]></eg>
-             <!--</note>-->
-             
-
-
-             <example diff="add" at="2025-02-25">
-                 <head>Generating a record with <elcode>xsl:record</elcode></head>
-                 <p>The following example constructs a record using <elcode>xsl:record</elcode></p>
-                 <eg role="xslt-declaration" xml:space="preserve"><![CDATA[<xsl:template match="book" as="map(*)">
-   <xsl:record author="string(AUTHOR)"
-               title="string(TITLE)" 
-               price="xs:decimal(PRICE)" 
-               publisher="string(../@name)">
-      <xsl:if test="@private">
-         <xsl:map-entry name="'private entry'" select="true()"/>
-      </xsl:if>
-   </xsl:record>
-</xsl:template>]]></eg>
-                 <p>with the following input</p>
-                 <eg><![CDATA[<catalog name="QT4 Community">
-  <book private="true">
-    <AUTHOR>MHK</AUTHOR>
-    <TITLE>XSLT 4.0</TITLE>
-    <PRICE>123.45</PRICE>
-  </book>
-</catalog>]]></eg>
-                 <p>will produce a resulting map:</p>
-                 <eg>map{'author':'MHK', 'title': 'XSLT 4.0', 'price':123.45, 
-                     'publisher':'QT4 Community', 'private entry': true()} </eg>
-             </example>
-            </div3>
-             
+               
             <div3 id="duplicate-keys" diff="add" at="2022-01-01">
                <head>Handling of duplicate keys</head>
                
@@ -28567,10 +28373,10 @@ the same group, and the-->
                   allowing control over how duplicate keys are handled by the <elcode>xsl:map</elcode>
                   instruction.
                   </change>
-                   <change issue="322" PR="1858" date="2025-03-14">
+                   <!--<change issue="322" PR="1858" date="2025-03-14">
                        Attribute <code>xsl:record/@xsl:duplicates</code> is added to control duplicate keys handling in the <elcode>xsl:record</elcode>
                        instruction.
-                   </change>
+                   </change>-->
                </changes>
                
                <p>This section describes what happens when two or more maps in the input sequence of
@@ -28582,7 +28388,7 @@ the same group, and the-->
                   <p>In the absence of the <code>[xsl:]duplicates</code> attribute, 
                      a <termref def="dt-dynamic-error">dynamic error</termref> occurs if the set of
                      keys in the maps making up the input sequence
-                      <error.extra>of an <elcode>xsl:map</elcode> or <elcode>xsl:record</elcode> instruction</error.extra>
+                      <error.extra>of an <elcode>xsl:map</elcode> instruction</error.extra>
                      contains duplicates.</p>
                </error></p>
                
@@ -28721,6 +28527,157 @@ the same group, and the-->
                
                
             </div3>
+            
+            <div3 id="record-instructions" diff="add" at="2025-03-14">
+                 <head>Record Instruction</head>
+                 <changes>
+                 <change issue="322" PR="1858" date="2025-03-25"> The <elcode>xsl:record</elcode> instruction is introduced
+                     to make construction of records simpler. </change>
+                 </changes>
+
+             <?element xsl:record?>
+
+             <p>(The notation <code>* = expression</code> indicates that this instruction accepts
+             any number of additional attributes in no namespace.)</p>
+             
+                 <p><ednote><edtext>There needs to be a construct available within <code>element-catalog.xml</code>
+                             to declare 'any permitted attribute of a given name type/pattern', in this case <code>xs:NCName</code>
+             
+                             </edtext></ednote></p>
+             <p>The instruction <elcode>xsl:record</elcode> constructs and returns a new
+                 record, permitting entries to be declared as attributes on the
+                 instruction. The <code>xsl:as</code> attribute is required, and its
+                value must be a record type.</p>
+                
+                <p>The instruction is intended to make writing maps where the entry keys are
+                 NCNames simpler and more concise, avoiding larger XSLT constructs using
+                 <elcode>xsl:map</elcode> and <elcode>xsl:map-entry</elcode> or
+                 <elcode>xsl:sequence</elcode> containing map-constructing XPath
+                 expressions.</p>
+                 
+                 <note>
+                     <p>Unlike all other <termref def="dt-xslt-element">XSLT elements</termref>, the names of the attributes <code>xsl:as</code> and
+                         <code>xsl:duplicates</code> as well as the <termref def="dt-standard-attributes">standard
+                             attributes</termref> (such as <code>use-when</code> or <code>xpath-default-namespace</code>) attached to the <elcode>xsl:record</elcode> instruction <rfc2119>must</rfc2119> be in the <termref def="dt-xslt-namespace">XSLT namespace</termref>, 
+                         as opposed to being in no namespace. This has been chosen to
+                         avoid reserving the names of such attributes (e.g. <code>as</code>, <code>duplicates</code>, <code>use-when</code> etc.) as potential
+                         entry keys, leaving any valid NCName as a candidate.</p>
+                 </note>
+                
+                <ednote><edtext>Need to update the schemas (XSD and RNG) for xsl:record</edtext></ednote>
+                 
+                 
+             
+             <p>The <elcode>xsl:record</elcode> instruction generates a new record: call this
+                 <code>$record</code>. For each of the attributes of the instruction whose name
+                 is an <code>xs:NCName</code> an entry is added to <code>$record</code> whose
+                 key is the name of the attribute (as an <code>xs:string</code>) and whose value is
+                 the result of evaluating the value of that attribute as an expression in the
+                 current context.</p>
+                
+                <p>The resulting record is coerced to the record type specified in the <code>xsl:as</code>
+                attribute, and acquires a type annotation to mark it as an instance of this record type.</p>
+                 <note>
+                     <p>As the values of the attributes whose names are <code>xs:NCName</code> are considered to be XPath expressions,
+                     two consequences follow for such attributes:
+                     <olist>
+                         <item>They <rfc2119>must not</rfc2119> be considered as shadow attributes (see <specref ref="shadow-attributes"/>) 
+                             as a leading underscore is a valid character within an <code>xs:NCName</code>.</item>
+                         <item>They are not designated as <termref def="dt-attribute-value-template">attribute
+                                 value templates</termref>.</item>
+                     </olist> These restrictions do not apply to attributes of <elcode>xsl:record</elcode> whose names are in namespaces.</p>
+                 </note>
+                 
+             <!--<p>After processing the applicable attributes of the instruction, any contained
+                 sequence constructor is evaluated and the result <rfc2119>must</rfc2119> be a
+                 (possibly empty) sequence of maps. The entries in these maps are merged into
+                 <code>$record</code>. By this means entries can be added whose keys are not
+                 NCNames, or conditionally generated entries can be included.</p>-->
+             <!--<p> Each of the map entries in
+                 <code>$record</code> is modified by applying the <termref def="dt-coercion-rules"/>
+                 to convert the singleton map to the type declared in the <code>xsl:as</code>
+                 attribute of the <elcode>xsl:record</elcode> instruction, if present. 
+                 This may contain a record type declaration or 
+                 a reference to one of the <xtermref
+                     spec="XP40" ref="dt-in-scope-named-item-types"/>, which may include record types.</p>
+             -->    
+             <!--<p>The treatment of duplicate keys between entries defined in the attributes of
+                 <elcode>xsl:record</elcode> and any generated by a contained sequence
+                 constructor is described in <specref ref="duplicate-keys"/> below. Note that in
+                 the absence of a sequence constructor, no duplicate keys can appear, as all
+                 attributes of <elcode>xsl:record</elcode> must have a unique name within the
+                 element tag.</p>-->
+           
+                 <!--<p>The effect of this instruction, in the absence of errors, is equivalent to execution of the XSLT <elcode>xsl:map</elcode> instruction generated by the 
+                     the following source transformation of the <elcode>xsl:record</elcode> subtree</p>
+                 <eg role="xslt-declaration" xml:space="preserve">
+                   <![CDATA[<xsl:namespace-alias stylesheet-prefix="t" result-prefix="xsl"/>
+...
+
+<xsl:mode name="record" on-no-match="shallow-copy">
+   <xsl:template match="xsl:record">
+      <xsl:variable name="xsl-attributes" select="@xsl:*"/>
+      <xsl:variable name="ncname-attributes" select="@*[empty(prefix-from-QName(node-name()))]"/>
+      <xsl:variable name="other-attributes"
+          select="@* except ($xsl-attributes, $ncname-attributes)"/>
+      <t:map>
+         <xsl:sequence select="$other-attributes"/>
+         <xsl:apply-templates select="$xsl-attributes, $ncname-attributes, node()"/>
+      </t:map>
+   </xsl:template>
+   <xsl:template match="xsl:record/@*">
+      <t:map-entry key="'{name()}'" select="{.}"/>
+   </xsl:template>
+   <xsl:template match="xsl:record/@xsl:*" priority="1">
+      <xsl:attribute name="{local-name()}" select="."/>
+   </xsl:template>
+</xsl:mode>]]>
+                 </eg>-->
+                 <p>For example, the instruction:</p>
+                 <eg><![CDATA[ <xsl:record xsl:as="eg:book" 
+               author="string(AUTHOR)"
+               title="string(TITLE)" 
+               price="xs:decimal(PRICE)" 
+               publisher="string(../@name)">
+   </xsl:record>]]></eg>
+                 <p>is equivalent to the call on the constructor function:</p>
+                <eg><![CDATA[<xsl:select>
+  eg:book(author := string(AUTHOR), 
+          title := string(TITLE),
+          price := xs:decimal(PRICE),
+          publisher := string(../@name))
+</xsl:select>]]></eg>
+ 
+             
+
+
+             <example diff="add" at="2025-02-25">
+                 <head>Generating a record with <elcode>xsl:record</elcode></head>
+                 <p>The following example constructs a record using <elcode>xsl:record</elcode></p>
+                 <eg role="xslt-declaration" xml:space="preserve"><![CDATA[<xsl:template match="book" as="map(*)">
+   <xsl:record author="string(AUTHOR)"
+               title="string(TITLE)" 
+               price="xs:decimal(PRICE)" 
+               publisher="string(../@name)">
+      <xsl:if test="@private">
+         <xsl:map-entry name="'private entry'" select="true()"/>
+      </xsl:if>
+   </xsl:record>
+</xsl:template>]]></eg>
+                 <p>with the following input</p>
+                 <eg><![CDATA[<catalog name="QT4 Community">
+  <book private="true">
+    <AUTHOR>MHK</AUTHOR>
+    <TITLE>XSLT 4.0</TITLE>
+    <PRICE>123.45</PRICE>
+  </book>
+</catalog>]]></eg>
+                 <p>will produce a resulting map:</p>
+                 <eg>map{'author':'MHK', 'title': 'XSLT 4.0', 'price':123.45, 
+                     'publisher':'QT4 Community', 'private entry': true()} </eg>
+             </example>
+            </div3>
+           
          </div2>
 
          
