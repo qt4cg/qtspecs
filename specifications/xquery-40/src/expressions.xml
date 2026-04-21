@@ -6348,7 +6348,37 @@ name.</p>
                <p>Rules defining whether one record type is a <termref def="dt-subtype"/> of another
                   are given in <specref ref="id-item-subtype-records"/>.</p>
 
-            
+            <div5 id="id-records-as-functions">
+               <head>Records as Functions</head>
+               
+               <p>Records are maps, and like all maps, they are therefore 
+                  <termref def="dt-function-item">function items</termref>.</p>
+               
+               <p>For example, if <code>$loc</code> is an instance of
+               <code>record(longitude, latitude)</code>, then the dynamic function call
+               <code>$loc("longitude")</code> returns the value of the <code>"longitude"</code> field.</p>
+               
+               <p>When considered as a function item, if <var>R</var> is a record
+               of type <var>T</var>, and the names of the fields defined for <var>T</var>
+               are <var>F1</var>, <var>F2</var>, <var>F3</var>, ... <var>F/n</var>, then the
+               signature of the corresponding function item is:</p>
+               
+               <eg>fn(enum(<var>F1</var>, <var>F2</var>, <var>F3</var>, ... <var>F/n</var>)) as item()*</eg>
+               
+               <p>For example, consider the function <function>fn:load-xquery-module</function>, which
+               returns a record of type <code>fn:load-xquery-module-record</code>. This record type
+               defines two fields, <code>variables</code> and <code>functions</code>. The corresponding
+               function signature is therefore <code>fn(enum("variables", "functions")) as item()*</code>,
+               which means that any call on this function supplying a key value other than <code>"variables"</code>
+               or <code>"functions"</code> will fail with a type error.</p>
+               
+               <note>
+                  <p>If <code>$R</code> is a record of type <var>T</var>, then <code>$R($S)</code> fails if
+                  <var>$S</var> is not one of the defined fields of <var>T</var>. The lookup expression
+                  <code>$R?$S</code> fails in a similar way. The function call <code>map:get($S)</code> succeeds,
+                  however, returning an empty sequence.</p>
+               </note>
+            </div5>
             
             <div5 id="id-recursive-record-tests" diff="add" at="issue295">
                <head>Recursive Record Types</head>
@@ -22603,42 +22633,39 @@ return $r?z</eg>
                <prodrecap ref="WithExpr"/>
             </scrap>
             
-            <p>A <nt def="WithExpr">WithExpr</nt> can be used to update a map or record:
-            that is, to construct a new map or record whose content differs from a supplied map
-            or record.</p>
+            <p>A <nt def="WithExpr">WithExpr</nt> can be used to update a record:
+            more precisely, to construct a new <termref def="dt-record"/> whose content differs from a supplied
+            record. The new record has the same type annotation as the original, and must
+            match the <termref def="dt-record-type"/> of the original.</p>
             
-            <p>For example, with maps, the result of the expression:</p>
+            <p>For example, consider the expression:</p>
             
-            <eg>{"a":1, "b":2} with {"c":3}</eg>
+            <eg>parts-of-dateTime(current-date()) with {"timezone" : ()} => build-dateTime()</eg>
             
-            <p>is the map</p>
+            <p>The first part of this expression, <code>parts-of-dateTime(current-date())</code>, returns
+            a record of type <code>fn:dateTime-record</code> containing seven fields (<code>year</code>,
+            <code>month</code>, <code>day</code>, <code>hours</code>, <code>minutes</code>, <code>seconds</code>, and
+            <code>timezone</code>) of which the first three are empty (the value of the field is an empty
+            sequence). The <code>with</code> expression takes this record as input, and produces another
+            record, also of type <code>fn:dateTime-record</code>, in which the <code>timezone</code>
+            field is set to an empty sequence. The final part of the expression (<code>=> build-dateTime())</code>
+            converts this record to an <code>xs:date</code> value having no timezone.</p>
             
-            <eg>{"a":1, "b":2, "c":3}</eg>
-            
-            <p>With records, the effect is similar, but the result will always be a record of the same type
-            as the input, and a type error results if this would make the update invalid. For example:</p>
-            
-            <eg>build-dateTime({"hours":12, "minutes":30, "seconds":0}) 
-                  with {"timezone": xs:duration("PT1H")} => build-dateTime()</eg>
-            
-            <p>produces the value <code>xs:time("12:30:00+01:00")</code>.</p>
-            
-            <p>However, the outcome of the expression:</p>
-         
-            <eg>build-dateTime({"hours":12, "minutes":30, "seconds":0}) 
-                  with {"time-zone": xs:duration("PT1H")} => build-dateTime()</eg>
-            
-            <p>is a type error (which might be reported statically), because the name of the <code>timezone</code>
-            field has been misspelled.</p>
+           
+            <p>The <code>with</code> expression is type-safe, in that a type error is raised if the
+               name of a field in the right-hand operand does not correspond to one of the named
+               fields defined by the relevant record type, or if the supplied value does not
+               conform to the required type for that field.</p>
             
             <p>A <nt def="WithExpr">WithExpr</nt> is a binary expression evaluated from left to right:
             that is, <code>A with B with C</code> is evaluated as <code>(A with B) with C</code>. The operands
             are arbitrary expressions, with a required type of <code>map(*)</code>. This means that if a JNode
             is supplied, it will be coerced to a map.</p>
             
-            <p>If the left-hand operand is a map and is not a record, then the effect of the expression
-            <code>$A with $B</code> is equivalent to the effect of the function call 
-               <code>map:merge(($A, $B), {'duplicates':'use-last'})</code>.</p>
+            <p>The required type for the left hand operand is <code>record(*)</code>, and for the right
+            hand operand, <code>map(*)</code>. In both cases the supplied value will be coerced to the
+            required type by applying the coercion rules. This means that a JNode can be supplied, provided
+            it has an appropriate <term>·jvalue·</term>.</p>
             
             <p>If the left-hand operand is a record with type annotation <var>R</var>, then the effect
             of the expression <code>$A with $B</code> is equivalent to:</p>
@@ -22647,10 +22674,14 @@ return $r?z</eg>
 return $temp</eg>
             
             <p>In effect this means that the keys and values supplied in <var>$B</var> must be
-            appropriate for a record of type <var>R</var>; if not, a type error is raised. The coercion
-            rules apply: in the example given above where <code>"timezone"</code> is supplied as
-            an instance of <code>xs:duration</code>, the coercion rules ensure that it will be cast
-            to the required type <code>xs:dayTimeDuration</code>.</p>
+            appropriate for a record of type <var>R</var>; if not, a type error 
+               <errorref class="TY" code="0004"/> is raised. The coercion
+            rules apply: for example, the record type <code>fn:dateTime-record</code>
+               requires the <code>timezone</code> to be an instance of <code>xs:dayTimeDuration</code>,
+               but supplying <code>xs:duration("PT0S")</code> will succeed because this can be
+               coerced to an <code>xs:dayTimeDuration</code>.</p>
+            
+
          </div3> 
          
          <div3 id="id-methods">
