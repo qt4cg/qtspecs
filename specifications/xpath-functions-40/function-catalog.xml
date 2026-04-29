@@ -30117,7 +30117,7 @@ return document {
             
             <fos:option key="null" diff="add" at="2024-02-19">
                <fos:meaning>Determines how the JSON <code>null</code> value should be represented.</fos:meaning>
-               <fos:type>item()*</fos:type>
+               <fos:type>item()?</fos:type>
                <fos:default>()</fos:default>
                <fos:values>
                   <fos:value value="Value">
@@ -30128,7 +30128,8 @@ return document {
                      is used with some other meaning, because expressions such as the lookup operator
                      <code>?</code> flatten the result to a single sequence of items,
                      which means that any entries whose value is the empty sequence effectively disappear.
-                     The property can be set to any XDM value; a suggested value is the <code>xs:QName</code>
+                     The property can be set to any XDM item or to an empty sequence; 
+                     a suggested value is the <code>xs:QName</code>
                      value <code>fn:QName("http://www.w3.org/2005/xpath-functions", "null")</code>,
                      which is recognized by the JSON serialization method as representing the JSON value
                      <code>null</code>.
@@ -30136,28 +30137,41 @@ return document {
                </fos:values>
             </fos:option>
 
-            <fos:option key="number-parser" diff="add" at="A">
+            <fos:option key="number-format" diff="add" at="A">
                <fos:meaning>Determines how numeric values should be processed.</fos:meaning>
-               <fos:type>(fn(xs:untypedAtomic) as item()?)?</fos:type>
-               <fos:default>xs:double#1</fos:default>
+               <fos:type>enum("double", "decimal", "adaptive")</fos:type>
+               <fos:default>"double"</fos:default>
                <fos:values>
-                  <fos:value value="User-supplied function">
-                     The supplied function is called to process the string value of any JSON number
-                     in the input. By default, numbers are processed by 
-                     converting to <code>xs:double</code> using the XPath casting rules.
-                     Supplying the value <code>xs:decimal#1</code> will instead convert to <code>xs:decimal</code>
-                     (which potentially retains more precision, but disallows exponential notation), while
-                     supplying a function that casts to <code>(xs:decimal | xs:double)</code> will treat
-                     the value as <code>xs:decimal</code> if there is no exponent, or as <code>xs:double</code>
-                     otherwise. Supplying the value <code>fn:identity#1</code> causes the value to be retained
-                     unchanged as an <code>xs:untypedAtomic</code>. 
-                     
-                     If the <code>liberal</code> option is <code>false</code> (the default), then
-                     the supplied <code>number-parser</code> is called if and only if the value conforms 
-                     to the JSON grammar for numbers (for example,
-                     a leading plus sign and redundant leading zeroes are not allowed). If the <code>liberal</code>
-                     option is <code>true</code> then it is also called if the value conforms to an
-                     <termref def="implementation-defined"/> extension of this grammar.
+                  <fos:value value="double">
+                     The result of parsing a JSON number will always be an <code>xs:double</code> value,
+                     obtained by following the XPath rules for casting <code>xs:string</code>
+                     to <code>xs:double</code>, having first checked that the supplied string
+                     conforms to the JSON rules for numeric values.
+                  </fos:value>
+                  <fos:value value="decimal">
+                     The result of parsing a JSON number will always be an <code>xs:decimal</code> value.
+                     The input must conform to the JSON rules for numeric values. If the input
+                     is a string in the lexical space of <code>xs:decimal</code> then it
+                     is cast to <code>xs:decimal</code> following the XPath casting rules. If the
+                     resulting <code>xs:decimal</code> has a <xtermref spec="XP40" ref="dt-datum"/> in the value space of 
+                     <code>xs:integer</code> then the result is coerced to <code>xs:integer</code>
+                     using the <xtermref spec="XP40" ref="dt-coercion-rules"/>. In other cases
+                     (specifically, when the JSON value uses exponential notation), the value is
+                     first cast to <code>xs:double</code> and the resulting <code>xs:double</code> is then cast to 
+                     <code>xs:decimal</code>, in both cases by following the XPath casting rules.
+                  </fos:value>
+                  <fos:value value="adaptive">
+                     The result of parsing a JSON number will be either an <code>xs:decimal</code> 
+                     or an <code>xs:double</code> value, depending on its lexical form.
+                     The input must conform to the JSON rules for numeric values. If the input
+                     is a string in the lexical space of <code>xs:decimal</code> then it
+                     is cast to <code>xs:decimal</code> following the XPath casting rules. If the
+                     resulting <code>xs:decimal</code> has a <xtermref spec="XP40" ref="dt-datum"/> in the value space of 
+                     <code>xs:integer</code> then the result is coerced to <code>xs:integer</code>
+                     using the <xtermref spec="XP40" ref="dt-coercion-rules"/>. In other cases
+                     (specifically, when the JSON value uses exponential notation), the value is
+                     cast to <code>xs:double</code>, following the XPath rules for casting from
+                     <code>xs:string</code> to <code>xs:double</code>.
                   </fos:value>
                </fos:values>
             </fos:option>
@@ -30193,8 +30207,8 @@ return document {
                <code>escape</code> and <code>fallback</code> options, as described in the table above.</phrase></p>
             </item>
             <item>
-               <p>A JSON <emph>number</emph> is <phrase diff="add" at="A">processed using the function supplied
-                  in the <code>number-parser</code> option; by default it is</phrase> converted to an <code>xs:double</code> value using
+               <p>A JSON <emph>number</emph> is processed according to the rules of the 
+                  <code>number-format</code> option; by default it is converted to an <code>xs:double</code> value using
                   the rules for casting from <code>xs:string</code> to <code>xs:double</code>.</p>
                <note><p>The casting rules leave implementations some flexibility as to how values should be handled when they
                are too large to represent as an <code>xs:double</code>. It is <rfc2119>recommended</rfc2119>
@@ -30252,10 +30266,14 @@ return document {
                <p><code>xs:double</code> for a JSON number</p>
             </item>
             <item>
+               <p><code>xs:decimal</code> for a JSON number</p>
+            </item>
+            <item>
                <p><code>xs:boolean</code> for a JSON boolean</p>
             </item>
             <item>
-               <p><code>empty-sequence()</code> for a JSON null (or for empty input)</p>
+               <p><code>empty-sequence()</code> for a JSON null (or for empty input); or some other type as determined by the
+               <code>null</code> option if set.</p>
             </item>
          </ulist>
          
@@ -30321,17 +30339,10 @@ return document {
             </fos:test>
             <fos:test>
                <fos:expression><eg>parse-json(
-  "1984.2",
-  { 'number-parser': fn { xs:integer(round(.)) } }
+  ["2.0", 1e6]
+  { 'number-format': 'adaptive' } }
 )</eg></fos:expression>
-               <fos:result>1984</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>parse-json(
-  '[ 1, -1, 2 ]',
-  { 'number-parser': fn  { boolean(. >= 0) } }
-)</eg></fos:expression>
-               <fos:result>[ true(), false(), true() ]</fos:result>
+               <fos:result>[ xs:integer('2'), xs:double('1.0e6') ]</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression><eg>parse-json('[ "a", null, "b" ]',
@@ -30341,6 +30352,7 @@ return document {
             </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:see-also prefix="fn" name="json-doc"/>
       <fos:changes>
          <fos:change issue="414" PR="546" date="2023-07-25">
             <p>The rules regarding use of non-XML characters in JSON texts have been relaxed.</p>
@@ -30348,7 +30360,7 @@ return document {
          <fos:change issue="960" PR="1028" date="2024-02-20">
             <p>An option is provided to control how the JSON <code>null</code> value should be handled.</p>
          </fos:change>
-         <fos:change issue="973 1037" PR="975 1058 1246" date="2024-03-12">
+         <fos:change issue="973 1037 2592" PR="975 1058 1246 2593" date="2024-03-12">
             <p>An option is provided to control how JSON numbers should be formatted.</p>
          </fos:change>
          <fos:change issue="641" PR="2387" date="2026-01-16">
@@ -30363,9 +30375,6 @@ return document {
          <fos:change issue="1651" PR="1703" date="2025-01-14">
             <p>The order of entries in maps is retained.</p>
          </fos:change>
-         <!--<fos:change issue="748" PR="2013" date="2025-05-20">
-            <p>Support for binary input has been added.</p>
-         </fos:change>-->
       </fos:changes>
    </fos:function>
 
@@ -30426,6 +30435,7 @@ return document {
          
          
       </fos:notes>
+      <fos:see-also prefix="fn" name="parse-json"/>
       <fos:changes>
          <fos:change><p>Additional options are available, as defined by <function>fn:parse-json</function>.</p></fos:change>
 
