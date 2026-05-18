@@ -621,19 +621,6 @@
 		
 		<xsl:apply-templates select="$record/fos:summary/node()"/>
 		
-		<!--<example role="record" id="{$record/@id}-narrative">
-	    <record>
-              <xsl:for-each select="$record/fos:field">
-                <arg name="{@name}" type="{@type}">
-                  <xsl:attribute name="occur"
-                                 select="if (xs:boolean(@required)) then 'req' else 'opt'"/>
-                </arg>
-              </xsl:for-each>
-              <xsl:if test="$record/@extensible != false()">
-                <arg name="*"/>
-              </xsl:if>
-	    </record>
-	  </example>-->
 	  <table class="fos-options">
 		  <thead>
 		    <tr>
@@ -668,7 +655,7 @@
 
 	<xsl:template match="fos:options">
 
-	  <example role="record">
+<!--	  <example role="record">
 	    <record>
               <xsl:copy-of select="@id"/>
               <xsl:for-each select="fos:option">
@@ -684,7 +671,7 @@
                 <arg name="*"/>
               </xsl:if>
 	    </record>
-	  </example>
+	  </example>-->
 
 <table class="fos-options">
   <xsl:copy-of select="@diff, @at"/>
@@ -715,7 +702,7 @@
     <p>
       <code>
 	     <xsl:value-of select="@key|@name"/>
-      	<xsl:if test="not(xs:boolean(@required))">?</xsl:if>
+      	<!--<xsl:if test="not(xs:boolean(@required))">?</xsl:if>-->
       </code>
     </p>
   </td>
