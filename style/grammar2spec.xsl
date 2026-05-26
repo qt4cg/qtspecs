@@ -36,6 +36,8 @@
   <xsl:param name="tokens-file" select="'tokens.xml'"/>
   
   <xsl:param name="is-xslt30" select="false()"/>
+      <!-- MHK 2026-05-12 in the current build this param appears to be false even when
+           expanding the XSLT specification. Safer to rely on `$spec = "xslt40"` --> 
 
   <!-- XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX -->
 
@@ -472,8 +474,24 @@
       <xsl:param name="subtree-root" as="element(*)" tunnel="yes"/>
       <xsl:param name="depth" as="xs:integer"/>
       <xsl:variable name="this" select="."/>
-
-      <xsl:if test="$depth lt 6 and not(@if[not(contains(., $spec) or ($spec = 'shared'))])">
+    
+      <xsl:variable name="max-depth" as="xs:integer">
+        <xsl:choose>
+          <xsl:when test="$spec eq 'xslt40' and ancestor-or-self::*/@if = 'xslt40-patterns'">
+            <!-- when expanding XSLT pattern productions in the XSLT spec, don't limit the depth -->
+            <xsl:sequence select="10"/>
+          </xsl:when>
+          <xsl:when test="$spec eq 'xslt40'">
+            <!-- when expanding XPath productions in the XSLT spec, limit the depth -->
+            <xsl:sequence select="4"/>
+          </xsl:when>
+          <xsl:otherwise>
+            <!-- in other specs, keep going unless the production has its own scrap -->
+            <xsl:sequence select="6"/>
+          </xsl:otherwise>
+        </xsl:choose>
+      </xsl:variable>
+      <xsl:if test="$depth lt $max-depth and not(@if[not(contains(., $spec) or ($spec = 'shared'))])">
           <xsl:variable name="refs" as="xs:string*" 
                         select="$this//g:ref[not(@node-type='void')]/@name"/>
           <xsl:variable name="children" 
@@ -486,7 +504,7 @@
             <!-- Include children of this production if either (a) this is the top-level
                  production of a scrap, or (b) the children are not themselves top-level
                  productions in a different scrap -->
-            <xsl:apply-templates select="$children[$depth eq 0 or not($this/@name = $prodrecaps/@ref)]"
+            <xsl:apply-templates select="$children[$depth eq 0 or not($this/@name = $prodrecaps/@ref) ]"
                                  mode="#current">
               <xsl:with-param name="depth" select="$depth + 1"/>
             </xsl:apply-templates> 

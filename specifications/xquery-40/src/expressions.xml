@@ -2525,8 +2525,10 @@ data (step DQ4), and on the <termref
                
                <p diff="chg" at="B">If an operand of an expression does not have a <termref def="dt-dynamic-type"
                      >dynamic type</termref> that is a <termref def="dt-subtype"/> of the <termref def="dt-static-type"/>
-                  required for that operand, a <termref def="dt-type-error">type error</termref> is
-                  raised <errorref class="TY" code="0004"/>.</p>
+                  required for that operand, and if no coercion is possible to the required type (see <specref ref="id-coercion-rules"/>),
+                  then a <termref def="dt-type-error">type error</termref> is
+                  raised (generally <errorref class="TY" code="0004"/>, but subject to the rules for the specific expression).</p>
+               
                <p>Even though static typing can catch many <termref def="dt-type-error"
                      >type errors</termref> before an expression is executed, it is possible for an expression to raise an error during evaluation that was not detected by static  analysis. For example, an expression may contain a cast of a string into an integer, which is statically valid. However, if the actual value of the string at run time cannot be cast into an integer, a <termref
                      def="dt-dynamic-error"
@@ -6134,60 +6136,102 @@ name.</p>
                      Extensible map types are dropped; instead, the coercion rules cause undefined
                      map entries to be discarded.
                   </change>
+                  <change issue="1979" PR="2566" date="2026-03-31">
+                     Records now carry a type annotation identifying a record type, and their behavior
+                     as well as their content is constrained by that record type. Optional fields in records
+                     are dropped (in records, there is no longer a distinction between absent values 
+                     and empty values).
+                  </change>
                </changes>
                
-               <p>A <nt def="RecordType">RecordType</nt> matches maps that meet specific criteria.</p>
-
-               <p>For example, the <code>RecordType</code>
-                  <code>record(r as xs:double, i as xs:double)</code>
-		             matches a map if the map has exactly two entries: an entry with key <code>"r"</code>
-		                whose value is a <termref def="dt-singleton"/> <code>xs:double</code> value, and an entry with key <code>"i"</code>
-		                whose value is also a <termref def="dt-singleton"/> <code>xs:double</code> value.</p>
+               <p><termdef id="dt-record" term="record">A <term>record</term> is a <termref def="dt-map"/>
+               whose structure and behavior is constrained by a <termref def="dt-record-type"/>.</termdef></p>
                
-               <p>Record types describe a subset of the value space of maps. They do not define any new kinds of
-		             values, or any additional operations. They are useful in many cases to describe more accurately the
-		             type of a variable, function parameter, or function result, giving benefits both in the readability
-		             of the code, and in the ability of the processor to detect and diagnose type errors and to optimize
-		             execution.</p>
-
-
+               <p><termdef id="dt-record-type" term="record type">A <term>record type</term>
+               is a sequence of field declarations, where each field declaration defines a name (an arbitrary
+               <xtermref spec="DM40" ref="dt-string"/>) and a type (an arbitrary <termref def="dt-sequence-type"/>).</termdef></p>
+               
+               <p>The syntax for defining a <termref def="dt-record-type"/> is the production
+               <nt def="TypedRecordType">TypedRecordType</nt>.</p>
+               
+               
                <scrap>
                   <prodrecap ref="RecordType"/>
                </scrap>
 
-              
-               
 
-               <!--<p>If the list of fields ends with <code>",*"</code> then the record type is said to be
-		                <term>extensible</term>. For example, the <code>RecordType</code>
-                  <code>record(e as element(Employee), *)</code>
-		             matches a map if it has an entry with key <code>"e"</code> whose value matches <code>element(Employee)</code>,
-		             regardless what other entries the map might contain.</p>-->
                
-               <p>For generality, the syntax <code>record()</code> defines a record type that has no explicit fields. 
-                  The only thing it matches is an <xtermref spec="DM40" ref="dt-empty-map"/>.</p>
                
+               <p>For example, the <nt def="TypedRecordType">TypedRecordType</nt>
+                  <code>record(r as xs:double, i as xs:double)</code>
+		             defines a record type with two fields: an field with key <code>"r"</code>
+		                whose value is a <termref def="dt-singleton"/> <code>xs:double</code> value, and a field with key <code>"i"</code>
+		                whose value is also a <termref def="dt-singleton"/> <code>xs:double</code> value.</p>
+               
+               <p>If the type declaration for a particular field is omitted, then <code>item()*</code> is assumed: that is,
+		             the map entry may have any type.</p>
+               
+               <p>For generality:</p>
+               
+               <ulist>
+                  <item><p>The syntax <code>record()</code> defines a record type that has no fields. 
+                  The only thing it matches is an <xtermref spec="DM40" ref="dt-empty-map"/> whose 
+                  type annotation is <code>record()</code> (the empty record type).</p></item>
+                  <item><p>The syntax <code>record(*)</code> matches any <termref def="dt-record"/>: that is, any map
+                  with a type annotation identifying it as a record, regardless of the record type.
+                  The record type <code>record(*)</code> is an abstract type: every instance
+                        belongs to some more specific record type.</p></item>
+               </ulist>
+               
+               <p>Records are generally constructed by coercing a map (which may itself be a record)
+               to a required record type. For example:</p>
+               
+               <eg>let $complex as record(r as xs:double, i as xs:double) := {"r":0, "i":0}</eg>
+               
+               <p>binds the variable <code>$complex</code> to a newly constructed record. Coercion of maps
+               to records is described in <specref ref="id-item-coercion-rules"/>. The rules for the coercion operation
+               ensure that the resulting record has one entry for every field in the corresponding record definition,
+               and that the values of those entries are instances of the required type for the relevant field.</p>
+               
+               <p>Record types inherit all operations available for maps, but offer the possibility
+                  of stronger type checking, because the names of the fields (keys) are generally
+                  known statically. Record types are useful in many cases to describe more accurately the
+		             type of a variable, function parameter, or function result, giving benefits both in the readability
+		             of the code, and in the ability of the processor to detect and diagnose type errors and to optimize
+		             execution.</p>
+               
+               <p>A record <var>R</var> matches a record type <var>T</var> if and only if the type annotation
+                  of <var>R</var> is a subtype of <var>T</var>, as described in <specref ref="id-item-subtype-records"/>.</p>
+               
+               <ednote><edtext>We expect in due course to define facilities that allow one record type to be
+               defined as a subtype of another, by extension or restriction.</edtext></ednote>
+               
+               
+               
+               <p>Record types provide stronger type checking than general maps. Accessing an entry
+               within a record gives a type error (rather than an empty result) if the key is not one of
+               the field names defined for the record, and replacing a value for a field gives a type error
+               if the new value does not conform to the required type. These type errors can be reported
+               statically if they are detected statically, which will often be possible if variables and
+               function parameters declare their required type as a record type.</p>
+               
+              
+
+
                <p>A record type can describe only maps whose keys are strings.
 		             A field whose key is a string can be expressed using an (unquoted) NCName if the key conforms to
 		             NCName syntax, or using a (quoted) string literal otherwise.</p>
                
-               <p>Although constructors for named record types produce a map in which the
-                  <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref> reflects
-                  the order of field definitions in the record type definition,
-                  the <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref>
-                  of a map has no effect on whether the map matches a particular
-                  record type: the entries in a map do not have to be in any particular order.</p>
-
+               
                <note>
                   <p>Lookup expressions have been extended in 4.0 so that non-NCName keys can be used without
 		             parentheses: <code>employee?"middle name"</code></p>
                </note>
 
 
-               <p>If the type declaration for a field is omitted, then <code>item()*</code> is assumed: that is,
-		             the map entry may have any type.</p>
+               
 
-               <p>If the field name is followed by a question mark,
+               <!--<p>If the field name is followed by a question mark,
 		             then the value must have the specified type if it is present, but it may also be absent. For example,
 		             the <code>RecordType</code>
                   <code>record(first as xs:string, middle? as xs:string, last as xs:string)</code>
@@ -6196,21 +6240,42 @@ name.</p>
 		                entry must be a single <code>xs:string</code>. Declaring the type as 
 		                <code>record(first as xs:string, middle? as xs:string?, last as xs:string)</code> also allows
 		             the entry with key <code>"middle"</code> to be present but empty.</p>
-               
-               <p>A map that contains an entry whose key corresponds to no field in the record type does not
+               -->
+               <!--<p>A map that contains an entry whose key does not correspond to any field in the record type fails to
                match the record type. However, it can be coerced to such a record type when the <termref def="dt-coercion-rules"/>
-               are applied. In practice this means that when the required type of an argument is declared using a record
+               are applied. In practice this means that when the required type of a function argument is declared as being a record
                type, the map that is supplied as a value for this argument may contain additional fields, which are discarded
                so they are invisible to the called function.</p>
+               -->
                
-               <!--<note>
-                  <p>Within an extensible record type, a <code>FieldDeclaration</code> that is marked optional 
-                     and has no declared type does not constrain the
-                     map in any way, so it serves no practical purpose, but it is permitted because it may have
-                     documentary value.</p>
-               </note>-->
                
                <p>The names of the fields in a record type must be distinct <errorref class="ST" code="0021"/>.</p>
+               
+               <p>Record types may be named, or they may be anonymous. Naming a record type has
+               a number of benefits:</p>
+               
+               <ulist>
+                  <item><p>It avoids repeated use of a type definition that may be lengthy.</p></item>
+                  <item><p>It means that when the details of the type definition change, the change
+                  need only be made in one place, and there is less risk of multiple definitions diverging.</p></item>
+                  <item><p>A named record type definition automatically has an associated constructor
+                  function that can be used to construct instances of the record type.</p></item>
+                  <item><p>Named record type definitions can be recursive, allowing more complex data structures
+                  such as lists and trees to be defined: see <specref ref="id-recursive-record-tests"/>.</p></item>
+                  <item><p>Use of named record type definitions may make it easier for a processor to check
+                  that a record conforms to a particular record type.</p></item>
+               </ulist>
+               
+               <p>Some record types used to define the parameters or results of built-in functions use
+               names in the <code>fn</code> namespace: for example the result of <function>fn:parts-of-dateTime</function>,
+               and the argument to <function>fn:build-dateTime</function>, is defined using the named record type
+               <code>fn:dateTime-record</code>.</p>
+               
+               <p>User-defined named record types may be declared in XQuery using the <code>declare record</code>
+               construct<phrase role="xquery"> (see <specref ref="id-named-record-types"/>)</phrase>, and 
+               in XSLT using an <code>xsl:record-type</code> declaration.</p>
+               
+               <p>Some built-in functions also use unnamed record types in their signatures.</p>
                
               
                
@@ -6218,36 +6283,36 @@ name.</p>
                
 
                
-
+<!--
                <p>If a variable <code>$rec</code> is known to conform to a particular
 		             record type, then when a lookup expression <code>$rec?field</code> is used, (a) the processor
 		             can report a type error if <code>$rec</code> cannot contain an entry with name <code>field</code>
                    (see <specref ref="id-implausible-lookup-expressions"/>),
 		             and (b) the processor can make static type inferences about the type of value returned by 
 		             <code>$rec?field</code>.</p>
-
+-->
                <note>
-                  <p>(TODO: change function signatures as suggested here!) A number of functions in the standard 
+                  <!--<p>(TODO: change function signatures as suggested here!) A number of functions in the standard 
                      function library use maps as function arguments;
 		                this is a useful technique where the information to be supplied across the interface is highly
 		                variable. However, the type signature for such functions typically declares the argument type
 		                as <code>map(*)</code>, which gives very little information (and places very few constraints)
 		                on the values that are actually passed across. Using record types offers the possibility of
 		                improving this: for example, the options argument of <function>fn:parse-json</function>, previously
-		                given as <code>map(*)</code>, can now be expressed as <code>record(liberal? as xs:boolean, 
-		                   duplicates? as xs:string, escape? as xs:boolean, fallback as fn(xs:string) as xs:string)</code>.
+		                given as <code>map(*)</code>, can now be expressed as <code>record(liberal as xs:boolean?, 
+		                   duplicates as xs:string?, escape as xs:boolean?, fallback as (fn(xs:string) as xs:string)?)</code>.
 		                In principle the <code>xs:string</code> type used to describe the <code>duplicates</code>
 		                   option could also be replaced by a schema-defined subtype
 		                of <code>xs:string</code> that enumerates the permitted values (<code>"reject"</code>,
 		                   <code>"use-first"</code>, <code>"use-last"</code>). 
-		                </p>
-                  <p>The use of a record type in the signature of such a function causes the 
+		                </p>-->
+                  <p>The use of a record type in the signature of a function (whether named or unnamed) causes the 
 		                   <termref def="dt-coercion-rules">coercion rules</termref>
-		                to be invoked. So, for example, if the function expects an entry in the map to be an <code>xs:double</code>
+		                to be invoked. So, for example, if the function expects an entry in the supplied record to be an <code>xs:double</code>
 		                value, it becomes possible to supply a map in which the corresponding entry has type <code>xs:integer</code>.</p>
-                  <p>Greater precision in defining the types of such arguments also enables better type checking,
+                  <!--<p>Greater precision in defining the types of such arguments also enables better type checking,
 		                better diagnostics, better optimization, better documentation, and better syntax-directed
-		                editing tools.</p>
+		                editing tools.</p>-->
                </note>
 
                <note>
@@ -6257,7 +6322,7 @@ name.</p>
 		             such as <code>{longitude: 130.2, latitude: 53.4}</code> relies instead on recognizing the property
 		             names appearing in the object. XSLT 4.0, by integrating record types into pattern matching syntax,
 		             allows such an object to be matched with a pattern of the form 
-		                <code>match="record(longitude, latitude)"</code></p>
+		                <code>match="~record(longitude, latitude)"</code></p>
                </note>
 
                <p>Rules defining whether one record type is a <termref def="dt-subtype"/> of another
@@ -6331,14 +6396,14 @@ name.</p>
                   <head>A Binary Tree</head>
                   <p>A record used to represent a node in a binary tree might be represented (using XQuery syntax) as:</p>
                   <eg>declare record t:binary-tree 
-   ( left? as t:binary-tree, 
+   ( left as t:binary-tree?, 
      value as item()*, 
-     right? as t:binary-tree
+     right as t:binary-tree?
    )</eg>
-                  <p>A recursive function to walk this tree and enumerate all the values in depth-first order might be written 
+                  <p>A recursive function to walk this tree and return all the leaf values in depth-first order might be written 
                      (again using XQuery syntax) as:</p>
-                  <eg><![CDATA[declare function t:values($tree as t:binary-tree?) as item()* {
-  $tree ! (t:values(?left), ?value, t:values(?right))   
+                  <eg><![CDATA[declare function t:walk-tree($tree as t:binary-tree?) as item()* {
+  $tree ! (t:walk-tree(?left), ?value, t:walk-tree(?right))   
 }]]></eg>
                </example>
                
@@ -7730,42 +7795,61 @@ declare record Particle (
                      </olist>
                </div4>
                <div4 id="id-item-subtype-records">
-                  <head>Subtyping Records</head>
-                  <changes>
+                  <head>Subtyping Non-recursive Record Types</head>
+                  <!--<changes>
                      <change issue="2365" PR="2413" date="2026-01-28">
                         Extensible map types are dropped; instead, the coercion rules cause undefined
                         map entries to be discarded.
                      </change>
-                  </changes>
+                  </changes>-->
+                  <note><p>For recursive record types, see <specref ref="id-itemtype-subtype-aliases"/>.</p></note>
+                  
                   <p>Given item types <var>A</var> and <var>B</var>, <var>A</var> <code>⊆</code> <var>B</var> is true if any of the following apply:</p>
                   <olist>
-                     <!--<item diff="add" at="issue52">
-                        <p><var>A</var> is <code>map(*)</code> and <var>B</var> is <code>record(*)</code>.</p>
-                     </item>-->
-                     <item diff="add" at="A">
+                     
+                     <item>
                         <p>All of the following are true:</p>
                         <olist>
-                           <item><p><var>A</var> is a record type.</p></item>
-                           <item><p><var>B</var> is <code>map(*)</code>.</p></item>
+                           <item><p><var>A</var> is <code>record(*)</code>.</p></item>
+                           <item><p><var>B</var> is <code>map(xs:string, item()*)</code>.</p></item>
+                        </olist>
+                        <example>
+                           <head>Examples:</head>
+                           <ulist>
+                              <item><p><code>record(*)</code> ⊆ <code>map(xs:string, item()*)</code></p></item>
+                              <item><p><code>record(*)</code> ⊆ <code>map(xs:anyAtomicType, item()*)</code></p></item>
+                              <item><p><code>record(*)</code> ⊆ <code>map(*)</code></p></item>
+                              <item><p><code>record(longitude, latitude)</code> ⊆ <code>map(xs:string, item()*)</code></p></item>
+                           </ulist>
+                           <p>The last three examples follow from the transitivity rules.</p>
+                        </example>
+                     </item>
+                     
+                     <!--<item>
+                        <p>All of the following are true:</p>
+                        <olist>
+                           <item><p><var>A</var> is <code>record(*)</code>.</p></item>
+                           <item><p><var>B</var> is <code>map(xs:string, item()*)</code>.</p></item>
                         </olist>
                         <example>
                            <head>Example:</head>
-                           <p><code>record(longitude, latitude)</code> ⊆ <code>map(*)</code></p>
-                           <p><code>record(longitude as xs:double, latitude as xs:double)</code> ⊆ <code>map(*)</code></p>
+                           <p><code>record(longitude, latitude)</code> ⊆ <code>map(xs:string, item()*)</code></p>
+                           <p><code>record(longitude as xs:double, latitude as xs:double)</code> ⊆ <code>map(xs:string, item()*)</code></p>
                            <p><code>record(longitude, latitude, altitude?)</code> ⊆ <code>map(*)</code></p>
                            
                         </example>
-                     </item>
+                     </item>-->
                      
                      <item diff="add" at="A">
                         <p>All of the following are true:</p>
                         <olist>
-                           <item><p><var>A</var> is a record type</p></item>
+                           <item><p><var>A</var> is a record type <code>record(<var>F1</var> as <var>T1</var>, 
+                           <var>F2</var> as <var>T2</var>, ...,  <var>F/n</var> as <var>T/n</var>)</code>
+                           (where the default for <var>T/i</var> is <code>item()*</code>)</p></item>
                            <item><p><var>B</var> is <code>map(<var>K</var>, <var>V</var>)</code></p></item>
                            <item><p><var>K</var> is either <code>xs:string</code> or <code>xs:anyAtomicType</code></p></item>
-                           <item><p>For every field <var>F</var> in <var>A</var>,
-                              where <var>T</var> is the declared type of <var>F</var> (or its default, <code>item()*</code>),
-                              <code><var>T</var> ⊑ <var>V</var></code>.</p></item>
+                           <item><p>For every <var>i</var> in 1 to <var>n</var>,
+                              <code><var>T/i</var> ⊑ <var>V</var></code>.</p></item>
                         </olist>
                         <example>
                            <head>Examples:</head>
@@ -7781,18 +7865,20 @@ declare record Particle (
                         <olist>
                            <item><p><var>A</var> is a record type.</p></item>
                            <item><p><var>B</var> is a record type.</p></item>
-                           <item><p>Every field in <var>A</var> is also declared in <var>B</var>.</p></item>
-                           <item><p>Every mandatory field in <var>B</var> is also declared  as mandatory in <var>A</var>.</p></item>
+                           <item><p>Every field name in <var>A</var> is also declared in <var>B</var>.</p></item>
                            <item><p>For every field that is declared in both <var>A</var> and <var>B</var>,
                               where the declared type in <var>A</var> is <var>T</var> 
                               and the declared type in <var>B</var> is <var>U</var>, <code><var>T</var> ⊑ <var>U</var></code>.</p>                               
+                           </item>
+                           <item><p>For every field that is declared in <var>B</var> but is not declared in <var>A</var>,
+                           the empty sequence matches the declared type in <var>B</var>.</p> 
                            </item>
                         </olist>
                         <example>
                            <head>Examples:</head>
                            <ulist>
                               <item><p><code>record(x, y as xs:integer) ⊆ record(x, y as xs:decimal)</code></p></item>
-                              <item><p><code>record(x, y) ⊆ record(x, y, z?)</code></p></item>
+                              <item><p><code>record(x, y) ⊆ record(x, y, z)</code></p></item>
                            </ulist>
                         </example>
                      </item>
@@ -8367,28 +8453,40 @@ declare record Particle (
                   </item>
 
                   <item diff="add" at="A">
-                     <p>If <var>R</var> is a <nt def="RecordType"
-                           >RecordType</nt> and <var>J</var> is a map, then <var>J</var> is converted
-                        to a new map as follows:</p>
+                     <p>If <var>R</var> is a <nt def="TypedRecordType"
+                           >TypedRecordType</nt> and <var>J</var> is a map, then <var>J</var> is converted
+                        to a new <termref def="dt-record"/> <var>N</var> as follows:</p>
                      <olist>
-                        <item><p>The keys in the supplied map are unchanged.</p></item>
-                        <item><p>In any map entry whose key is equal to the
-                        name of one of the field declarations in <var>R</var> (under the rules
-                           of the <function>atomic-equal</function> function), the corresponding
-                           value is converted to the required type defined by that field declaration, 
-                           by applying the coercion rules recursively 
-                           (but with XPath 1.0 compatibility mode treated as false).</p></item>
-                        <item><p>Any map entry in the supplied map whose key is not equal to the name
-                        of any of the field declarations in <var>R</var> (under the same rules) is
-                        removed from the map.</p></item>
-                        <item><p>The order of entries in the map is changed to match the order of the 
-                              field declarations in <var>R</var>.</p></item>
+                        <item><p>The type annotation of <var>N</var> is <var>R</var>.</p></item>
+                        <item><p>For every field declaration <var>F</var> in <var>R</var>,
+                        <var>N</var> contains an entry (key/value pair) as follows:</p>
+                           <olist>
+                              <item><p>If <var>J</var> contains an entry <var>E</var> with the <termref def="dt-same-key"/>
+                              value as the name of <var>F</var>, then an entry whose key is the
+                              name of <var>F</var> and whose associated value is the value part
+                              of <var>E</var>, coerced to the declared type of <var>F</var>
+                              by applying these coercion rules recursively.</p></item>
+                              <item><p>Otherwise (if <var>J</var> contains no such entry),
+                              an entry whose key is the name of <var>F</var> and whose
+                              associated value is the empty sequence; a type error occurs
+                              if the empty sequence does not match the declared type of <var>F</var>.</p></item>
+                           </olist>
+                        </item>
+                        <!--<item><p>Entries in <var>J</var> whose key does not match the name of
+                        any field in <var>R</var> are discarded.</p></item>-->
+                        <item><p>The order of entries in <var>N</var> corresponds to the order
+                        of field declarations in <var>R</var>.</p> 
+                        </item>
+                        
                      </olist>
 
                      <note><p>For example, if the required type is
                      <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is 
-                        <code>{ "latitude": 53.2, "longitude": 0, "altitude": 3_500 }</code>,
-                        then the map is converted to <code>{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.</p></note>
+                        <code>{ "latitude": 53.2, "longitude": 0}</code>,
+                        then the map is converted to the record <code>{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.
+                     But if the supplied value is <code>{ "latitude": 53.2, "longitude": 0, "altitude": 3_500 }</code>,
+                     then a type error occurs because the field <code>"altitude"</code> is not defined
+                     in the record type.</p></note>
 
                   </item>
 
@@ -11928,7 +12026,7 @@ return $incrementors[2](4)]]></eg>
          <head>Path Expressions</head>
          
          <changes>
-            <change issue="2054">
+            <change issue="2054" PR="2083" date="2025-07-05">
                Path expressions are extended to handle JNodes (found in trees of maps and arrays)
                as well as XNodes (found in trees representing parsed XML).
             </change>
@@ -12017,6 +12115,10 @@ return $incrementors[2](4)]]></eg>
          <div3 id="id-absolute-path-expressions">
             <head>Absolute Path Expressions</head>
             
+            <changes>
+               <change issue="2624" PR="2627" date="2026-05-11">Error code XPTY0020 is replaced by XPTY0004.</change>
+            </changes>
+            
             <p>There are two cases to consider: expressions starting with <code>/</code>,
                and expressions starting with <code>//</code>. These are described in the
                following subsections.</p>
@@ -12069,7 +12171,7 @@ return $incrementors[2](4)]]></eg>
                   </olist>
                </item>
                <item>
-                  <p>Otherwise, a type error is raised <errorref class="TY" code="0020"/>.</p>
+                  <p>Otherwise, a type error is raised <errorref class="TY" code="0004"/>.</p>
                </item>
             </olist>
 	 
@@ -12124,6 +12226,10 @@ return $incrementors[2](4)]]></eg>
             </div4>
             <div4 id="id-absolute-double-slash">
                <head>Absolute Path Expressions: Double Slash</head>
+               
+               <changes>
+                  <change issue="2624" PR="2627" date="2026-05-11">Error code XPTY0020 is replaced by XPTY0004.</change>
+               </changes>
             
 
          <p>An expression of the form <code>//<var>PP</var></code> (that is, an <termref def="dt-absolute-path-expression"/>
@@ -12172,7 +12278,7 @@ return $incrementors[2](4)]]></eg>
                </olist>
             </item>
             <item>
-               <p>Otherwise, a type error is raised <errorref class="TY" code="0020"/>.</p>
+               <p>Otherwise, a type error is raised <errorref class="TY" code="0004"/>.</p>
             </item>
          </olist>
         
@@ -12264,6 +12370,10 @@ return $incrementors[2](4)]]></eg>
          </div3>
             <div3 id="id-path-operator">
                <head>Path Operator (<code>/</code>)</head>
+               
+               <changes>
+                  <change issue="2624" PR="2627" date="2026-05-11">Error code XPTY0019 is replaced by XPTY0004.</change>
+               </changes>
 
                <p>The path operator <code>/</code> is primarily used for 
                   locating GNodes within GTrees. The value of the left-hand operand
@@ -12278,8 +12388,7 @@ return $incrementors[2](4)]]></eg>
                   by applying the <function>fn:jtree</function> function. If the result is not a 
                   (possibly empty) sequence <var>S</var> of GNodes, 
                   a <termref def="dt-type-error">type error</termref> is raised <errorref class="TY"
-                     code="0019"
-                     />. Each GNode in <var>S</var> then serves in turn to provide an inner focus 
+                     code="0004"/>. Each GNode in <var>S</var> then serves in turn to provide an inner focus 
                   (the GNode as the context value, its position in <var>S</var> as the context 
                   position, the length of <code>S</code> as the context size) for an evaluation 
                   of <var>E2</var>, as described in  <specref
@@ -12378,6 +12487,16 @@ return if (every $r in $R satisfies $r instance of gnode())
 
          <div3 id="id-axis-steps">
             <head>Axis Steps</head>
+
+            <changes>
+
+	            <change issue="2054" PR="2083" date="2025-07-05">
+	               Axis steps are extended to handle JNodes (found in trees of maps and arrays)
+	               as well as XNodes (found in trees representing parsed XML).
+	            </change>           
+                <change issue="2624" PR="2627" date="2026-05-11">Error code XPTY0020 is replaced by XPTY0004.</change>
+            </changes>
+
             <scrap>
                <head/>
                <prodrecap ref="AxisStep"/>
@@ -12407,7 +12526,7 @@ return if (every $r in $R satisfies $r instance of gnode())
                converted to a JNode as if by applying the <function>fn:jtree</function> function.
                If, after this conversion, the sequence contains a value that is not a GNode, 
                a <termref def="dt-type-error">type error</termref> is
-		         raised <errorref class="TY" code="0020"/>. The result of evaluating the axis step
+		         raised <errorref class="TY" code="0004"/>. The result of evaluating the axis step
                is a sequence of zero or more GNodes.</p>
             
             <p>The <termref def="dt-axis-step"/> <code>S</code> is equivalent to <code>./S</code>.
@@ -21458,24 +21577,19 @@ return upper-case($x)
          <p>Most modern programming languages have support for collections of
 key/value pairs, which may be called maps, dictionaries, associative
 arrays, hash tables, keyed lists, or objects (these are not the same
-thing as objects in object-oriented systems). In &language;, we call
-these maps. Most modern programming languages also support ordered
+thing as objects in object-oriented systems). In &language; these are called
+maps. Most modern programming languages also support ordered
 lists of values, which may be called arrays, vectors, or sequences.
-In &language;, we have both
+In &language;, there are two kinds of ordered lists, called
 sequences and arrays. Unlike sequences, an array is an
 item, and can appear as an item in a sequence.</p>
 
-         <p diff="del" at="B">In previous versions of the language, element structures and
-sequences were the only complex data structures.  We are adding maps
-and arrays to &language; in order to provide lightweight data
-structures that are easier to optimize and less complex to use for
-intermediate processing and to allow programs to easily combine XML
-processing with JSON processing.</p>
+         
 
 
          <note>
-            <p>The &language; specification focuses on syntax provided for maps
-  and arrays, especially constructors and lookup.</p>
+            <p>This specification focuses on &language; syntax provided for maps
+  and arrays, especially constructors and lookup expressions.</p>
 
             <p>Some of the functionality typically needed for maps and
   arrays is provided by functions defined in <xspecref spec="FO40" ref="maps"/>
@@ -21882,6 +21996,46 @@ return { $persons/*/* }
                         /> with map lookups.)</p>
                   </item>
                </ulist>
+               
+               <!--<note>
+                  <p>Because the function call <code>$map($key)</code> is equivalent to
+                  <code>map:get($map, $key)</code>, it follows that if <code>$map</code>
+                  is a <termref def="dt-record"/> and <code>$key</code> does not match
+                  the name of any field defined for the corresponding <termref def="dt-record-type"/>,
+                  the call will fail with a type error <xerrorref spec="FO40" class="TY" code="0016"/>.</p>
+               </note>-->
+            </div4>
+            
+            <div4 id="id-records-as-functions">
+               <head>Records as Functions</head>
+               
+               <p>Records are maps, and like all maps, they are therefore 
+                  <termref def="dt-function-item">function items</termref>.</p>
+               
+               <p>For example, if <code>$loc</code> is an instance of
+               <code>record(longitude, latitude)</code>, then the dynamic function call
+               <code>$loc("longitude")</code> returns the value of the <code>"longitude"</code> field.</p>
+               
+               <p>When considered as a function item, if <var>R</var> is a record
+               of type <var>T</var>, and the names of the fields defined for <var>T</var>
+               are <var>F1</var>, <var>F2</var>, <var>F3</var>, ... <var>F/n</var>, then the
+               signature of the corresponding function item is:</p>
+               
+               <eg>fn(enum(<var>F1</var>, <var>F2</var>, <var>F3</var>, ... <var>F/n</var>)) as item()*</eg>
+               
+               <p>For example, consider the function <function>fn:load-xquery-module</function>, which
+               returns a record of type <code>fn:load-xquery-module-record</code>. This record type
+               defines two fields, <code>variables</code> and <code>functions</code>. The corresponding
+               function signature is therefore <code>fn(enum("variables", "functions")) as item()*</code>,
+               which means that any call on this function supplying a key value other than <code>"variables"</code>
+               or <code>"functions"</code> will fail with a type error.</p>
+               
+               <note>
+                  <p>If <code>$R</code> is a record of type <var>T</var>, then <code>$R($S)</code> fails if
+                  <var>$S</var> is not one of the defined fields of <var>T</var>. The lookup expression
+                  <code>$R?$S</code> fails in a similar way. The function call <code>map:get($S)</code> succeeds,
+                  however, returning an empty sequence.</p>
+               </note>
             </div4>
 
 
@@ -21889,28 +22043,39 @@ return { $persons/*/* }
          </div3>
          <div3 id="id-arrays">
             <head>Arrays</head>
-            <p/>
+            <p>
+                  <termdef id="dt-array" term="array"
+                     >An <term>array</term> is
+                   a <termref def="dt-function-item"/> that associates a set of positions, represented as
+                   positive integer keys, with values.</termdef> The first position
+                   in an array is associated with the integer 1.
+                   <termdef
+                                  id="dt-member" term="member"
+                                     >The values of an array are called
+                   its <term>members</term>.</termdef></p>
+
+      <p>In the type hierarchy, array has a distinct type, which is
+      derived from <code>function(*)</code>.</p>
+            
+      <p>Atomization converts arrays to sequences (see <termref
+                     def="dt-atomization">Atomization</termref>).  
+      </p>
             <div4 id="id-array-constructors">
                <head>Array Constructors</head>
 
-               <p>
-                  <termdef id="dt-array" term="array"
-                     >An <term>array</term> is
-      a <termref def="dt-function-item"/> that associates a set of positions, represented as
-      positive integer keys, with values.</termdef> The first position
-      in an array is associated with the integer 1.
-      <termdef
-                     id="dt-member" term="member"
-                        >The values of an array are called
-      its <term>members</term>.</termdef>
+               
 
-      In the type hierarchy, array has a distinct type, which is
-      derived from function.
-      Atomization converts arrays to sequences (see <termref
-                     def="dt-atomization">Atomization</termref>).  
-      </p>
-
-               <p>An array is created using an <nt def="ArrayConstructor">ArrayConstructor</nt>.</p>
+               <p>An array is created using an <nt def="ArrayConstructor">ArrayConstructor</nt>. There are two
+               kinds of array constructor:</p>
+               
+               <ulist>
+                  <item><p>A <code>SquareArrayConstructor</code> such as <code>[$a, $b, $c]</code>
+                  returns an array with <var>N</var> members, where <var>N</var> is the number of
+                  commas in the constructor plus one.</p></item>
+                  <item><p>A <code>CurlyArrayConstructor</code> such as <code>{$a, $b, $c}</code>
+                  returns an array whose members are single items; in this example the members
+                  are the items in the sequence <code>($a, $b, $c)</code>.</p></item>
+               </ulist>
                <scrap>
                   <prodrecap ref="ArrayConstructor"/>
                </scrap>
@@ -22072,6 +22237,10 @@ return { $persons/*/* }
                   for cases where keys are items other than integers or NCNames.
                   It can also be followed by a variable reference or a context value reference.
                </change>
+               <change  issue="1979" PR="2566" date="2026-03-31">
+                  When applied to a record, the lookup operator <code>?</code> now raises a type
+                  error if the requested key is not present in the record.
+               </change>
 
             </changes>
 
@@ -22184,15 +22353,20 @@ return { $persons/*/* }
                         or a <code>ParenthesizedExpr</code>,
                         then it is evaluated as an expression to produce a value <code>$K</code>
                         and the result is:</p> 
-                           <eg><![CDATA[data($K) ! map:get($V, .)]]></eg>
+                           <eg><![CDATA[data($K) ! $V(.)]]></eg>
                            <note>
                               <p>The focus for evaluating the key specifier expression is the 
                                  same as the focus for the <code>Lookup</code> expression itself.</p>
                               <p>The order of items in the result reflects the order of keys in
                               <code>$K</code>: <code>{'a':10, 'b':20, 'c':30}?('c', 'a')</code> 
                                  returns <code>(30, 10)</code>.</p>
-                              <p>There is no error when <code>$K</code> includes a key that is not
-                              present in the map.</p>
+                              <p>If <var>$V</var> is a <termref def="dt-record"/>,
+                                 this rule results in a type error <xerrorref spec="FO40" class="TY" code="0004"/>
+                                 when <code>$K</code> includes a key that does not
+                                 match the name of any field in the type annotation of the record.
+                                 This type error may be reported statically if it can be detected statically.
+                                 There is no such error when <code>$V</code> is a map other than a record: in this case,
+                                 the call on <code>$V(.)</code> returns the empty sequence.</p>
                            </note>
                         </item>
                      
@@ -22342,6 +22516,14 @@ return { $persons/*/* }
                         because <code>?3</code> applied to one of the
                         items in the sequence fails.</p>
                   </item>
+                  <item>
+                     <p>The following expression:</p>
+                     <eg>let $r as record(x, y) := {'x': 12, 'y': 13}
+return $r?z</eg>
+                     <p>raises a type error <xerrorref spec="FO40" class="TY" code="0004"/> 
+                        (typically reported statically) because the key specifier <code>"z"</code> 
+                     does not match any of the fields in the record type <code>record(x, y)</code>.</p>
+                  </item>
       
                   
                </ulist>
@@ -22395,10 +22577,19 @@ return { $persons/*/* }
 
                   <p>Lookup expressions on arrays result in a dynamic error if the subscript is out
                   of bounds, whereas the equivalent path expression succeeds, returning the empty
-                  sequence. For example <code>array{1 to 5}?10</code> raises 
+                  sequence. For example, <code>array{1 to 5}?10</code> raises 
                      <xerrorref spec="FO40" class="AY" code="0001"/>, whereas <code>array{1 to 5}/get(10)</code>
                      returns a empty sequence.
                  </p>
+                  
+                  <p>Lookup expressions on records result in a type error if the requested key value
+                  is not a defined field in the corresponding record type, whereas the equivalent path
+                  expression succeeds, returning the empty sequence. For example,
+                  <code>fn:dateTime-record(2026, 4, 1)?quarter</code> raises 
+                  <xerrorref spec="FO40" class="TY" code="0004"/>, whereas
+                  <code>fn:dateTime-record(2026, 4, 1)/get("quarter")</code>
+                     returns an empty sequence.
+                  </p>
 
                </div4>
                
@@ -22455,6 +22646,76 @@ return { $persons/*/* }
             </div4>
          </div3>
          
+         <div3 id="id-with-expression">
+               <head>The <code>+:=</code> (Record Put) Operator</head>
+            
+               <changes>
+                  <change issue="1979" PR="2566" date="2026-04-18">The <code>+:=</code> operator
+                  provides a convenient way of updating records, with appropriate type
+                  checking.</change>
+               </changes>
+            
+            <scrap>
+               <prodrecap ref="RecordPutExpr"/>
+            </scrap>
+            
+            <p>A <nt def="RecordPutExpr">RecordPutExpr</nt> can be used to update a record:
+            more precisely, to construct a new <termref def="dt-record"/> whose content differs from a supplied
+            record. The new record has the same type annotation as the original, and must
+            match the <termref def="dt-record-type"/> of the original.</p>
+            
+            <p>For example, consider the expression:</p>
+            
+            <eg>(parts-of-dateTime(current-date()) +:= {"timezone" : ()}) => build-dateTime()</eg>
+            
+            <p>The first part of this expression, <code>parts-of-dateTime(current-date())</code>, returns
+            a record of type <code>fn:dateTime-record</code> containing seven fields (<code>year</code>,
+            <code>month</code>, <code>day</code>, <code>hours</code>, <code>minutes</code>, <code>seconds</code>, and
+            <code>timezone</code>) of which the first three are empty (the value of the field is an empty
+            sequence). The <nt def="RecordPutExpr">RecordPutExpr</nt> expression takes this record as input, 
+               and produces another
+            record, also of type <code>fn:dateTime-record</code>, in which the <code>timezone</code>
+            field is set to an empty sequence. The final part of the expression (<code>=> build-dateTime())</code>
+            converts this record to an <code>xs:date</code> value having no timezone.</p>
+            
+           
+            <p>The <code>+:=</code> expression is type-safe, in that a type error is raised if the
+               name of a field in the right-hand operand does not correspond to one of the named
+               fields defined by the relevant record type, or if the supplied value does not
+               conform to the required type for that field.</p>
+            
+            <p>A <nt def="RecordPutExpr">RecordPutExpr</nt> is a binary expression evaluated from left to right:
+            that is, <code>A +:= B +:= C</code> is evaluated as <code>(A +:= B) +:= C</code>. The operands
+            are arbitrary expressions.</p>
+            
+            <p>The required type for the left hand operand is <code>record(*)</code>, and for the right
+            hand operand, <code>map(*)</code>. In both cases the supplied value will be coerced to the
+            required type by applying the coercion rules. This means that a JNode can be supplied, provided
+            it has an appropriate <term>·jvalue·</term>.</p>
+            
+            <p>If the left-hand operand is a record with type annotation <var>R</var>, then the effect
+            of the expression <code>$A +:= $B</code> is equivalent to:</p>
+            
+            <eg>let $temp as <var>R</var> := map:merge(($A, $B), {'duplicates':'use-last'})
+return $temp</eg>
+            
+            <p>That is: the values of the two operands are merged as maps, with the value from the second
+            operand taking precedence in the case of duplicates; the result is then coerced to the record
+            typed defined by the type annotation of the first operand, raising a type error if the result
+            cannot be coerced to this record type.
+            </p>
+            
+            <p>In effect this means that the keys and values supplied in <var>$B</var> must be
+            appropriate for a record of type <var>R</var>; if not, a type error 
+               <errorref class="TY" code="0004"/> is raised. The coercion
+            rules apply: for example, the record type <code>fn:dateTime-record</code>
+               requires the <code>timezone</code> to be an instance of <code>xs:dayTimeDuration</code>,
+               but supplying <code>xs:duration("PT0S")</code> will succeed because this can be
+               coerced to an <code>xs:dayTimeDuration</code>.</p>
+            
+
+         </div3> 
+         
          <div3 id="id-methods">
                <head>Methods and Method Calls</head>
                
@@ -22491,9 +22752,8 @@ let $rectangle := {
                  2 × ($rect?height + $rect?width) 
                },
   'resize':    fn ($rect, $factor) { 
-                  $rect 
-                     => map:put('height', $rect?height × $factor)
-                     => map:put('width', $rect?width × $factor)
+                  $rect +:= {'height': $rect?height × $factor}
+                        +:= {'width': $rect?width × $factor}
                }
 }
                </eg>
@@ -22611,7 +22871,8 @@ return $lib =?> product((1.2, 1.3, 1.4))
                is twice the size of the original, so <code>$rectangle =?> resize(2) =?> area()</code> returns the area of the
                enlarged rectangle.</p>
                
-               <note><p>Note how the <code>resize</code> function is implemented using <code>map:put</code>, which
+               <note><p>Note how the <code>resize</code> function is implemented using a
+                     <nt def="RecordPutExpr">RecordPutExpr</nt> (see <specref ref="id-with-expression"/>), which
                ensures that the map entries holding function items (<code>area</code>, <code>perimeter</code>, and
                <code>resize</code>) are automatically present and unchanged in the modified map.</p></note>
                
@@ -22637,9 +22898,9 @@ declare record my:rectangle (
      := fn{?height × ?width},
    resize as fn(my:rectangle, xs:double) as my:rectangle 
      := fn($rect, $factor) {
-           $rect => map:put('height', $rect?height × $factor)
-             => map:put('width', $rect?width × $factor)
-             => map:put('children', $rect?children =?> resize($factor))
+           $rect +:= {'height': $rect?height × $factor,
+                      'width': $rect?width × $factor,
+                      'children': $rect?children =?> resize($factor)}
         },
    contents as fn(my:rectangle) as my:rectangle*
      := fn{?children}

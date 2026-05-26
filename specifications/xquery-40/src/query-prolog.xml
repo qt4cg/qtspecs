@@ -2172,7 +2172,8 @@ local:depth(doc("partlist.xml"))
        <item><p>As a function, it must not have an arity range that overlaps the arity range of any
        other function declaration having the same name in the same static context.</p></item>
        <item><p>The order of field declarations is significant, because it determines the order of
-       arguments in a call to the constructor function.</p></item>
+       arguments in a call to the constructor function, as well as the order of entries
+       in the underlying map.</p></item>
        <item><p>The fields must have distinct names. <errorref class="ST" code="0021"/></p></item>
        <item><p>In order to work as both a record type and a function declaration, the names of the
        fields must be simple NCNames in no namespace; the names must not be written as string literals
@@ -2215,7 +2216,7 @@ local:depth(doc("partlist.xml"))
         in the case of a recursive definition, simple textual replacement would not terminate.</p></note>
       
         <p>A recursive record type will only be instantiable if every field whose value may contain instances of the record type
-        (directly or indirectly) is optional or emptiable. Specifically, it must either be an optional field, or its type
+        (directly or indirectly) is emptiable. Specifically, its type
         declaration must be such that it can hold an empty sequence or a value of a different type. 
         A recursive record type that is not instantiable is considered to be <termref def="dt-implausible"/>, 
         which means that a processor may treat it as an error but is not obliged to do so <errorref class="ST" code="0023"/>.</p>
@@ -2238,29 +2239,30 @@ local:depth(doc("partlist.xml"))
       <p>implicitly defines the function:</p>
        
        <eg>declare function cx:complex($r as xs:double, $i as xs:double := 0) as cx:complex {
-  map:merge(({ "r": $r }, { "i": $i }))
+   { "r": $r, "i": $i }
 };
        </eg>
       
       <p>So the call <code>cx:complex(3, 2)</code> produces the value <code>{ "r": 3e0, "i": 2e0 }</code>,
       while the call <code>cx:complex(3)</code> produces the value <code>{ "r": 3e0, "i": 0e0 }</code></p>
       
-      <p>The order of entries in the map corresponds
+      <p>The result of the function is a <termref def="dt-record"/> whose type annotation is the
+      declared <termref def="dt-record-type"/>.</p>
+      
+      <!--<p>The order of entries in the map corresponds
       to the order of field declarations in the record type. This means, for example, that when
       the map is serialized using the JSON output method, the order of entries in the output will
-      correspond to the order of field declarations.</p>
+      correspond to the order of field declarations.</p>-->
       
-      <p>If a field is declared as optional, by including a question mark after the name, and if it has no initializer,
+      <!--<p>If a field is declared as optional, by including a question mark after the name, and if it has no initializer,
       then the initializer <code>:= ()</code> is added implicitly. If the declared type of an optional field does
         not permit an empty sequence, then the declared type of the function parameter is adjusted by changing the
         occurrence indicator (from absent to <code>?</code> or from <code>+</code> to <code>*</code>) in order
-      to make the empty sequence an acceptable value.</p>
+      to make the empty sequence an acceptable value.</p>-->
       
-      <p>Furthermore, if a field is optional and has no explicit initializer, the relevant entry in the constructed 
-        map will be absent when the value supplied (implicitly or explicitly) to the function argument is an empty sequence. 
-        This is achieved by modifying the function body. Given the declaration:</p>
+      <!--<p>Given the declaration:</p>
       
-      <eg>declare record cx:complex(r as xs:double, i? as xs:double);</eg>
+      <eg>declare record cx:complex(r as xs:double, i as xs:double? := ());</eg>
       
       <p>the equivalent function declaration is:</p>
        
@@ -2271,10 +2273,10 @@ local:depth(doc("partlist.xml"))
   ), { "retain-order" : true() })
 };
        </eg>
+      -->
       
-      
-      <p>If any field is either declared optional, or has an explicit initializer, 
-        then all subsequent fields must also either be declared optional, or have an explicit initializer
+      <p>If any field has an explicit initializer, 
+        then all subsequent fields must also have an explicit initializer
         <errorref class="ST" code="0148"/>.</p>
       
       
@@ -2292,32 +2294,20 @@ local:depth(doc("partlist.xml"))
        declaration, in order.</p>
        <ulist>
          <item><p>The name of the parameter is the name of the field (always an NCName).</p></item>
-         <item><p>The declared type of the parameter is the declared type of the field, if present; but
-         if the field is optional, indicated by a question mark (<code>?</code>) after its name, and has no initializer,
-           then the occurrence indicator is adjusted to permit an empty sequence, as described earlier.</p></item>
+         <item><p>The declared type of the parameter is the declared type of the field, defaulting to 
+             <code>item()*</code>.</p></item>
          <item><p>The default value for the parameter is given by the initializing expression in
-         the <nt def="ExtendedFieldDeclaration"/>, if present. If the field is optional and has no initializer, then
-         it is given a default value of <code>()</code>, the empty sequence.</p></item>
+         the <nt def="ExtendedFieldDeclaration">ExtendedFieldDeclaration</nt>, if present.</p></item>
        </ulist></item>
        
        
        
-       <item><p>The return type of the function is the name of the record declaration, with no occurrence
+       <item><p>The return type of the function is the <termref def="dt-record-type"/> being declared, with no occurrence
        indicator.</p></item>
-       <item><p>The body of the function is a call of the function <code>map:merge</code> with two arguments:</p>
-         <ulist>
-           <item><p>The first argument is a parenthesized expression containing a 
-             comma-separated sequence of subexpressions, containing one
-           subexpression for each field, in order.</p></item>
-           <item><p>By default, the relevant subexpression is the map constructor <code>{ "N": $N }</code>
-           where <var>N</var> is the field name.</p></item>
-           <item><p>If the field is optional and is declared without an explicit initializer, then the
-           relevant subexpression takes the form <code>if (exists($N)) { { "N": $N } }</code>
-           where <var>N</var> is the field name.</p></item>
-           
-           <item><p>The second argument in the call of the function <code>map:merge</code>
-           is the map <code>{ "duplicates": "use-first" }</code>.</p></item>
-         </ulist>
+       <item><p>The body of the function is a <nt def="MapConstructor">MapConstructor</nt>
+           containing one <nt def="MapConstructorEntry">MapConstructorEntry</nt> for each field of the record type,
+           in the form <code>"<var>N</var>" : $<var>N</var></code>, where <var>N</var> is the field name.</p>
+         
        </item>  
  
  
@@ -2325,7 +2315,7 @@ local:depth(doc("partlist.xml"))
       
        
       
-       <p>Note that a question mark <code>?</code> after the field name indicates that the field is optional from the point of
+       <!--<p>Note that a question mark <code>?</code> after the field name indicates that the field is optional from the point of
        view of conformance of an item to the record type. The presence of an initializer indicates that it is optional
        from the point of view of a call on the constructor function. The two things are independent of each other. For example:</p>
      
@@ -2344,7 +2334,7 @@ local:depth(doc("partlist.xml"))
              record and in the function call: but because a default value has been supplied explicitly,
              the constructed map will always have an entry for <code>altitude</code>.</p>
          </item>
-       </ulist>
+       </ulist>-->
       
       <note>
         <p>Although the constructor function for a named record type produces a map in which the
@@ -2416,7 +2406,7 @@ return $box =?> expand(2) =?> perimeter()</eg>
                   </p></item>
                   
                   <item><p>
-                     <eg><![CDATA[declare function my:is-even ($n as xs:integer) as xs:boolean {
+                     <eg><![CDATA[declare function my:is-even($n as xs:integer) as xs:boolean {
     $evens =?> contains($n)
 };]]></eg>
                   </p></item>
