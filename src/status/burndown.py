@@ -1,15 +1,13 @@
 import sys
 import json
 import math
-from datetime import datetime, timedelta
-import dateutil.parser
-from dateutil.tz import tzutc
+from datetime import datetime, timedelta, UTC
 import numpy as np
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-meetingone = datetime(2022, 9, 6, 16, 0, 0, tzinfo=tzutc())
+meetingone = datetime(2022, 9, 6, 16, 0, 0, tzinfo=UTC)
 meetingnow = datetime.now().astimezone()
 oneweek = timedelta(days=7)
 weekcount = math.floor((meetingnow - meetingone) / oneweek)
@@ -21,7 +19,7 @@ firstweek = weekcount - 27
 print(firstweek)
 
 def compute_weeks(issue):
-    opendate = dateutil.parser.isoparse(issue.get("created_at"))
+    opendate = datetime.fromisoformat(issue.get("created_at"))
     if opendate <= meetingone:
         firstweek = 0
     else:
@@ -29,7 +27,7 @@ def compute_weeks(issue):
     issue['week_open'] = firstweek
 
     if issue["closed_at"]:
-        closdate = dateutil.parser.isoparse(issue.get("closed_at"))
+        closdate = datetime.fromisoformat(issue.get("closed_at"))
         if closdate <= meetingone:
             lastweek = 0
         else:
