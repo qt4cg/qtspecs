@@ -7573,7 +7573,7 @@ return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A mor
                   instructions acquire an attribute <code nobreak="false">separator</code> that can be
                   used to insert content between adjacent items. [This change was in the
                   editor's draft adopted as a baseline when the WG commenced work.]
-               </change><change date="2026-06-19" issue="2695">
+               </change><change date="2026-06-19" issue="2695" PR="2696">
                   Semantics are defined for an <elcode>xsl:apply-templates</elcode> instruction
                   with no <code nobreak="false">select</code> attribute in the case where the context item is
                   not a node.
@@ -7613,7 +7613,7 @@ return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A mor
                sorted sequence as the <termref def="dt-context-size">context size</termref>. Each
                template rule that is evaluated produces a sequence of items as its result. The
                result of the <elcode>xsl:apply-templates</elcode> instruction is the
-               <xtermref spec="XP40" def="dt-sequence-concatenation"/> of the
+               <xtermref spec="XP40" ref="dt-sequence-concatenation"/> of the
                resulting sequences (one for each item in the
                sorted sequence). </p><example><head>Applying Template Rules to an XTree</head><p>Suppose the source document is as follows:</p><eg xml:space="preserve" role="xml">&lt;message&gt;Proceed &lt;emph&gt;at once&lt;/emph&gt; to the exit!&lt;/message&gt;</eg><p>This can be processed using the two template rules shown below.</p><eg xml:space="preserve" role="xslt-declarations">&lt;xsl:template match="message"&gt;
   &lt;p&gt;
@@ -7647,8 +7647,8 @@ return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A mor
                   text node containing the value <code nobreak="false">at once</code>, and a text node containing
                   the value <code nobreak="false"> to the exit!</code>. This <termref def="dt-result-tree">result
                      tree</termref> might be serialized as:</p><eg xml:space="preserve" role="xml">&lt;p&gt;Proceed &lt;b&gt;at once&lt;/b&gt; to the exit!&lt;/p&gt;</eg></example><p>The default value of the <code nobreak="false">select</code> attribute depends on the type of the context item:</p><ulist><item><p>If the context item is an XNode, the default is <code nobreak="false">child::node()</code>,
-                  which causes all the children of the context node to be processed.</p></item><item><p>If the context item is a JNode, the default is <code nobreak="false">jvalue(.)</code>,
-                  which causes all the items in the ·value· property of the JNode to be processed.</p></item><item><p>If the context item is a map or array, the default is <code nobreak="false">jtree(.)/child::*</code>.
+                  which causes all the children of the context node to be processed.</p></item><item><p>If the context item is a JNode, the default is <code nobreak="false">child::*</code>,
+                  which causes all the children of the context JNode to be processed.</p></item><item><p>If the context item is a map or array, the default is <code nobreak="false">jtree(.)/child::*</code>.
                This has the effect that the map or array is wrapped in a root JNode, and the children
                of this JNode (encapsulating the map entries or array members) are then processed.</p></item><item><p>If the context item is any other item (specifically, an atomic item, or a function item
                   other than a map or array), the default is <code nobreak="false">.</code>,
@@ -7785,7 +7785,44 @@ return $tree =?&gt; depth()</eg><p>Returning the result 3.</p></example><p>A mor
      Applying templates to this JNode works its way recursively down the tree until the book entries are reached; these entries match
      the third template rule. The third template rule processes each book by outputting an HTML table row with cells corresponding
      to the properties of the book; the fifth cell takes the value <code nobreak="false">jkey(..)</code>, that is, the key associated with the array
-     containing the book, which is either <code nobreak="false">"fiction"</code> or <code nobreak="false">"non-fiction"</code>.</p></example><note><p>The <elcode>xsl:apply-templates</elcode> instruction is most commonly used to
+     containing the book, which is either <code nobreak="false">"fiction"</code> or <code nobreak="false">"non-fiction"</code>.</p><p>The above example processes the tree of maps and arrays by matching JNodes. The advantage of this approach is that JNodes allow
+     full navigation within the containing tree: this is illustrated by the use of the expression <code nobreak="false">jkey(..)</code> which
+     returns the key of a containing JNode. If this flexibility is not required, an alternative is to match the maps and arrays
+     directly, rather than wrapping them in JNodes. The following examples illustrates this alternative approach, which
+     produces the same result:</p><eg xml:space="preserve">&lt;xsl:template name="xsl:initial-template"&gt;
+  &lt;h1&gt;Christmas Book Selection&lt;/h1&gt;
+  &lt;table&gt;
+    &lt;thead&gt;
+       &lt;tr&gt;
+         &lt;th&gt;Title&lt;/th&gt;
+         &lt;th&gt;Authors&lt;/th&gt;
+         &lt;th&gt;Keywords&lt;/th&gt;
+         &lt;th&gt;Price&lt;/th&gt;
+         &lt;th&gt;Category&lt;/th&gt;
+       &lt;/tr&gt;
+    &lt;/thead&gt;
+    &lt;tbody&gt;
+      &lt;xsl:variable name="root" select="parse-json('input.json')"/&gt;
+      &lt;xsl:for-each select="map:keys($root)"&gt;
+         &lt;xsl:apply-templates select="$root(.)?*"&gt;
+            &lt;xsl:with-param name="category" select="." tunnel="yes"/&gt;
+         &lt;/xsl:apply-templates&gt;
+      &lt;/xsl:for-each&gt;
+    &lt;/tbody&gt;
+  &lt;/table&gt;                
+&lt;/xsl:template&gt;  
+
+&lt;xsl:template match="map("Title", "Authors", *)"&gt;
+  &lt;xsl:param name="category" tunnel="yes"/&gt;
+  &lt;tr&gt;
+    &lt;td&gt;{Title}&lt;/td&gt;
+    &lt;td&gt;{Authors/* =&gt; string-join(", ")}&lt;/td&gt;
+    &lt;td&gt;{Keywords}&lt;/td&gt;
+    &lt;td&gt;${Price}&lt;/td&gt;
+    &lt;td&gt;{$category}&lt;/td&gt;
+  &lt;/tr&gt;
+&lt;/xsl:template&gt;
+</eg></example><note><p>The <elcode>xsl:apply-templates</elcode> instruction is most commonly used to
                   process nodes that are descendants of the context node. Such use of
                      <elcode>xsl:apply-templates</elcode> cannot result in non-terminating
                   processing loops. However, when <elcode>xsl:apply-templates</elcode> is used to
