@@ -20,16 +20,25 @@ rm -f /tmp/issues.$$.page*.json
 while [ "$DONE" = "0" ]; do
     printf -v PN "%02d" $PAGE
     FN="/tmp/issues.$$.page$PN.json"
-    printf "Getting page %s..." "$PN"
 
-    if [ -z QT4CG_GITHUB_ISSUES_TOKEN ]; then
-        curl -s -o $FN "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
-    else
-        curl -s -o $FN \
-             --header "Authorization: Bearer $QT4CG_GITHUB_ISSUES_TOKEN" \
-             --header "X-GitHub-Api-Version: 2022-11-28" \
-             "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
-    fi
+    SUCCESS=0
+    while [ "$SUCCESS" = "0" ]; do
+        printf "Getting page %s..." "$PN"
+        if [ -z QT4CG_GITHUB_ISSUES_TOKEN ]; then
+            curl -s -o $FN "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
+        else
+            curl -s -o $FN \
+                 --header "Authorization: Bearer $QT4CG_GITHUB_ISSUES_TOKEN" \
+                 --header "X-GitHub-Api-Version: 2022-11-28" \
+                 "$ISSUESURI?per_page=$PERPAGE&page=$PAGE&state=all"
+        fi
+        if jq . < $FN /dev/null 2>&1 ; then
+            SUCCESS=1
+        else
+            echo "Failed to download $FN...retrying"
+            sleep 5
+        fi
+    done
 
     LAST=`cat $FN | jq ".[].number" | tail -1`
     echo $LAST
