@@ -8398,14 +8398,134 @@ map( xs:string,
                   <code>&lt;ref name="x"/&gt;</code> could be transformed to <code>&lt;ref&gt;x&lt;/ref&gt;</code>.</p></note>
             </div3>
             
+<div3 id="id-converting-maps-to-elements">
+   <head>Converting maps to elements</head>
+   <changes>
+      <change issue="1962" PR="2707" date="2026-06-24">
+         A new function <function>fn:map-to-element</function> is provided for converting
+         a map produced by <function>fn:element-to-map</function> back to an XML element node.
+      </change>
+   </changes>
+
+   <p>The <function>fn:map-to-element</function> function performs the inverse of
+      <function>fn:element-to-map</function>: it reconstructs an element node from a
+      <termref def="dt-single-entry-map">single-entry map</termref> of the form produced
+      by that function. Because the forward conversion is not lossless (see
+      <specref ref="id-loss-of-xdm-information"/>), the inverse cannot recover all of the
+      original information. However, the function is designed so that for any element
+      <var>E</var> and options map <var>OPTS</var>,</p>
+
+   <eg><var>E</var> => element-to-map(<var>OPTS</var>) => map-to-element(<var>OPTS</var>)</eg>
+
+   <p>reconstructs an element that is <function>fn:deep-equal</function> to <var>E</var>,
+      except for the information identified as lost in <specref ref="id-loss-of-xdm-information"/>.
+      Supplying the same <code>plan</code>, <code>attribute-marker</code>, <code>content-key</code>,
+      and <code>name-format</code> options that were used for the forward conversion is generally
+      necessary to achieve this round trip.</p>
+
+   <p>The same <code>$options</code> entries as for <function>fn:element-to-map</function> are
+      recognized; they are interpreted in the reverse direction:</p>
+
+   <ulist>
+      <item><p>The <code>plan</code> determines, for each element name, the layout (and where
+         applicable the content <code>type</code> and the <code>child</code> element name) that
+         was used in the forward direction, and hence how the corresponding map value is to be
+         interpreted. The rules for selecting a layout are the inverse of those in
+         <specref ref="id-selecting-element-layout"/>. Entries with the layout
+         <code>deep-skip</code> are ignored; the layout <code>error</code> is not relevant
+         to this function.</p></item>
+      <item><p>A map key beginning with the <code>attribute-marker</code> denotes an attribute;
+         the marker is removed to recover the attribute name.</p></item>
+      <item><p>A map key equal to the <code>content-key</code> denotes simple element content
+         (when its value is atomic) or, when its value is <code>#fn:null</code>, a nilled element.</p></item>
+      <item><p>The <code>name-format</code> governs how keys are decoded into names, as the
+         inverse of <specref ref="element-and-attribute-names"/>. A key of the form
+         <code>Q{uri}local</code> always yields a name in the namespace <code>uri</code>.
+         When <code>name-format</code> is <code>default</code>, a key consisting of a local name
+         alone yields a name in no namespace if it is the top-level element, and otherwise a name
+         in the namespace of the parent element; this is the inverse of the rule that omits the
+         namespace for a child in the same namespace as its parent. Namespace prefixes are always
+         synthesized; under <code>name-format</code> <code>local</code> or <code>lexical</code>,
+         namespace URIs cannot be recovered.</p></item>
+   </ulist>
+
+   <p>In the absence of a <code>plan</code>, the layout is inferred from the structure of the
+      map value, as the inverse of the rules in <specref ref="id-creating-a-conversion-plan"/>.</p>
+
+   <p>If the supplied map is not a single-entry map, the function fails with a dynamic error
+      <errorref class="JS" code="0009"/>. Otherwise the single entry is processed: its key is
+      decoded into the element name, and its value is interpreted as the content of that element,
+      as follows.</p>
+
+   <div4 id="id-map-to-element-value">
+      <head>Interpreting a map value</head>
+
+      <p>A value <var>V</var> appearing as element content is interpreted according to its kind:</p>
+
+      <olist>
+         <item><p>If <var>V</var> is an atomic value, it contributes a single text-node child
+            whose string value is the lexical representation of <var>V</var>. (Numeric and boolean
+            values therefore lose their type and reappear as text, just as type annotations are
+            lost in the forward direction.) The zero-length string contributes no child, which is
+            the common inverse of the <code>empty</code> and <code>simple</code> layouts.</p></item>
+
+         <item><p>If <var>V</var> is the value <code>#fn:null</code>, the element is nilled: the
+            attribute <code>xsi:nil="true"</code> is added, together with a declaration of the
+            <code>xsi</code> namespace. This is the inverse of the "Mapping for nilled elements"
+            rules of every layout.</p></item>
+
+         <item><p>If <var>V</var> is a map, each entry contributes to the element as follows:</p>
+            <ulist>
+               <item><p>If the key begins with the <code>attribute-marker</code>, it contributes
+                  an attribute whose name is the decoded key and whose value is the lexical
+                  representation of the entry value.</p></item>
+               <item><p>If the key is equal to the <code>content-key</code>, it contributes simple
+                  text content (atomic value) or a nilled marker (value <code>#fn:null</code>).</p></item>
+               <item><p>Otherwise the key contributes one or more child elements named by the
+                  decoded key: an atomic or map value contributes a single child; an array value
+                  contributes one child per array member, each member being interpreted recursively
+                  as that child's content. This single rule is the common inverse of the
+                  <code>empty-plus</code>, <code>simple-plus</code>, <code>record</code>, and
+                  <code>list-plus</code> layouts.</p></item>
+            </ulist>
+         </item>
+
+         <item><p>If <var>V</var> is an array, its members contribute children (and attributes) in
+            order, as the inverse of the <code>sequence</code> and <code>mixed</code> layouts. A
+            member that is a string contributes a text node; a single-entry map whose key begins
+            with the <code>attribute-marker</code> contributes an attribute; a single-entry map
+            with the key <code>#comment</code> contributes a comment node; a single-entry map with
+            the key <code>#processing-instruction</code> (whose value is a map with keys
+            <code>#target</code> and <code>#data</code>) contributes a processing-instruction node;
+            a single-entry map with the key equal to <code>content-key</code> and value
+            <code>#fn:null</code> indicates a nilled element; and any other single-entry map
+            contributes a child element. The <code>sequence</code> and <code>mixed</code> layouts
+            are reconstructed identically.</p>
+            <p>If the <code>plan</code> selects <code>list</code> or <code>list-plus</code> layout
+            for the element, the array members are instead interpreted as the content of children
+            all having the <code>child</code> element name given in the plan. If <code>list</code>
+            layout applies but no <code>child</code> name is available (the element name is not
+            recoverable from the array alone), the function fails with a dynamic error
+            <errorref class="JS" code="0009"/>.</p></item>
+
+         <item><p>If the <code>plan</code> selects <code>xml</code> layout, <var>V</var> is a string
+            containing serialized XML; it is parsed as an XML fragment and the resulting node is
+            used as the element content.</p></item>
+      </olist>
+   </div4>
+</div3>
+
             <!--<?local-function-index?>-->
-            
+
             <div3 id="func-element-to-map-plan">
                <head><?function fn:element-to-map-plan?></head>
             </div3>
             
             <div3 id="func-element-to-map">
                <head><?function fn:element-to-map?></head>
+            </div3>
+            <div3 id="func-map-to-element">
+               <head><?function fn:map-to-element?></head>
             </div3>
          </div2>
          
@@ -14571,6 +14691,16 @@ ISBN 0 521 77752 6.</bibl>
                   elements of a given name is unsuitable for an element node with that name, or
                   if the conversion plan explicitly defines the processing of a particular
                element as an error.</p>
+            </error>
+
+            <error class="JS" code="0009" label="Cannot convert map to element." type="dynamic">
+               <p>Raised by <function>fn:map-to-element</function> if the supplied map cannot be
+                  converted to an element node. This includes the cases where the map is not a
+                  single-entry map; where a map key or the <code>#processing-instruction</code>
+                  structure does not have the form required by the selected layout; where a
+                  reconstructed element or attribute name is not a valid <code>xs:QName</code>;
+                  or where <code>list</code> layout is selected for an array but the conversion
+                  plan supplies no <code>child</code> element name.</p>
             </error>
             
 
