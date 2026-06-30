@@ -36,7 +36,7 @@
             </div>
         </div>   
     </xsl:template>
-    
+
     <xsl:template
         match="code[matches(., '^(bin|file):[-a-zA-Z0-9]+(#[0-9]+)?$')][not(@role = 'example')]">
         <!--<xsl:variable name="raw-name">
