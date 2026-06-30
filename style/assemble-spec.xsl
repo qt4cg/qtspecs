@@ -23,6 +23,24 @@
   <xsl:param name="not-spec" select="''"/>
   <xsl:param name="grammar-file" select="'xpath-grammar.xml'"/>
   <xsl:param name="grammar-map-file-name">grammar-map.xml</xsl:param>
+  
+  <xsl:variable name="injections" as="map(*)">
+    <xsl:choose>
+      <xsl:when test="$spec eq 'xpath40'">
+        <xsl:sequence select="map{ 'language': 'XPath 4.0' }"/>
+      </xsl:when>
+      <xsl:when test="$spec eq 'xquery40'">
+        <xsl:sequence select="map{ 'language': 'XQuery 4.0' }"/>
+      </xsl:when>
+      <xsl:otherwise>
+        <xsl:sequence select="map{ 'language': $spec }"/>
+      </xsl:otherwise>
+    </xsl:choose>
+  </xsl:variable>
+  
+  <xsl:template match="processing-instruction('inject')">
+    <xsl:value-of select="$injections(string(.))"/>
+  </xsl:template>
 
   <!-- xsl:variable name="grammar" select="document($grammar-file)"/ -->
   <xsl:variable name="sourceTree" select="/"/>
@@ -54,6 +72,10 @@
   </xsl:template>
 
   <xsl:include href="grammar2spec.xsl"/>
+  
+  <xsl:template match="fascicle">
+    <xsl:apply-templates/>
+  </xsl:template>
 
   <xsl:template name="get-gfn">
     <!-- Assumes predrecap context -->
