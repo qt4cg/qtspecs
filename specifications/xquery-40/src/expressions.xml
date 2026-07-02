@@ -12985,7 +12985,8 @@ return if (every $r in $R satisfies $r instance of gnode())
                      among its siblings (in the case of XNodes, this is the node name);</p></item>
                   <item><p>Union node tests, which provide multiple conditions: a GNode satisfies
                   the union node test if it satisfies any of its operand node tests.</p></item>
-                  <item><p>Enclosed expressions, which dynamically compute a value that must match
+                  <item><p>Dynamic node tests: a dynamic node test is written as an enclosed expression, 
+                     which dynamically computes a value that must match
                   the name of an XNode, or the <term>·jkey·</term> property of a JNode.</p></item>
                </ulist>
                
@@ -13047,11 +13048,12 @@ return if (every $r in $R satisfies $r instance of gnode())
 		  such attribute, it selects an empty set of
 		  nodes.</p>
                
-               <note><p>A name test is not satisfied by an element node whose name does not match the <termref
+               <note><p>To satisfy a name test, the name of an element node must actually match the <termref
                      def="dt-expanded-qname"
-                     >expanded QName</termref> of the name test, even if it is in a <termref
+                     >expanded QName</termref> of the name test; it is not enough for
+                  the element to be in the <termref
                      def="dt-substitution-group"
-                  >substitution group</termref> whose head is the named element.</p></note>
+                  >substitution group</termref> of the named element.</p></note>
          
          <p>Wildcard node tests are interpreted as follows:</p>
           <ulist>
@@ -13113,10 +13115,10 @@ return if (every $r in $R satisfies $r instance of gnode())
              </item>
           </ulist>
                
-               <p>A <nt def="NodeTest">NodeTest</nt> can also take the form of an enclosed expression
+               <p>A <nt def="DynamicNodeTest">DynamicNodeTest</nt> takes the form of an enclosed expression
                   <code>{E}</code>
                   where <var>E</var> is an <nt def="Expr">Expr</nt>.
-               The contained expression <var>E</var> is evaluated and coerced
+               The contained expression <var>E</var> is evaluated with an absent focus and coerced
                   to a required type of <code>(xs:QName | xs:string)*</code>;
                   let the result be <var>A</var>.
                   An XNode satisfies the NodeTest if its node kind is the principal
@@ -13130,9 +13132,13 @@ return if (every $r in $R satisfies $r instance of gnode())
                   <code><var>AXIS</var>::{<var>E</var>}</code> returns the result
                of the expression:</p>
                
-               <eg>let $A as (xs:QName | xs:string)* := <var>E</var> 
+               <eg>let $A as (xs:QName | xs:string)* := fn(){<var>E</var>}() 
 return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.)) 
                satisfies atomic-equal($a, $n)]</eg>
+               
+               <note><p>The construct <code>fn(){<var>E</var>}()</code> has the effect
+               of evaluating <var>E</var> with an absent focus. If <var>E</var> depends
+               on the focus, the construct raises a type error.</p></note>
                
                <p>For example if <code>$name</code> is an <code>xs:QName</code>
                   then <code>descendant::{$name}</code> selects descendant elements 
@@ -13155,11 +13161,7 @@ return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.))
                whose name is equal to the QName <code>$name</code>: it is equivalent
                to <code>child::*[node-name()=$name]</code>.</p>
                
-               <note><p>It is permitted, though not generally useful, for the
-               enclosed expression to be focus-dependent, in which case its value
-               will vary from one selected node to another. For example,
-               <code>child::{@name}</code> selects those child elements whose local-name
-               is equal to the value of their <code>@name</code> attribute.</p></note>
+              
             </div4>
             
             <div4 id="id-selectors-for-JNodes">
@@ -13186,11 +13188,11 @@ return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.))
                   <code>xs:QName</code>, using the same rules as for wildcards in XNode steps
                (see <specref ref="id-selectors-for-xnodes"/>).</p>
                
-               <p>If the <nt def="NodeTest">NodeTest</nt> takes the form of an enclosed expression <code>{<var>E</var>}</code>,
-                  where <var>E</var> is an <nt def="Expr">Expr</nt>,
-               the contained expression <var>E</var> is evaluated and coerced to the required
+               <p>A <nt def="DynamicNodeTest">DynamicNodeTest</nt> takes the form of an enclosed expression <code>{<var>E</var>}</code>,
+                  where <var>E</var> is an <nt def="Expr">Expr</nt>.
+                  In this case the contained expression <var>E</var> is evaluated with an absent focus and coerced to the required
                   type <code>xs:anyAtomicType*</code>. 
-                  A JNode satisfies the selector if the value of its 
+                  A JNode satisfies the <code>DynamicNodeTest</code> if the value of its 
                   <term>·jkey·</term> property is equal to one of the values
                   present in the atomized result of <var>E</var>, under the rules
                   of the <function>atomic-equal</function> function.</p>
@@ -13200,18 +13202,20 @@ return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.))
                   <code><var>AXIS</var>::{<var>E</var>}</code> returns the result
                of the expression:</p>
                
-               <eg><![CDATA[<var>AXIS</var>::*[some(<var>E</var>, atomic-equal(?, jkey()))]
-]]></eg>
-               <note>
-                  <p>The effect of <code>$map/child::{$key}</code> is thus equivalent
-                  to <code>$map/$key</code>.</p>
+               <eg>let $A as (xs:QName | xs:string)* := fn(){<var>E</var>}() 
+return <var>AXIS</var>::*[some $a in $A satisfies atomic-equal($a, jkey()]</eg>
+               
+               <note><p>The construct <code>fn(){<var>E</var>}()</code> has the effect
+                  of evaluating <var>E</var> with an absent focus. If <var>E</var> depends
+                  on the focus, the construct raises a type error.</p>
                </note>
-               <note>
-                  <p>It is possible, though rarely useful, for the enclosed expression
-                  to depend on the focus. For example <code>$map/child::{string(.)}</code>
-                  selects every entry in <code>$map</code> whose key
-                  is equal to its value, converted to a string.</p>
-                  <p>It is not an error if the atomized value of <var>E</var>
+                <note>
+                  <p>The effect of <code>$map/child::{$key}</code> is thus equivalent
+                  to <code>$map/$key</code>. Although the latter form is more concise, the longer
+                  form might be considered to be more readable.</p>
+               </note>
+               
+                <note><p>It is not an error if the atomized value of <var>E</var>
                includes atomic items that select nothing: such values are effectively ignored.
                This is true both for maps and arrays.</p></note>
                
