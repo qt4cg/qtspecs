@@ -14506,39 +14506,39 @@ fn:parse-QName("xmp:person")</eg></fos:expression>
                </olist>
             </item>
                <item>
-                  <p>For a JNode where the ·jvalue· property of the parent
-                     is an array, then as the string <code>*[<var>N</var>]</code> where <var>N</var>
-                     is the value of the ·jkey· property.</p>
-               </item>
-               <item><p>For any other JNode (including the case where the ·jvalue· property of the parent
-                     is a map):</p>
+                  <p>For a JNode:</p>
                   <olist>
-                     <item><p>If the value is an <code>xs:string</code>, <code>xs:untypedAtomic</code>,
+                     <item><p>Let <var>K</var> be the value of the ·jkey· property.</p></item>
+                     <item><p>If <var>K</var> is an <code>xs:string</code>, <code>xs:untypedAtomic</code>,
                      or <code>xs:anyURI</code> that is castable to <code>xs:NCName</code>, then
-                     the result of casting the value to <code>xs:NCName</code>.</p></item>
+                        the result of casting <var>K</var> to <code>xs:NCName</code>.</p></item>
                      <item><p>If the value is an <code>xs:string</code>, <code>xs:untypedAtomic</code>,
                      or <code>xs:anyURI</code> that is not castable to <code>xs:NCName</code>, then
-                     then as the string <code>get("<var>S</var>")</code>
-                     where <var>S</var> is the string value.</p></item>
-                     <item><p>If the value is numeric, then as the string <code>get(<var>N</var>)</code>
-                     where <var>N</var> is the result of casting the numeric value to 
-                        <code>xs:string</code>.</p></item>
-                     <item><p>If the value is an <code>xs:QName</code>, then as the string
-                     <code>get(#Q{<var>uri</var>}<var>local</var>)</code> where <var>uri</var>
+                     the string <code>"<var>K</var>"</code> (including the quotation marks), with any contained
+                        quotation marks escaped by doubling them.</p></item>
+                     <item><p>If <var>K</var> is numeric, then the string <code><var>N</var></code>
+                        where <var>N</var> is the result of casting <var>K</var> to 
+                        <code>xs:string</code>.</p>
+                        <note><p>This includes the case where the parent of the JNode is an array.</p></note>
+                     </item>
+                     <item><p>If <var>K</var> is an <code>xs:QName</code>, then the string
+                     <code>#Q{<var>uri</var>}<var>local</var></code> where <var>uri</var>
                      and <var>local</var> are the namespace URI and local name parts of the QName.</p></item>
-                     <item><p>If the value is an <code>xs:boolean</code>, then as the string
-                     <code>get(true())</code> or <code>get(false())</code>.</p></item>
-                     <item><p>If the value is of any other type, then as the string
-                     <code>get(xs:<var>T</var>("<var>S</var>"))</code> where <var>T</var> is the
-                        local part of the most specific built-in atomic type of which the value
-                        is an instance, and <var>S</var> is the result of casting the value to 
-                           <code>xs:string</code>.</p></item>
+                     <item><p>If <var>K</var> is an <code>xs:boolean</code>, then the string
+                     <code>true()</code> or <code>false()</code>.</p></item>
+                     <item><p>If <var>K</var> is of any other type, then as the string
+                     <code>{xs:<var>T</var>("<var>S</var>")}</code> (including the enclosing braces) where <var>T</var> is the
+                        local part of the name of the most specific built-in atomic type of which the value
+                        is an instance, and <var>S</var> is the result of casting <var>K</var> to 
+                           <code>xs:string</code>.</p>
+                     <note><p>Escaping of embedded quotation marks is not necessary in this case, because they will never arise
+                     for the types covered by this rule.</p></note></item>
                   </olist>
                   
-                  <p>TODO: Better handling of the case where the parent is neither a map nor an array,
+                  <!--<p>TODO: Better handling of the case where the parent is neither a map nor an array,
                   for example where it is a sequence of several maps or several arrays. It's hard to
                   provide a better path for these when there is no AxisStep for selecting within
-                  such values.</p>
+                  such values.</p>-->
                         
                      
                </item>
@@ -14578,6 +14578,26 @@ fn:parse-QName("xmp:person")</eg></fos:expression>
          
          <p>If the supplied argument is a map or an array, it will automatically be coerced to a JNode. This
          however is not useful, because this will be a root JNode, yielding the path <code>/</code>.</p>
+         
+         <p>If there is a requirement to use the generated path as an XPath expression in order to retrieve
+         nodes, perhaps from a different document <code>$doc</code>, this can be achieved as follows:</p>
+         
+         <olist>
+            <item><p>Call the <function>fn:path</function> function with default options: let the result be
+            <code>$path</code>.</p></item>
+            <item><p>Choose some arbitrary XQuery module URI, say "http://example.com/pathfinder".</p></item>
+            <item><p>Set the variable <code>$module</code> to the string:</p>
+               <eg>"module namespace f = 'http://example.com/pathfinder'; 
+declare function f:eval($root) { $root " || $path || "};"</eg></item>
+
+            <item><p>Construct a function, say <code>$evalPath</code>: </p>
+               <eg>let $evalPath := fn:load-xquery-module($module-uri, {'content': $module}
+                  ?functions/?#Q{http://example.com/pathfinder}eval</eg>
+            </item>
+            <item><p>Call this function to evaluate the path with a given root:</p>
+              <eg>return $evalPath($doc)</eg>
+            </item>
+         </olist>
          
       </fos:notes>
       
@@ -14681,20 +14701,31 @@ Himmlische, dein Heiligtum.
             <fos:test>
                <fos:expression><eg>let $in := [ { "b": [ 3, 4 ] } ]
 return path($in/*[1]/b/*[2])</eg></fos:expression>
-               <fos:result>"/*[1]/b/*[2]"</fos:result>
+               <fos:result>"/1/b/2"</fos:result>
             </fos:test>
             <fos:test>
                <fos:expression><eg>let $in := [ [ { 'a': 1 } ], [ { 'a': 2 } ] ]
 return path($in//a[. = 2])</eg></fos:expression>
-               <fos:result>"/*[2]/*[1]/a"</fos:result>
+               <fos:result>"/1/2/a"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>let $in := [ { "London": 1, "New York": 2 } ]
+                  return path($in//*[. = 2])</eg></fos:expression>
+               <fos:result>'/1/"New York"'</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>let $in := [ { xs:date('2026-04-18'): 1, xs:date('2026-03-04'): 2 } ]
+                  return path($in//*[. = 2])</eg></fos:expression>
+               <fos:result>'/1/xs:date("2026-03-04")'</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
+      <fos:see-also prefix="fn" name="load-xquery-module"/>
       <fos:changes>
          <fos:change issue="332 1660" PR="1620 1886" date="2024-11-29">
             <p>Options are added to customize the form of the output.</p>
          </fos:change>
-         <fos:change issue="2100" PR="2149" date="2025-08-05">
+         <fos:change issue="2100 2704" PR="2149 2796" date="2025-08-05">
             <p>The function is extended to handle JNodes.</p>
          </fos:change>
       </fos:changes>
