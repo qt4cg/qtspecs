@@ -217,7 +217,7 @@
         <xsl:variable name="spec">
             <xsl:choose>
                 <xsl:when test="@spec">
-                    <xsl:value-of select="replace(@spec, '3[0|1]', '')"/>
+                    <xsl:value-of select="replace(@spec, '(30|31|40)', '')"/>
                 </xsl:when>
                 <xsl:otherwise>
                     <xsl:value-of select="substring($default.specdoc,1,2)"/>
@@ -254,7 +254,7 @@
         
         <xsl:variable name="label">
             <!-- CREATES LABEL IN XQUERY STYLE -->
-            <xsl:text>{$expath-prefix}:</xsl:text>
+            <xsl:text>{if ($spec = 'XP') then 'err:XP' else $expath-prefix || ':'}</xsl:text>
             <!--<xsl:value-of select="$spec"/>-->
             <xsl:value-of select="$class"/>
             <xsl:value-of select="$code"/>
