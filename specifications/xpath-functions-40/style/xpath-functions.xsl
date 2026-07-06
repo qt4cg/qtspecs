@@ -440,7 +440,11 @@
   
   <xsl:template match="var[matches(., '[A-Z]''')]">
     <var><xsl:value-of select="translate(., '''', '&#x2032;')"/></var>
-  </xsl:template>  
+  </xsl:template>
+
+<xsl:template match="code[@role = 'arg-note']">
+  <code class="arg-note"><xsl:apply-templates/></code>
+</xsl:template>
 
 <xsl:template match="code[matches(., '^(fn|op|math|map|array):[-a-zA-Z0-9]+(#[0-9]+)?$')][not(@role=('example','element-name'))]">
   <!-- Simplified 2016-09-20 in response to bug 29825; as a result much of the logic here is redundant -->
