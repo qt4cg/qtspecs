@@ -378,7 +378,14 @@
   
 <xsl:template match="@*" mode="render-type" priority="11">
   <code>
-    <xsl:sequence select="replace(string(.), ' as ', ' as ')"/>
+    <xsl:analyze-string select="string(.)" regex="\$[\w-]+">
+      <xsl:matching-substring>
+        <span class="doc-param"><xsl:value-of select="."/></span>
+      </xsl:matching-substring>
+      <xsl:non-matching-substring>
+        <xsl:value-of select="."/>
+      </xsl:non-matching-substring>
+    </xsl:analyze-string>
   </code>
 </xsl:template>
 
