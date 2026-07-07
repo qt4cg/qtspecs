@@ -783,11 +783,16 @@ return try {
     </fos:summary>
     <fos:rules>
       <p>Lists all files and directories in a given directory.
-        In contrast to is <loc href="#func-file-children">file:children</loc>,
+        In contrast to <loc href="#func-file-children">file:children</loc>,
         the returned paths are relative to the supplied directory <code>$dir</code>.
         The order of the items in the resulting sequence is not defined.
         The references to the specified directory and its parent directory
         (<code>.</code> and <code>..</code>) are not returned.</p>
+      <p>Each returned string is the path of the entry relative to <code>$dir</code>,
+        with path segments separated by the implementation-defined directory separator;
+        paths that refer to directories carry a trailing separator. For example,
+        <code>file:list('/tmp', true())</code> may return paths such as
+        <code>foo.txt</code>, <code>sub/</code>, and <code>sub/inner.txt</code>.</p>
       <p>If <code>$recursive</code> is <code>true</code>, all directories and files will be returned
         that are found while recursively traversing the given directory.
         Otherwise, only the contents of the specified directory will be returned.</p>
@@ -1559,7 +1564,11 @@ file:write(
         directory. The order of the items in the resulting sequence is not defined.
         The references to the specified directory and its parent directory
         (<code>.</code> and <code>..</code>) are not returned.</p>
-      
+      <p>Each returned string is composed of the directory argument followed by the
+        implementation-defined directory separator and the file or directory name;
+        paths that refer to directories carry an additional trailing separator.
+        For example, <code>file:children('/tmp')</code> may return paths such as
+        <code>/tmp/foo.txt</code> (a file) and <code>/tmp/sub/</code> (a directory).</p>
     </fos:rules>
     <fos:errors>
       <p>
@@ -1595,6 +1604,7 @@ file:write(
     <fos:signatures>
       <fos:proto name="descendants" return-type="xs:string*">
         <fos:arg type="xs:string" name="path"/>
+        <fos:arg name="options" type="map(*)?" default="{}"/>
       </fos:proto>
     </fos:signatures>
     <fos:properties>
@@ -1612,6 +1622,42 @@ file:write(
         is not defined.
         The references to the specified directory and its parent directory
         (<code>.</code> and <code>..</code>) are not returned.</p>
+      <p>Each returned string is composed of the directory argument followed by the
+        relative path from that directory to the entry, using the implementation-defined
+        directory separator; paths that refer to directories carry an additional trailing
+        separator. For example, <code>file:descendants('/tmp')</code> may return paths
+        such as <code>/tmp/foo.txt</code>, <code>/tmp/sub/</code>, and
+        <code>/tmp/sub/inner.txt</code>.</p>
+
+      <p>The entries that may appear in the <code>$options</code> map are as follows (the
+        <xtermref spec="FO40" ref="option-parameter-conventions"/> apply):</p>
+      <fos:options>
+        <fos:option key="recurse">
+          <fos:meaning>A predicate that is invoked for every directory. The traversal descends
+            into the directory only if the predicate returns <code>true</code>.
+            In all cases, a directory is subject to the <code>filter</code> option.
+            The <code>$path</code> argument is the path of the directory, in the format
+            described above.
+          </fos:meaning>
+          <fos:type>fn($path as xs:string) as xs:boolean?</fos:type>
+          <fos:default>fn:true#0</fos:default>
+        </fos:option>
+        <fos:option key="filter">
+          <fos:meaning>A predicate that is invoked for every file and directory encountered
+            during the traversal. Only those entries are added to the result for which the
+            predicate returns <code>true</code>. The <code>$path</code> argument is the
+            path of the entry, in the format described above.</fos:meaning>
+          <fos:type>fn($path as xs:string) as xs:boolean?</fos:type>
+          <fos:default>fn:true#0</fos:default>
+        </fos:option>
+        <fos:option key="depth">
+          <fos:meaning>The maximum number of subdirectory levels to descend into. <code>0</code>
+            restricts the result to the entries of the specified directory.
+            The empty sequence imposes no limit.</fos:meaning>
+          <fos:type>xs:integer?</fos:type>
+          <fos:default>()</fos:default>
+        </fos:option>
+      </fos:options>
     </fos:rules>
     <fos:errors>
       <p>
@@ -1622,10 +1668,14 @@ file:write(
       <p>
         <errorref spec="FILE40" code="io-error"/> is raised if any other error occurs.</p>
     </fos:errors>
+    <fos:notes>
+      <p>The most effective way to speed up the traversal of large directory structures
+        is to skip the recursion of subdirectories.</p>
+    </fos:notes>
     <fos:examples>
       <fos:example>
         <fos:test>
-          <fos:expression>count(file:descendants('.')[file:is-directory(.)])</fos:expression>
+          <fos:expression>count(file:descendants('.')[file:is-dir(.)])</fos:expression>
           <fos:result narrative="true">Counts the subdirectories in the <termref def="current-working-dir"/>.</fos:result>
         </fos:test>
         <fos:test>
@@ -1636,10 +1686,36 @@ return $file
           </eg></fos:expression>
           <fos:result narrative="true">Returns the paths to all files that have been modified in the last hour.</fos:result>
         </fos:test>
+        <fos:test>
+          <fos:expression><eg>
+file:descendants('.', { 'filter': fn { file:size(.) > 10_000_000 } })
+          </eg></fos:expression>
+          <fos:result narrative="true">Returns the paths to files that are greater than 10 MB.</fos:result>
+        </fos:test>
+        <fos:test>
+          <fos:expression><eg>
+file:descendants('.', { 'depth': 1 })
+          </eg></fos:expression>
+          <fos:result narrative="true">Returns the entries of the current directory and its
+            immediate subdirectories.</fos:result>
+        </fos:test>
+        <fos:test>
+          <fos:expression><eg>
+file:descendants('.', {
+  'filter':  fn($path) { ends-with($path, '.jpg') },
+  'recurse': fn($dir)  { not(contains($dir, 'node_modules')) }
+})
+          </eg></fos:expression>
+          <fos:result narrative="true">Returns the paths of all JPG files, skipping
+            <code>node_modules</code> directories.</fos:result>
+        </fos:test>
       </fos:example>
     </fos:examples>
     <fos:changes>
       <fos:change issue="2016" PR="2077" date="2024-07-02"><p>New in 4.0.</p></fos:change>
+      <fos:change issue="2647" PR="2649" date="2026-05-20">
+        <p><code>$options</code> parameter added.</p>
+      </fos:change>
     </fos:changes>
   </fos:function>
 
