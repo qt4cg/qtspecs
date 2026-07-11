@@ -396,6 +396,8 @@ Michael Sperberg-McQueen (1954–2024).</p>
                   Furthermore, XSD 1.1
                   includes the option of supporting revised definitions of types such as <code>xs:NCName</code>
                   based on the rules in XML 1.1 rather than 1.0.</p>
+               <p>This specification adopts the definitions of datatypes from XSD 1.1, except when XSD validation is performed
+               using an XSD 1.0 processor, in which case the XSD 1.0 definitions apply.</p>
             </note>
 
             <p diff="add" at="2023-06-12">The <bibref ref="xpath-datamodel-40"/> allows flexibility in the
@@ -465,7 +467,7 @@ Michael Sperberg-McQueen (1954–2024).</p>
                <item>
                   <p><code>http://www.w3.org/2005/xpath-functions/array</code>
                      for functions &#x2014; associated with <code>array</code>. </p>
-                  <p>This namespace is used for some functions that manipulate maps (see
+                  <p>This namespace is used for some functions that manipulate arrays (see
                      <specref ref="array-functions"/>). The namespace
                      prefix used in this document for these functions is <code>array</code>.
                      These functions are available to users in exactly the same way as those in the
@@ -882,9 +884,9 @@ Item types form a directed graph, rather than a
 hierarchy or lattice: in the relationship defined by the
 <code>derived-from(A, B)</code> function, some types are derived from
 more than one other type. Examples include functions
-(<code>function(xs:string) as xs:int</code> is substitutable for
-<code>function(xs:NCName) as xs:int</code> and also for
-<code>function(xs:string) as xs:decimal</code>), and choice types
+(<code>fn(xs:string) as xs:int</code> is substitutable for
+<code>fn(xs:NCName) as xs:int</code> and also for
+<code>fn(xs:string) as xs:decimal</code>), and choice types
 (<code>A</code> is substitutable for the choice type <code>(A | B)</code> and also
 for <code>(A | C)</code>. Record types provide an alternative way of categorizing
    maps: the instances of <code>record(longitude, latitude)</code> overlap with
@@ -1496,6 +1498,13 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
             
             <p>With all these functions, if the caller-supplied function fails with a dynamic error,
             this error is propagated as an error from the higher-order function itself.</p>
+
+            <p>Several higher-order functions in this specification pass the 1-based position of an
+            item to the caller-supplied function as an additional <code>xs:integer</code> argument,
+            shown in the function signatures as <code>$pos</code>. The descriptions of individual
+            functions rely on this convention rather than restating it. A caller that does not need
+            the position may, by function coercion, supply a function of lower arity that omits the
+            parameter.</p>
             
             <div3 id="func-apply">
                <head><?function fn:apply?></head>
@@ -3467,8 +3476,10 @@ quantity            ::= quantRange | quantMin | QuantExact
 quantRange          ::= QuantExact ',' QuantExact
 quantMin            ::= QuantExact ','
 QuantExact          ::= 【0➜9】+
-§atom               ::= NormalChar | charClass | ( '(' '?:'? regExp ')' ) | backReference 
-NormalChar          ::= ¬【.\?*+{}()|[]】	
+§atom               ::= NormalChar | charClass
+                        | ( '(' ( '?:' | '?<' groupName '>' )? regExp ')' ) | backReference
+§groupName          ::= 【A➜Za➜z】 【A➜Za➜z0➜9】*
+NormalChar          ::= ¬【.\?*+{}()|[]】
 charClass           ::= SingleCharEsc | charClassEsc | charClassExpr | WildcardEsc
 charClassExpr       ::= '[' charGroup ']'
 charGroup           ::= ( posCharGroup | negCharGroup ) ( '-' charClassExpr )?
@@ -3633,11 +3644,26 @@ WildcardEsc         ::= '.'
                         the syntax <code>(?:xxxx)</code>.</p>
                      
                      
-                     <p>In the absence of back-references (see below), 
+                     <p>In the absence of back-references (see below),
                         the presence of the optional <code>?:</code> has no effect on the set of strings
                      that match the regular expression, but causes the left parenthesis not to be counted
-                     by operations (such as <function>fn:replace</function> and back-references) that number the capturing sub-expressions 
+                     by operations (such as <function>fn:replace</function> and back-references) that number the capturing sub-expressions
                         within a regular expression.</p>
+
+                     <p><termdef id="dt-named-capturing-group" term="named capturing group">A
+                        <termref def="dt-capturing-subexpression">capturing subexpression</termref>
+                        may be given a <term>name</term> by using the syntax
+                        <code>(?&lt;<var>name</var>&gt;xxxx)</code>, where <var>name</var> matches the
+                        <code>groupName</code> production: that is, an ASCII letter followed by zero or
+                        more ASCII letters or digits.</termdef> A named capturing group is a capturing
+                        subexpression, and is numbered in the same way as any other capturing subexpression.
+                        In the result of <function>fn:matching-segments</function>, however, it is keyed by
+                        its name rather than by its group number.</p>
+
+                     <p>Within a single regular expression, the same name must not be used for more than one
+                        capturing group. A regular expression that uses a name that does not conform to the
+                        <code>groupName</code> production, or that uses the same name for two different
+                        capturing groups, is invalid <errorref class="RX" code="0002"/>.</p>
                   </div3>
                <div3 id="back-references">
                   <head>Back-references</head>
@@ -6449,7 +6475,7 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
          
          <p>A map can also be viewed as a function from keys to associated values. To achieve this, a map is also a 
             function item. The function corresponding to the map has the signature 
-            <code>function($key as xs:anyAtomicValue) as item()*</code>. Calling the function has the same effect as calling
+            <code>fn($key as xs:anyAtomicValue) as item()*</code>. Calling the function has the same effect as calling
             the <function>map:get</function> function: the expression
             <code>$map($key)</code> returns the same result as <code>get($map, $key)</code>. For example, if <code>$books-by-isbn</code>
             is a map whose keys are ISBNs and whose assocated values are <code>book</code> elements, then the expression
@@ -8470,7 +8496,7 @@ map( xs:string,
          <p>An array acts as a function from integer positions to associated values, so the
             function call <code>$array($index)</code> can be used to retrieve the array member at a given position.
             The function corresponding to the array has the signature 
-            <code>function($index as xs:integer) as item()*</code>. 
+            <code>fn($index as xs:integer) as item()*</code>. 
             The fact that an array is a function item allows it to be passed as an argument to higher-order functions 
             that expect a function item as one of their arguments.</p>
          
@@ -10394,10 +10420,8 @@ map( xs:string,
                <item><p>Line endings are normalized: specifically, the character sequences
                <char>U+000D</char>, or <char>U+000D</char> followed by <char>U+000A</char>, are converted
                   to a single <char>U+000A</char> character. This applies whether or not the line ending
-               appears within a quoted string, and whether or not <char>U+000A</char> is the chosen
-               row delimiter.</p></item>
-               <item><p>Row delimiters other than newline are recognized.</p></item>
-               <item><p>Field delimiters other than <char>U+002C</char> are recognized.</p></item>
+               appears within a quoted string.</p></item>
+               <item><p>Field separators other than <char>U+002C</char> are recognized.</p></item>
                <item><p>Quote characters other than <char>U+0022</char> are recognized.</p></item>
                <item><p>Non-ASCII characters are recognized.</p></item>
             </ulist>
@@ -10413,7 +10437,7 @@ map( xs:string,
             <?local-function-index?>
             
             <p>The most basic function for parsing CSV is <function>fn:csv-to-arrays</function>
-            which recognizes the delimiters for rows and fields and returns a sequence
+            which recognizes the boundaries between rows and fields and returns a sequence
             of arrays each corresponding to one row. The fields within each array are
             represented as instances of <code>xs:string</code>.</p>
             
@@ -10423,45 +10447,44 @@ map( xs:string,
             function represents the information using XDM element nodes.</p>
             
             <div3 id="csv-delimiters">
-               <head>CSV delimiters</head>
-               
-               <p>The delimiters used for rows, columns, and quoting are configurable. An error
-                  is raised if the same delimiter string is used in multiple roles 
-                  <errorref class="CV" code="0003"/>.</p>
+               <head>CSV separator and quoting</head>
 
-                  <p>Rows in CSV files are typically delimited with CRLF (<char>U+000D</char>, <char>U+000A</char>), 
-                     LF (<char>U+000A</char>), or CR (<char>U+000D</char>) line endings, 
-                     although RFC 4180 specifies CRLF. The CSV parsing functions 
+               <p>The character used to separate fields, and the character used for quoting,
+                  are configurable. An error
+                  is raised if the same character is used in both roles
+                  <errorref class="CV" code="0002"/>.</p>
+
+                  <p>Rows in CSV files are typically delimited with CRLF (<char>U+000D</char>, <char>U+000A</char>),
+                     LF (<char>U+000A</char>), or CR (<char>U+000D</char>) line endings,
+                     although RFC 4180 specifies CRLF. The CSV parsing functions
                      normalize these line endings to LF (<char>U+000A</char>).
-                     They therefore use LF as the default row delimiter.
+                     Rows are therefore always delimited by LF (<char>U+000A</char>).
                   </p>
-               
-                 
-               
-                  <p>The last row in the file may or may not be followed by a row delimiter.
-                  the empty file is treated as containing zero rows, while a file consisting solely
-                  of a row delimiter is treated as containing one empty row. In all other cases,
-                  a file that does not end with a row delimiter is treated as if a row delimiter were
+
+
+                  <p>The last row in the file may or may not be followed by a newline.
+                  The empty file is treated as containing zero rows, while a file consisting solely
+                  of a newline is treated as containing one empty row. In all other cases,
+                  a file that does not end with a newline is treated as if a newline were
                   added at the end.</p>
 
-                  <p>Fields in CSV are frequently delimited with a comma. Other field
-                     delimiters are useful, for
+                  <p>Fields in CSV are frequently separated by a comma. Other separators are useful, for
                      example when numeric data uses comma as a decimal separator. The
-                     chosen field delimiter is then often <char>U+003B</char>
+                     chosen separator is then often <char>U+003B</char>
                      or <char>U+0009</char>.</p>
 
-               <p>The column delimiter thus defaults to <char>U+002C</char>. 
+               <p>The separator thus defaults to <char>U+002C</char>.
                      The value may be
-                     any single Unicode character. An error is raised if the 
-                     <code>column-delimiter</code> option is set to a multi-character string.</p>
+                     any single Unicode character. An error is raised if the
+                     <code>separator</code> option is set to a multi-character string.</p>
             </div3>
 
             <div3 id="csv-field-quoting">
                <head>Field quoting</head>
 
-               <p>CSVs, as specified in <bibref ref="rfc4180"/>, require that fields be wrapped 
+               <p>CSVs, as specified in <bibref ref="rfc4180"/>, require that fields be wrapped
                   with a quote character if they
-                  contain either the row or column delimiter. For example:</p>
+                  contain either a newline or the separator. For example:</p>
 
                <eg>"A single field, containing a comma","another field containing CRLF
                   within it"</eg>
@@ -10485,10 +10508,10 @@ map( xs:string,
                <p>The quote character defaults to <char>U+0022</char>.</p>
 
 
-                  <p>No space is allowed between the column delimiter and a quote. An error is raised
+                  <p>No space is allowed between the separator and a quote. An error is raised
                      <errorref class="CV" code="0001"/> if
                      whitespace or other characters occur between a quote character and the nearest
-                     column delimiter.</p>
+                     separator.</p>
 
                   <p>The following example is therefore invalid and parsing it will raise an error.</p>
 
@@ -11428,7 +11451,7 @@ $gen2ToInf := f:generator(initialized := true(),
                     in <xspecref spec="DM31" ref="types"/> and the two derived types
                     <code>xs:yearMonthDuration</code> and <code>xs:dayTimeDuration</code> defined
                     in <xspecref spec="DM31" ref="types"/> also have associated constructor functions.
-                Implementations <rfc2119>may</rfc2119> additionally provide
+                Implementations <rfc2119>must</rfc2119> additionally provide
                 a constructor functions for the datatype <code>xs:dateTimeStamp</code> introduced in <bibref ref="xmlschema11-2"/>.</p>
 <p>
 A constructor function is not defined for <code>xs:anyAtomicType</code> as there are no atomic items with type annotation <code>xs:anyAtomicType</code> at runtime, although this can be a statically inferred type.
@@ -11757,7 +11780,7 @@ The form of the constructor function for an atomic type
                         returnEmptyOk="yes" isSchema="yes" prefix="xs" role="example">
                         <arg name="value" default="." type="xs:anyAtomicType?"/>
                      </proto>
-                     <p><emph>Available only if the implementation supports XSD 1.1.</emph></p>
+                     <p><emph>Available whether or not the implementation supports XSD 1.1 for validation.</emph></p>
                   </item>
                </ulist>
             </div2>
@@ -14746,17 +14769,13 @@ ISBN 0 521 77752 6.</bibl>
                type="dynamic">
                <p>Raised when parsing CSV input if a syntax error in the input CSV is found.</p>
             </error>
-            <error class="CV" code="0002" label="Invalid CSV delimiter error."
+            <error class="CV" code="0002" label="Invalid CSV option error."
                type="dynamic">
-               <p>Raised when parsing CSV input if the <code>field-separator</code>,
-                  <code>record-separator</code>, or <code>quote-character</code> option is set to
+               <p>Raised when parsing CSV input if the <code>separator</code>
+                  or <code>quote-character</code> option is set to
                   an invalid value.</p>
             </error>
-            <error class="CV" code="0003" label="Duplicate CSV delimiter error."
-               type="dynamic">
-               <p>Raised when parsing CSV input if the same delimiter character is assigned
-                  to more than one role.</p>
-            </error>
+            <!-- CV0003 has been merged into CV0002 and is no longer used. -->
             <error class="CV" code="0004" label="Argument supplied is not a known column name."
                type="dynamic">
                <p>Raised by the function from the <code>get</code> entry of
@@ -15159,9 +15178,9 @@ ISBN 0 521 77752 6.</bibl>
             <error class="UT" code="1200" label="Cannot infer encoding of external resource."
                type="dynamic">
                <p>Raised by <function>fn:unparsed-text</function> or <function>fn:unparsed-text-lines</function>
-                  if the <code>$encoding</code> argument is absent and the processor
-                  cannot infer the encoding using external information and the
-                  encoding is not UTF-8.</p>
+                  if no encoding has been supplied or can be inferred using external
+                  information, and the resource cannot be decoded using the encoding
+                  determined by <function>bin:infer-encoding</function>.</p>
             </error>
             <error class="UR" code="0001" label="Invalid IPv6/IPvFuture authority"
                type="dynamic">
