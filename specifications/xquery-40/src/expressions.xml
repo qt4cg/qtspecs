@@ -2119,76 +2119,132 @@ comparison or arithmetic operation. The implicit timezone is an  <termref
          and resolver callbacks, as well as supporting additional URI schemes and protocols, whether
          standardized or not.</p>
          
-         <p><termdef id="dt-trusted" term="trusted">The static context 
-            includes a boolean property called <term>trusted</term> that determines whether 
-            external resources are available.</termdef> This may take the following values:</p>
-         
+         <p>Trust is characterized by two independent notions: <emph>who</emph> is executing
+            (the trust level of the code) and <emph>what</emph> external resources a particular
+            operation may reach. The permissions of an individual operation refine, and never widen,
+            the limits set by the trust level of the code.</p>
+
+         <p><termdef id="dt-trusted" term="trusted">The static context
+            includes a boolean property called <term>trusted</term> that determines whether
+            external resources are available to the executing code.</termdef> Only code is trusted
+            or untrusted; the property is binary:</p>
+
          <olist>
-            <item><p><term>false</term>: No external resources are available other than
-               resources explicitly made available by the caller through some trusted implementation-defined
-               mechanism.</p>
-               <p><termdef id="dt-untrusted" term="untrusted">Code executing 
+            <item><p><term>false</term>: No external resources are available other than those in the
+               caller's <termref def="dt-resource-allow-list">resource allow-list</termref>.</p>
+               <p><termdef id="dt-untrusted" term="untrusted">Code executing
                   with <termref def="dt-trusted"/> set to <code>false</code> is said to be <term>untrusted</term>.</termdef>
                   </p>
             </item>
-            
+
             <item><p><term>true</term>: Trusted code has access to all the resources
                available to its immediate caller.</p></item>
          </olist>
-         
-         
-         <p>The functions <function>transform</function> and <function>load-xquery-module</function>,
-            and the XSLT instruction <code>xsl:evaluate</code>, have an option
-            allowing the trust level of the executed code to be set:</p>
-            <olist>
-               <item><p>If <code>trusted</code> is set to <code>true</code>, the invoked code executes
-               with the same trust level as its caller.</p></item>
 
-               <item><p>If <code>trusted</code> is set to <code>false</code>, the invoked code is not able
-               to access any external resources other than resources explicitly made available using
-               an <termref def="dt-implementation-defined"/> mechanism under the control
-               of the caller.</p></item>
-            </olist>
-         
-         <p>Some resources, such as XML documents, may themselves contain references to 
-            other resources. For example, an XML document
-            may reference external entities (including an external DTD).
-          External entity expansion is recognized as a known security risk.
-          Functions that invoke XML parsing (such as <function>parse-xml</function>, <code>doc</code>,
-         or <code>collection</code>) therefore have a <code>trusted</code> option indicating
-            whether the document being parsed is trusted to access external entities.
-         Such access is allowed only if (a) the <code>trusted</code> option is set to <code>true</code>, 
-         or (b) access to the external entity in question is explicitly enabled by the caller.</p>
-         
-         <note><p>The term <term>explicitly enabled</term> is not intended to mean that 
-         every resource to which access is permitted must be individually listed. The mechanism
-         for enabling access might provide access to a class of resources (for example, all
-         resources accessible using the HTTPS protocol, or all resources within the containing
-         XML database having particular access permissions). The mechanism might also take account of other
-         criteria, for example it might impose limits on the size or other characteristics of the resources
-         accessed.</p></note>        
-         
-         <p>It is <rfc2119>recommended</rfc2119> that any external API used to 
-            invoke XPath, XQuery, or XSLT processing should
-         similarly offer the ability to indicate whether the code
-         being executed is <termref def="dt-trusted"/>.</p>
-         
-         <p>In the interests of security, the default for these options is <term>false</term>.
-         However, for backwards compatibility reasons, processors <rfc2119>may</rfc2119> provide
-         an option whereby a trusted user can change the default.</p>
-         
+         <p><termdef id="dt-resource-allow-list" term="resource allow-list">A caller
+            <rfc2119>may</rfc2119> make specified external resources available to untrusted code
+            through a <termref def="dt-implementation-defined"/> mechanism; the set of resources made
+            available in this way is the caller's <term>resource allow-list</term>.</termdef> These
+            resources are typically drawn from the available documents, available text resources, and
+            available collections of the <termref def="dt-dynamic-context"/>, but an implementation
+            <rfc2119>may</rfc2119> populate the allow-list by other means.</p>
+
+         <note><p>A resource allow-list is not required to enumerate individual resources. It might
+            grant access to a class of resources (for example, all resources accessible using the
+            HTTPS protocol, or all resources within the containing XML database having particular
+            access permissions), and it might take account of other criteria, for example imposing
+            limits on the size or other characteristics of the resources accessed.</p></note>
+
+         <p>The <termref def="dt-trusted"/> property is established when execution begins:</p>
+         <olist>
+            <item><p>Code invoked directly through an implementation's normal interface, such as a
+               query or stylesheet run by a user, is <termref def="dt-trusted">trusted</termref> by
+               default.</p></item>
+            <item><p>Code invoked indirectly by another expression, using
+               <function>transform</function>, <function>load-xquery-module</function>, or the XSLT
+               instruction <code>xsl:evaluate</code>, is <termref def="dt-untrusted">untrusted</termref>
+               by default. Each of these operations takes a <code>trusted</code> option, with default
+               <code>false</code>; setting it to <code>true</code> causes the invoked code to execute
+               with the same trust as its caller.</p></item>
+         </olist>
+         <p>It is <rfc2119>recommended</rfc2119> that any external API used to invoke XPath, XQuery, or
+            XSLT processing should similarly offer the ability to indicate whether the code being
+            executed is <termref def="dt-trusted"/>. For backwards compatibility, processors
+            <rfc2119>may</rfc2119> provide a mechanism whereby a trusted user changes these defaults.</p>
+
+         <p>Some resources, such as XML documents, themselves contain references to further resources:
+            an XML document may reference external entities (including an external DTD), and processing
+            it may cause other resources to be fetched, for example by activating XInclude or by
+            resolving <code>xsi:schemaLocation</code>. External entity expansion and other such
+            <emph>secondary</emph> references are recognized security risks. Functions that invoke XML
+            parsing (such as <function>doc</function>, <function>parse-xml</function>, and
+            <function>xsd-validator</function>) therefore have a <code>trust-external</code> option
+            indicating whether secondary references encountered while processing the primary resource
+            may be resolved.</p>
+
+         <p>Access to an external resource is permitted only if <emph>both</emph> of the following
+            hold:</p>
+         <olist>
+            <item><p>the executing code is <termref def="dt-trusted"/>, or the resource is in the
+               caller's <termref def="dt-resource-allow-list">resource allow-list</termref>; and</p></item>
+            <item><p>where the resource is a secondary reference discovered while processing a primary
+               resource, the <code>trust-external</code> option of the call is set to <code>true</code>
+               (its default is <code>false</code>), or the resource is in the caller's resource
+               allow-list.</p></item>
+         </olist>
+         <p>Consequently, the <code>trust-external</code> option refines, but never widens, the
+            permissions granted by the trust level: an untrusted call can never gain access to an
+            external resource by setting <code>trust-external</code> to <code>true</code>. The
+            combined effect is summarized below.</p>
+
+         <table width="100%" border="1" role="small">
+            <caption>Permission to access an external resource</caption>
+            <tbody>
+               <tr>
+                  <th>Executing code</th>
+                  <th>Resource</th>
+                  <th><code>trust-external</code></th>
+                  <th>Access permitted?</th>
+               </tr>
+               <tr>
+                  <td>untrusted</td>
+                  <td>primary or secondary</td>
+                  <td>(no effect)</td>
+                  <td>No, unless the resource is in the caller's resource allow-list</td>
+               </tr>
+               <tr>
+                  <td>trusted</td>
+                  <td>primary (named in the call)</td>
+                  <td>(not applicable)</td>
+                  <td>Yes</td>
+               </tr>
+               <tr>
+                  <td>trusted</td>
+                  <td>secondary (external entity, DTD, XInclude, indirectly referenced schema)</td>
+                  <td><code>false</code> (default)</td>
+                  <td>No</td>
+               </tr>
+               <tr>
+                  <td>trusted</td>
+                  <td>secondary</td>
+                  <td><code>true</code></td>
+                  <td>Yes</td>
+               </tr>
+            </tbody>
+         </table>
+
          <p>In general, when an application requests access to an external resource which is
          not available because the application is untrusted, the processor <rfc2119>should</rfc2119> behave
          in the same way as if the resource did not exist. However, the processor <rfc2119>may</rfc2119>
          choose to disclose in its diagnostics why the request was unsuccessful.</p>
-         
-         <p>A processor <rfc2119>may</rfc2119> (but is not <rfc2119>required</rfc2119> to) 
+
+         <p>A processor <rfc2119>may</rfc2119> (but is not <rfc2119>required</rfc2119> to)
             limit an application’s consumption of resources such as CPU cycles
          and memory when the application is untrusted.</p>
-         
+
          <p><termdef id="dt-available-docs" term="available documents">The term
-         <term>available documents</term> refers (TODO: for the time being) to the set
-         of XML documents that an application is able to access by URI.</termdef></p>
+         <term>available documents</term> refers to the set of XML documents that an application is
+         able to access by URI, as provided by the <termref def="dt-dynamic-context"/>.</termdef></p>
       </div2>
 
       <div2 id="id-processing-model">
