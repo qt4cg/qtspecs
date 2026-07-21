@@ -697,6 +697,10 @@ nodes.</p></note></div1>
     <change issue="938" PR="2259" date="2025-10-20">
       Added the <code>canonical</code> parameter for XML, XHTML, and JSON serialization.
     </change>
+    <change issue="2748" date="2026-07-02">
+      Added the <code>csv-separator</code>, <code>csv-quote-character</code>, and
+      <code>csv-header</code> parameters for CSV serialization.
+    </change>
   </changes>
 <p>There are a number of parameters that influence how serialization
 is performed. <termref def="host-language">Host languages</termref> <rfc2119>MAY</rfc2119> allow users to specify any or all of these parameters, but
@@ -738,6 +742,16 @@ is specified, a serialization error <errorref code="0022" class="RE"/> may be ra
           this parameter is ignored.</td></tr>
 <tr><td rowspan="1" colspan="1" valign="top"><code>canonical</code></td><td rowspan="1" colspan="1">A boolean value, <code>true</code> or <code>false</code>.</td></tr>
 <tr><td rowspan="1" colspan="1" valign="top"><code>cdata-section-elements</code></td><td rowspan="1" colspan="1">A list of expanded QNames, possibly empty.</td></tr>
+<tr diff="add" at="2026-07-02"><td rowspan="1" colspan="1" valign="top"><code>csv-header</code></td>
+<td rowspan="1" colspan="1">A boolean value, <code>true</code> or <code>false</code>. This parameter indicates
+whether the CSV output method writes a header record derived from the <code>columns</code> entry
+of a supplied parsed CSV structure.</td></tr>
+<tr diff="add" at="2026-07-02"><td rowspan="1" colspan="1" valign="top"><code>csv-quote-character</code></td>
+<td rowspan="1" colspan="1">A string consisting of exactly one character. This parameter is used by the
+CSV output method to quote fields whose content requires quoting.</td></tr>
+<tr diff="add" at="2026-07-02"><td rowspan="1" colspan="1" valign="top"><code>csv-separator</code></td>
+<td rowspan="1" colspan="1">A string consisting of exactly one character. This parameter is used by the
+CSV output method to separate the fields within a record.</td></tr>
 <tr><td rowspan="1" colspan="1" valign="top"><code>doctype-public</code></td><!--Text replaced by erratum E10 change 1"-->
 <td>A string of
 <xnt spec="XML" ref="NT-PubidChar">PubidChar</xnt> characters.
@@ -816,11 +830,11 @@ output method.</td>
 <termref def="non-null-namespace-URI">non-null
 namespace URI</termref>,
 or with a <termref def="null-namespace-URI">null 
-namespace URI</termref> and a local name that <rfc2119>MUST</rfc2119> be equal 
+namespace URI</termref> and a local name that <rfc2119>MUST</rfc2119> be equal
 to one of <code>xml</code>, <code>xhtml</code>,
-<code>html</code>, <code>text</code>, 
-<code>json</code>, or <code>adaptive</code>, in which case, the output method specified <rfc2119>MUST</rfc2119> 
-be used for serializing. 
+<code>html</code>, <code>text</code>,
+<code>json</code>, <code>csv</code>, or <code>adaptive</code>, in which case, the output method specified <rfc2119>MUST</rfc2119>
+be used for serializing.
 If the namespace URI is non-null, 
 the parameter
 specifies an <termref def="impdef">implementation-defined</termref> 
@@ -899,10 +913,10 @@ specify the means by which an implementation can define such an additional
 serialization parameter, and implementations <rfc2119>MAY</rfc2119> provide
 mechanisms by which users can define such an additional serialization
 parameter.
-If the serialization method is one of the six
-methods <code>xml</code>, <code>html</code>, 
-<code>xhtml</code>, <code>text</code>, 
-<code>json</code>, or <code>adaptive</code>
+If the serialization method is one of the seven
+methods <code>xml</code>, <code>html</code>,
+<code>xhtml</code>, <code>text</code>,
+<code>json</code>, <code>csv</code>, or <code>adaptive</code>
  then the additional serialization parameters <rfc2119>MAY</rfc2119>
 affect the output of the <termref def="serializer">serializer</termref> to the extent (but only to the extent)
 that this specification leaves the output <termref def="impdef">implementation-defined</termref> or
@@ -1384,9 +1398,10 @@ comprises six phases of processing
 described in <specref ref="serdm"/>).<!--End of text replaced by erratum E2-->
 <!--Should the below be implementation-dependent?  -sb 3/16/05-->
 
-For the JSON and Adaptive
-output methods, serialization is described in <specref ref="json-output"/> and 
-  <specref ref="adaptive-output"/> respectively.
+For the JSON, CSV, and Adaptive
+output methods, serialization is described in <specref ref="json-output"/>,
+  <specref ref="csv-output"/>, and
+  <specref ref="adaptive-output"/>, respectively.
 
 
 </p>
@@ -4041,6 +4056,205 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
 </div3>
 
 </div2>
+</div1>
+
+<div1 id="csv-output">
+<head>CSV Output Method</head>
+
+  <changes>
+    <change issue="2748" date="2026-07-02">
+      The CSV output method was added, providing an inverse of the
+      <code>fn:parse-csv</code> and <code>fn:csv-to-arrays</code> functions.
+    </change>
+  </changes>
+
+  <p>The CSV output method serializes the <termref def="dt-input-tree"/> as CSV
+    (comma-separated values) data, following the conventions defined in <bibref ref="rfc4180"/>.
+    It is designed as an inverse of the <code>fn:parse-csv</code> and
+    <code>fn:csv-to-arrays</code> functions: applying the CSV output method to the result of
+    one of these functions recovers CSV data equivalent to the original input.
+    Sequence normalization is not performed for this output method.</p>
+
+  <p>The <termref def="dt-input-value"/> <rfc2119>MUST</rfc2119> take one of the following two
+    forms:</p>
+
+  <ulist>
+    <item><p>A single <termref def="dt-map-item">map</termref> having the structure returned by
+      the <code>fn:parse-csv</code> function (a <emph>parsed CSV structure</emph>). The map
+      <rfc2119>MUST</rfc2119> contain an entry whose key is the string <code>rows</code> and whose
+      associated value is a sequence of <termref def="dt-array-item">arrays</termref>, each array
+      representing one record. The map <rfc2119>MAY</rfc2119> contain an entry whose key is the
+      string <code>columns</code> and whose associated value is a sequence of atomic items
+      supplying the column names. Any other entries in the map are ignored.</p></item>
+
+    <item><p>A sequence of <termref def="dt-array-item">arrays</termref>, as returned by the
+      <code>fn:csv-to-arrays</code> function, each array representing one record.</p></item>
+  </ulist>
+
+  <div2 id="serializing-csv">
+    <head>Serializing a CSV Structure</head>
+
+    <p>The output consists of a sequence of <term>records</term>, one for each row, separated by
+      a single <char>U+000A</char> (line feed) character. A <char>U+000A</char> character is also
+      written after the final record. If the <code>line-ending</code> parameter is specified, its
+      value is written in place of each of these <char>U+000A</char> characters.</p>
+
+    <p>Records are written as follows:</p>
+
+    <olist>
+      <item><p>If the input is a map, and the <code>csv-header</code> parameter is
+        <code>true</code>, a header record is written first. This record is derived from the value
+        of the <code>columns</code> entry of the map; each field of the record is the
+        <termref def="dt-string-value">string value</termref> of the corresponding item. If the
+        map has no <code>columns</code> entry, a serialization error
+        <errorref code="0025" class="RE"/> occurs. If the <code>csv-header</code> parameter is
+        <code>false</code> (the default), no header record is written.</p></item>
+
+      <item><p>One record is then written for each array in the input (the value of the
+        <code>rows</code> entry if the input is a map, or the arrays of the input sequence
+        otherwise). The fields of the record are the
+        <termref def="dt-string-value">string values</termref> of the members of the array, in
+        order.</p></item>
+    </olist>
+
+    <p>Within a record, fields are separated by the character supplied in the
+      <code>csv-separator</code> parameter (default: <char>U+002C</char>, a comma). Each field is
+      derived from the <termref def="dt-string-value">string value</termref> of the corresponding
+      item by applying the following procedure:</p>
+
+    <olist>
+      <item><p>Any character in the string for which character mapping is defined (see
+        <specref ref="character-maps"/>) is substituted by the replacement string defined in the
+        character map.</p></item>
+
+      <item><p>Any other character in the string (but not a character produced by character mapping)
+        is a candidate for <termref def="unicode-normalization">Unicode Normalization</termref> if
+        requested by the <code>normalization-form</code> parameter. In addition, the field requires
+        quoting if it contains the separator character, the quote character, a <char>U+000A</char>
+        character, or a <char>U+000D</char> character; and any line ending (<char>U+000D</char>,
+        <char>U+000A</char>, or <char>U+000D</char> followed by <char>U+000A</char>) is replaced by
+        the string that separates records: <char>U+000A</char>, or the value of the
+        <code>line-ending</code> parameter if specified.</p></item>
+
+      <item><p>If the field requires quoting, each occurrence of the quote character (but not one
+        produced by character mapping) is doubled, and the resulting field is enclosed in the
+        character supplied in the <code>csv-quote-character</code> parameter (default:
+        <char>U+0022</char>, a quotation mark). Otherwise the field is written unchanged.</p></item>
+    </olist>
+
+    <note><p>The <code>fn:parse-csv</code> and <code>fn:csv-to-arrays</code> functions normalize
+      all line endings to <char>U+000A</char>, including line endings within quoted fields, so
+      this replacement does not affect the result of reparsing the serialized output.</p></note>
+
+    <p>A serialization error <errorref code="0025" class="RE"/> occurs if the
+      <termref def="dt-input-value"/> is not one of the two forms described above; in particular,
+      if a member of a row array is not a single <xtermref spec="XP40" ref="dt-atomic-item">atomic
+      value</xtermref>.</p>
+
+    <note><p>Because every field is written using its
+      <termref def="dt-string-value">string value</termref>, the distinction between the different
+      atomic types of the members is not preserved. When CSV data produced by
+      <code>fn:parse-csv</code> or <code>fn:csv-to-arrays</code> is serialized, all fields are
+      already strings, so this has no effect.</p></note>
+
+    <note><p>To reproduce a header row when serializing the result of
+      <code>fn:parse-csv($input, { "header": true() })</code>, the <code>csv-header</code>
+      parameter must be set to <code>true</code>; the column names are otherwise available in the
+      <code>columns</code> entry but are not written to the output.</p></note>
+  </div2>
+
+  <div2 id="CSV_PARAMS">
+    <head>The Influence of Serialization Parameters upon the CSV Output Method</head>
+
+    <p>The serialization parameters that affect the CSV output method are listed in the
+      following subsections.</p>
+
+    <p>Serialization parameters other than those listed are not applicable to this output
+      method. It is the responsibility of the
+      <termref def="host-language">host language</termref> to specify whether an error occurs if
+      such a parameter is specified in combination with the CSV output method, or whether the
+      parameter is ignored, or whether it is validated and then ignored.</p>
+
+    <div3 id="CSV_SEPARATOR">
+      <head>CSV Output Method: <code>csv-separator</code></head>
+      <p>The <code>csv-separator</code> parameter supplies the character used to separate the
+        fields within a record. The default is <char>U+002C</char> (a comma).
+        A <termref def="serial-err">serialization error</termref> <errorref code="0016" class="PM"/>
+        occurs if the value is <char>U+000A</char>, if it is not a string consisting of exactly
+        one character, or if it is the same character as the value of the
+        <code>csv-quote-character</code> parameter.</p>
+    </div3>
+
+    <div3 id="CSV_QUOTE-CHARACTER">
+      <head>CSV Output Method: <code>csv-quote-character</code></head>
+      <p>The <code>csv-quote-character</code> parameter supplies the character used to enclose a
+        field whose content requires quoting. The default is <char>U+0022</char> (a quotation
+        mark). A <termref def="serial-err">serialization error</termref> <errorref code="0016" class="PM"/>
+        occurs if the value is <char>U+000A</char>, if it is not a string consisting of exactly
+        one character, or if it is the same character as the value of the
+        <code>csv-separator</code> parameter.</p>
+    </div3>
+
+    <div3 id="CSV_HEADER">
+      <head>CSV Output Method: <code>csv-header</code></head>
+      <p>The <code>csv-header</code> parameter controls whether a header record is written from
+        the <code>columns</code> entry of a supplied map, as described in
+        <specref ref="serializing-csv"/>. The default is <code>false</code>. This parameter has no
+        effect when the <termref def="dt-input-value"/> is a sequence of arrays.</p>
+    </div3>
+
+    <div3 id="CSV_LINE-ENDING">
+      <head>CSV Output Method: <code>line-ending</code></head>
+      <p>The <code>line-ending</code> parameter is applicable to the CSV output method. Its value
+        is used to separate records, and it replaces line endings occurring in the content of
+        fields, as described in <specref ref="serializing-csv"/>. If the parameter is absent,
+        <char>U+000A</char> is used.</p>
+    </div3>
+
+    <div3 id="CSV_ENCODING">
+      <head>CSV Output Method: <code>encoding</code></head>
+      <p>The <code>encoding</code> parameter identifies the encoding that the CSV output method
+        <rfc2119>MUST</rfc2119> use to convert sequences of characters to sequences of bytes.
+        A <termref def="serial-err">serialization error</termref> <errorref code="0007" class="SU"/>
+        occurs if the <termref def="serializer">serializer</termref> does not support the encoding
+        specified by the <code>encoding</code> parameter. If the
+        <termref def="dt-input-tree"/> contains a character that cannot be represented in the
+        encoding that the <termref def="serializer">serializer</termref> is using for output, the
+        <termref def="serializer">serializer</termref> <rfc2119>MUST</rfc2119> raise a
+        <termref def="serial-err">serialization error</termref> <errorref code="0008" class="RE"/>.</p>
+    </div3>
+
+    <div3 id="CSV_NORMALIZATION-FORM">
+      <head>CSV Output Method: <code>normalization-form</code></head>
+      <p>The <code>normalization-form</code> parameter is applicable to the CSV output method, and
+        controls the Unicode normalization of the content of each field. The values <code>NFC</code>
+        and <code>none</code> <rfc2119>MUST</rfc2119> be supported by the
+        <termref def="serializer">serializer</termref>.
+        A <termref def="serial-err">serialization error</termref> <errorref code="0011" class="SU"/>
+        results if the value of the <code>normalization-form</code> parameter specifies a
+        normalization form that is not supported by the
+        <termref def="serializer">serializer</termref>; the
+        <termref def="serializer">serializer</termref> <rfc2119>MUST</rfc2119> raise the error.</p>
+    </div3>
+
+    <div3 id="CSV_MEDIA-TYPE">
+      <head>CSV Output Method: <code>media-type</code></head>
+      <p>The <code>media-type</code> parameter is applicable to the CSV output method.
+        See <specref ref="serparam"/> for more information.</p>
+    </div3>
+
+    <div3 id="CSV_USE-CHARACTER-MAPS">
+      <head>CSV Output Method: <code>use-character-maps</code></head>
+      <p>The <code>use-character-maps</code> parameter is applicable to the CSV output method.
+        See <specref ref="character-maps"/> for more information.</p>
+    </div3>
+
+    <div3 id="CSV_BYTE-ORDER-MARK">
+      <head>CSV Output Method: <code>byte-order-mark</code></head>
+      <p>The <code>byte-order-mark</code> parameter is applicable to the CSV output method.
+        See <specref ref="serparam"/> for more information.</p>
+    </div3>
+  </div2>
 </div1>
 
 <div1 id="adaptive-output">
