@@ -2080,7 +2080,10 @@ local:depth(doc("partlist.xml"))
 
     <p>An item type declaration defines a name for an <termref def="dt-item-type"/>. Defining a name for an item type
     allows it to be referenced by name rather than repeating
-    the <termref def="dt-item-type-designator"/> in full.</p>
+    the <termref def="dt-item-type-designator"/> in full every time it is used. Subject to certain constraints, it also allows the
+    type to be recursive: that is, to refer to itself, directly or indirectly. The item type name may also,
+    in appropriate circumstances, be used as the name of a constructor function used to create instances
+    of the item type.</p>
     
     <scrap>
       <prodrecap ref="ItemTypeDecl"/>
@@ -2157,14 +2160,21 @@ local:depth(doc("partlist.xml"))
       declared item types and <termref def="dt-generalized-atomic-type">generalized atomic types</termref>
       in the <termref def="dt-static-context"/> of the query module. <errorref class="ST" code="0146"/></p>
 
-    <p diff="add" at="issue1506">If the declared item type expands to a <termref def="dt-generalized-atomic-type"/>
-      or to a <nt def="RecordType">RecordType</nt>, then the declaration also implicitly defines a
-      <termref def="dt-constructor-function"/> whose name is the name of the item type;
-      the rules are given in <specref ref="id-constructor-functions"/>.</p>
+    <p>If the item type declaration includes the phrase <code>with constructor</code>, then the declaration also implicitly defines a
+      <termref def="dt-constructor-function"/> whose name is the name of the item type. Constructor
+      functions are available only for generalized atomic types and record types:</p>
+    
+    <ulist>
+      <item><p>The rules for generalized atomic types are given in <specref ref="id-constructor-functions"/>.</p></item>
+      <item><p>The rules for record types are given in <specref ref="named-records-as-functions"/>.</p></item>
+      <item><p>If the type is neither a generalized atomic type nor a record type, then a static error is
+      raised ([TODO: define error code]).</p></item>
+    </ulist>
+   
 
     <p diff="add" at="issue1506">Any <code>%public</code> or <code>%private</code> annotations apply
-      both to the item type declaration and to the constructor function. As with named record declarations,
-      the constructor function must not have an arity range that overlaps the arity range of another
+      both to the item type declaration and to the constructor function. The constructor function must not
+      have an arity range that overlaps the arity range of another
       function declaration having the same name in the same static context.</p>
 
     <example diff="add" at="issue1506">
@@ -2194,10 +2204,46 @@ local:depth(doc("partlist.xml"))
     its definition. However, it is generally more convenient if any named item types used
     in public function and variable declarations are themselves public.</p></note>
     
+    <div3 id="id-recursive-record-types">
+      <head>Recursive Record Types</head>
+      <p>In limited circumstances, a named item type may refer to itself, directly or indirectly. Such
+      an item type is said to be <term>recursive</term>.</p>
+      <p>If there is a cycle of references such that <var>T0</var> refers to <var>T1</var>,
+        <var>T1</var> refers to <var>T2</var>, ..., and <var>T/n</var> refers to <var>T0</var>, then
+        at least one of these references must appear within a <term>discretionary field</term> of a record
+      type definition. A field of a record type is discretionary if the empty sequence is a valid value
+      for the field.</p>
+      <note><p>The reason for this rule is to ensure that it is possible to construct
+      instances of the record type.</p></note>
+      <p>The following example shows a simple recursive record type:</p>
+      
+      <eg>declare type linked-list as record(data as item()*, next as linked-list?);</eg>
+      
+      <p>The next example illustrates mutual recursion:</p>
+      
+      <eg>declare type binary-tree as record(left as node?, data as item()*, right as node?);
+declare type node as (binary-tree | leaf);
+declare type leaf as item()*;</eg>
+      
+      <p><termdef id="recursive-record-type" term="recursive record type">A named record type is
+      <term>recursive</term> if it contains a reference to itself, or if it participates
+      in a cycle of named item types where each item type contains a reference to the next.</termdef></p>
+      
+      <p>A static error is raised (<errorref class="ST" code="0023"/>) if there is a cycle 
+        of named item types that does not satisfy the constraints defined in this section.
+      </p>
+      
+      <note><p>Although items other than record types may participate in a cycle, only the
+      record types in the cycle are considered to be recursive.</p></note>
+      
+      <p>There a special rules defining subtyping of recursive record types: see
+        <specref ref="id-itemtype-subtype-aliases"/>.</p>
+    </div3>
     
-  </div2>
+    
   
-  <div2 id="id-named-record-types">
+  
+  <!--<div2 id="id-named-record-types">
     <head>Named Record Types</head>
     <p>Although item type declarations, as described in <specref ref="id-item-type-declaration"/>, can be
     used to give names to record types as well as any other item type, named record types as described
@@ -2279,7 +2325,7 @@ local:depth(doc("partlist.xml"))
         A recursive record type that is not instantiable is considered to be <termref def="dt-implausible"/>, 
         which means that a processor may treat it as an error but is not obliged to do so <errorref class="ST" code="0023"/>.</p>
         
-    </div3>
+    </div3>-->
     <div3 id="named-records-as-functions">
       <head>Constructor Functions for Named Record Types</head>
       
@@ -2297,7 +2343,7 @@ local:depth(doc("partlist.xml"))
    
        <p>The construct:</p>
         
-        <eg>declare record cx:complex(r as xs:double, i as xs:double := 0);</eg>
+        <eg>declare type cx:complex as record(r as xs:double, i as xs:double := 0) with constructor;</eg>
       
       <p>implicitly defines the function:</p>
        
@@ -2306,40 +2352,28 @@ local:depth(doc("partlist.xml"))
 };
        </eg>
       
-      <p>So the call <code>cx:complex(3, 2)</code> produces the value <code>{ "r": 3e0, "i": 2e0 }</code>,
-      while the call <code>cx:complex(3)</code> produces the value <code>{ "r": 3e0, "i": 0e0 }</code></p>
+      <p>So the call <code>cx:complex(3, 2)</code> produces the record <code>{ "r": 3e0, "i": 2e0 }</code>,
+      while the call <code>cx:complex(3)</code> produces the record <code>{ "r": 3e0, "i": 0e0 }</code>
+        (in both cases, as instances of the record type <code>cx:complex</code>).</p>
       
-      <p>The result of the function is a <termref def="dt-record"/> whose type annotation is the
+      <p>The result of the constructor function is a <termref def="dt-record"/> whose type annotation is the
       declared <termref def="dt-record-type"/>.</p>
       
-      <!--<p>The order of entries in the map corresponds
+      <p>If the record declaration defines a field whose default value is given by an <termref def="dt-inline-func"/>
+      (that is, a method), then the generated constructor function does not include a parameter corresponding
+      to that field; the corresponding field in the constructed record will always take its default value.</p>
+      
+      <p>The order of entries in the map corresponds
       to the order of field declarations in the record type. This means, for example, that when
       the map is serialized using the JSON output method, the order of entries in the output will
-      correspond to the order of field declarations.</p>-->
+      correspond to the order of field declarations.</p>
       
-      <!--<p>If a field is declared as optional, by including a question mark after the name, and if it has no initializer,
-      then the initializer <code>:= ()</code> is added implicitly. If the declared type of an optional field does
-        not permit an empty sequence, then the declared type of the function parameter is adjusted by changing the
-        occurrence indicator (from absent to <code>?</code> or from <code>+</code> to <code>*</code>) in order
-      to make the empty sequence an acceptable value.</p>-->
-      
-      <!--<p>Given the declaration:</p>
-      
-      <eg>declare record cx:complex(r as xs:double, i as xs:double? := ());</eg>
-      
-      <p>the equivalent function declaration is:</p>
-       
-       <eg>declare function cx:complex($r as xs:double, $i as xs:double? := ()) as cx:complex {
-  map:merge((
-    { "r": $r },
-    if (exists($i)) { { "i": $i } }
-  ), { "retain-order" : true() })
-};
-       </eg>
-      -->
+    
       
       <p>If any field has an explicit initializer, 
-        then all subsequent fields must also have an explicit initializer
+        then all subsequent fields must either (a) have an explicit initializer, or
+        (b) permit the empty sequence as a value, in which case the initializer <code>:= ()</code>
+        is assumed.
         <errorref class="ST" code="0148"/>.</p>
       
       
@@ -2348,7 +2382,7 @@ local:depth(doc("partlist.xml"))
        <p>More formally, the equivalent function declaration is derived as follows:</p>
      
      <ulist>
-       <item><p>The function annotations are the annotations on the named record declaration.</p></item>
+       <item><p>The function annotations are the annotations on the item type declaration.</p></item>
        <item><p>The function name is the QName of the named record declaration, expanded using
          the <termref def="dt-default-type-namespace-rule"/>. <phrase diff="chg" at="issue2257">If the
        declaration appears in a library module, the resulting QName must be in the
@@ -2362,19 +2396,36 @@ local:depth(doc("partlist.xml"))
        <item><p>The parameters of the function declaration are derived from the fields of the named record
        declaration, in order.</p>
        <ulist>
-         <item><p>The name of the parameter is the name of the field (always an NCName).</p></item>
+         <item><p>No parameter is generated in respect of a field whose default value is an <termref def="dt-inline-func"/>.</p></item>
+         <item><p>The name of the parameter is the name of the field, if this is an NCName. If the field
+         name is not an NCName, then the name of the parameter is an implementation-dependent QName
+         in a non-null namespace.</p>
+           <note><p>Effectively this means that such a field name cannot be used as a keyword in a function call; the corresponding
+           argument must either be supplied positionally, or must take its default value.</p></note>
+         </item>
          <item><p>The declared type of the parameter is the declared type of the field, defaulting to 
              <code>item()*</code>.</p></item>
          <item><p>The default value for the parameter is given by the initializing expression in
-         the <nt def="ExtendedFieldDeclaration">ExtendedFieldDeclaration</nt>, if present.</p></item>
+         the <nt def="FieldDecl">FieldDecl</nt>, if present. If there is no explicit initializer but
+         the type of the field permits the empty sequence, then the initializer <code>:= ()</code> is
+         assumed. In other cases, the parameter becomes mandatory, which means that all previous
+         parameters are also treated as being mandatory.</p></item>
        </ulist>
        </item>
        
        <item><p>The return type of the function is the <termref def="dt-record-type"/> being declared, with no occurrence
        indicator.</p></item>
        <item><p>The body of the function is a <nt def="MapConstructor">MapConstructor</nt>
-           containing one <nt def="MapConstructorEntry">MapConstructorEntry</nt> for each field of the record type,
-           in the form <code>"<var>N</var>": $<var>N</var></code>, where <var>N</var> is the field name.</p>
+           containing one <nt def="MapConstructorEntry">MapConstructorEntry</nt> for each field of the record type, in order.
+         The <nt def="MapConstructorEntry">MapConstructorEntry</nt> takes one of the following forms, where <var>N</var> is the field name:</p>
+         <ulist>
+           <item><p>If the default value of the field is the inline function expression <var>M</var>,
+             then <code>"<var>N</var>" : <var>M</var></code>.</p></item>
+           <item><p>Otherwise, if <var>N</var> is an NCName, 
+             then <code>"<var>N</var>" : $<var>N</var></code>.</p></item>
+           <item><p>Otherwise, <code>"<var>N</var>" : $<var>QN</var></code> where <var>QN</var> is the implementation-dependent
+             QName used to identify a field whose name is not an NCName.</p></item>
+         </ulist>
        </item>  
  
  
@@ -2382,26 +2433,7 @@ local:depth(doc("partlist.xml"))
       
        
       
-       <!--<p>Note that a question mark <code>?</code> after the field name indicates that the field is optional from the point of
-       view of conformance of an item to the record type. The presence of an initializer indicates that it is optional
-       from the point of view of a call on the constructor function. The two things are independent of each other. For example:</p>
-     
-       <ulist>
-         <item>
-           <p><code>record(longitude, latitude, altitude?)</code></p>
-           <p>Defines a record type in which <code>altitude</code> entry may be absent, and a constructor
-           function with three arguments, of which the last is optional; if the function is called
-           with two arguments (or with the third argument set to an empty sequence), then there will be no
-           <code>altitude</code> entry in the resulting map.</p>
-           <p><code>record(longitude, latitude, altitude := 0)</code></p>
-           <p>Defines a record type in which all three fields will always be present, and a constructor
-           function in which the third argument can be omitted, defaulting to zero.</p>
-           <p><code>record(longitude, latitude, altitude? := ())</code></p>
-           <p>Defines a record type in which the <code>altitude</code> entry may be absent both from the
-             record and in the function call: but because a default value has been supplied explicitly,
-             the constructed map will always have an entry for <code>altitude</code>.</p>
-         </item>
-       </ulist>-->
+       
       
       <note>
         <p>Although the constructor function for a named record type produces a map in which the
@@ -2418,17 +2450,17 @@ local:depth(doc("partlist.xml"))
          described in <specref ref="id-methods"/>. For example, given the declaration:</p>
        
 <eg role="xquery">
-declare record my:rectangle (
+declare type my:rectangle as record (
    height as xs:double,
    width as xs:double,
    area as fn(my:rectangle) as xs:double 
      := fn{?height × ?width},
    resize as fn(my:rectangle, xs:double) as my:rectangle 
      := fn($rect, $factor) {
-           $rect => map:put('height', $rect?height × $factor)
-                 => map:put('width', $rect?width × $factor)
+           $rect +:= {'height': $rect?height × $factor}
+                 +:= {'width': $rect?width × $factor}
         }
-);
+) with constructor;
                </eg>
       
       
@@ -2442,9 +2474,10 @@ return $box =?> area()</eg>
         calculates the perimeter of the result:</p>
       <eg>let $box := my:rectangle(3, 2)
 return $box =?> expand(2) =?> perimeter()</eg>
-     <note><p>There is nothing to stop a user constructing an instance of <code>my:rectangle</code>
-     in which the <code>area</code> entry holds some different function: while the syntax imitates
-     that of object-oriented languages, there is no encapsulation.</p></note>
+     <note><p>The two standard ways of constructing an instance of a record, namely coercion from a map, or the use of a constructor
+       function, both disallow setting the value of a method to any value other than its default. This provides a degree
+     of encapsulation.</p></note>
+      <ednote><edtext>Should we ban the use of <code>+:=</code> to modify method-values fields?</edtext></ednote>
     </div3>
     
     <div3 id="id-atomic-set-example">
@@ -2497,19 +2530,19 @@ module namespace set = "http://qt4cg.org/atomic-set";
       If $A and $B are instances of set:atomic-set, then they
       can be manipulated using methods including:
       
-      $A=?>size() - returns the number of items in the set
-      $A=?>empty() - returns true if the set is empty
-      $A=?>contains($k) - determines whether $k is a member of the set
-      $A=?>contains-all($B) - returns true if $B is a subset of $A
-      $A=?>values() - returns the items in $A, as a sequence
-      $A=?>add($k) - returns a new atomic set containing an additional item
-      $A=?>remove($k) - returns a new atomic set in which the given item is absent
-      $A=?>union($B) - returns a new atomic set holding the union of $A and $B
-      $A=?>intersect($B) - returns a new atomic set holding the intersection of $A and $B
-      $A=?>except($B) - returns a new atomic set holding the difference of $A and $B
+      $A =?> size() - returns the number of items in the set
+      $A =?> empty() - returns true if the set is empty
+      $A =?> contains($k) - determines whether $k is a member of the set
+      $A =?> contains-all($B) - returns true if $B is a subset of $A
+      $A =?> values() - returns the items in $A, as a sequence
+      $A =?> add($k) - returns a new atomic set containing an additional item
+      $A =?> remove($k) - returns a new atomic set in which the given item is absent
+      $A =?> union($B) - returns a new atomic set holding the union of $A and $B
+      $A =?> intersect($B) - returns a new atomic set holding the intersection of $A and $B
+      $A =?> except($B) - returns a new atomic set holding the difference of $A and $B
    :)
    
-   declare %public record set:atomic-set (
+   declare %public type set:atomic-set as record (
        _data        as map(xs:anyAtomicType, xs:boolean),
        size         as fn($set as set:atomic-set) as xs:integer,
        empty        as fn($set as set:atomic-set) as xs:boolean,
@@ -2573,7 +2606,7 @@ module namespace set = "http://qt4cg.org/atomic-set";
     
     
   </div2>
-  
+ 
   
   <div2 id="id-option-declaration">
     <head>Option Declarations</head>
