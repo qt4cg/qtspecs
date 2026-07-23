@@ -6826,13 +6826,12 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <p>This function returns the original representation of a URI-escaped string.</p>
          <p>If <code>$value</code> is the empty sequence, the function returns the zero-length
             string.</p>
-         <p>Otherwise, the value is first converted to a sequence of octets. Each plus sign
-            (<code>+</code>) is replaced with the octet representing a space character
-            (<code>x20</code>), and any substring that matches the regular expression
-            <code>%[a-fA-F0-9][a-fA-F0-9]</code> is replaced with an octet for the two-digit
-            hexadecimal number that follows the percent sign. Characters that are not part of
-            such a substring are replaced with the octets of their UTF-8 encoding.
-            For example, <code>"A%42+C"</code> results in the octets <code>x41</code>,
+         <p>Otherwise, the value is first converted to a sequence of octets. Any substring that
+            matches the regular expression <code>%[a-fA-F0-9][a-fA-F0-9]</code> is replaced with
+            an octet for the two-digit hexadecimal number that follows the percent sign.
+            Characters that are not part of such a substring are replaced with the octets of
+            their UTF-8 encoding.
+            For example, <code>"A%42%20C"</code> results in the octets <code>x41</code>,
             <code>x42</code>, <code>x20</code>, <code>x43</code>, and <code>"💡"</code> yields
             <code>xF0</code>, <code>x9F</code>, <code>x92</code>, and <code>xA1</code>.</p>
          <p>If <code>%</code> is followed by up to two characters that are not hexadecimal digits,
@@ -6876,7 +6875,16 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <fos:example>
             <fos:test>
                <fos:expression>decode-from-uri("~b%C3%A9b%C3%A9?a=b+c")</fos:expression>
+               <fos:result>"~bébé?a=b+c"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>decode-from-uri(translate("~b%C3%A9b%C3%A9?a=b+c", "+", " "))</fos:expression>
                <fos:result>"~bébé?a=b c"</fos:result>
+               <fos:postamble>Plus signs can be replaced before decoding to follow the conventions
+                  of the <code>application/x-www-form-urlencoded</code> media type, which
+                  <function>fn:parse-uri</function> applies to query parameters.</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -6890,6 +6898,8 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:see-also prefix="fn" name="escape-html-uri"/>
       <fos:see-also prefix="fn" name="iri-to-uri"/>
       <fos:changes>
+         <fos:change issue="2811" date="2026-07-23"><p>Plus signs are no longer decoded as
+            spaces.</p></fos:change>
          <fos:change issue="600" PR="631" date="2023-09-12"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
@@ -35542,17 +35552,23 @@ exists(filter($input, $predicate))
          <p>Applying <emph>uri decoding</emph> is equivalent to
          calling <function>fn:decode-from-uri</function> on the string.</p>
 
+         <p>Applying <emph>form decoding</emph> is equivalent to replacing each plus sign
+         (<code>+</code>) in the string with a space, and then applying
+         <emph>uri decoding</emph>. Form decoding is applied to query parameters only,
+         following the conventions of the <code>application/x-www-form-urlencoded</code>
+         media type; a plus sign has no special meaning elsewhere in a URI.</p>
+
          <p>The <emph>query-parameters</emph> value is constructed as follows.
          Start with the empty map. Tokenize the <emph>query</emph> on
          the <code>&amp;</code> (ampersand). For each token, identify
          the <emph>key</emph> and the <emph>value</emph>. If the token
          contains an equal sign (<code>=</code>), the <emph>key</emph>
-         is the string that precedes the first equal sign, uri
+         is the string that precedes the first equal sign, form
          decoded, and the <emph>value</emph> is the remainder
-         of the token, after the first equal sign, uri decoded. If the
+         of the token, after the first equal sign, form decoded. If the
          token does not contain an equal sign, <emph>key</emph> is the
          empty string and the <emph>value</emph> is equal to the
-         token, uri decoded. Add the <emph>key</emph>/<emph>value</emph> pair
+         token, form decoded. Add the <emph>key</emph>/<emph>value</emph> pair
          to the map. If the <emph>key</emph> already exists in the map, add the <emph>value</emph>
          to a list of values associated with that key. The resulting map, when all
          tokens have been processed, is the <emph>query-parameters</emph> map.</p>
@@ -35687,6 +35703,7 @@ exists(filter($input, $predicate))
 }</eg></fos:result>
 </fos:test>
 </fos:example>
+
 
 <fos:example>
 <fos:test>
@@ -36011,7 +36028,7 @@ exists(filter($input, $predicate))
   "path": "+1-816-555-1212",
   "query": (),
   "fragment": (),
-  "path-segments": " 1-816-555-1212",
+  "path-segments": "+1-816-555-1212",
   "query-parameters": (),
   "filepath": ()
 }</eg></fos:result>
@@ -36206,6 +36223,8 @@ path with an explicit <code>file:</code> scheme.</p>
 
       <fos:see-also prefix="fn" name="build-uri"/>
       <fos:changes>
+         <fos:change issue="2811" date="2026-07-23"><p>Plus signs are only decoded as spaces
+            in query parameters.</p></fos:change>
          <fos:change date="2022-10-17" PR="215 415 " issue="72 389 390"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
@@ -36355,9 +36374,9 @@ path with an explicit <code>file:</code> scheme.</p>
            and exclusively the following characters with their
            percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>, 
               <char>U+002F</char>, <char>U+003F</char>,
-           <char>U+0023</char>, <char>U+002B</char>,
-           <char>U+005B</char>, and <char>U+005D</char>. 
-              That is “<code>[#0-#20%/\?\#\+\[\]]</code>”.</p>
+           <char>U+0023</char>,
+           <char>U+005B</char>, and <char>U+005D</char>.
+              That is “<code>[#0-#20%/\?\#\[\]]</code>”.</p>
 
            <note>
               <p>Encoding is performed unless the URI is known to be non-hierarchical;
@@ -36367,9 +36386,8 @@ path with an explicit <code>file:</code> scheme.</p>
               <code>fn:parse-uri('a+b/c') => fn:build-uri()</code> will return 
               <code>a+b/c</code>.)</p>
               <p>It is necessary to avoid encoding non-hierarchical schemes because there is more
-              variation in them (for example, the <code>tel:</code> scheme
-              uses a “<code>+</code>” that must not be encoded). Users working with
-              non-hierarchical schemes may need to address the encoding issue directly
+              variation in them. Users working with non-hierarchical
+              schemes may need to address the encoding issue directly
               bearing in mind the encoding requirements of the particular schemes in use.</p>
            </note>
         </item>
@@ -36395,7 +36413,9 @@ path with an explicit <code>file:</code> scheme.</p>
         <char>U+0023</char>, <char>U+002B</char>,
         <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%=&amp;\#\+\[\]]</code>”.
         (This differs from the path encoding in that it excludes <char>U+002F</char>
-        and <char>U+003F</char> but includes <char>U+003D</char> and <char>U+0026</char>.)
+        and <char>U+003F</char> but includes <char>U+003D</char>, <char>U+0026</char>,
+        and <char>U+002B</char>. A plus sign is escaped because query parameters are
+        form decoded by <function>fn:parse-uri</function>.)
         For each <emph>key</emph> and each <emph>value</emph> associated with
         that key in turn:</p>
 
@@ -36422,8 +36442,8 @@ path with an explicit <code>file:</code> scheme.</p>
         The encoding performed replaces any control characters (codepoints less than 0x20)
         and exclusively the following characters with their
         percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>,
-        <char>U+0023</char>, <char>U+002B</char>,
-        <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%\#\+\[\]]</code>”.
+        <char>U+0023</char>,
+        <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%\#\[\]]</code>”.
         (This differs from the path encoding in that it excludes <char>U+002F</char>
         and <char>U+003F</char>.)</p>
 
@@ -36445,6 +36465,8 @@ path with an explicit <code>file:</code> scheme.</p>
       </fos:examples>
       <fos:see-also prefix="fn" name="parse-uri"/>
       <fos:changes>
+         <fos:change issue="2811" date="2026-07-23"><p>Plus signs are only escaped in query
+            parameters.</p></fos:change>
          <fos:change date="2022-10-17" issue="72 389 390" PR="1423 1413"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
