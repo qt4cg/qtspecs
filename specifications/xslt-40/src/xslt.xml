@@ -15288,7 +15288,7 @@ return $tree =?> depth()]]></eg>
                is exactly the same as <code>shallow-copy</code>.</p>
                
                <p>For arrays, the processing is as follows. A new result array is created, and its content
-                  is populated by decomposing the input array to a sequence of <term>value records</term>
+                  is populated by decomposing the input array to a sequence of JNodes
                using the function <function>array:members</function>. Each of these value records is processed
                   by a call on <elcode>xsl:apply-templates</elcode> (using the current mode, and passing
                   on the values of all template parameters); the result of the called template
@@ -15301,7 +15301,7 @@ return $tree =?> depth()]]></eg>
   <xsl:apply-templates select="array:members(.)" mode="#current"/>
 </xsl:array>  
     ]]></eg>
-               <ednote><edtext>TODO: the use attribute is no more. Example need reworking.</edtext></ednote>
+               <ednote><edtext>TODO: the use attribute is no more, and array:members() now delivers JNodes. Example needs reworking.</edtext></ednote>
                
                <note><p>A <term>value record</term> is a single-entry map: it has a single key-value pair with the key <code>"value"</code>,
                the corresponding value being a member of the original array. The default processing for a value
@@ -15941,21 +15941,19 @@ return $tree =?> depth()]]></eg>
 ]</eg>
             <p>The following code processes this array to produce an XML representation of the same information. The
                cities are sorted by name:</p>
-               <eg><![CDATA[<xsl:for-each select="json-doc('input.json')?*">
+               <eg><![CDATA[<xsl:for-each select="json-doc('input.json')/*">
    <xsl:sort select="?city"/>
    <city number="{position()}" 
          name="{?city}" 
          latitude="{?latitude}" 
          longitude="{?longitude}"/>
 </xsl:for-each>]]></eg>
-               <p>In this example it is possible to use the expression <code>$array?*</code> to convert an array to a sequence.
-               This works because the members of the array are all single items. In the more general case (a member
-               of the array might be the empty sequence, corresponding to the JSON value <code>null</code>, or it
-               might be a sequence containing several items), <phrase diff="chg" at="2023-04-04">the function <code>array:members</code> can be
-               used to deliver the contents of the array as a sequence of <emph>value records</emph>. This is 
-               illustrated in the next example.</phrase></p>
+               <p>The expression <code>json-doc('input.json')/*</code> returns a sequence of JNodes representing the members of <code>$array</code>,
+                  that is, the three maps representing cities. The lookup expressions <code>?city</code>, <code>?latitude</code>, and <code>?longitude</code>
+                  coerce the JNode to the contained map, and return value of the relevant entry in the map.
+               </p>
             </example>
-            <example diff="chg" at="2022-11-01">
+            <!--<example diff="chg" at="2022-11-01">
                <head>Using <elcode>xsl:for-each</elcode> to process an array containing nulls</head>
                <p>Consider a JSON document of the form:</p>
                <eg>[
@@ -15973,17 +15971,16 @@ return $tree =?> depth()]]></eg>
                <eg><![CDATA[<xsl:for-each select="json-doc('input.json')?*">
    <city name="{?city}">
      <xsl:for-each select="array:members(?data)">
-       <xsl:attribute name="Q{position()}" select="?value"/>
+       <xsl:attribute name="Q{position()}" select="jvalue(.)"/>
      </xsl:for-each>
    </city>  
 </xsl:for-each>]]></eg>
                <p>In this example the expression <code>$array?*</code> cannot be used on the inner arrays
                   because JSON nulls (which translate to the empty sequence in XDM) would be lost. Instead
                   the function <xfunction>array:members</xfunction> is used to create a sequence of
-                  value records: a non-null entry is represented by a value such as <code>{ 'value': 12.3 }</code>,
-                  while a null entry would be <code>{ 'value': () }</code>.</p>
+                  JNodes: a JNode can wrap an arbitrary XDM value, including an empty sequence.</p>
 
-            </example>
+            </example>-->
             <example diff="add" at="2022-11-01">
                <head>Using <elcode>xsl:for-each</elcode> to process a map</head>
                <p>Consider a JSON document of the form:</p>
@@ -15994,16 +15991,16 @@ return $tree =?> depth()]]></eg>
 }</eg>
                <p>The following code processes this map to produce an XML representation of the same information. The
                   cities are sorted by name:</p>
-               <eg><![CDATA[<xsl:for-each select="map:pairs(json-doc('input.json'))">
-   <xsl:sort select="?key"/>
+               <eg><![CDATA[<xsl:for-each select="json-doc('input.json')/*">
+   <xsl:sort select="jkey()"/>
    <city number="{position()}" 
-         name="{?key}" 
-         latitude="{?value?latitude}" 
-         longitude="{?value?longitude}"/>
+         name="{jkey()}" 
+         latitude="{jvalue()?latitude}" 
+         longitude="{jvalue()?longitude}"/>
 </xsl:for-each>]]></eg>
-               <p>In this example the map is decomposed to a sequence of key-value pairs, each represented as
-               a map with two entries, <code>"key"</code> and <code>"value"</code>, which can be accessed using
-               the lookup expressions <code>?key</code> and <code>?value</code>.</p>
+               <p>The expression <code>json-doc('input.json')/*</code> returns a sequence of JNodes representing the entries in the top-level
+                  map, that is, the entries representing cities. For each of these JNodes, the <function>jkey</function> function returns
+                  the key (that is, the city name), and the <function>jvalue</function> function returns the corresponding value.</p>
             </example>
             <div3 id="for-each-separator" diff="add" at="2022-01-01">
                <head>The <code>separator</code> attribute</head>
@@ -16053,21 +16050,7 @@ return $tree =?> depth()]]></eg>
   { "date": "2008-09-02", credit: 12.00 }
 ]</eg>
                <p>The following code converts this to an XML representation that includes a running balance:</p>
-               <eg><![CDATA[<xsl:iterate select="json-doc('account.json') => array:members()">
-   <xsl:param name="balance" as="xs:decimal" select="0"/>               
-   <xsl:variable name="delta" select="?value?credit otherwise -?value?debit"/>               
-   <entry date="{ ?value?date }"
-          amount="{ $delta }"
-          balance="{ $balance + $delta }"/>
-   <xsl:next-iteration>
-      <xsl:with-param name="balance" select="$balance + $delta"/>
-   </xsl:next-iteration>   
-</xsl:iterate>]]></eg>
-               <p>Using <code>array:members()</code> in this way makes it possible to process any array, including one whose members
-               are arbitrary sequences rather than single items. In this particular case, if it is known that the JSON array
-               will not contain any <code>null</code> entries, or if any <code>null</code> entries are to be ignored,
-                  it becomes possible to simplify the code as follows:</p>
-               <eg><![CDATA[<xsl:iterate select="json-doc('account.json')?*">
+               <eg><![CDATA[<xsl:iterate select="json-doc('account.json')/*">
    <xsl:param name="balance" as="xs:decimal" select="0"/>               
    <xsl:variable name="delta" select="?credit otherwise -?debit"/>               
    <entry date="{ ?date }"
@@ -16077,6 +16060,10 @@ return $tree =?> depth()]]></eg>
       <xsl:with-param name="balance" select="$balance + $delta"/>
    </xsl:next-iteration>   
 </xsl:iterate>]]></eg>
+               <p>Using <code>json-doc()/*</code> returns a sequence of JNodes representing the members of the
+                  array, that is, the individual transactions. Subsequent lookup
+               expressions such as <code>?credit</code> return entries in the map that is encapsulated by the JNode.</p>
+ 
               
             </example>
             
@@ -29222,7 +29209,7 @@ the same group, and the-->
                <p>This returns the array <code>[ (1, 2, 3, 4), (5, 6, 7, 8, 9), 10 ]</code>.</p>
                </item>
                <item>
-                  <p>An array can be constructed by selecting members of an existing array, and appending
+                  <p>An array can be constructed by selecting members of an existing array, and adding
                   additional members:</p>
                <eg><![CDATA[<xsl:array>
    <xsl:array-member select="'start'"/>               
@@ -29328,7 +29315,7 @@ the same group, and the-->
                         </item>
                      </olist>
                   </item>
-            </olist>
+                 </olist>
                </item>
             </olist>
             
@@ -29345,6 +29332,11 @@ the same group, and the-->
                if and only if the <code>select</code> and <code>for-each</code> attributes
                of <code>xsl:array</code> are both absent.</emph></p>
             </note>
+            
+            <note><p>The <elcode>xsl:array</elcode> and <elcode>xsl:array-member</elcode> instructions
+            are designed to be used in conjunction with the <function>array:members</function> and <function>array:of-members</function>
+            functions, and with path expressions operating on JTrees. 
+            All of these instructions and functions represent array members as JNodes.</p></note>
             
             <p>If the <elcode>xsl:array</elcode> instruction has a <code>select</code> attribute then
             the sequence constructor must be empty, except for any <elcode>xsl:fallback</elcode> instructions
@@ -29455,12 +29447,12 @@ the same group, and the-->
             <example>
                <head>Constructing an array based on an existing array</head>
                <p>The <elcode>xsl:array</elcode> instruction can be used in conjunction with
-               the <xfunction>array:members</xfunction> function to construct an array from the members
-               of an existing array. For example, the following code combines two arrays <code>$A1</code>
+               path expressions that extract the contents of an existing array as JNodes.
+               For example, the following code combines two arrays <code>$A1</code>
                   and <code>$A2</code>, and sorts the result:</p>
-               <eg><![CDATA[<xsl:array 
-   for-each="(array:members($A1), array:members($A2)) => sort(fn{count(?value)})"
-   select="?value"/>]]></eg>
+               <eg><![CDATA[<xsl:array select="($A1/*, $A2/*) => sort(jvalue#1)"/>]]></eg>
+               <p>If the input arrays are <code>[1, (5, 7), 8]</code> and <code>[9, (5, 2), 3]</code>,
+               the result will be <code>[1, (5, 2), (5, 7), 8, 9]</code>.</p>
                <p>The following code transposes a regular nested array (such as <code>[ [ 1, 2, 3 ], [ 4, 5, 6 ], [ 7, 8, 9 ] ]</code>)
                so the result is organized by columns rather than rows (<code>[ [ 1, 4, 7 ], [ 2, 5, 8 ], [ 3, 6, 9 ] ]</code>):</p>
                <eg><![CDATA[<xsl:array for-each="1 to array:size($input?1)">
