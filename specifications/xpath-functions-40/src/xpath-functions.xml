@@ -10435,9 +10435,9 @@ map( xs:string,
             of arrays each corresponding to one row. The fields within each array are
             represented as instances of <code>xs:string</code>.</p>
             
-            <p>The other two functions recognize column names, and make it easier to address
-            individual fields using these names. The <code>parse-csv</code> function
-            delivers this capability using XDM maps and functions, while <code>csv-to-xml</code>
+            <p diff="chg" at="issue2780">The other functions recognize column names, and make it easier to address
+            individual fields using these names. The <code>parse-csv</code> and <code>csv-doc</code> functions
+            deliver this capability using XDM maps and functions, while the <code>csv-to-xml</code>
             function represents the information using XDM element nodes.</p>
             
             <div3 id="csv-delimiters">
@@ -10702,9 +10702,14 @@ Bob,2023-07-14,2.34
 
                <p>The following examples illustrate more complex applications making use of CSV parsing functions.</p>
 
-               <p>A variable <code>$crlf</code> is assumed to be in scope representing the CRLF string:</p>
+               <p>The examples below assume a variable <code>$crlf</code> bound to the two-character CRLF
+                  string. In XQuery:</p>
 
-               <eg>let $crlf := fn:char(0x0D)||fn:char(0x0A)</eg>
+               <eg>let $crlf := char(0x0D) || char(0x0A)</eg>
+
+               <p>In XSLT:</p>
+
+               <eg><![CDATA[<xsl:variable name="crlf" select="char(0x0D) || char(0x0A)"/>]]></eg>
 
                <example id="csv-to-html-table">
                   <head>Converting a CSV into an HTML-style table using <function>fn:parse-csv</function></head>
@@ -10714,24 +10719,21 @@ Bob,2023-07-14,2.34
 
                   <p>Using XQuery:</p>
                   <eg><![CDATA[
-let $csv := fn:parse-csv(`name,city{ $crlf }Bob,Berlin`)
+let $csv := fn:parse-csv(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })
 return <table>
   <thead>{
-    for $column in $csv?columns?fields
+    for $column in $csv?columns
     return <th>{ $column }</th>
   }</thead>
   <tbody>{
     for $row in $csv?rows
-    return <tr>{ for $field in $row?fields return <td>{ $field }</td> }</tr>
+    return <tr>{ for $field in $row?* return <td>{ $field }</td> }</tr>
   }</tbody>
 </table>]]></eg>
 
                   <p>Using XSLT:</p>
                   <eg><![CDATA[
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-  xmlns:eg="http://example.org/eg"
-  xmlns:array="http://www.w3.org/2005/xpath-functions/array"
-  exclude-result-prefixes="eg array"
   version="4.0">
   <xsl:output method="xml" indent="true"/>
 
@@ -10745,16 +10747,16 @@ return <table>
 
   <xsl:template match="." mode="csv-tr">
     <tr>
-      <xsl:apply-templates select=".?fields" mode="csv-td"/>
+      <xsl:apply-templates select=".?*" mode="csv-td"/>
     </tr>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template name="xsl:initial-template">
-    <xsl:variable name="csv" select="parse-csv(`name,city{ $crlf }Bob,Berlin`)"/>
+    <xsl:variable name="csv" select="parse-csv(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })"/>
     <table>
       <thead>
         <tr>
-          <xsl:apply-templates select="$csv?columns?fields" mode="csv-th"/>
+          <xsl:apply-templates select="$csv?columns" mode="csv-th"/>
         </tr>
       </thead>
       <tbody>
@@ -10772,15 +10774,15 @@ return <table>
                      conversion-to-XML-table tasks simpler by providing a simple XML represenation of the data. Here, in XQuery:</p>
 
                   <eg><![CDATA[
-let $csv := csv-to-xml(`name,city{ $crlf }Bob,Berlin`)
+let $csv := csv-to-xml(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })
 return <table>
   <thead>{
-    for $column in $csv/csv/columns/column
-    return <th>{ $column }</th>
+    for $column in $csv/fn:csv/fn:columns/fn:column
+    return <th>{ string($column) }</th>
   }</thead>
   <tbody>{
-    for $row in $csv/csv/rows/row
-    return <tr>{ for $field in $row/field return <td>{ $field }</td> }</tr>
+    for $row in $csv/fn:csv/fn:rows/fn:row
+    return <tr>{ for $field in $row/fn:field return <td>{ string($field) }</td> }</tr>
   }</tbody>
 </table>
                   ]]></eg>
@@ -10806,7 +10808,7 @@ return <table>
     <tr>
       <xsl:apply-templates/>
     </tr>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template match="fn:columns">
     <thead>
@@ -10814,13 +10816,13 @@ return <table>
         <xsl:apply-templates/>
       </tr>
     </thead>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template match="fn:rows">
     <tbody>
       <xsl:apply-templates/>
     </tbody>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template match="fn:csv">
     <table>
@@ -10829,7 +10831,7 @@ return <table>
   </xsl:template>
 
   <xsl:template name="xsl:initial-template">
-    <xsl:apply-templates select="fn:csv-to-xml(`name,city{ $crlf }Bob,Berlin`)"/>
+    <xsl:apply-templates select="fn:csv-to-xml(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })"/>
   </xsl:template>
 </xsl:stylesheet>
                   ]]></eg>
