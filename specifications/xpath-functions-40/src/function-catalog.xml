@@ -36596,133 +36596,111 @@ for-each(
       </fos:changes>
    </fos:function>
 
-   <!--<fos:function name="scan-left" prefix="fn">
-       <fos:signatures>
-         <fos:proto name="scan-left" return-type="array(*)*">
-            <fos:arg name="input" type="item()*" usage ="navigation"/>           
-            <fos:arg name="init" type="item()*" usage="navigation"/>           
-            <fos:arg name="action" type="fn($acc as item()*, $item as item()) as item()*" usage="inspection"/>   
+   <fos:function name="scan" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="scan" return-type="array(item()*)*">
+            <fos:arg name="input" type="item()*" usage="navigation"/>
+            <fos:arg name="init" type="item()*"/>
+            <fos:arg name="action" type="fn($acc as item()*, $item as item(), $pos as xs:integer) as item()*" usage="inspection"/>
          </fos:proto>
-       </fos:signatures>
+      </fos:signatures>
       <fos:properties>
          <fos:property>deterministic</fos:property>
          <fos:property>context-independent</fos:property>
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-        <p>Produces the sequence of successive partial results from 
-           the evaluation of <function>fn:fold-left</function> with the same arguments.</p>
+         <p>Returns the successive intermediate results of an evaluation of
+            <function>fn:fold-left</function>, including the initial value of the accumulator.</p>
       </fos:summary>
       <fos:rules>
-         <p>The function returns a sequence of <var>N</var>+1 
-            <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>, where <var>N</var> is the number of 
-         items in <code>$input</code>. For values of <code>$n</code> in the range 0 to <var>N</var>,
-            the value of the single member of array <code>$n+1</code> in the result sequence is the value of the expression
-            <code>fold-left( subsequence($input, 1, $n), $init, $action )</code>.</p>
+         <p>The function returns a sequence of <var>N</var>+1
+            <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>,
+            where <var>N</var> is the number of items in <code>$input</code>.</p>
+         <p>The member of the first array in the result is the value of <code>$init</code>.</p>
+         <p>For each item in <code>$input</code>, taken in order, the function calls
+            <code>$action($acc, $item, $pos)</code>, where <code>$acc</code> is the member of the
+            preceding array in the result, <code>$item</code> is the item, and <code>$pos</code> is
+            the position of that item in <code>$input</code>. The result of this call becomes the
+            member of the next array in the result.</p>
+         <p>If <code>$input</code> is empty, the result is therefore a single array whose member is
+            the value of <code>$init</code>.</p>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-(0 to count($input)) 
-! [fold-left(subsequence($input, 1, .), $init, $action) ]
+fold-left(1 to count($input), [ $init ], fn($result, $pos) {
+  $result, [ $action(foot($result)?*, $input[$pos], $pos) ]
+})
       </fos:equivalent>
+      <fos:errors>
+         <p>As a consequence of the function signature and the function calling rules, a type error
+            occurs if <code>$action</code> cannot be applied to arguments <code>$acc</code> and
+            <code>$item</code>, where <code>$acc</code> is either the value of <code>$init</code> or
+            the result of a previous application of <code>$action</code>, and <code>$item</code> is
+            any single item from the sequence <code>$input</code>.</p>
+      </fos:errors>
       <fos:notes>
-         <p>A practical implementation is likely to compute each array in the result sequence based on the value
-         of the previous item, rather than computing each item independently as implied by the specification.</p>
+         <p><function>fn:fold-left</function> returns only the final value of an accumulation; this
+            function returns every intermediate value as well, the last of them being the value that
+            <function>fn:fold-left</function> would return. It is needed whenever those intermediate
+            values matter in their own right: to report a running total alongside each item that
+            contributes to it, or to accumulate only until some condition is met.</p>
+         <p>Each value is wrapped in an array because the accumulator may itself be a sequence. Where
+            it is a single item, the arrays can be discarded by applying a lookup to each of them, as
+            in <code>scan($input, $init, $action) ! ?*</code>.</p>
+         <p>A practical implementation is expected to produce the result incrementally, in a single
+            pass over <code>$input</code>, applying <code>$action</code> only as far as the result is
+            required. The function can therefore be combined with a consumer that stops early, such
+            as <function>fn:take-while</function>, to accumulate only as far as needed over an input
+            that it would be impractical to process in full.</p>
+         <p>A right-to-left scan, corresponding to <function>fn:fold-right</function>, is obtained by
+            reversing both the input and the result:</p>
+         <eg>reverse(scan(reverse($input), $init, fn($acc, $item) { $action($item, $acc) }))</eg>
       </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
-               <fos:expression><eg>scan-left(1 to 5, 0, op('+'))</eg></fos:expression>
-               <fos:result><eg>[ 0 ], [ 1 ], [ 3 ], [ 6 ], [ 10 ], [ 15 ]</eg></fos:result>
-            </fos:test>
-         </fos:example>         
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>scan-left(1 to 3, 0, op('-'))</eg></fos:expression>
-               <fos:result><eg>[ 0 ], [ -1 ], [ -3 ], [ -6 ]</eg></fos:result>
+               <fos:expression><eg>let $amounts := (150, -60, -40, 300, -25)
+return tail(scan($amounts, 0, op('+'))) ! ?*</eg></fos:expression>
+               <fos:result><eg>150, 90, 50, 350, 325</eg></fos:result>
+               <fos:postamble>This returns the balance of an account after each transaction in a
+                  statement; applying <function>fn:tail</function> to the result of
+                  <function>fn:scan</function> discards the opening balance, leaving one value for
+                  each transaction</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression><eg>scan-left(1 to 5, 1, op('*'))</eg></fos:expression>
-               <fos:result>[ 1 ], [ 1 ], [ 2 ], [ 6 ], [ 24 ], [ 120 ]</fos:result>
+               <fos:expression><eg>tail(scan(
+  ("usr", "local", "bin"),
+  "",
+  fn($path, $step) { $path || "/" || $step }
+)) ! ?*</eg></fos:expression>
+               <fos:result><eg>"/usr", "/usr/local", "/usr/local/bin"</eg></fos:result>
+               <fos:postamble>This returns the cumulative paths of the steps in a path, as needed for
+                  a breadcrumb trail</fos:postamble>
             </fos:test>
-         </fos:example>  
+         </fos:example>
          <fos:example>
             <fos:test>
-               <fos:expression><eg>scan-left(1 to 3, (), fn($a, $b) { $b, $a })</eg></fos:expression>
-               <fos:result><eg>[ () ], [ 1 ], [ (2, 1) ], [ (3, 2, 1) ]</eg></fos:result>
+               <fos:expression><eg>take-while(
+  scan((3, 4, 5, 2), 0, op('+')),
+  fn($total) { $total?* le 7 }
+)</eg></fos:expression>
+               <fos:result><eg>[ 0 ], [ 3 ], [ 7 ]</eg></fos:result>
+               <fos:postamble>This returns the running totals of the items in the sequence for as
+                  long as they remain within a limit; <code>$action</code> need not be applied to the
+                  remaining items</fos:postamble>
             </fos:test>
-         </fos:example>           
+         </fos:example>
       </fos:examples>
       <fos:see-also prefix="fn" name="fold-left"/>
       <fos:see-also prefix="fn" name="fold-right"/>
-      <fos:see-also prefix="fn" name="scan-right"/>
+      <fos:see-also prefix="fn" name="partition"/>
+      <fos:see-also prefix="fn" name="take-while"/>
       <fos:changes>
-         <fos:change issue="982" PR="1296" date="2024-06-23"><p>New in 4.0</p></fos:change>
+         <fos:change issue="2823" PR="2824" date="2026-07-31"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
-
-   <fos:function name="scan-right" prefix="fn">
-       <fos:signatures>
-         <fos:proto name="scan-right" return-type="array(*)*">
-            <fos:arg name="input" type="item()*" usage ="navigation"/>           
-            <fos:arg name="init" type="item()*" usage="navigation"/>           
-            <fos:arg name="action" type="fn($item as item(), $acc as item()*) as item()*" usage="inspection"/>   
-         </fos:proto>
-       </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-        <p>Produces the sequence of successive partial results from 
-           the evaluation of <function>fn:fold-right</function> with the same arguments.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function returns a sequence of <var>N</var>+1 
-            <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>, where <var>N</var> is the number of 
-         items in <code>$input</code>. For values of <code>$n</code> in the range 0 to <var>N</var>,
-            the value of the single member of array <code>$n+1</code> in the result sequence is the value of the expression
-            <code>fold-right( subsequence($input, count($input)-$n+1), $init, $action )</code>.</p>
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-(0 to count($input)) 
-! [ fold-right(subsequence($input, count($input)-.+1), $init, $action) ]
-      </fos:equivalent>
-      <fos:notes>
-         <p>A practical implementation is likely to compute each array in the result sequence based on the value
-         of the previous item, rather than computing each item independently as implied by the specification.</p>
-      </fos:notes>  
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>scan-right(1 to 10, 0, op('+'))</eg></fos:expression>
-               <fos:result><eg>[ 55 ], [ 54 ], [ 52 ], [ 49 ], [ 45 ], [ 40 ],
-[ 34 ], [ 27 ], [ 19 ], [ 10 ], [ 0 ]</eg></fos:result>
-            </fos:test>
-         </fos:example>         
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>scan-right(1 to 3, 0, op('-'))</eg></fos:expression>
-               <fos:result><eg>[ 2 ], [ -1 ], [ 3 ], [ 0 ]</eg></fos:result>
-            </fos:test>
-         </fos:example>  
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>scan-right(1 to 5, (), fn($a, $b) { $b, $a })</eg></fos:expression>
-               <fos:result><eg>[ (5, 4, 3, 2, 1) ], [ (5, 4, 3, 2) ], [ (5, 4, 3) ],
-[ (5, 4) ], [ 5 ], [ () ]</eg></fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>  
-      <fos:see-also prefix="fn" name="fold-left"/>
-      <fos:see-also prefix="fn" name="fold-right"/>
-      <fos:see-also prefix="fn" name="scan-left"/>
-      <fos:changes>
-         <fos:change><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
     
    <fos:function name="invisible-xml" prefix="fn">
       <fos:signatures>
