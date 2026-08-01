@@ -132,7 +132,7 @@
 									</xsl:when>
 									<xsl:otherwise>
 										<xsl:text>The </xsl:text>
-										<xsl:number value="@arity" format="w"/>
+										<xsl:number value="@arity" format="w" lang="en"/>
 										<xsl:text>-argument form of this function is </xsl:text>
 									</xsl:otherwise>
 								</xsl:choose>
