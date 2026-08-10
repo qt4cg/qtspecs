@@ -1,0 +1,68 @@
+<item>
+   <title>Issue #2820 created</title>
+   <pubDate>2026-07-28T20:01:01Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/2820</link>
+   <guid>https://qt4cg.org/@qt4cg/2026/#created-2820</guid>
+   <description>&lt;div&gt;&lt;p&gt;Ambiguity caused by introducing `OccurrenceIndicator` after `CastTarget`&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;Today's merging of #2777 brought this change of the XQuery 4.0 grammar:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-txt"&gt;676,677c676,677
+&amp;lt;          ::= CastExpr ( 'castable' 'as' CastTarget '?'? )?
+&amp;lt; CastExpr ::= PipelineExpr ( 'cast' 'as' CastTarget '?'? )?
+---
+&amp;gt;          ::= CastExpr ( 'castable' 'as' CastTarget OccurrenceIndicator? )?
+&amp;gt; CastExpr ::= PipelineExpr ( 'cast' 'as' CastTarget OccurrenceIndicator? )?
+1177a1178,1180
+&amp;gt;            | TypedArrayType
+&amp;gt;            | TypedMapType
+&amp;gt;            | TypedRecordType
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This now uses &lt;code&gt;OccurrenceIndicator?&lt;/code&gt; after &lt;code&gt;CastTarget&lt;/code&gt;:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-txt"&gt;CastableExpr ::= CastExpr ( "castable" "as" CastTarget OccurrenceIndicator? )?
+CastExpr     ::= PipelineExpr ( "cast" "as" CastTarget OccurrenceIndicator? )?
+CastTarget   ::= TypeName
+               | ChoiceItemType
+               | EnumerationType
+               | TypedArrayType
+               | TypedMapType
+               | TypedRecordType
+OccurrenceIndicator ::= "?" | "*" | "+"
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This introduces an ambiguity with addition and multiplication operators. For example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;4 cast as xs:integer + -5
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;can be read as either:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;(4 cast as xs:integer+) - 5
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;or:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;(4 cast as xs:integer) + (-5)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Similarly, &lt;code&gt;*&lt;/code&gt; after a cast target can be read either as an occurrence indicator or as a multiplication operator.&lt;/p&gt;
+&lt;p&gt;The spec has the extra-grammatical constraint &lt;code&gt;xgc: occurrence-indicators&lt;/code&gt;, but its wording appears to apply only to &lt;code&gt;SequenceType&lt;/code&gt;:&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Any occurrence of "+", "?" or "*", that follows a sequence type is assumed to be an occurrence indicator, which binds to the last ItemType in the SequenceType.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Here, however, the relevant grammar uses &lt;code&gt;CastTarget&lt;/code&gt;, not &lt;code&gt;SequenceType&lt;/code&gt;, so it is unclear whether this disambiguation rule is intended to apply.&lt;/p&gt;
+&lt;p&gt;This causes LALR(2) parser generation conflicts for the new grammar. The old grammar used only &lt;code&gt;'?'?&lt;/code&gt; after &lt;code&gt;CastTarget&lt;/code&gt;, which did not create the same conflict.&lt;/p&gt;
+&lt;p&gt;If the intent is to apply &lt;code&gt;xgc: occurrence-indicators&lt;/code&gt; here as well, then expressions such as:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;4 cast as xs:integer + 5
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;would become syntactically invalid for the same reason as the existing &lt;code&gt;treat as item() + 5&lt;/code&gt; example: the &lt;code&gt;+&lt;/code&gt; would be consumed as an occurrence indicator, and parentheses would be required to force addition. This would affect these test cases, then resulting in syntax errors:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;op-numeric-add-13&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;op-numeric-add-14&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;op-numeric-add-15&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;op-numeric-add-16&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;These test cases, expecting syntax errors, would parse OK, so they need to be adapted to the changes of #2777:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCastable-1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCastable-2&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCastable-3&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCastable-4a&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCastable-12a&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCast-1&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCast-2&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;K-SeqExprCast-3a&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;One final remark: rather than repeating the optional &lt;code&gt;OccurrenceIndicator&lt;/code&gt; in &lt;code&gt;CastableExpr&lt;/code&gt; and &lt;code&gt;CastExpr&lt;/code&gt;, it could also be made part of &lt;code&gt;CastTarget&lt;/code&gt;.&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
