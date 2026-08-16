@@ -284,7 +284,7 @@
                to be the same as the result of <code>fn:tokenize($s, <var>R</var>?pattern, <var>R</var>?flags)</code>.</p>
          </fos:meaning>
       </fos:field>
-      <fos:field name="replace" type="fn($s as xs:string, $r as (xs:string | fn($m as xs:untypedAtomic, $g as xs:untypedAtomic*) as item()?)?) as xs:string" required="true">
+      <fos:field name="replace" type="fn($s as xs:string, $r as (xs:string | fn($m as xs:untypedAtomic, $g as map((xs:integer | xs:string), xs:untypedAtomic)) as item()?)?) as xs:string" required="true">
          <fos:meaning>
             <p>An arity-two function that can be used to replace parts of the supplied string <var>$s</var> that match
             the regular expression. If <var>R</var> is a <code>compiled-regex-record</code> 
@@ -450,10 +450,9 @@
                      <item><p>With <code>"header":true()</code>, the value is a sequence
                      of strings taken from the first row of the data. The strings have
                      leading and trailing whitespace trimmed, regardless of the value of the
-                     <code>trim-whitespace</code> option. The sequence
-                     of strings will potentially be truncated if the <code>number-of-columns</code>
-                     option is specified, and it will potentially be reordered if the
-                     <code>filter-columns</code> option is specified. Any strings that are
+                     <code>trim-whitespace</code> option and of whether the field is quoted. The sequence
+                     of strings will potentially be truncated and reordered if the
+                     <code>select-columns</code> option is specified. Any strings that are
                      zero-length or duplicated are retained <emph>as-is</emph>.</p>
                     </item>
                      <item><p>If the value of the <code>header</code> option is a sequence
@@ -480,7 +479,7 @@
                      contains entries based on the contents of the first row of the data. 
                      The strings have
                      leading and trailing whitespace trimmed, regardless of the value of the
-                     <code>trim-whitespace</code> option. Any string appearing in the header
+                     <code>trim-whitespace</code> option and of whether the field is quoted. Any string appearing in the header
                      row that is non-zero-length and is not equal (using codepoint collation) to
                      any previous string appearing in the header results in an entry
                      pairing that string to its 1-based position in the header row.</p>
@@ -6604,9 +6603,9 @@ return normalize-unicode(concat($v1, $v2))</eg>
                <code>xs:base64Binary</code> or <code>xs:hexBinary</code>, it is converted to a sequence of
             octets. </p>
          <p>The <code>$algorithm</code> argument determines the algorithm to be used to
-            calculate a checksum, hash, or cyclic redundancy check. The effective value of the
-            algorithm is determined by passing the value through
-            <code>fn:upper-case(fn:normalize-space())</code>. </p>
+            calculate a checksum, hash, or cyclic redundancy check. The effective value of
+            <code>$algorithm</code> is the value of the expression
+            <code>fn:upper-case(fn:normalize-space($algorithm))</code>. </p>
          <p>Conforming implementations <rfc2119>must</rfc2119> support the following
             options and the functions referred to by them:</p>
          <ulist> 
@@ -6634,8 +6633,8 @@ return normalize-unicode(concat($v1, $v2))</eg>
             The process is followed even if the input octet sequence is empty.</p>
       </fos:rules>
       <fos:errors>
-         <p>A dynamic error is raised <errorref class="HA" code="0001"/> if the effective value of the
-            option <code>algorithm</code> is not one of the values supported by the implementation.</p>
+         <p>A dynamic error is raised <errorref class="HA" code="0001"/> if the effective value of
+            <code>$algorithm</code> is not one of the values supported by the implementation.</p>
       </fos:errors>
       <fos:notes>
          <p>It is common for secure algorithms to be cryptographically broken, as has happened to
@@ -6826,13 +6825,12 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <p>This function returns the original representation of a URI-escaped string.</p>
          <p>If <code>$value</code> is the empty sequence, the function returns the zero-length
             string.</p>
-         <p>Otherwise, the value is first converted to a sequence of octets. Each plus sign
-            (<code>+</code>) is replaced with the octet representing a space character
-            (<code>x20</code>), and any substring that matches the regular expression
-            <code>%[a-fA-F0-9][a-fA-F0-9]</code> is replaced with an octet for the two-digit
-            hexadecimal number that follows the percent sign. Characters that are not part of
-            such a substring are replaced with the octets of their UTF-8 encoding.
-            For example, <code>"A%42+C"</code> results in the octets <code>x41</code>,
+         <p>Otherwise, the value is first converted to a sequence of octets. Any substring that
+            matches the regular expression <code>%[a-fA-F0-9][a-fA-F0-9]</code> is replaced with
+            an octet for the two-digit hexadecimal number that follows the percent sign.
+            Characters that are not part of such a substring are replaced with the octets of
+            their UTF-8 encoding.
+            For example, <code>"A%42%20C"</code> results in the octets <code>x41</code>,
             <code>x42</code>, <code>x20</code>, <code>x43</code>, and <code>"💡"</code> yields
             <code>xF0</code>, <code>x9F</code>, <code>x92</code>, and <code>xA1</code>.</p>
          <p>If <code>%</code> is followed by up to two characters that are not hexadecimal digits,
@@ -6876,7 +6874,16 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <fos:example>
             <fos:test>
                <fos:expression>decode-from-uri("~b%C3%A9b%C3%A9?a=b+c")</fos:expression>
+               <fos:result>"~bébé?a=b+c"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>decode-from-uri(translate("~b%C3%A9b%C3%A9?a=b+c", "+", " "))</fos:expression>
                <fos:result>"~bébé?a=b c"</fos:result>
+               <fos:postamble>Plus signs can be replaced before decoding to follow the conventions
+                  of the <code>application/x-www-form-urlencoded</code> media type, which
+                  <function>fn:parse-uri</function> applies to query parameters.</fos:postamble>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -6890,6 +6897,8 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:see-also prefix="fn" name="escape-html-uri"/>
       <fos:see-also prefix="fn" name="iri-to-uri"/>
       <fos:changes>
+         <fos:change issue="2811" date="2026-07-23"><p>Plus signs are no longer decoded as
+            spaces.</p></fos:change>
          <fos:change issue="600" PR="631" date="2023-09-12"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
@@ -7740,6 +7749,24 @@ Tak, tak, tak! - da kommen sie.
                <fos:result>true()</fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>matches("abcabc", "(abc)\1")</fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>matches("abcabc", "(?&lt;x>abc)\k&lt;x>")</eg></fos:expression>
+               <fos:result>true()</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>matches("abcabd", "(?&lt;x>abc)\k&lt;x>")</eg></fos:expression>
+               <fos:result>false()</fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:see-also prefix="fn" name="regex"/>
       <fos:see-also prefix="fn" name="replace"/>
@@ -7753,7 +7780,7 @@ Tak, tak, tak! - da kommen sie.
          <fos:proto name="replace" return-type="xs:string">
             <fos:arg name="value" type="xs:string?"/>
             <fos:arg name="pattern" type="xs:string"/>
-            <fos:arg name="replacement" type="(xs:string | fn($match as xs:untypedAtomic, $groups as xs:untypedAtomic*) as item()?)?" default='""' note="default-on-empty"/>
+            <fos:arg name="replacement" type="(xs:string | fn($match as xs:untypedAtomic, $groups as map((xs:integer | xs:string), xs:untypedAtomic)) as item()?)?" default='""' note="default-on-empty"/>
             <fos:arg name="flags" type="xs:string?" default='""' note="default-on-empty"/>
          </fos:proto>
       </fos:signatures>
@@ -7783,12 +7810,13 @@ Tak, tak, tak! - da kommen sie.
                function <function>fn:string</function> to the result.</p>
                <p>The first argument, <code>$match</code>, is the string to be replaced,
                   provided as <code>xs:untypedAtomic</code>.</p>
-               <p>The second argument, <code>$groups</code>, provides the captured
-                  groups as an <code>xs:untypedAtomic</code> sequence.
-                  The <code>Nth</code> item in this sequence is the string value of the segment captured by 
-                  the <code>Nth</code> capturing subexpression. If the
-                  <code>Nth</code> capturing subexpression was not matched, the <code>Nth</code> item
-                  will be the zero-length string.</p>
+               <p>The second argument, <code>$groups</code>, provides the captured groups as a
+                  map. As in the result of <function>fn:matching-segments</function>, each group is
+                  keyed by its name if it is a <termref def="dt-named-capturing-group">named
+                  capturing group</termref>, and by its group number otherwise. The associated
+                  value is the string value of the group, supplied as
+                  <code>xs:untypedAtomic</code>. Groups that did not participate in the match
+                  have no entry.</p>
                <p>Note that the rules for function coercion mean that the function actually
                   supplied for <var>F</var> may be an arity-1 function: the
                   <code>$groups</code> argument does not need to be declared if it is not used.</p>
@@ -7806,10 +7834,16 @@ Tak, tak, tak! - da kommen sie.
             with the string value of the relevant captured group.
                The variable marker <code>$0</code> refers to the substring captured by the regular expression as a
             whole.</p>
+               <p>Similarly, a variable marker <code>$&lt;<var>name</var>&gt;</code> refers to the
+            group captured by the <termref def="dt-named-capturing-group">named capturing
+            group</termref> with the given name, or to the zero-length string if that group did
+            not participate in the match. A named capturing group can also be referred to by its
+            group number.</p>
                <p>A literal <code>$</code> character within the
             replacement string must be written as <code>\$</code>, and a literal <code>\</code>
             character must be written as <code>\\</code>.</p>
-         <p>More specifically, the rules are as follows, where <var>S</var> is the number of
+         <p>More specifically, the rules for numeric variable markers are as follows,
+            where <var>S</var> is the number of
             capturing subexpressions in the regular expression, and <var>N</var> is the
             decimal number formed by taking all the digits that consecutively follow the
                <code>$</code> character in <code>$replacement</code>:</p>
@@ -7876,8 +7910,18 @@ Tak, tak, tak! - da kommen sie.
                class="RX" code="0004"
                /> if the value of
                <code>$replacement</code> contains a dollar sign (<code>$</code>) character that is not
-            immediately followed by a digit <code>0-9</code> and not immediately preceded by a
+            immediately followed by a digit <code>0-9</code> or a left angle bracket
+            (<code>&lt;</code>), and not immediately preceded by a
             backslash (<code>\</code>).</p>
+         <p>In the absence of the <code>q</code> flag,
+            a dynamic error is raised <errorref
+               class="RX" code="0004"
+               /> if the value of
+               <code>$replacement</code> contains <code>$&lt;</code>, with the dollar sign not
+            immediately preceded by a backslash, unless the following characters, up to the next
+            right angle bracket (<code>&gt;</code>), form the name of a
+            <termref def="dt-named-capturing-group">named capturing group</termref> in the
+            regular expression.</p>
          <p>In the absence of the <code>q</code> flag,
             a dynamic error is raised <errorref
                class="RX" code="0004"
@@ -7885,8 +7929,6 @@ Tak, tak, tak! - da kommen sie.
                <code>$replacement</code> contains a backslash (<code>\</code>) character that is not part of a
                <code>\\</code> pair, unless it is immediately followed by a dollar sign (<code>$</code>)
             character.</p>
-         <p>A dynamic error is raised <errorref class="RX" code="0005"/> if both the <code>$replacement</code> 
-            and <code>$action</code> arguments are supplied, and neither is the empty sequence.</p>
       </fos:errors>
       <fos:notes>
          <p>If the input string contains no substring that matches the regular
@@ -7971,10 +8013,26 @@ Tak, tak, tak! - da kommen sie.
   "57°43′30″",
   "([0-9]+)°([0-9]+)′([0-9]+)″",
   fn($s, $groups) {
-    string($groups[1] + $groups[2] ÷ 60 + $groups[3] ÷ 3600) || '°'
+    string($groups?1 + $groups?2 ÷ 60 + $groups?3 ÷ 3600) || '°'
   }
 )</eg></fos:expression>
                <fos:result>"57.725°"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>replace(
+  "2026-06-25",
+  "(?&lt;year&gt;\d{4})-(?&lt;month&gt;\d{2})-(?&lt;day&gt;\d{2})",
+  "$&lt;day&gt;/$&lt;month&gt;/$&lt;year&gt;"
+)</eg></fos:expression>
+               <fos:result>"25/06/2026"</fos:result>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>replace(
+  "42 plus 7",
+  "(?&lt;first&gt;\d+) plus (?&lt;second&gt;\d+)",
+  fn($s, $groups) { string($groups?first + $groups?second) }
+)</eg></fos:expression>
+               <fos:result>"49"</fos:result>
             </fos:test>
          </fos:example>
       </fos:examples>
@@ -7985,6 +8043,7 @@ Tak, tak, tak! - da kommen sie.
          <fos:change issue="1876" PR="1897" date="2025-04-08"><p>The <code>$replacement</code> argument can now be a function
             that computes the replacement strings.</p></fos:change>
          <fos:change issue="1911" PR="1913" date="2025-04-08"><p>It is now permitted for the regular expression to match a zero-length string.</p></fos:change>
+         <fos:change issue="2729" date="2026-07-16"><p>Named capturing groups can be referenced in replacement strings; replacement functions receive the captured groups as a map.</p></fos:change>
       </fos:changes>
    </fos:function>
    <fos:function name="tokenize" prefix="fn">
@@ -8550,7 +8609,8 @@ return $regex?replace($title, fn { . + 1 })</eg></fos:expression>
             the substring captured by an ordinary group, specifically the string value of the <var>Nth</var> captured group. 
             For each ordinary capturing subexpression there will be at most one corresponding
                <code role="element-name">fn:group</code> element in each <code>fn:match</code> element in the
-            result.</p>
+            result. If the group is a <termref def="dt-named-capturing-group">named capturing group</termref>,
+            the element also has a <code>name</code> attribute holding its name.</p>
          
          <p>By contrast, lookahead groups are represented by <code role="element-name">fn:lookahead-group</code> elements,
          which (if they appear at all) must follow all text node and <code role="element-name">fn:group</code> element children
@@ -8561,6 +8621,8 @@ return $regex?replace($title, fn { . + 1 })</eg></fos:expression>
          <ulist>
             <item><p><code>nr</code>: the group number, based on the position of the capturing subexpression
             that captured the group;</p></item>
+            <item><p><code>name</code>: the name of the group, present only if it is a
+            <termref def="dt-named-capturing-group">named capturing group</termref>;</p></item>
             <item><p><code>value</code>: the string value of the segment that was captured;</p></item>
             <item><p><code>position</code>: the one-based start position of the segment within the input string.</p></item>
          </ulist>
@@ -8712,6 +8774,17 @@ return $regex?replace($title, fn { . + 1 })</eg></fos:expression>
 </analyze-string-result>]]></fos:result>
             </fos:test>
          </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>analyze-string("2026-06-25", "(?&lt;y>\d{4})-(?&lt;m>\d{2})-(?&lt;d>\d{2})")</eg></fos:expression>
+               <fos:result normalize-space="true" ignore-prefixes="true" as="element()"><![CDATA[
+<analyze-string-result xmlns="http://www.w3.org/2005/xpath-functions">
+  <match>
+    <group name="y" nr="1">2026</group>-<group name="m" nr="2">06</group>-<group name="d" nr="3">25</group>
+  </match>
+</analyze-string-result>]]></fos:result>
+            </fos:test>
+         </fos:example>
       </fos:examples>
       <fos:see-also prefix="fn" name="regex"/>
       <fos:see-also prefix="fn" name="matches"/>
@@ -8723,6 +8796,9 @@ return $regex?replace($title, fn { . + 1 })</eg></fos:expression>
          </fos:change>
          <fos:change issue="1911" PR="1913" date="2025-04-08">
             <p>It is now permitted for the regular expression to match a zero-length string.</p>
+         </fos:change>
+         <fos:change issue="2729" date="2026-07-19">
+            <p>A named capturing group carries a <code>name</code> attribute.</p>
          </fos:change>
       </fos:changes>
    </fos:function>
@@ -14584,7 +14660,7 @@ fn:parse-QName("xmp:person")</eg></fos:expression>
                      <item><p>If <var>K</var> is an <code>xs:boolean</code>, then the string
                      <code>true()</code> or <code>false()</code>.</p></item>
                      <item><p>If <var>K</var> is of any other type, then as the string
-                     <code>{xs:<var>T</var>("<var>S</var>")}</code> (including the enclosing braces) where <var>T</var> is the
+                     <code>child::{xs:<var>T</var>("<var>S</var>")}</code> (including the enclosing braces) where <var>T</var> is the
                         local part of the name of the most specific built-in atomic type of which the value
                         is an instance, and <var>S</var> is the result of casting <var>K</var> to 
                            <code>xs:string</code>.</p>
@@ -21857,6 +21933,42 @@ return $typed-result instance of element(distance, xs:decimal)
                      <code>()</code>
                   </td>
                </tr>
+               <tr diff="add" at="2026-07-02">
+                  <td>
+                     <code>csv-header</code>
+                  </td>
+                  <td>
+                     <code>xs:boolean?</code>
+                  </td>
+                  <td><code>true()</code> means <code>"yes"</code>, <code>false()</code> means <code>"no"</code></td>
+                  <td>
+                     <code>no</code>
+                  </td>
+               </tr>
+               <tr diff="add" at="2026-07-02">
+                  <td>
+                     <code>csv-quote-character</code>
+                  </td>
+                  <td>
+                     <code>xs:string?</code>
+                  </td>
+                  <td/>
+                  <td>
+                     <code>"</code>
+                  </td>
+               </tr>
+               <tr diff="add" at="2026-07-02">
+                  <td>
+                     <code>csv-separator</code>
+                  </td>
+                  <td>
+                     <code>xs:string?</code>
+                  </td>
+                  <td/>
+                  <td>
+                     <code>,</code>
+                  </td>
+               </tr>
                <tr>
                   <td>
                      <code>doctype-public</code>
@@ -29010,6 +29122,103 @@ element-to-map-plan((<a><b/><b/></a>, <a><b/><c/></a>))
       </fos:changes>
    </fos:function>
 
+   <fos:function name="map-to-element" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="map-to-element" return-type="element()?">
+            <fos:arg name="map" type="map(*)?" usage="inspection"/>
+            <fos:arg name="options" type="map(*)?" usage="inspection" default="{}" note="default-on-empty"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property>deterministic</fos:property>
+         <fos:property>context-independent</fos:property>
+         <fos:property>focus-independent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Converts a map into an element node.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>This function performs the inverse of <function>element-to-map</function>:
+            it reconstructs an element node from the <termref def="dt-single-entry-map"/>
+            supplied in <code>$map</code>. The key of the entry represents the element name,
+            and the value of the entry represents the element’s attributes and children.</p>
+
+         <p>If <code>$map</code> is the empty sequence, the result is the empty sequence.</p>
+
+         <p>Because <function>element-to-map</function> does not preserve all information present
+            in its input (see <specref ref="id-loss-of-xdm-information"/>), the reconstruction is
+            exact only up to that loss of information, and generally only when the same
+            <code>$options</code> are supplied as were used for the forward conversion.</p>
+
+         <p>The entries that may appear in the <code>$options</code> map are the same as for
+            <function>element-to-map</function> but are interpreted in the reverse direction.</p>
+
+         <p>The rules for converting a map to an element are described in
+            <specref ref="id-converting-maps-to-elements"/>; the rules for selecting a layout from
+            the conversion plan are the inverse of those in <specref ref="id-selecting-element-layout"/>.</p>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <errorref class="JS" code="0009"/> occurs if <code>$map</code>
+            is not a single-entry map, if a map key or the <code>#processing-instruction</code>
+            structure does not have the form required by the selected layout, if a reconstructed
+            element or attribute name is not a valid <code>xs:QName</code>, or if <code>list</code>
+            layout is selected for an array but the conversion plan supplies no <code>child</code>
+            element name.</p>
+         <p>Any error in the conversion plan is treated as a type error <xerrorref
+               spec="XP" class="TY" code="0004"/>, as for <function>element-to-map</function>.</p>
+      </fos:errors>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>map-to-element(())</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><![CDATA[map-to-element({ "foo": "bar" })]]></fos:expression>
+               <fos:result><![CDATA[<foo>bar</foo>]]></fos:result>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[map-to-element(
+  { "price": { "@currency": "USD", "#content": 12.16 } }
+)]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[<price currency="USD">12.16</price>]]></eg></fos:result>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[map-to-element({ "name": {
+  "first": "Jane",
+  "middle": [ "Elizabeth", "Mary" ],
+  "last": "Smith"
+} })]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[
+<name>
+  <first>Jane</first>
+  <middle>Elizabeth</middle>
+  <middle>Mary</middle>
+  <last>Smith</last>
+</name>]]></eg></fos:result>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[map-to-element(
+  { "years": [ "2023", "2023" ] },
+  { "plan": { "dates": { "layout": "list", "child": "year" } } }
+)]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[<years><year>2023</year><year>2023</year></years>]]></eg></fos:result>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[map-to-element(
+  { "para": [ { "@id": "x" }, "A ", { "i": "fine" }, " mess!" ] }
+)]]></eg></fos:expression>
+               <fos:result><eg><![CDATA[<para id="x">A <i>fine</i> mess!</para>]]></eg></fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="element-to-map"/>
+      <fos:see-also prefix="fn" name="element-to-map-plan"/>
+      <fos:changes>
+         <fos:change issue="1962" PR="2707" date="2026-06-24"><p>New in 4.0.</p></fos:change>
+      </fos:changes>
+   </fos:function>
+
    <fos:function name="parse-csv" prefix="fn">
       <fos:signatures>
          <fos:proto name="parse-csv" return-type-ref="parsed-csv-structure-record" return-type-ref-occurs="?">
@@ -29030,8 +29239,8 @@ element-to-map-plan((<a><b/><b/></a>, <a><b/><c/></a>))
 
          <p>If <code>$value</code> is the empty sequence, the function returns the empty sequence.</p>
 
-         <p>The input supplied in <code>$value</code> is CSV data, as defined
-            in <bibref ref="rfc4180"/>. The function
+         <p>The input supplied in <code>$value</code> is CSV data, based on the grammar of
+            <bibref ref="rfc4180"/> with the extensions described in <specref ref="csv-functions"/>. The function
             first parses the input using <function>fn:csv-to-arrays</function>, and then
             further processes the result. The initial parsing is exactly as defined for
             <function>fn:csv-to-arrays</function>, and can be controlled using the same options.
@@ -29122,8 +29331,9 @@ element-to-map-plan((<a><b/><b/></a>, <a><b/><c/></a>))
                <fos:type>xs:boolean</fos:type>
                <fos:default>false</fos:default>
                <fos:values>
-                  <fos:value value="false">No padding or trimming of rows takes place,
-                  unless requested using the <code>select-columns</code> option.</fos:value>
+                  <fos:value value="false">The number of fields in each row is left unchanged, so rows may
+                  vary in length. Fields are added or removed only where the <code>select-columns</code>
+                  option requests it.</fos:value>
                   <fos:value value="true">The number of fields in the first row (whether this
                      be a header or a data row) determines the number of fields in every
                      subsequent row; to achieve this, excess fields are removed, or
@@ -29449,7 +29659,8 @@ return (
       </fos:summary>
       <fos:rules>
          
-         <p>The <code>$value</code> argument is CSV data, as defined in <bibref ref="rfc4180"/>, in the form of an
+         <p>The <code>$value</code> argument is CSV data, based on the grammar of <bibref ref="rfc4180"/>
+            with the extensions described in <specref ref="csv-functions"/>, in the form of an
             <code>xs:string</code> value. The function parses this string,
             after normalizing newlines so that <char>U+000D</char> and (<char>U+000D</char>, <char>U+000A</char>)
             sequences are converted to <char>U+000A</char>.
@@ -29582,15 +29793,7 @@ return (
             </fos:test>
             <fos:test>
                <fos:expression><eg>csv-to-arrays(char('\n'), { 'trim-whitespace': false() })</eg></fos:expression>
-               <fos:result>[ " " ]</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>csv-to-arrays(char('\n'), { 'trim-whitespace': true() })</eg></fos:expression>
                <fos:result>[]</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>csv-to-arrays(char('\n'), { 'trim-whitespace': false() })</eg></fos:expression>
-               <fos:result>[], [ " " ]</fos:result>
             </fos:test>
             <p>Using newline separators:</p>
             <fos:test>
@@ -29635,10 +29838,8 @@ return csv-to-arrays(
   `"name","city"{ char('\n') }` ||
   `"Bob ""The Exemplar"" Mustermann","Berlin"{ char('\n') }`
 )</eg></fos:expression>
-               <fos:result><eg>(
-  [ "name", "city" ],
-  [ 'Bob "The Exemplar" Mustermann', "Berlin" ]
-)</eg></fos:result>
+               <fos:result><eg>[ "name", "city" ],
+[ 'Bob "The Exemplar" Mustermann', "Berlin" ]</eg></fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -34370,9 +34571,10 @@ return every($dl/*, fn($elem, $pos) {
             <termref def="character">characters</termref>, it is returned unchanged: the function
             never truncates. Otherwise, padding characters are added to bring its length up to
             <code>$length</code> characters. They are formed by repeating the <code>padding</code>
-            option as often as necessary and truncating the result to the number of characters
-            required: for example, seven padding characters formed from <code>"ab"</code> are
-            <code>"abababa"</code>.</p>
+            option as often as necessary and truncating the result on the right to the number of
+            characters required: each run of padding characters is thus a prefix of the repeated
+            <code>padding</code> string. For example, seven padding characters formed from
+            <code>"ab"</code> are <code>"abababa"</code>.</p>
          <p>The <code>side</code> option determines where the padding characters are added: at the
             end of the input string, at its start, or divided between both sides. In the last case
             each of the two runs is formed independently, and if an odd number of padding characters
@@ -34411,6 +34613,18 @@ return every($dl/*, fn($elem, $pos) {
             <fos:test>
                <fos:expression><eg>pad-string("abc", 8, { "side": "both", "padding": "*" })</eg></fos:expression>
                <fos:result>"**abc***"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>pad-string("x", 5, { "padding": "0123456789", "side": "start" })</eg></fos:expression>
+               <fos:result>"0123x"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>pad-string("x", 8, { "padding": "0123456789", "side": "both" })</eg></fos:expression>
+               <fos:result>"012x0123"</fos:result>
             </fos:test>
          </fos:example>
          <fos:example>
@@ -35574,17 +35788,23 @@ exists(filter($input, $predicate))
          <p>Applying <emph>uri decoding</emph> is equivalent to
          calling <function>fn:decode-from-uri</function> on the string.</p>
 
+         <p>Applying <emph>form decoding</emph> is equivalent to replacing each plus sign
+         (<code>+</code>) in the string with a space, and then applying
+         <emph>uri decoding</emph>. Form decoding is applied to query parameters only,
+         following the conventions of the <code>application/x-www-form-urlencoded</code>
+         media type; a plus sign has no special meaning elsewhere in a URI.</p>
+
          <p>The <emph>query-parameters</emph> value is constructed as follows.
          Start with the empty map. Tokenize the <emph>query</emph> on
          the <code>&amp;</code> (ampersand). For each token, identify
          the <emph>key</emph> and the <emph>value</emph>. If the token
          contains an equal sign (<code>=</code>), the <emph>key</emph>
-         is the string that precedes the first equal sign, uri
+         is the string that precedes the first equal sign, form
          decoded, and the <emph>value</emph> is the remainder
-         of the token, after the first equal sign, uri decoded. If the
+         of the token, after the first equal sign, form decoded. If the
          token does not contain an equal sign, <emph>key</emph> is the
          empty string and the <emph>value</emph> is equal to the
-         token, uri decoded. Add the <emph>key</emph>/<emph>value</emph> pair
+         token, form decoded. Add the <emph>key</emph>/<emph>value</emph> pair
          to the map. If the <emph>key</emph> already exists in the map, add the <emph>value</emph>
          to a list of values associated with that key. The resulting map, when all
          tokens have been processed, is the <emph>query-parameters</emph> map.</p>
@@ -35719,6 +35939,7 @@ exists(filter($input, $predicate))
 }</eg></fos:result>
 </fos:test>
 </fos:example>
+
 
 <fos:example>
 <fos:test>
@@ -36043,7 +36264,7 @@ exists(filter($input, $predicate))
   "path": "+1-816-555-1212",
   "query": (),
   "fragment": (),
-  "path-segments": " 1-816-555-1212",
+  "path-segments": "+1-816-555-1212",
   "query-parameters": (),
   "filepath": ()
 }</eg></fos:result>
@@ -36238,6 +36459,8 @@ path with an explicit <code>file:</code> scheme.</p>
 
       <fos:see-also prefix="fn" name="build-uri"/>
       <fos:changes>
+         <fos:change issue="2811" date="2026-07-23"><p>Plus signs are only decoded as spaces
+            in query parameters.</p></fos:change>
          <fos:change date="2022-10-17" PR="215 415 " issue="72 389 390"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
@@ -36387,9 +36610,9 @@ path with an explicit <code>file:</code> scheme.</p>
            and exclusively the following characters with their
            percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>, 
               <char>U+002F</char>, <char>U+003F</char>,
-           <char>U+0023</char>, <char>U+002B</char>,
-           <char>U+005B</char>, and <char>U+005D</char>. 
-              That is “<code>[#0-#20%/\?\#\+\[\]]</code>”.</p>
+           <char>U+0023</char>,
+           <char>U+005B</char>, and <char>U+005D</char>.
+              That is “<code>[#0-#20%/\?\#\[\]]</code>”.</p>
 
            <note>
               <p>Encoding is performed unless the URI is known to be non-hierarchical;
@@ -36399,9 +36622,8 @@ path with an explicit <code>file:</code> scheme.</p>
               <code>fn:parse-uri('a+b/c') => fn:build-uri()</code> will return 
               <code>a+b/c</code>.)</p>
               <p>It is necessary to avoid encoding non-hierarchical schemes because there is more
-              variation in them (for example, the <code>tel:</code> scheme
-              uses a “<code>+</code>” that must not be encoded). Users working with
-              non-hierarchical schemes may need to address the encoding issue directly
+              variation in them. Users working with non-hierarchical
+              schemes may need to address the encoding issue directly
               bearing in mind the encoding requirements of the particular schemes in use.</p>
            </note>
         </item>
@@ -36427,7 +36649,9 @@ path with an explicit <code>file:</code> scheme.</p>
         <char>U+0023</char>, <char>U+002B</char>,
         <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%=&amp;\#\+\[\]]</code>”.
         (This differs from the path encoding in that it excludes <char>U+002F</char>
-        and <char>U+003F</char> but includes <char>U+003D</char> and <char>U+0026</char>.)
+        and <char>U+003F</char> but includes <char>U+003D</char>, <char>U+0026</char>,
+        and <char>U+002B</char>. A plus sign is escaped because query parameters are
+        form decoded by <function>fn:parse-uri</function>.)
         For each <emph>key</emph> and each <emph>value</emph> associated with
         that key in turn:</p>
 
@@ -36454,8 +36678,8 @@ path with an explicit <code>file:</code> scheme.</p>
         The encoding performed replaces any control characters (codepoints less than 0x20)
         and exclusively the following characters with their
         percent-escaped forms: <char>U+0020</char>, <char>U+0025</char>,
-        <char>U+0023</char>, <char>U+002B</char>,
-        <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%\#\+\[\]]</code>”.
+        <char>U+0023</char>,
+        <char>U+005B</char>, and <char>U+005D</char>. That is “<code>[#0-#20%\#\[\]]</code>”.
         (This differs from the path encoding in that it excludes <char>U+002F</char>
         and <char>U+003F</char>.)</p>
 
@@ -36477,6 +36701,8 @@ path with an explicit <code>file:</code> scheme.</p>
       </fos:examples>
       <fos:see-also prefix="fn" name="parse-uri"/>
       <fos:changes>
+         <fos:change issue="2811" date="2026-07-23"><p>Plus signs are only escaped in query
+            parameters.</p></fos:change>
          <fos:change date="2022-10-17" issue="72 389 390" PR="1423 1413"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
