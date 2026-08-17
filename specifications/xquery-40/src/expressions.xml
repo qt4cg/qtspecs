@@ -12422,6 +12422,7 @@ return $incrementors[2](4)]]></eg>
                
                <changes>
                   <change issue="2624" PR="2627" date="2026-05-11">Error code XPTY0019 is replaced by XPTY0004.</change>
+                  <change issue="2733" PR="2734" date="2026-06-27">The way literal atomic steps are applied in JTree paths has changed.</change>
                </changes>
 
                <p>The path operator <code>/</code> is primarily used for 
@@ -12431,10 +12432,48 @@ return $incrementors[2](4)]]></eg>
                   After this conversion, the left-hand operand must return 
                   a sequence of GNodes. The result of the operator is either a sequence of GNodes
                   (in document order, with no duplicates), or a sequence of non-GNodes.</p>
+               
+               <p>Given the expression <code><var>E1</var>/<var>E2</var></code>, the result of evaluating <var>E1</var> 
+               must either be a sequence of XNodes or a sequence of JNodes. There are some differences in the way
+               <var>E2</var> is evaluated based on this distinction.</p>
+               
+               <p><termdef id="dt-navigational" term="navigational" open="true">We define an expression to be
+               <term>navigational</term> if it is one of the following:</termdef></p> 
+               <ulist>
+                  <item><p>A <nt def="ContextValueRef">ContextValueRef</nt> (<code>.</code>).</p></item>
+                  <item><p>A <nt def="AxisStep">AxisStep</nt> (for example, <code>child::x</code>, <code>@x</code>, <code>x</code>,
+                     <code>..</code>, or <code>x[3]</code>).</p></item>
+                  <item><p>A <termref def="dt-non-trivial"/> <nt def="UnionExpr">UnionExpr</nt> or <nt def="IntersectExceptExpr">IntersectExceptExpr</nt> whose
+                  operands are all <termref def="dt-navigational"/> expressions.</p></item>
+                  <item><p>A <termref def="dt-non-trivial"/> <nt def="RelativePathExpr">RelativePathExpr</nt> whose
+                     operands are all <termref def="dt-navigational"/> expressions.</p></item>               
+                  <item><p>A <termref def="dt-non-trivial"/> sequence expression (using the comma operator) whose
+                     operands are all <termref def="dt-navigational"/> expressions.</p></item>
+                  <item><p>A <termref def="dt-non-trivial"/> <nt def="FilterExpr">FilterExpr</nt>  whose
+                     <nt def="PrimaryExpr">PrimaryExpr</nt> operand is a <termref def="dt-navigational"/> expression.</p></item>
+                  <item role="xquery"><p>A <termref def="dt-non-trivial"/> <nt def="FLWORExpr">FLWORExpr</nt>  whose
+                     return clause is a <termref def="dt-navigational"/> expression.</p></item>
+                  <item role="xpath"><p>A <termref def="dt-non-trivial"/> <nt def="ForExpr">ForExpr</nt> or <nt def="LetExpr">LetExpr</nt> whose
+                     return clause is a <termref def="dt-navigational"/> expression.</p></item>
+                  <item role="xquery"><p>An <nt def="IfExpr">IfExpr</nt>  whose
+                     <code>then</code> and <code>else</code> clauses are both <termref def="dt-navigational"/> expressions.</p></item>
+                  <item role="xquery"><p>A <nt def="SwitchExpr">SwitchExpr</nt> or <nt def="TypeswitchExpr">TypeswitchExpr</nt>  whose
+                     <code>case</code> clauses are all <termref def="dt-navigational"/> expressions.</p></item>
+                  <item><p>A <nt def="ParenthesizedExpr">ParenthesizedExpr</nt> whose body is a <termref def="dt-navigational"/> expression.</p></item>
+               </ulist>
+               <p role="closetermdef"/>
 
                <p>The operation <code><var>E1</var>/<var>E2</var></code> is evaluated as follows:</p>
                
                <olist>
+                  <item><p>If the expression <var>E2</var> is <emph>not</emph> a <termref def="dt-navigational"/> expression, then
+                     it is replaced by the expression:</p>
+                  
+                  <eg>if (. instance of node()) then <var>E2</var> else child::{<var>E2</var>}</eg>
+                     
+                     <p>In other cases, <var>E2</var> is used as is. Call the result of this rewrite <var>E3</var>.</p>
+                  
+                  </item>
                   <item><p>Expression <var>E1</var> is evaluated. Call the result <var>S0</var>.</p></item>
                   <item><p>If <var>S0</var> is the empty sequence, then the result is the empty sequence.</p></item>
                   <item><p>Any maps or arrays in <var>S0</var> are converted to JNodes
@@ -12445,70 +12484,136 @@ return $incrementors[2](4)]]></eg>
                   <item><p>Each item <var>N</var> in <var>S1</var> then serves in turn to provide an inner focus 
                   (with <var>N</var> as the context value, its position in <var>S1</var> as the context 
                   position, and the length of <var>S1</var> as the context size) for an evaluation 
-                  of <var>E2</var>, as described in  <specref
+                  of <var>E3</var>, as described in  <specref
                      ref="eval_context"
                      />.</p></item>
-                  <item><p>If <var>S1</var> is a sequence of XNodes, then
-                        the sequences resulting from all the evaluations of <var>E2</var> 
+                  <item><p>The sequences resulting from all the evaluations of <var>E3</var> 
                         are combined as follows:</p>
 
                      <olist>
                         <item>
-                           <p>If every evaluation of <var>E2</var> returns a (possibly empty) sequence of XNodes, 
-                              these sequences are combined, and duplicate XNodes are eliminated based on XNode identity.
-                              The resulting XNode sequence is returned in <termref
+                           <p>If every evaluation of <var>E3</var> returns a (possibly empty) sequence of GNodes (that is, XNodes or JNodes), 
+                              these sequences are combined, and duplicate GNodes are eliminated based on GNode identity.
+                              The resulting GNode sequence is returned in <termref
                                     def="dt-document-order">document order</termref>.
                            </p>
                         </item>
       
                         <item>
       
-                           <p>If every evaluation of <var>E2</var> returns a (possibly empty) 
-                              sequence of non-XNodes, these sequences are concatenated, in order, and returned.
+                           <p>If every evaluation of <var>E3</var> returns a (possibly empty) 
+                              sequence of non-GNodes, these sequences are concatenated, in order, and returned.
                               The returned sequence preserves the orderings within and among the subsequences 
-                              generated by the evaluations of <var>E2</var>.
+                              generated by the evaluations of <var>E3</var>.
                            </p>
                            <note><p>The use of <termref def="dt-path-expression">path expressions</termref> 
-                              to select values other than XNodes is for
+                              to select values other than GNodes is for
                            backwards compatibility. Generally it is preferable to use the simple mapping
                            operator <code>!</code> for this purpose. For example, write <code>$nodes!node-name()</code>
                            in preference to <code>$nodes/node-name()</code>.</p></note>
                         </item>
       
                         <item>
-                           <p>If the multiple evaluations of <var>E2</var> return at least one XNode and at least one non-XNode, a <termref
+                           <p>If the multiple evaluations of <var>E3</var> return at least one GNode and at least one non-GNode, a <termref
                                  def="dt-type-error">type error</termref> is raised <errorref class="TY"
                                  code="0018"/>.</p>
                         </item>
                      </olist>
                   </item>
-                  <item>
-                     <p>If <var>S1</var> is a sequence of JNodes, then
-                        a sequence of JNodes <var>R</var> is formed as follows:
-                        for each JNode <var>N</var> in <var>S1</var>, let the result
-                        of evaluating <var>E2</var> (as described above) be <var>P</var>.
-                        Then:</p>
-                        <olist>
-                           <item><p>If <var>P</var> is a sequence of zero or more JNodes,
-                           these JNodes are added to <var>R</var>.</p></item>
-                           <item><p>If <var>P</var> is a sequence of one or more atomic items <var>A</var>,
-                           the JNodes that are children of <var>N</var> and that have a <term>·jkey·</term> property
-                           equal (under the rules of the <function>fn:atomic-equal</function> function)
-                           to one or more of the atomic items in <var>A</var> are added to <var>R</var>.</p></item>
-                           <item><p>Otherwise (if <var>P</var> is neither a sequence of zero or more JNodes
-                           nor a sequence of one or more atomic items) a type error is raised: 
-                           <errorref class="TY" code="0018"/>.</p></item>
-                        </olist>
-                     
-                     
-                     <p>The result is <code>fn:distinct-ordered-nodes(<var>R</var>)</code>: that is,
-                        the JNodes in <var>R</var> with duplicates removed, sorted into document
-                        order.</p>
                   
-                  </item>
                </olist>
-                     
-                     
+               
+               <div4 id="effect-of-slash-with-xnodes">
+                  <head>Effect of <code>/</code> with XNodes</head>
+                  
+                  <p><emph>This section is non-normative.</emph></p>
+                  
+                  <p>The effect of a path expression such as <code><var>E1</var>/<var>E2</var>/<var>E3</var>/...</code> when <var>E1</var> selects
+                  a sequence of XNodes is unchanged from earlier versions of the language, other than extending the rules
+                  for the rare case when a subsequent step selects JNodes:</p>
+                  
+                  <ulist>
+                     <item><p>Typically, each step in the path selects nodes by navigating from the nodes selected by the previous step,
+                     and the result of the expression is a sequence of nodes, with duplicates removed and in document order, containing the
+                     nodes selected by the final step.</p>
+                     <p>These steps are most commonly written as axis steps. An axis step is essentially a function that performs a mapping
+                     and a selection. The mapping is defined by the selected axis (for example <code>child</code> or <code>following-sibling</code>),
+                     and the selection is achieved using the node test and predicates. The provisions for writing abbreviated steps for common
+                     cases, such as selecting a specific child by name, hide the fact that these two components, the axis and the node test,
+                     are always present implicitly if not explicitly.</p></item>
+                     <item><p>Alternatively, the final step will often be a function call such as <code>node-name()</code>, <code>data()</code>,
+                        <code>string()</code>, or <code>upper-case(.)</code> that returns atomic properties of the nodes selected
+                        by the penultimate step. Although this usage is common, the same effect can be achieved with greater clarity
+                     in 4.0 by using the <code>!</code> or <code>=!></code> operator in place of <code>/</code>: for example, 
+                     writing <code>a/b/c ! node-name()</code>, or <code>a/b/c =!> node-name()</code>, rather than 
+                        <code>a/b/c / node-name()</code>. Using a different operator makes it clearer to the reader that
+                     this final step is doing something very different from the previous steps.</p></item>
+                  </ulist>
+                  
+                  <p>The rewrite of <var>E2</var> described in the previous section has no effect in this case, because the rewrite changes the effect
+                  of <var>E2</var> only in the case where <var>E1</var> selects JNodes.</p>
+               </div4>
+               
+               <div4 id="effect-of-slash-with-jnodes">
+                  <head>Effect of <code>/</code> with JNodes</head>
+                  
+                  <p><emph>This section is non-normative.</emph></p>
+                  
+                  <p>The effect of a path expression such as <code><var>E1</var>/<var>E2</var>/<var>E3</var>/...</code> when <var>E1</var> selects
+                     a sequence of JNodes is very similar to the effect when <var>E1</var> selects XNodes, provided that the steps are
+                     navigational. The provisions for writing abbreviated steps, however, are somewhat different.</p>
+                  
+                  <ulist>
+                     <item><p>If the first step selects JNodes, then all subsequent steps will also select JNodes. This is achieved by
+                        the rule for rewriting <var>E2</var> which ensures that any step that is not explicitly navigational is interpreted
+                        as defining a selection of JNodes on the child axis.</p>
+                     </item>
+                     <item><p>The effect of rewriting <var>E2</var> as <code>child::{<var>E2</var>}</code> in the case where <var>E2</var>
+                     is non-navigational is that the value of <var>E2</var> is used as a map key or array subscript to select 
+                        JNodes from among the children of the context JNode.</p>
+                        <p>In the expression <code>child::{<var>E2</var>}</code>, <var>E2</var> is evaluated with an absent focus, which means that
+                        using an expression such as <code>data()</code>, <code>string()</code>, <code>upper-case()</code>, or <code>jvalue()</code> as 
+                        the final step will result in a type error. Instead, such operations must use a different operator such as
+                        <code>!</code> or <code>=!></code>.</p>
+                     </item>
+                     <item>
+                        <p>The steps in a path expression for searching a JTree will often be literals or simple context-free expressions
+                           that evaluate to strings for selection within a map, or integers for selection within an array. For example,
+                           in the path <code>$booklist/$category//author/1/"last name"</code>, the first subexpression selects the root of the JTree,
+                           and the subsequent steps (with the exception of the implicit <code>descendant-or-self::*</code> step implied by the <code>//</code>
+                           operator) are context-free expressions that evaluate to map keys or array subscripts to be selected within the child axis.</p>
+                        <p>An unquoted string such as <code>author</code> is equivalent to the quoted string <code>"author"</code>, and enables the
+                        path to be written more concisely when the keys are simple NCNames.</p>
+                     </item>
+                  </ulist>
+                  
+                  <p>In a path that selects within an XTree, a step such as <code>book</code> expands to <code>child::book</code>, which can
+                  itself be seen as a shorthand for <code>child::*[node-name() = #book]</code>, selecting the child element whose name is
+                  the QName <code>#book</code>. Similarly, when selecting within a JTree, the step <code>book</code> can be viewed as shorthand
+                  for <code>child::*[jkey() = "book"]</code>, selecting the entry within a map whose key value is <code>"book"</code>.</p>
+                  
+                  <p>Another way to view the distinction between different kinds of expression acting as steps is to consider that
+                  expressions can be classified into those that depend on the focus, and those that are independent of the focus. All the
+                  expressions that are defined here as <termref def="dt-navigational"/> come into the first category, while all expressions with
+                  no focus dependency are available for computing key values and subscripts. This leaves expressions that depend on the focus
+                  but that are not defined as <termref def="dt-navigational"/> unavailable for use as steps; most of these (functions calls such as
+                  <code>jkey()</code>) would not be useful as steps in a path because they do not select nodes. If such a function is
+                  used as a step, a type error will result, because the rewritten expression <code>child::{<var>E2</var>}</code> is evaluated
+                  with absent focus. This leaves a small number of expressions such as <code>root()</code> which cannot be used in a path because
+                  (a) they are not classified as navigational, but (b) they depend on the focus. Calls on user-defined functions may also
+                  fall into this category. To incorporate such functions into a path, use an operator such as <code>=></code>, <code>=!></code>,
+                  or <code>!</code> in place of the <code>/</code> operator (while bearing in mind that the operator precedence may be different).</p>
+                  
+                 
+                  
+                  
+                  
+               </div4>
+               
+               
+               
+               
+               
              
 
                <!--<note>
@@ -12579,9 +12684,9 @@ return if (every $r in $R satisfies $r instance of gnode())
 	               as well as XNodes (found in trees representing parsed XML).
 	            </change>           
                 <change issue="2624" PR="2627" date="2026-05-11">Error code XPTY0020 is replaced by XPTY0004.</change>
-                <change issue="2591" PR="2747" date="2026-07-01">An axis step may now be followed
+                <!--<change issue="2591" PR="2747" date="2026-07-01">An axis step may now be followed
                    directly by a <nt def="Lookup">lookup</nt> (as well as by predicates), so that
-                   <code>a/b?c</code> is permitted without parentheses.</change>
+                   <code>a/b?c</code> is permitted without parentheses.</change>-->
             </changes>
 
             <scrap>
@@ -12600,18 +12705,18 @@ return if (every $r in $R satisfies $r instance of gnode())
                      def="dt-node-test"
                      >node test</termref>,
 		which selects GNodes based on their properties, and zero or more
-               <termref def="dt-predicate">predicates</termref> and
-               <nt def="Lookup">lookups</nt>, applied in order, which filter or
-               dereference the results.</termdef></p>
+               <termref def="dt-predicate">predicates</termref><!-- and
+               <nt def="Lookup">lookups</nt>-->, applied in order, which filter<!-- or
+               dereference--> the results.</termdef></p>
 
-            <p>A <nt def="Lookup">Lookup</nt> that follows an axis step has the same meaning as when
+            <!--<p>A <nt def="Lookup">Lookup</nt> that follows an axis step has the same meaning as when
                it follows a <nt def="PostfixExpr">postfix expression</nt>: it applies the
                <specref ref="id-lookup"/> to the sequence produced by the preceding step. The lookup
                binds to that step alone: <code>a/b?c</code> is parsed as <code>a/(b?c)</code>, so
                the <code>?c</code> lookup is applied to the <code>b</code> nodes selected from each
                <code>a</code>. As with any lookup, the items to which it is applied must be maps,
                arrays, or JNodes; otherwise a <termref def="dt-type-error">type error</termref> is
-               raised.</p>
+               raised.</p>-->
             
             <note><p>An <termref def="dt-axis-step"/> is an expression in its own right.
                While axis steps are often used as the operands of 
@@ -13025,7 +13130,8 @@ return if (every $r in $R satisfies $r instance of gnode())
                      among its siblings (in the case of XNodes, this is the node name);</p></item>
                   <item><p>Union node tests, which provide multiple conditions: a GNode satisfies
                   the union node test if it satisfies any of its operand node tests.</p></item>
-                  <item><p>Enclosed expressions, which dynamically compute a value that must match
+                  <item><p>Dynamic node tests: a dynamic node test is written as an enclosed expression, 
+                     which dynamically computes a value that must match
                   the name of an XNode, or the <term>·jkey·</term> property of a JNode.</p></item>
                </ulist>
                
@@ -13060,7 +13166,7 @@ return if (every $r in $R satisfies $r instance of gnode())
                   <item><p>If the principal node kind of the axis step is <code>element</code>, 
                   using the <termref def="dt-element-name-matching-rule"/>.</p>
                   <note><p>If the <termref def="dt-default-namespace-elements-and-types"/> has the
-                     special value <code>"##any</code>, the result of the expanding an unprefixed name
+                     special value <code>"##any</code>, the result of expanding an unprefixed name
                   <var>NN</var> is the wildcard <code>*:<var>NN</var></code>.</p></note></item>
                   <item><p>Otherwise, using the <termref def="dt-no-namespace-rule"/>.</p></item>
                </ulist>
@@ -13087,11 +13193,12 @@ return if (every $r in $R satisfies $r instance of gnode())
 		  such attribute, it selects an empty set of
 		  nodes.</p>
                
-               <note><p>A name test is not satisfied by an element node whose name does not match the <termref
+               <note><p>To satisfy a name test, the name of an element node must actually match the <termref
                      def="dt-expanded-qname"
-                     >expanded QName</termref> of the name test, even if it is in a <termref
+                     >expanded QName</termref> of the name test; it is not enough for
+                  the element to be in the <termref
                      def="dt-substitution-group"
-                  >substitution group</termref> whose head is the named element.</p></note>
+                  >substitution group</termref> of the named element.</p></note>
          
          <p>Wildcard node tests are interpreted as follows:</p>
           <ulist>
@@ -13153,10 +13260,10 @@ return if (every $r in $R satisfies $r instance of gnode())
              </item>
           </ulist>
                
-               <p>A <nt def="NodeTest">NodeTest</nt> can also take the form of an enclosed expression
+               <p>A <nt def="DynamicNodeTest">DynamicNodeTest</nt> takes the form of an enclosed expression
                   <code>{E}</code>
                   where <var>E</var> is an <nt def="Expr">Expr</nt>.
-               The contained expression <var>E</var> is evaluated and coerced
+               The contained expression <var>E</var> is evaluated with an absent focus and coerced
                   to a required type of <code>(xs:QName | xs:string)*</code>;
                   let the result be <var>A</var>.
                   An XNode satisfies the NodeTest if its node kind is the principal
@@ -13170,9 +13277,13 @@ return if (every $r in $R satisfies $r instance of gnode())
                   <code><var>AXIS</var>::{<var>E</var>}</code> returns the result
                of the expression:</p>
                
-               <eg>let $A as (xs:QName | xs:string)* := <var>E</var> 
+               <eg>let $A as (xs:QName | xs:string)* := fn(){<var>E</var>}() 
 return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.)) 
                satisfies atomic-equal($a, $n)]</eg>
+               
+               <note><p>The construct <code>fn(){<var>E</var>}()</code> has the effect
+               of evaluating <var>E</var> with an absent focus. If <var>E</var> depends
+               on the focus, the construct raises a type error.</p></note>
                
                <p>For example if <code>$name</code> is an <code>xs:QName</code>
                   then <code>descendant::{$name}</code> selects descendant elements 
@@ -13195,11 +13306,7 @@ return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.))
                whose name is equal to the QName <code>$name</code>: it is equivalent
                to <code>child::*[node-name()=$name]</code>.</p>
                
-               <note><p>It is permitted, though not generally useful, for the
-               enclosed expression to be focus-dependent, in which case its value
-               will vary from one selected node to another. For example,
-               <code>child::{@name}</code> selects those child elements whose local-name
-               is equal to the value of their <code>@name</code> attribute.</p></note>
+              
             </div4>
             
             <div4 id="id-selectors-for-JNodes">
@@ -13226,11 +13333,11 @@ return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.))
                   <code>xs:QName</code>, using the same rules as for wildcards in XNode steps
                (see <specref ref="id-selectors-for-xnodes"/>).</p>
                
-               <p>If the <nt def="NodeTest">NodeTest</nt> takes the form of an enclosed expression <code>{<var>E</var>}</code>,
-                  where <var>E</var> is an <nt def="Expr">Expr</nt>,
-               the contained expression <var>E</var> is evaluated and coerced to the required
+               <p>A <nt def="DynamicNodeTest">DynamicNodeTest</nt> takes the form of an enclosed expression <code>{<var>E</var>}</code>,
+                  where <var>E</var> is an <nt def="Expr">Expr</nt>.
+                  In this case the contained expression <var>E</var> is evaluated with an absent focus and coerced to the required
                   type <code>xs:anyAtomicType*</code>. 
-                  A JNode satisfies the selector if the value of its 
+                  A JNode satisfies the <code>DynamicNodeTest</code> if the value of its 
                   <term>·jkey·</term> property is equal to one of the values
                   present in the atomized result of <var>E</var>, under the rules
                   of the <function>atomic-equal</function> function.</p>
@@ -13240,18 +13347,20 @@ return <var>AXIS</var>::*[some $a in $A, $n in (node-name(.), local-name(.))
                   <code><var>AXIS</var>::{<var>E</var>}</code> returns the result
                of the expression:</p>
                
-               <eg><![CDATA[<var>AXIS</var>::*[some(<var>E</var>, atomic-equal(?, jkey()))]
-]]></eg>
-               <note>
-                  <p>The effect of <code>$map/child::{$key}</code> is thus equivalent
-                  to <code>$map/$key</code>.</p>
+               <eg>let $A as xs:anyAtomicType* := fn(){<var>E</var>}() 
+return <var>AXIS</var>::*[some $a in $A satisfies atomic-equal($a, jkey())]</eg>
+               
+               <note><p>The construct <code>fn(){<var>E</var>}()</code> has the effect
+                  of evaluating <var>E</var> with an absent focus. If <var>E</var> depends
+                  on the focus, the construct raises a type error.</p>
                </note>
-               <note>
-                  <p>It is possible, though rarely useful, for the enclosed expression
-                  to depend on the focus. For example <code>$map/child::{string(.)}</code>
-                  selects every entry in <code>$map</code> whose key
-                  is equal to its value, converted to a string.</p>
-                  <p>It is not an error if the atomized value of <var>E</var>
+                <!--<note>
+                  <p>The effect of <code>$map/child::{$key}</code> is thus equivalent
+                  to <code>$map/$key</code>. Although the latter form is more concise, the longer
+                  form might be considered to be more readable.</p>
+               </note>-->
+               
+                <note><p>It is not an error if the atomized value of <var>E</var>
                includes atomic items that select nothing: such values are effectively ignored.
                This is true both for maps and arrays.</p></note>
                
@@ -14365,8 +14474,12 @@ every <code>section</code> element that has a parent that is either a <code>chap
                <item><p><code>//*/last!jvalue()</code> returns a sequence of two
                      JNode whose <term>·jvalue·</term> is 
                strings <code>"Baker"</code>, <code>"Smith"</code>.</p>
-               <note><p>Writing <code>//*/last/jvalue()</code> would not have the desired effect:
-               it is equivalent to <code>//*/last[jkey() = jvalue()]</code>.</p></note></item>
+               <note><p>
+                  In all these examples, the <code>!</code> operator is used in preference
+                  to <code>/</code> when the intention is to compute an atomic item
+                  based on a JNode, rather than to select a child JNode by its key. In these
+                  examples using <code>/</code> would have the same effect, but using
+                  the mapping operator <code>!</code> avoids any confusion about the meaning.</p></note></item>
             </ulist>
          </div3>
          <div3 id="comparison-with-JSONPath">
@@ -19063,9 +19176,12 @@ let $z := g($x, $y)]]></eg>
                      <termdef id="dt-binding-collection" term="binding collection"
                         >In a <code>for</code> clause, when an expression is 
                         preceded by the keyword <code>in</code>, the value of that expression is 
-                        called a <term>binding collection</term>.</termdef> The collection may be either
-                     a sequence, an array, or a map. The <code>for</code>  
-                     clause iterates over its binding collection, producing multiple bindings for one or more variables. 
+                        called a <term>binding collection</term>.</termdef> When neither the keyword
+                     <code>member</code>, <code>key</code>, nor <code>value</code> is used, the collection is
+                     an arbitrary sequence; when <code>member</code> is used it is a sequence of zero or more
+                     arrays; and when <code>key</code> or <code>value</code> is used it is a sequence of zero or
+                     more maps. The <code>for</code>
+                     clause iterates over its binding collection, producing multiple bindings for one or more variables.
                      Details on how binding collections are used in <code>for</code> clauses 
                      are described in the following sections.</p>
                </item>
@@ -19090,8 +19206,12 @@ let $z := g($x, $y)]]></eg>
                <change issue="49" PR="344" date="2023-02-10">A <code>for member</code> clause is added to 
                   FLWOR expressions to allow iteration over an array.
                </change>
-               <change issue="31" PR="1249" date="2024-06-01">A <code>for key/value</code> clause is added to 
+               <change issue="31" PR="1249" date="2024-06-01">A <code>for key/value</code> clause is added to
                   FLWOR expressions to allow iteration over a map.
+               </change>
+               <change issue="2653" date="2026-06-25">A <code>for member</code> clause now accepts a sequence
+                  of zero or more arrays, and a <code>for key/value</code> clause a sequence of zero or more maps,
+                  iterating over the members or entries of each array or map in turn.
                </change>
                <change issue="189" PR="820" date="2023-11-08">
                   The value bound to a variable in a <code>for</code> clause is now converted
@@ -19106,9 +19226,11 @@ let $z := g($x, $y)]]></eg>
             <p>A <code>for</code> clause is used for iteration. Each variable in a <code>for</code> clause iterates over a 
                sequence, an array, or a map.</p>
             
-            <p>The expression following the keyword <code>in</code> is evaluated; we refer to the 
-               resulting sequence, array, or map generically as the <termref def="dt-binding-collection"/>, and to
-               its items, members, or entries as the <code>components</code> of the collection.</p>
+            <p>The expression following the keyword <code>in</code> is evaluated; we refer to the
+               resulting value generically as the <termref def="dt-binding-collection"/>. Its
+               <code>components</code> are its items (for a <nt def="ForItemBinding">ForItemBinding</nt>),
+               the members of its arrays taken in order (for a <nt def="ForMemberBinding">ForMemberBinding</nt>),
+               or the entries of its maps taken in entry order (for a <nt def="ForEntryBinding">ForEntryBinding</nt>).</p>
             
             <ulist>
                <item><p>When a <nt def="ForItemBinding">ForItemBinding</nt> is used (that is, when none of the
@@ -19116,21 +19238,25 @@ let $z := g($x, $y)]]></eg>
                   the range variable is bound in turn to each item in the <termref def="dt-binding-collection"/>,
                   which is treated as a sequence of items.</p></item>
                <item><p>When a <nt def="ForItemBinding">ForMemberBinding</nt> is used (that is, when the
-               keyword <code>member</code> is used), 
-               the range variable is bound in turn to each member of the array.</p>
+               keyword <code>member</code> is used),
+               the range variable is bound in turn to each member of each array in the binding collection,
+               taking the arrays in order and the members of each array in order.</p>
                   <p>In this case the corresponding <code>ExprSingle</code>
-                  must evaluate to a single array, otherwise a type error is raised <errorref
+                  must evaluate to a sequence of zero or more arrays; if any item in the sequence is not an array,
+                  a type error is raised <errorref
                   class="TY" code="0141"/>. However, the coercion rules also allow a JNode
-                  whose <term>·jvalue·</term> is an array to be supplied.</p></item>
+                  whose <term>·jvalue·</term> is an array to be supplied in place of an array.</p></item>
                <item><p>When a <nt def="ForItemBinding">ForEntryBinding</nt> is used (that is, when either
-                  or both of the keywords <code>key</code> and <code>value</code> are used), 
-                  the <code>key</code> range variable (if present) is bound in turn to each key in the map 
+                  or both of the keywords <code>key</code> and <code>value</code> are used),
+                  then for each map in the binding collection, taking the maps in order,
+                  the <code>key</code> range variable (if present) is bound in turn to each key in the map
                   (in <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref>), and the <code>value</code>
                   range variable (if present) is bound to the corresponding value.</p>
                   <p>In this case the corresponding <code>ExprSingle</code>
-                  must evaluate to a single map, otherwise a type error is raised <errorref
+                  must evaluate to a sequence of zero or more maps; if any item in the sequence is not a map,
+                  a type error is raised <errorref
                   class="TY" code="0141"/>. However, the coercion rules also allow a JNode
-                  whose <term>·jvalue·</term> is a map to be supplied.</p>
+                  whose <term>·jvalue·</term> is a map to be supplied in place of a map.</p>
                <p>If both the <code>key</code> and <code>value</code> variables are declared,
                their <termref def="dt-expanded-qname">expanded
 			        QNames</termref> must be distinct <errorref
@@ -19220,10 +19346,28 @@ for member $y in $expr2]]></eg>
                   <eg><![CDATA[for member $x in []]]></eg>
                   <p>Output tuple stream contains no tuples.</p>
                </item>
-               
+
+               <item diff="add" at="A">
+                  <p>Initial clause:</p>
+                  <eg><![CDATA[for member $x in ([ 1, 2 ], [ 3, 4 ])]]></eg>
+                  <p>Output tuple stream:</p>
+                  <eg><![CDATA[($x = 1)
+($x = 2)
+($x = 3)
+($x = 4)]]></eg>
+               </item>
+
                <item>
                   <p>Initial clause:</p>
                   <eg><![CDATA[for key $k value $v in { 'x': 1, 'y': 2 }]]></eg>
+                  <p>Output tuple stream:</p>
+                  <eg><![CDATA[($k = 'x', $v = 1)
+($k = 'y', $v = 2)]]></eg>
+               </item>
+
+               <item diff="add" at="A">
+                  <p>Initial clause:</p>
+                  <eg><![CDATA[for key $k value $v in ({ 'x': 1 }, { 'y': 2 })]]></eg>
                   <p>Output tuple stream:</p>
                   <eg><![CDATA[($k = 'x', $v = 1)
 ($k = 'y', $v = 2)]]></eg>
@@ -19265,6 +19409,15 @@ for member $y in $expr2]]></eg>
 ($x = (21, 22, 23), $i = 3)]]></eg>
                </item>
 
+               <item diff="add" at="A">
+                  <p>Initial clause (the positional variable is numbered across the whole binding collection):</p>
+                  <eg><![CDATA[for member $x at $i in ([ 1 ], [ 2, 3 ])]]></eg>
+                  <p>Output tuple stream:</p>
+                  <eg><![CDATA[($x = 1, $i = 1)
+($x = 2, $i = 2)
+($x = 3, $i = 3)]]></eg>
+               </item>
+
                <item>
                   <p>Initial clause:</p>
                   <eg><![CDATA[for $x allowing empty at $i in ()]]></eg>
@@ -19288,8 +19441,9 @@ for member $y in $expr2]]></eg>
                   >binding collection</termref> depends on have the same values as in a previous evaluation.</p>
             </note>
             <p>For a given input tuple, if the <termref def="dt-binding-collection" diff="chg" at="A"
-                  >binding collection</termref> for the new variable in the <code>for</code> clause <phrase diff="add" at="A">is empty 
-               (that is, it is the empty sequence or an <xtermref spec="DM40" ref="dt-empty-array"/> depending on whether <code>member</code> is specified)</phrase>,
+                  >binding collection</termref> for the new variable in the <code>for</code> clause <phrase diff="add" at="A">has no components
+               (for example, the empty sequence, or, when <code>member</code> or <code>key</code>/<code>value</code> is specified,
+               a sequence consisting only of empty arrays or maps)</phrase>,
                and if <code>allowing empty</code> is not specified, the input tuple generates zero output tuples 
                (it is not represented in the output tuple stream.)</p>
             
@@ -21190,6 +21344,10 @@ return ($i, $j)]]></eg>
             <change issue="31" PR="1249" date="2024-06-01">
                A <code>for key/value</code> clause is added to FLWOR expressions to allow iteration over
                maps.</change>
+            <change issue="2653" date="2026-06-25">
+               A <code>for member</code> clause now accepts a sequence of zero or more arrays, and a
+               <code>for key/value</code> clause a sequence of zero or more maps, iterating over the members
+               or entries of each array or map in turn.</change>
             <change issue="231" PR="1131" date="2024-04-01">
                A positional variable can be defined in a <code>for</code> expression.
             </change>
@@ -21273,22 +21431,23 @@ return ($i, $j)]]></eg>
             <item>
                <p>When the <code>member</code> keyword is present:
                   <olist>
-                     <item><p>The value of the <termref def="dt-binding-collection-xp"/> must be a single array.
-                        Otherwise, a <termref def="dt-type-error">type error</termref> is raised: <errorref class="TY" code="0141"/>.
-                        However, the coercion rules also allow a JNode whose <term>·jvalue·</term> is an array to be supplied.
+                     <item><p>The value of the <termref def="dt-binding-collection-xp"/> must be a sequence of zero
+                        or more arrays. Otherwise (if any item in the sequence is not an array), a <termref def="dt-type-error">type error</termref> is raised: <errorref class="TY" code="0141"/>.
+                        However, the coercion rules also allow a JNode whose <term>·jvalue·</term> is an array to be supplied in place of an array.
                      </p></item>
                      <item><p>If a <nt def="TypeDeclaration">TypeDeclaration</nt>
-                        is present then each member of the <termref def="dt-binding-collection-xp"/> array
+                        is present then each member of each array in the <termref def="dt-binding-collection-xp"/>
                         is converted to the specified type by applying the <termref def="dt-coercion-rules"/>.
                         (Recall that this can be any sequence, not necessarily a single item). </p></item>
                      <item><p>The result of the single-variable <code>for member</code> expression is obtained
-                        by evaluating the <term>return expression</term> once 
-                        for each member of that array, with the range variable bound to that member </p></item>
-                     <item><p>The <term>return expression</term> is evaluated once 
-                        for each member of the <termref def="dt-binding-collection-xp"/> array, 
+                        by evaluating the <term>return expression</term> once
+                        for each member of each array in the <termref def="dt-binding-collection-xp"/>,
+                        taking the arrays in order and the members of each array in order, with the range variable bound to that member </p></item>
+                     <item><p>The <term>return expression</term> is evaluated once
+                        for each such member,
                         with a dynamic context in which
-                        the <term>range variable</term> is bound to that member, and the <term>position variable</term> 
-                        (if present) is bound to the one-based position of that member in the <termref def="dt-binding-collection-xp"/>.</p></item>
+                        the <term>range variable</term> is bound to that member, and the <term>position variable</term>
+                        (if present) is bound to the one-based position of that member within the <termref def="dt-binding-collection-xp"/>, counting members across all arrays.</p></item>
                      <item><p>The result of the <code>for</code> expression is the <termref def="dt-sequence-concatenation"/>
                         of the results of the successive evaluations of the <term>return expression</term>.</p>
                      <p>Note that the result is a sequence, not an array.</p></item>
@@ -21302,11 +21461,11 @@ return ($i, $j)]]></eg>
             <item>
                <p>When the <code>key</code> and/or <code>value</code> keywords are present:
                   <olist>
-                     <item><p>The value of the <termref def="dt-binding-collection-xp"/> must be a single map.
-                        Otherwise, a <termref def="dt-type-error">type error</termref> is raised: 
+                     <item><p>The value of the <termref def="dt-binding-collection-xp"/> must be a sequence of zero
+                        or more maps. Otherwise (if any item in the sequence is not a map), a <termref def="dt-type-error">type error</termref> is raised:
                         <errorref class="TY" code="0141"/>. However, the coercion rules also allow a JNode
-                        whose <term>·jvalue·</term> is a map to be supplied.
-                        The map is treated as an ordered sequence of key/value
+                        whose <term>·jvalue·</term> is a map to be supplied in place of a map.
+                        Each map is treated as an ordered sequence of key/value
                         pairs.
                      </p></item>
                      <item><p>If the <code>key</code> keyword is present, then the corresponding
@@ -21323,18 +21482,19 @@ return ($i, $j)]]></eg>
                         is present for the value, then each value is converted to the specified type by 
                         applying the <termref def="dt-coercion-rules"/>.</p></item>
                      <item><p>The result of the single-variable <code>for key/value</code> expression is obtained
-                        by evaluating the <term>return expression</term> once 
-                        for each entry in the map, with the range variables bound to that entry as described.</p></item>
-                     <item><p>The <term>return expression</term> is evaluated once 
-                        for each entry of the <termref def="dt-binding-collection-xp"/> map, 
+                        by evaluating the <term>return expression</term> once
+                        for each entry of each map in the <termref def="dt-binding-collection-xp"/>, taking the maps
+                        in order, with the range variables bound to that entry as described.</p></item>
+                     <item><p>The <term>return expression</term> is evaluated once
+                        for each such entry,
                         with a dynamic context in which
                         the <code>key</code> <term>range variable</term> (if present)
-                        is bound to the key part of that entry, 
+                        is bound to the key part of that entry,
                         the <code>value</code> <term>range variable</term> (if present)
-                        is bound to the value part of that entry, and the <term>position variable</term> 
-                        (if present) is bound to the one-based position of that entry in the 
-                        defined ordering of the 
-                        <termref def="dt-binding-collection-xp"/>.</p></item>
+                        is bound to the value part of that entry, and the <term>position variable</term>
+                        (if present) is bound to the one-based position of that entry in the
+                        defined ordering of the <termref def="dt-binding-collection-xp"/>,
+                        counting entries across all maps.</p></item>
                      <item><p>The result of the <code>for</code> expression is the <termref def="dt-sequence-concatenation"/>
                         of the results of the successive evaluations of the <term>return expression</term>.</p>
                      <p>Note that the result is a sequence, not a map.</p></item>
@@ -21419,6 +21579,13 @@ return $map ! (?x + ?y)</eg>
 return `{$key}={$value}`</eg>
          <p>The result is the sequence <code>("x=1", "y=2", "z=3")</code> (but
          not necessarily in that order).</p>
+
+         <p diff="add" at="A">The binding expression may also evaluate to a sequence of arrays or maps, in which
+         case the members or entries of each array or map are processed in turn. The following example
+         iterates over the members of two arrays:</p>
+         <eg diff="add" at="A">for member $m in ([ 1, 2 ], [ 3, 4 ])
+return $m</eg>
+         <p diff="add" at="A">The result is the sequence <code>(1, 2, 3, 4)</code>.</p>
          
          <note>
             <p>The focus for evaluation of the <code>return</code> clause of a <code>for</code> expression
@@ -22900,6 +23067,9 @@ return $temp</eg>
                   <change issue="2143" PR="2147" date="2025-08-04">A method call invokes a function
                      held as the value of an entry in a map, supplying the map implicitly
                      as the value of the first argument.</change>
+                  <change issue="2219" date="2026-06-25">The equivalent code for a method call now
+                     inlines the map lookup as the target of the function call, aligning method calls
+                     with the generalization of dynamic function calls to sequences of functions.</change>
                </changes>
             
             <scrap>
@@ -22966,10 +23136,9 @@ let $rectangle := {
                <p>The expression <code><var>M</var> =?> <var>N</var>(<var>X</var>, <var>Y</var>, ...)</code>
                   is by definition equivalent to:</p>
               <eg>for $map as map(*) in <var>M</var>
-let $f as function(*) := $map?<var>N</var>                 
-return $f($map, <var>X</var>, <var>Y</var>, ...)</eg> 
-            <p>(where <code>$map</code> and <code>$f</code>
-                  are otherwise unused variable names).</p>
+return $map?<var>N</var>($map, <var>X</var>, <var>Y</var>, ...)</eg>
+            <p>(where <code>$map</code>
+                  is an otherwise unused variable name).</p>
             
               <note><p>The left-hand operand can be a sequence of maps. For example, given <code>$rectangle</code>
               defined as in the first example above, the expression <code>((1 to 2) ! $rectangle =?> resize(.)) =?> area()</code>
@@ -22988,8 +23157,9 @@ return $f($map, <var>X</var>, <var>Y</var>, ...)</eg>
                         key <var>N</var> (as an instance of <code>xs:string</code>,
                         <code>xs:untypedAtomic</code>, or <code>xs:anyURI</code>);</p></item>
                      <item><p>The value of that entry must be
-                     a single function item;</p></item>
-                     <item><p>That function item must have an arity equal to one plus the number
+                     a (possibly empty) sequence of function items; if there are several, each is
+                     called in turn, and the results are concatenated;</p></item>
+                     <item><p>Each such function item must have an arity equal to one plus the number
                         of supplied arguments, and the signature of the function
                         must allow a map to be supplied as the first argument.</p></item>
                   </ulist>
@@ -24103,133 +24273,120 @@ be used to process an expression in a way that depends on its <termref
                   The specification now insists that the result of a cast to type <var>T</var> must be an
                   instance of <var>T</var>, and not of any subtype of <var>T</var>.
                </change>
+               <change issue="2644" PR="2777" date="2026-07-08">
+                  The target of a <code>cast</code> or <code>castable</code> expression can now
+                  be a sequence, an array, a map, or a record type.
+               </change>
             </changes>
             <scrap>
                <prodrecap ref="CastExpr"/>
             </scrap>
-            <p>Sometimes
-it is necessary to convert a value to a specific datatype. For this
-purpose, <?inject language?> provides a <code>cast</code> expression that
-creates a new value of a specific type based on an existing value. A
+            <p>A <code>cast</code> expression 
+creates a new value of a specific type by converting an existing value. A
 <code>cast</code> expression takes two operands: an <term>input
 expression</term> and a <term>target type</term>. The type of the
-atomized value of the input expression is called the <term>input type</term>. 
-The target type must be a <termref def="dt-generalized-atomic-type"/>. In practice
-               this means it may be any of:</p>
-            <ulist>
-               <item diff="add" at="issue688"><p>The name of an <termref def="dt-named-item-type">named item type</termref>
-               defined in the <termref def="dt-static-context"/>, which in turn must refer to an item
-               type in one of the following categories.</p></item>
-               <item><p>The name of a type defined in the  <termref def="dt-is-types">in-scope schema types</termref>, 
-                  which must be a simple type (of variety atomic, list or union) <errorref class="ST" code="0052"/> .
-                  In addition, the target type cannot be <code>xs:NOTATION</code>, <code>xs:anySimpleType</code>,
-                  or <code>xs:anyAtomicType</code></p></item>
-               <item diff="add" at="A"><p>A <code>ChoiceItemType</code> representing a 
-                  <termref def="dt-generalized-atomic-type"/> (such as <code>(xs:date | xs:dateTime)</code>).</p></item>
-               <item diff="add" at="issue688"><p>An <code>EnumerationType</code> such as <code>enum("red", "green", "blue")</code>.</p></item>
-            </ulist>
-               <p>Otherwise, a static error is raised <errorref class="ST" code="0080"/>.</p> 
-            <p>The optional occurrence indicator <code>?</code> denotes that the empty
-sequence is permitted.</p> 
+input expression is called the <term>input type</term>. The item type of the <term>target type</term>
+            is called the <term>target item type</term>.</p>
             
+            <p>The target type may be any of the following:</p>
+            
+            <ulist>
+               
+               <item><p>A <termref def="dt-generalized-atomic-type"/>, specifically one of the following:</p>
 
-            <p>Casting a node to <code>xs:QName</code> can cause surprises because it uses the <termref def="dt-static-context"/>
-               of the cast expression to provide the <termref def="dt-namespace-binding">namespace bindings</termref> for this operation. 
-               Instead of casting to <code>xs:QName</code>, it is generally preferable to use the <function>fn:QName</function> 
-               function, which allows the namespace context to be taken from the document containing the QName.</p>
+                 <ulist>
+                    
+                    <item><p>The name of a type defined in the  <termref def="dt-is-types">in-scope schema types</termref>, 
+                       which must be a simple type (of variety atomic, list or union) <errorref class="ST" code="0052"/> .
+                       In addition, the target type cannot be <code>xs:NOTATION</code>, <code>xs:anySimpleType</code>,
+                       or <code>xs:anyAtomicType</code></p></item>
+                    <item diff="add" at="A"><p>A <code>ChoiceItemType</code> representing a 
+                       <termref def="dt-generalized-atomic-type"/> (such as <code>(xs:date | xs:dateTime)</code>).</p></item>
+                    <item diff="add" at="issue688"><p>An <code>EnumerationType</code> such as <code>enum("red", "green", "blue")</code>.</p></item>
+                 </ulist>
+                  <p>Casting to a generalized atomic type is described in <specref ref="casting-to-atomic"/>.</p>
+                  <p>Casting to a schema-defined list type is described in <specref ref="casting-to-list"/>.</p>
+                  <p>Casting to a schema-defined union type is described in <specref ref="casting-to-union"/>.</p>
+               </item>
+               <item>
+                  <p>A <nt def="TypedArrayType">TypedArrayType</nt> (for example <code>array(xs:integer)</code>). Casting to an array
+                  type is described in <specref ref="casting-to-array"/>.</p>
+               </item>
+               <item>
+                  <p>A <nt def="TypedMapType">TypedMapType</nt> (for example <code>map(xs:string, array(xs:integer)*)</code>). Casting to a map
+                     type is described in <specref ref="casting-to-map"/>.</p>
+               </item>
+               <item>
+                  <p>A <nt def="TypedRecordType">TypedRecordType</nt> (for example <code>record(x as xs:double, y as xs:double)</code>). Casting to a record
+                     type is described in <specref ref="casting-to-record"/>.</p>
+               </item>
+               <item><p>The name of a <termref def="dt-named-item-type">named item type</termref>
+                  defined in the <termref def="dt-static-context"/>, which <rfc2119>must</rfc2119> refer to an item
+                  type in one of the categories described above. The semantics are the same as if the target type
+                  were included directly.</p></item>
+               <item>
+                  <p>Any of the above item types followed by an occurrence indicator (<code>*</code>, <code>+</code>, or <code>?</code>). </p>
+               </item>
+               
+            </ulist>
+               <p>If the target type is not in one of the categories listed, then a static error is raised <errorref class="ST" code="0080"/>.</p> 
+           
+            
+            <div4 id="casting-to-atomic">
+               <head>Casting to a Generalized Atomic Type</head>
+            
+            <p>The semantics of the <code>cast</code> expression when the target type is a <termref def="dt-generalized-atomic-type"/>
+               are as follows:</p>
 
-
-            <p>The semantics of the <code>cast</code> expression
-are as follows:</p>
 
             <olist>
 
                <item>
-                  <p>The input expression is evaluated.</p>
+                  <p>The input expression is evaluated to provide a value <var>V0</var>.</p>
                </item>
 
                <item>
-                  <p>The result of the first step is <termref def="dt-atomization"
-                        >atomized</termref>.</p>
-               </item>
-
-
-               <item>
-                  <p> If the result of atomization is a
-sequence of more than one atomic item, a <termref
-                        def="dt-type-error">type error</termref> is raised <errorref class="TY"
-                        code="0004"/>.</p>
+                  <p><var>V0</var> is <termref def="dt-atomization"
+                        >atomized</termref>, producing a value <var>V1</var>.</p>
                </item>
 
 
 
                <item>
-                  <p>If the result
-of atomization is the empty sequence:</p>
-
-                  <olist>
-
-
-
-                     <item>
-                        <p>If
-<code>?</code> is specified after the target type, the result of the
-<code>cast</code> expression is the empty sequence.</p>
-                     </item>
-
-
-
-                     <item>
-                        <p>
-If <code>?</code> is not specified after the target type, a <termref
-                              def="dt-type-error">type error</termref> is raised <errorref
-                              class="TY" code="0004"/>.</p>
-                     </item>
-                  </olist>
+                  <p>Each atomic item in <var>V1</var> is cast to the target item type as described in <xspecref
+                        spec="FO40" ref="casting"/>, producing a sequence of atomic items <var>V2</var>.</p>
+                  
+                  
+                     <p> 
+                        This process may result in a type error, if casting from the source type to the
+                        target type is not supported (for example attempting to convert an
+                        integer to a date).
+                     </p>
+                  
+                     <p>The process may also result in a dynamic error, if the particular input value cannot be
+                        converted to the target type (for example, attempting to convert
+                        the string <code>"three"</code> to an integer).</p>
+                  
                </item>
-
-
-
+               
                <item>
-                  <p>If the result of atomization is a single
-atomic item, the result of the cast expression is determined by
-casting to the target type as described in <xspecref
-                        spec="FO40" ref="casting"
-                        />.</p> <!--When casting, an
-implementation may need to determine whether one type is derived by
-restriction from another. An implementation can determine this either
-by examining the <termref
-                        def="dt-issd"
-                        >in-scope schema
-definitions</termref> or by using an alternative, <termref
-                        def="dt-implementation-dependent">implementation-dependent</termref>
-mechanism such as a data dictionary.-->
+                  <p>If the number of items in <var>V2</var> does not match the requirements of the
+                     (explicit or implicit) occurrence indicator, then a type error <errorref class="TY" code="0004"/>
+                  is raised.</p>
+                  <p>For example, a type error is raised if the input is an empty sequence and the target type
+                  does not include the occurrence indicator <code>?</code> or <code>*</code>.</p>
+               </item>
+               
+               <item><p>The result of the cast expression is <var>V2</var>.</p></item>
+            </olist>
+               
 
-<p>The result of a cast expression is one of the following:</p> 
-
-<olist>
-                        <item>
-                           <p> 
-    A value of the target type (or, in the case of list types,
-    a sequence of values that are instances of the item type of the
-    list type).
-  </p>
-                        </item>
-                        <item>
-                           <p> 
-    A type error, if casting from the source type to the
-    target type is not supported (for example attempting to convert an
-    integer to a date).
-  </p>
-                        </item>
-                        <item>
-                           <p> 
-    A dynamic error, if the particular input value cannot be
-    converted to the target type (for example, attempting to convert
-    the string <code>"three"</code> to an integer).
-  </p>
-                        </item>
-                     </olist>
+                  
+                  <note><p>Casting a node to <code>xs:QName</code> can cause surprises because it uses the <termref def="dt-static-context"/>
+                     of the cast expression to provide the <termref def="dt-namespace-binding">namespace bindings</termref> for this operation. 
+                     Instead of casting to <code>xs:QName</code>, it is generally preferable to use the <function>fn:QName</function> 
+                     function, which allows the namespace context to be taken from the document containing the QName.</p>
+                  </note>
                   
 
                   <note diff="add" at="issue688"><p>Casting to an enumeration type relies on the fact that an enumeration type
@@ -24248,16 +24405,222 @@ mechanism such as a data dictionary.-->
                   
                   
 
-               </item>
-            </olist>
             
             <p>In general, expressions are free to return a value belonging to a subtype of the type
                required by the specification. Cast expressions are an exception to this rule: when casting
                to an atomic type <var>T</var>, the result (if the cast succeeds) will always be an atomic
                item whose type annotation is <var>T</var>, rather than some subtype of <var>T</var>.</p>
+            
+            </div4>
+            <div4 id="casting-to-union">
+               <head>Casting to a Union Type</head>
+               
+               <p>The target type of a cast expression may be a schema-defined union type, even if the union
+               type does not satisfy the conditions making it a <termref def="dt-generalized-atomic-type"/>. (For example,
+               it may be a union type that includes a list type in its transitive membership.)</p>
+               
+               <p>The rules for casting a single item to a union type are given in <xspecref spec="FO40" ref="casting-to-union"/>.</p>
+               
+               <p>In the general case:</p>
+               <olist>
+               <item>
+                    <p>The input expression is evaluated to provide a value <var>V0</var>.</p>
+                 </item>
+                
+                 <item>
+                    <p><var>V0</var> is <termref def="dt-atomization"
+                       >atomized</termref>, producing a value <var>V1</var>.</p>
+                 </item>
+  
+                 <item>
+                    <p>Each atomic item in <var>V1</var> is cast to the target union type as described 
+                       in <xspecref spec="FO40" ref="casting-to-union"/>, producing a sequence of atomic items <var>V2</var>.</p>
+                                       
+                    <p>The process may result in a dynamic error, if the particular input value cannot be
+                       converted to any of the member types of the union type.</p>
+                    
+                 </item>
+                 
+                 <item>
+                    <p>If the number of items in <var>V2</var> does not match the requirements of the
+                       (explicit or implicit) occurrence indicator, then a type error <errorref class="TY" code="0004"/>
+                       is raised.</p>
+                    <p>For example, a type error is raised if the input is an empty sequence and the target type
+                       does not include the occurrence indicator <code>?</code> or <code>*</code>.</p>
+                 </item>
+                  
+                 <item><p>The result of the cast expression is <var>V2</var>.</p></item>
+               </olist>
+            </div4>
+            <div4 id="casting-to-list">
+               <head>Casting to a List Type</head>
+               
+               <p>The target type of a cast expression may be a schema-defined list type.</p>
+               
+               <p>The rules for casting a single item to a list type are given in <xspecref spec="FO40" ref="casting-to-list"/>.
+               The result is, in general, a sequence of atomic items, each being an instance of the list type's item type.
+               The result of the cast expression is the <termref def="dt-sequence-concatenation"/> of the results of casting
+               the individual items in the input sequence.</p>
+               
+               <p>For backwards compatibility, when the target type is a list type, the cardinality of the result is not
+               constrained by the occurrence indicator in the cast expression.</p>
+               
+               <note>
+                  <p>In earlier versions of the specification, the occurrence indicator <code>?</code> constrained the
+                  number of items in the input of the cast expression, not the number of items in the output.</p>
+               </note>
+               
+               
+            </div4>
+            
+            <div4 id="casting-to-array">
+               <head>Casting to an Array Type</head>
+               
+               <p>The target type of a cast expression may be a <nt def="TypedArrayType">TypedArrayType</nt>, for example
+                  <code>array(xs:integer)</code>. Let <var>T</var> be the member type of the array type (<code>xs:integer</code>
+               in this example).</p>
+               
+               <p>The input to the cast expression is first <termref def="dt-coercion-rules">coerced</termref> to the required type <code>array(*)*</code>; 
+                  if this fails then a type error <errorref class="TY" code="0004"/> is raised.</p>
+               
+               <p>The effect of the cast expression is to process each input array <var>A0</var> by constructing a new array <var>A1</var>, 
+                  whose members correspond one-to-one with the members
+               of <var>A0</var>, each member <var>M0</var> of <var>A0</var> being processed to produce a member <var>M1</var> of <var>A1</var> as follows:</p>
+               
+               <ulist>
+                  <item><p>If <var>M0</var> matches <var>T</var>, then <var>M1</var> is <var>M0</var>.</p></item>
+                  <item><p>Otherwise, if <var>T</var> is a valid <nt def="CastTarget">CastTarget</nt>, then <var>M1</var> is <code><var>M0</var> cast as <var>T</var></code>.</p></item>
+                  <item><p>Otherwise a type error <errorref class="TY" code="0155"/> is raised.</p></item>
+               </ulist>
+             
+               
+               <p>For example, <code>[[1], [2], [3]] cast as array(xs:integer)</code> returns <code>[1, 2, 3]</code>, because casting
+                  the array <code>[1]</code> to <code>xs:integer</code> produces the integer <code>1</code>.</p>
+               
+               <p>The number of arrays in the result (and therefore in the input) must conform with the explicit or implicit occurrence indicator, otherwise
+                  a type error <errorref class="TY" code="0004"/> is raised.</p>
+               
+               <note><p>If the member type of the array is not a valid <code>CastTarget</code>, for example if the array type
+                  is <code>array(function(*))</code> or <code>array(element(*))</code>, then the existing array members must already
+                  be instances of the target type: the cast will then leave the input array unchanged.
+               </p></note>
+               
+              
+               
+            </div4>
+            
+            <div4 id="casting-to-map">
+               <head>Casting to a Map Type</head>
+               
+               <p>The target type of a cast expression may be a <nt def="TypedMapType">TypedMapType</nt>, for example
+                  <code>map(xs:integer, item()*)</code>. Let <var>T/K</var> and <var>T/V</var> be respectively the key type
+                  and the value type of the <nt def="TypedMapType">TypedMapType</nt>, that is, in this example, <code>xs:integer</code>
+                  and <code>item()*</code> respectively.</p>
+                  
+                  <!--Both the key type and the value type (here <code>xs:integer</code> and
+                  <code>item()*</code> respectively) must
+                  be eligible in their own right as the target of a cast expression, otherwise a static error <errorref class="ST" code="0080"/>
+                  is raised.</p>-->
+               
+               
+               <p>The input to the cast expression is first <termref def="dt-coercion-rules">coerced</termref> to the required type <code>map(*)*</code>; 
+                  if this fails then a type error <errorref class="TY" code="0004"/> is raised.</p>
+               
+               <p>The effect of the cast expression is to process each input map <var>M0</var> by constructing a new map <var>M1</var>, whose entries correspond one-to-one with the entries
+                  of <var>M</var>, each entry in the result map being obtained as follows. Let (<var>K0</var>, <var>V0</var>) be an entry
+                  in <var>M0</var>, and let (<var>K1</var>, <var>V1</var>) be the corresponding entry in <var>M1</var>. Then:</p>
+               
+               <ulist>
+                  <item><p>If <var>K0</var> matches <var>T/K</var>, then <var>K1</var> is <var>K0</var>.</p></item>
+                  <item><p>Otehrwise, if <var>T/K</var> is a valid <nt def="CastTarget">CastTarget</nt>, then <var>K1</var> is <code><var>K0</var> cast as <var>T/K</var></code>.</p></item>
+                  <item><p>Otherwise a type error <errorref class="TY" code="0155"/> is raised.</p></item>
+                  <item><p>If <var>V0</var> matches <var>T/V</var>, then <var>V1</var> is <var>V0</var>.</p></item>
+                  <item><p>Otherwise, if <var>T/V</var> is a valid <nt def="CastTarget">CastTarget</nt>, then <var>V1</var> is <code><var>V0</var> cast as <var>T/V</var></code>.</p></item>
+                  <item><p>Otherwise a type error <errorref class="TY" code="0155"/> is raised.</p></item>
+               </ulist>
+               
+               
+              
+               
+               <p>For example, <code>{"1":"a", "2":"b", "3":"c"} cast as map(xs:integer, xs:string)</code> returns 
+                  <code>{1:"a", 2:"b", 3:"c"}</code>.</p>
+               
+               <p>If the effect of casting is to generate duplicate keys, then a dynamic
+                  error is raised <errorref class="DY" code="0137"/>.</p>
+               
+               <p>The number of maps in the result (and therefore in the input) must conform with the explicit or implicit occurrence indicator, otherwise
+                  a type error <errorref class="TY" code="0004"/> is raised.</p>
+               
+               
+               
+            </div4>
+            
+            <div4 id="casting-to-record">
+               <head>Casting to a Record Type</head>
+               
+               <p>The target type of a cast expression may be a <nt def="TypedRecordType">TypedRecordType</nt>, for example
+                  <code>record(x as xs:integer, y as item()*)</code>. <!--The value types for each field  (here <code>xs:integer</code> and
+                  <code>item()*</code> respectively) must
+                  be eligible in their own right as the target of a cast expression, otherwise a static error <errorref class="ST" code="0080"/>
+                  is raised.--></p>
+               
+               <p>The input to the cast expression is <termref def="dt-coercion-rules">coerced</termref> to the required type <code>map(*)*</code>; 
+                  if this fails then a type error <errorref class="TY" code="0155"/> is raised. 
+                  Records are maps, so the input can also include records.</p>
+               
+               <p>The effect of the cast expression is to process each input map <var>M0</var> by constructing a new record <var>R1</var>of the target record type.
+                  For each field in the definition of the target record type, if <var>K0</var> is the name of the field (as a string)
+                  and <var>T</var> is the required type of the field, then the value of field <var>K0</var> in record <var>R1</var>
+               will be as follows:</p>
+               
+               <ulist>
+                  <item>
+                     <p>If <code>map:contains(<var>M0</var>, <var>K0</var>)</code> is true, let <var>V0</var> be 
+                        <code>map:get(<var>M0</var>, <var>K0</var>)</code>:</p>
+                     <ulist>
+                        <item><p>If <var>V0</var> matches <var>T</var>, then <var>V0</var>;</p></item>
+                        <item><p>Otherwise, if <var>T</var> is a valid <code>CastTarget</code>, then <code><var>V0</var> cast as <var>T</var></code>;</p></item>
+                        <item><p>Otherwise a type error <errorref class="TY" code="0155"/> is raised.</p></item>
+                     </ulist>
+                  </item>
+                  <item><p>Otherwise:</p>
+                     <ulist>
+                        <item><p>If the empty sequence matches <var>T</var>, then the empty sequence;</p></item>
+                        <item><p>Otherwise a type error <errorref class="TY" code="0155"/> is raised.</p></item>
+                     </ulist>
+                  </item>
+               </ulist>
+               
+               <p>Note that unreferenced entries in the map are simply ignored (that is, they are effectively discarded).</p>
+               
+                          
+               <p>For example, <code>{"first": "John", "middle": "Ignatius", "last": "Smith"} cast as record(title, first, last)</code> returns 
+                  <code>{"title": (), "first": "John", "last": "Smith}</code> as an instance of the target record type.</p>
+               
+              
+               
+               <p>The number of records in the result (and therefore, the number of maps in the input) must conform with the explicit 
+                  or implicit occurrence indicator, otherwise
+                  a type error <errorref class="TY" code="0004"/> is raised.</p>
+               
+               
+               
+            </div4>
+         
          </div3>
          <div3 id="id-castable">
             <head>Castable</head>
+            
+            <changes>
+               <change issue="2644" PR="2777" date="2026-07-08">
+                  The target of a <code>cast</code> or <code>castable</code> expression can now
+                  be a sequence, an array, a map, or a record type.
+               </change>
+               <change issue="2644" PR="2777" date="2026-07-08">
+                  An error that occurs while atomizing the operand of a <code>castable</code> expression now results
+                  in the expression returning false, not in an error.
+               </change>
+            </changes>
             
             <scrap>
                <prodrecap ref="CastableExpr"/>
@@ -24275,8 +24638,13 @@ The <phrase diff="chg" at="A">target type</phrase> is subject to the same
 if the result of evaluating <code>E</code>  
 can be successfully cast into the target type <code>T</code> by using a <code>cast</code> expression; 
 otherwise it returns <code>false</code>. 
-If evaluation of <code>E</code> fails with a dynamic error or if the value of <code>E</code> cannot be atomized, 
+If evaluation of <code>E</code> fails with a dynamic error, 
 the <code>castable</code> expression as a whole fails.</p> 
+            
+            <note><p>In earlier versions of this specification, an error in atomizing the operand resulted
+            in the expression failing with an error; it now causes the expression to return false. This is because
+            atomization is now one of many coercions that might be applied, and it can occur implicitly
+            when casting to a target type such as <code>map(xs:integer, xs:string)</code>.</p></note>
 
 <p>The <code>castable</code> expression can be used as a <termref
                   def="dt-predicate"

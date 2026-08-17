@@ -3299,6 +3299,10 @@ string conversion of the number as obtained above, and the appropriate <var>suff
                      Assertions (including <code>^</code> and <code>$</code>) can no longer be followed
                      by a quantifier.
                   </change>
+                  <change issue="2660 2729" date="2026-07-19">
+                     Capturing groups can be named, using <code>(?&lt;<var>name</var>&gt;…)</code>, and a
+                     named group can be referenced within the pattern by <code>\k&lt;<var>name</var>&gt;</code>.
+                  </change>
                </changes>
                <p>The regular expression syntax used by these functions is defined in terms of
                         the regular expression syntax specified in XSD 1.1 (see <bibref ref="xmlschema11-2"/>), 
@@ -3515,7 +3519,7 @@ WildcardEsc         ::= '.'
 §startOfString      ::= '^'
 §endOfString        ::= '$'
 §wordBoundary       ::= '\b' | '\B'
-§backReference      ::= '\' 【1➜9】【0➜9】*
+§backReference      ::= ( '\' 【1➜9】【0➜9】* ) | ( '\k<' groupName '>' )
 §positiveLookahead  ::= '(?=' regExp ')' 
                         | '(*positive_lookahead:' regExp ')'
 §negativeLookahead  ::= '(?!' regExp ')' 
@@ -3660,8 +3664,11 @@ WildcardEsc         ::= '.'
                         <code>groupName</code> production: that is, an ASCII letter followed by zero or
                         more ASCII letters or digits.</termdef> A named capturing group is a capturing
                         subexpression, and is numbered in the same way as any other capturing subexpression.
-                        In the result of <function>fn:matching-segments</function>, however, it is keyed by
-                        its name rather than by its group number.</p>
+                        However, in the maps of captured groups returned by
+                        <function>fn:matching-segments</function> or passed to a replacement function
+                        by <function>fn:replace</function>, it is keyed by its name rather than by its
+                        group number, and in a replacement string, it can be referenced by the
+                        variable marker <code>$&lt;<var>name</var>&gt;</code>.</p>
 
                      <p>Within a single regular expression, the same name must not be used for more than one
                         capturing group. A regular expression that uses a name that does not conform to the
@@ -3686,11 +3693,16 @@ WildcardEsc         ::= '.'
                      </p>
                      <p>A back-reference with number <var>N</var> matches a string that is the same as
                         the value of the <code>N</code>th captured substring.</p>
+                     <p>The construct <code>\k&lt;<var>name</var>&gt;</code> is a back-reference
+                        to the <termref def="dt-named-capturing-group">named capturing group</termref>
+                        with the given name, equivalent to a back-reference with the number of that
+                        group. The regular expression is invalid if no such group exists.</p>
 				 
                 <p>For example, the regular expression
                 <code>('|").*\1</code> matches a sequence of characters
                 delimited either by an apostrophe at the start and end, or by a
-                quotation mark at the start and end. </p>
+                quotation mark at the start and end. The regular expression
+                <code>(?&lt;quote&gt;'|").*\k&lt;quote&gt;</code> is equivalent.</p>
                      <p>If no string has been matched by the <code>N</code>th capturing 
                sub-expression, the back-reference is interpreted as matching 
                a zero-length string.</p>
@@ -8173,6 +8185,11 @@ map( xs:string,
                then the element <code><![CDATA[<data x:val="3" y:val="4"/>]]></code> becomes either
                <code>{ "data": { "@val": ["3", "4"] } }</code> or (because attribute order is unpredictable)
                <code>{ "data": { "@val": ["4", "3"] } }</code>.</p>
+
+               <p>Where both rules apply, the <code>attribute-marker</code> rule is applied first: a conflict
+               between the names of attributes and child elements reverts the marker to <code>"@"</code>,
+               decided separately for each element. This preserves the round trip; entries that are combined
+               into an array, by contrast, cannot be reconverted by <function>fn:map-to-element</function>.</p>
                
                
                
@@ -8436,14 +8453,172 @@ map( xs:string,
                   <code>&lt;ref name="x"/&gt;</code> could be transformed to <code>&lt;ref&gt;x&lt;/ref&gt;</code>.</p></note>
             </div3>
             
+<div3 id="id-converting-maps-to-elements">
+   <head>Converting maps to elements</head>
+   <changes>
+      <change issue="1962" PR="2707" date="2026-06-24">
+         A new function <function>fn:map-to-element</function> is provided for converting
+         a map produced by <function>fn:element-to-map</function> back to an XML element node.
+      </change>
+   </changes>
+
+   <p>The <function>fn:map-to-element</function> function performs the inverse of
+      <function>fn:element-to-map</function>: it reconstructs an element node from a
+      <termref def="dt-single-entry-map">single-entry map</termref> of the form produced
+      by that function. The function is designed so that for any element
+      <var>E</var> and options map <var>OPTS</var>,</p>
+
+   <eg><var>E</var> => element-to-map(<var>OPTS</var>) => map-to-element(<var>OPTS</var>)</eg>
+
+   <p>reconstructs an element that is <function>fn:deep-equal</function> to <var>E</var>,
+      except for the information identified as lost in <specref ref="id-loss-of-xdm-information"/>.
+      Supplying the same <code>plan</code>, <code>attribute-marker</code>, <code>content-key</code>,
+      and <code>name-format</code> options that were used for the forward conversion is generally
+      necessary to achieve this round trip. In particular, <code>list</code> layout (requested
+      explicitly, or selected automatically when an element’s children all share a name) does not
+      preserve the child element names; reconstructing them requires an explicit <code>plan</code>
+      supplying the <code>child</code> name, failing which the function raises
+      <errorref class="JS" code="0009"/>.</p>
+
+   <note><p>This function is not intended as a general-purpose converter from arbitrary JSON to
+      XML. It expects the specific structure produced by <function>fn:element-to-map</function>
+      (a single-entry map, attribute keys prefixed with the <code>attribute-marker</code>, arrays
+      of like-named children, and so on), and it raises <errorref class="JS" code="0009"/> for
+      input that does not follow those conventions. To construct XML from arbitrary JSON, use
+      <function>fn:json-to-xml</function>, or <function>fn:parse-json</function> together with a
+      bespoke transformation.</p></note>
+
+   <p>The same <code>$options</code> entries as for <function>fn:element-to-map</function> are
+      recognized; they are interpreted in the reverse direction:</p>
+
+   <ulist>
+      <item><p>The <code>plan</code> determines, for each element name, the layout (and where
+         applicable the content <code>type</code> and the <code>child</code> element name) that
+         was used in the forward direction, and hence how the corresponding map value is to be
+         interpreted. Layouts are those recorded by <specref ref="id-selecting-element-layout"/>.
+         Entries with the layout <code>deep-skip</code> are ignored; the layout <code>error</code>
+         is not relevant to this function.</p></item>
+      <item><p>A map key beginning with the <code>attribute-marker</code> denotes an attribute;
+         the marker is removed to recover the attribute name.</p></item>
+      <item><p>A map key equal to the <code>content-key</code> denotes simple element content
+         (when its value is atomic) or, when its value is <code>#fn:null</code>, a nilled element.</p></item>
+      <item><p>If a key both begins with the <code>attribute-marker</code> and equals the
+         <code>content-key</code>, the content interpretation takes precedence over the attribute
+         interpretation. (Within an array, the reserved keys <code>#comment</code> and
+         <code>#processing-instruction</code> are likewise recognized in preference to an attribute
+         interpretation; they have no special meaning as the key of a child map.) Attributes
+         round-trip as attributes only if the <code>attribute-marker</code> is distinctive, that is,
+         if no genuine child-element key begins with it. An empty
+         <code>attribute-marker</code> leaves attributes and child elements
+         indistinguishable, so such a configuration does not round-trip; under <code>name-format</code>
+         <code>lexical</code> a prefixed name is recovered only if its prefix is bound in the
+         static context of the function call.</p></item>
+      <item><p>The <code>name-format</code> governs how keys are decoded into names, as the
+         inverse of <specref ref="element-and-attribute-names"/>. A key of the form
+         <code>Q{uri}local</code> always yields a name in the namespace <code>uri</code>.
+         When <code>name-format</code> is <code>default</code>, a key consisting of a local name
+         alone yields a name in no namespace if it is the top-level element, and otherwise a name
+         in the namespace of the parent element; this is the inverse of the rule that omits the
+         namespace for a child in the same namespace as its parent. When <code>name-format</code>
+         is <code>eqname</code>, a key consisting of a local name alone always yields a name in no
+         namespace, since names in a namespace are invariably encoded as <code>Q{uri}local</code>.
+         Namespace prefixes are always synthesized; under <code>name-format</code> <code>local</code> or <code>lexical</code>,
+         namespace URIs cannot be recovered.</p></item>
+   </ulist>
+
+   <p>In the absence of a <code>plan</code>, the value is interpreted directly from its structure,
+      by the rules in <specref ref="id-map-to-element-value"/>. A <code>plan</code> is consulted only
+      where the structure alone is ambiguous: to supply the <code>child</code> element name for
+      <code>list</code> layout, wherever the array appears; and to request <code>xml</code>-layout
+      parsing.</p>
+
+   <p>If the supplied map is not a single-entry map, the function fails with a dynamic error
+      <errorref class="JS" code="0009"/>. Otherwise the single entry is processed: its key is
+      decoded into the element name, and its value is interpreted as the content of that element,
+      as follows. A key that does not decode to a valid, non-empty element or attribute name
+      causes the function to fail with <errorref class="JS" code="0009"/>.</p>
+
+   <div4 id="id-map-to-element-value">
+      <head>Interpreting a map value</head>
+
+      <p>A map value <var>V</var> is interpreted according to its kind, contributing to the
+         element’s content:</p>
+
+      <olist>
+         <item><p>If <var>V</var> is an atomic value, it contributes a single text-node child
+            whose string value is the lexical representation of <var>V</var>. (Numeric and boolean
+            values therefore lose their type and reappear as text, just as type annotations are
+            lost in the forward direction.) The zero-length string contributes no child, which is
+            the common inverse of the <code>empty</code> and <code>simple</code> layouts.</p></item>
+
+         <item><p>If <var>V</var> is the value <code>#fn:null</code>, the element is nilled: the
+            attribute <code>xsi:nil="true"</code> is added, together with a declaration of the
+            <code>xsi</code> namespace. This is the inverse of the "Mapping for nilled elements"
+            rules of every layout.</p></item>
+
+         <item><p>If <var>V</var> is a map, each entry contributes to the element as follows:</p>
+            <ulist>
+               <item><p>If the key begins with the <code>attribute-marker</code>, it contributes
+                  an attribute whose name is the decoded key and whose value is the lexical
+                  representation of the entry value.</p></item>
+               <item><p>If the key is equal to the <code>content-key</code>, it contributes simple
+                  text content (atomic value) or a nilled marker (value <code>#fn:null</code>).</p></item>
+               <item><p>Otherwise the key contributes one or more child elements named by the
+                  decoded key: an atomic or map value contributes a single child; an array value
+                  contributes one child per array member, each member being interpreted recursively
+                  as that child’s content. If, however, the <code>plan</code> assigns
+                  <code>list</code> layout to the decoded key, the array is the content of a single
+                  child, and its members become the children of that child, named by the
+                  <code>child</code> entry of the plan. This single rule is the common inverse of the
+                  <code>empty-plus</code>, <code>simple-plus</code>, <code>record</code>, and
+                  <code>list-plus</code> layouts.</p></item>
+            </ulist>
+         </item>
+
+         <item><p>If <var>V</var> is an array, its members contribute children (and attributes) in
+            order, as the inverse of the <code>sequence</code> and <code>mixed</code> layouts. A
+            member that is a string contributes a text node; a single-entry map whose key begins
+            with the <code>attribute-marker</code> contributes an attribute; a single-entry map
+            with the key <code>#comment</code> contributes a comment node; a single-entry map with
+            the key <code>#processing-instruction</code> (whose value is a map with keys
+            <code>#target</code> and <code>#data</code>) contributes a processing-instruction node;
+            a single-entry map with the key equal to <code>content-key</code> and value
+            <code>#fn:null</code> indicates a nilled element; and any other single-entry map
+            contributes a child element. The <code>sequence</code> and <code>mixed</code> layouts
+            are reconstructed identically. If the array contains two consecutive atomic members and
+            the <code>plan</code> does not select a <code>list</code> layout, the function fails with
+            a dynamic error <errorref class="JS" code="0009"/>.</p>
+            <p>If the <code>plan</code> selects <code>list</code> or <code>list-plus</code> layout
+            for the element, the array members are instead interpreted as the content of children
+            all having the <code>child</code> element name given in the plan. If <code>list</code>
+            layout applies but no <code>child</code> name is available (the element name is not
+            recoverable from the array alone), the function fails with a dynamic error
+            <errorref class="JS" code="0009"/>.</p></item>
+
+         <item><p>If the <code>plan</code> selects <code>xml</code> layout, <var>V</var> is a string
+            containing serialized XML; it is parsed as an XML fragment and the resulting node is
+            used as the element content.</p></item>
+      </olist>
+
+      <p>In every case the result must be a well-formed element. The function fails with
+         <errorref class="JS" code="0009"/> if a value that contributes attribute, simple, or text
+         content is not a single atomic value, if simple content is combined with child elements, or
+         if a comment or processing instruction reconstructed from the map would not be well-formed
+         (for example, an invalid processing-instruction target).</p>
+   </div4>
+</div3>
+
             <!--<?local-function-index?>-->
-            
+
             <div3 id="func-element-to-map-plan">
                <head><?function fn:element-to-map-plan?></head>
             </div3>
             
             <div3 id="func-element-to-map">
                <head><?function fn:element-to-map?></head>
+            </div3>
+            <div3 id="func-map-to-element">
+               <head><?function fn:map-to-element?></head>
             </div3>
          </div2>
          
@@ -10444,9 +10619,9 @@ map( xs:string,
             of arrays each corresponding to one row. The fields within each array are
             represented as instances of <code>xs:string</code>.</p>
             
-            <p>The other two functions recognize column names, and make it easier to address
-            individual fields using these names. The <code>parse-csv</code> function
-            delivers this capability using XDM maps and functions, while <code>csv-to-xml</code>
+            <p diff="chg" at="issue2780">The other functions recognize column names, and make it easier to address
+            individual fields using these names. The <code>parse-csv</code> and <code>csv-doc</code> functions
+            deliver this capability using XDM maps and functions, while the <code>csv-to-xml</code>
             function represents the information using XDM element nodes.</p>
             
             <div3 id="csv-delimiters">
@@ -10711,9 +10886,14 @@ Bob,2023-07-14,2.34
 
                <p>The following examples illustrate more complex applications making use of CSV parsing functions.</p>
 
-               <p>A variable <code>$crlf</code> is assumed to be in scope representing the CRLF string:</p>
+               <p>The examples below assume a variable <code>$crlf</code> bound to the two-character CRLF
+                  string. In XQuery:</p>
 
-               <eg>let $crlf := fn:char(0x0D)||fn:char(0x0A)</eg>
+               <eg>let $crlf := char(0x0D) || char(0x0A)</eg>
+
+               <p>In XSLT:</p>
+
+               <eg><![CDATA[<xsl:variable name="crlf" select="char(0x0D) || char(0x0A)"/>]]></eg>
 
                <example id="csv-to-html-table">
                   <head>Converting a CSV into an HTML-style table using <function>fn:parse-csv</function></head>
@@ -10723,24 +10903,21 @@ Bob,2023-07-14,2.34
 
                   <p>Using XQuery:</p>
                   <eg><![CDATA[
-let $csv := fn:parse-csv(`name,city{ $crlf }Bob,Berlin`)
+let $csv := fn:parse-csv(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })
 return <table>
   <thead>{
-    for $column in $csv?columns?fields
+    for $column in $csv?columns
     return <th>{ $column }</th>
   }</thead>
   <tbody>{
     for $row in $csv?rows
-    return <tr>{ for $field in $row?fields return <td>{ $field }</td> }</tr>
+    return <tr>{ for $field in $row?* return <td>{ $field }</td> }</tr>
   }</tbody>
 </table>]]></eg>
 
                   <p>Using XSLT:</p>
                   <eg><![CDATA[
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-  xmlns:eg="http://example.org/eg"
-  xmlns:array="http://www.w3.org/2005/xpath-functions/array"
-  exclude-result-prefixes="eg array"
   version="4.0">
   <xsl:output method="xml" indent="true"/>
 
@@ -10754,16 +10931,16 @@ return <table>
 
   <xsl:template match="." mode="csv-tr">
     <tr>
-      <xsl:apply-templates select=".?fields" mode="csv-td"/>
+      <xsl:apply-templates select=".?*" mode="csv-td"/>
     </tr>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template name="xsl:initial-template">
-    <xsl:variable name="csv" select="parse-csv(`name,city{ $crlf }Bob,Berlin`)"/>
+    <xsl:variable name="csv" select="parse-csv(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })"/>
     <table>
       <thead>
         <tr>
-          <xsl:apply-templates select="$csv?columns?fields" mode="csv-th"/>
+          <xsl:apply-templates select="$csv?columns" mode="csv-th"/>
         </tr>
       </thead>
       <tbody>
@@ -10781,15 +10958,15 @@ return <table>
                      conversion-to-XML-table tasks simpler by providing a simple XML represenation of the data. Here, in XQuery:</p>
 
                   <eg><![CDATA[
-let $csv := csv-to-xml(`name,city{ $crlf }Bob,Berlin`)
+let $csv := csv-to-xml(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })
 return <table>
   <thead>{
-    for $column in $csv/csv/columns/column
-    return <th>{ $column }</th>
+    for $column in $csv/fn:csv/fn:columns/fn:column
+    return <th>{ string($column) }</th>
   }</thead>
   <tbody>{
-    for $row in $csv/csv/rows/row
-    return <tr>{ for $field in $row/field return <td>{ $field }</td> }</tr>
+    for $row in $csv/fn:csv/fn:rows/fn:row
+    return <tr>{ for $field in $row/fn:field return <td>{ string($field) }</td> }</tr>
   }</tbody>
 </table>
                   ]]></eg>
@@ -10815,7 +10992,7 @@ return <table>
     <tr>
       <xsl:apply-templates/>
     </tr>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template match="fn:columns">
     <thead>
@@ -10823,13 +11000,13 @@ return <table>
         <xsl:apply-templates/>
       </tr>
     </thead>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template match="fn:rows">
     <tbody>
       <xsl:apply-templates/>
     </tbody>
-  </xsl:function>
+  </xsl:template>
 
   <xsl:template match="fn:csv">
     <table>
@@ -10838,7 +11015,7 @@ return <table>
   </xsl:template>
 
   <xsl:template name="xsl:initial-template">
-    <xsl:apply-templates select="fn:csv-to-xml(`name,city{ $crlf }Bob,Berlin`)"/>
+    <xsl:apply-templates select="fn:csv-to-xml(`name,city{ $crlf }Bob,Berlin`, { 'header': true() })"/>
   </xsl:template>
 </xsl:stylesheet>
                   ]]></eg>
@@ -15018,6 +15195,16 @@ ISBN 0 521 77752 6.</bibl>
                   if the conversion plan explicitly defines the processing of a particular
                element as an error.</p>
             </error>
+
+            <error class="JS" code="0009" label="Cannot convert map to element." type="dynamic">
+               <p>Raised by <function>fn:map-to-element</function> if the supplied map cannot be
+                  converted to an element node. This includes the cases where the map is not a
+                  single-entry map; where a map key or the <code>#processing-instruction</code>
+                  structure does not have the form required by the selected layout; where a
+                  reconstructed element or attribute name is not a valid <code>xs:QName</code>;
+                  or where <code>list</code> layout is selected for an array but the conversion
+                  plan supplies no <code>child</code> element name.</p>
+            </error>
             
 
             
@@ -15142,10 +15329,6 @@ ISBN 0 521 77752 6.</bibl>
             <!--</error>-->
             <error class="RX" code="0004" label="Invalid replacement string." type="dynamic">
                <p>Raised by <function>fn:replace</function> to report errors in the replacement string.</p>
-            </error>
-            <error class="RX" code="0005" label="Incompatible arguments for fn:replace." type="dynamic">
-               <p>Raised by <function>fn:replace</function> if both the <code>$replacement</code> 
-                  and <code>$action</code> arguments are supplied.</p>
             </error>
             <error class="TY" code="0012" label="Argument to fn:data contains a node that does not have a typed value."
                    type="dynamic">
