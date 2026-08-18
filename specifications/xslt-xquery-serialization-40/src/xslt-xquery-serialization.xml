@@ -2303,6 +2303,10 @@ is described in <specref ref="serdm"/>.</p>
     </change>
     <change issue="1889" PR="1977" date="2025-05-02">The default HTML version is now 5. This may result in changes to the serialized
     output in cases where no explicit HTML version is requested.</change>
+    <change issue="2821" PR="2822" date="2026-08-12">Bug fix: the rules for prefix normalization with HTML5 have been changed to prevent unwanted
+    <code>xmlns=""</code> undeclarations appearing on elements in a namespace other than XHTML, MathML, or SVG.
+    The XSLT code that was supposedly equivalent to the prefix normalization logic has been withdrawn, as it did
+    not correspond precisely to the prose description.</change>
   </changes>
 
   <p>The XHTML output method serializes the <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> as
@@ -2363,101 +2367,28 @@ and on <bibref ref="html-polyglot"/>,
 both of which are designed
 to ensure that as far as possible, XHTML is rendered correctly on user
 agents designed originally to handle HTML.</p>
-<p><termref def="id-with-html5">With HTML5</termref> the 
-  <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> is first subjected to
-<termref def="PREFIXNORMALIZATION">prefix normalization</termref>.</p>
-<p>
-<termdef term="prefix normalization" id="PREFIXNORMALIZATION">During
-  <term>prefix normalization</term>, any element node in the 
-  <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> that is in one of the
-<termref def="xhtml-namespace">XHTML namespace</termref>, the
-<termref def="svg-namespace">SVG namespace</termref> or the
-<termref def="mathml-namespace">MathML namespace</termref> has its name
-replaced by the local part of its name.  Such an element node is given a
-default namespace node whose value is the element’s namespace URI.  Any
-namespace node for any of those three namespaces that was previously present
-on any element node in the <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> is also removed,
-unless the prefix that that namespace node declared is used as the prefix on
-the name of an attribute on that element or an ancestor of that
-element.</termdef></p>
-<p>
-The process of <termref def="PREFIXNORMALIZATION">prefix normalization</termref>
+  
+  <ulist>
+    <item>
+      <p><termref def="id-with-html5">With HTML5</termref> the 
+        <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> is first subjected to
+      <termref def="PREFIXNORMALIZATION">prefix normalization</termref>.</p>
+      <p>
+      <termdef term="prefix normalization" id="PREFIXNORMALIZATION">During
+        <term>prefix normalization</term>, any element node in the 
+        <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> that is in one of the
+      <termref def="xhtml-namespace">XHTML namespace</termref>, the
+      <termref def="svg-namespace">SVG namespace</termref> or the
+      <termref def="mathml-namespace">MathML namespace</termref> (a) has its name
+      replaced by the local part of its name, and (b) acquires a 
+      default namespace node that binds the empty prefix to the element’s namespace URI. Furthermore,
+      for every element <var>E</var> in the <termref def="dt-input-tree"/>, 
+        any namespace node of <var>E</var> that binds a non-empty prefix 
+      to any of those three namespaces is removed, unless that prefix is used in the
+      name of an attribute node on an ancestor-or-self of <var>E</var>.</termdef></p>
+    </item>
 
-  is equivalent to replacing the <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> 
-  with the result of the transformation described by this XSLT
-  stylesheet, with the root of the <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> as the initial <phrase diff="chg" at="2023-10-30">context value</phrase>.
-
-</p>
-<eg><![CDATA[
-<xsl:stylesheet
-    xmlns:xsl="http://www.w3.org/1999/XSL/Transform" 
-    version="4.0"
-    xmlns:xhtml="http://www.w3.org/1999/xhtml"
-    xmlns:svg="http://www.w3.org/2000/svg"
-    xmlns:mathml="http://www.w3.org/1998/Math/MathML">
-  <xsl:template match="xhtml:*|svg:*|mathml:*">
-    <xsl:element name="{local-name()}" 
-                 namespace="{namespace-uri()}">
-      <xsl:apply-templates select="@*|namespace::*|node()"/>
-    </xsl:element>
-  </xsl:template>
-
-  <xsl:template match="node()|@*|namespace::*">
-    <xsl:copy copy-namespaces="no">
-      <xsl:apply-templates select="@*|namespace::*|node()"/>
-    </xsl:copy>
-  </xsl:template>
-
-  <xsl:template
-    match="namespace::*[. eq 'http://www.w3.org/1999/xhtml']|
-           namespace::*[. eq 'http://www.w3.org/2000/svg']|
-           namespace::*[. eq 'http://www.w3.org/1998/Math/MathML']"/>
-</xsl:stylesheet>
-]]></eg>
-<!--
-   - Commented out XQuery version, as it's using the namespace axis, which
-   - isn't allowed in XQuery!
-  -->
-<!--
-<p>
-It is also equivalent to replacing the instance of the data model that is
-to be serialized with the result of executing the following XQuery expression,
-again with the instance of the data model as the context item.
-</p>
-<eg><![CDATA[
-declare copy-namespaces preserve, no-inherit;
-
-declare variable $ns-to-strip :=
-                   ('http://www.w3.org/1999/xhtml',
-                    'http://www.w3.org/2000/svg',
-                    'http://www.w3.org/1998/Math/MathML');
-
-declare function local:copy($n as node()) {
-  typeswitch ($n)
-    case $d as document-node()
-      return document { $d/node()/local:copy(.) }
-    case $e as element()
-      return element { if (namespace-uri($e) = $ns-to-strip)
-                       then QName(namespace-uri($e),local-name($e))
-                       else node-name($e) }
-                { $e/(@*,namespace::*,node())/local:copy(.) }
-    case $ns as namespace-node()
-      return if (fn:data($ns) = $ns-to-strip)
-             then ()
-             else $ns
-    default
-      return $n
-};
-
-local:copy(.)
-]]></eg>
--->
-<!--
-<edtext>Serialization has always referred
-to the XHTML namespace (and the XML namespace, for that matter), but has
-never provided a definition or reference.  Must rectify that.</edtext></ednote>
--->
-<ulist><item>
+<item>
 <p><termdef term="EMPTY" id="XHTMLEMPTY">The following XHTML elements have an <term>EMPTY</term> content model: <code>area</code>, <code>base</code>, <code>br</code>, <code>col</code>, <code>embed</code>, <code>hr</code>, <code>img</code>, <code>input</code>, <code>link</code>, <code>meta</code>, <code>basefont</code>, <code>frame</code>,  <code>isindex</code>, and <code>param</code>.</termdef>
 <termdef term="void" id="XHTMLVOID">The
 <term>void</term> elements of HTML5 are
@@ -2564,7 +2495,8 @@ the form <code>&lt;html xmlns="http://www.w3.org/1999/xhtml"&gt; ... &lt;/html&g
 XQuery direct element constructor of the same form, then the <code>html</code> element in
 the result document will have a node name whose prefix is "", which will
 satisfy the requirements of the DTD. In other cases the prefix assigned to
-the element is <termref def="impdep">implementation-dependent</termref>.</p></note></item></ulist>
+the element is <termref def="impdep">implementation-dependent</termref>.</p></note></item>
+  </ulist>
 <note><p><bibref ref="html-polyglot"/>
 and Appendix C of <bibref ref="xhtml1"/>
 describe
