@@ -5961,22 +5961,29 @@ is returned.</p>
     <div2 id="function-items">
 <head>Function Items</head>
   <changes>
-    <change issue="520" PR="525" date="2023-05-30">
+    <!--<change issue="520" PR="525" date="2023-05-30">
       Introduced the concept of function identity.
-    </change>
+    </change>-->
     <change issue="1896">
       The <term>parameter names</term> property of a function item is dropped;
       the property never had any effect on the semantics of the language.
     </change>
+    <change issue="2802">
+      Introduced the concept of function equvalence.
+    </change>
   </changes>
 
-<p>
-<termdef term="function item" id="dt-function-item">
+<p><termdef term="function item" id="dt-function-item">
   A <term>function item</term> is an <termref def="dt-item"/> that can be called with zero or more
   arguments to return a result.
-</termdef>
-Function items <phrase diff="del" at="2023-05-25">cannot be compared for
-identity, equality, or otherwise, and</phrase> have no serialization.
+</termdef></p>
+      
+<p><termdef term="intensional function item" id="dt-intensional-function-item">
+  An <term>intensional function item</term> is a <termref def="dt-function-item"/> other than a <termref def="dt-map-item"/>
+    or <termref def="dt-array-item"/>.
+</termdef></p>
+<p>
+  Intensional function items have no serialization.
 </p>
   
   <note diff="add" at="2023-03-11"><p>XDM 4.0 uses the term <term>function item</term> where XDM 3.1 used
@@ -5996,7 +6003,7 @@ identity, equality, or otherwise, and</phrase> have no serialization.
       <termref def="dt-absent">absent</termref>. 
     </p>
   </item>
-  <item>
+  <!--<item>
     <p diff="add" at="2023-05-25">
       <term role="property-definition" id="prop-function-identity">identity</term>: An abstract property that can be used to test whether
       two variables refer to the same function or to different functions. This property
@@ -6006,7 +6013,7 @@ identity, equality, or otherwise, and</phrase> have no serialization.
     when functions appear in the arguments supplied to the <code>fn:deep-equal</code> function;
     and secondly, in establishing whether the arguments and results of a function are "the same"
     when deciding whether the function is deterministic.</p></note>
-  </item>
+  </item>-->
   
   <item>
     <p>
@@ -6021,6 +6028,9 @@ identity, equality, or otherwise, and</phrase> have no serialization.
       <item><p>The required types of its parameters (each one being a <xnt spec="XP40" ref="doc-xpath40-SequenceType">SequenceType</xnt>)</p></item>
       <item><p>The required types of the function result (also a <xnt spec="XP40" ref="doc-xpath40-SequenceType">SequenceType</xnt>)</p></item>
     </ulist>
+    
+    <note><p>The names of the function parameters may be used internally within the function body, but they
+    have no external significance, so they are not considered to be properties of the function item.</p></note>
 
   </item>
   <item>
@@ -6108,6 +6118,78 @@ must equal the function’s arity.
     <code>function(item()) as item()</code> is a subtype of <code>function(xs:string) as item()</code>
   </p></item>
 </ulist>
+      
+      <div3 id="function-item-equivalence">
+    <head>Function Item Equivalence</head>
+    
+    <p><termdef id="equivalent" term="equivalent">Two 
+        <termref def="dt-intensional-function-item">intensional function items</termref> <var>F1</var> and <var>F2</var>
+        are said to be <term>equivalent</term> if it is possible to establish that 
+        for any set of argument values <var>A1</var>, <var>A2</var>, ...,
+    the function call <code><var>F1</var>(<var>A1</var>, <var>A2</var>, ...)</code> will produce the same result
+    as <code><var>F2</var>(<var>A1</var>, <var>A2</var>, ...)</code></termdef>.</p>
+        
+    <p>An intensional function item is always equivalent to itself, and this remains the case if the item is
+    bound to a variable, added to a sequence, a map, or an array, or extracted from such a structure. 
+    This means, for example, that if <code>$f</code> is a function item, then the expression
+    <code>deep-equal( $f, {'a': $f}?a )</code> returns true.</p>
+        
+    <p>In general an expression that is defined to construct a new function item (as distinct from one that returns
+      an existing function item) returns a new function item each time, one that is not equivalent
+    to any other existing function item. However, an implementation will often be able to detect
+    cases where two function items are equivalent. Examples include:</p>
+        
+        <olist>
+          <item><p>If a named function reference such as <code>fn:abs#1</code> is evaluated
+          repeatedly, the function items returned are all equivalent. This is because
+          the function <code>fn:abs</code> is context-independent, so the resulting
+          function item can have an empty captured context. An optimizer can therefore
+          evaluate <code>fn:abs#1</code> statically.</p></item>
+          <item><p>Similar considerations apply to a partial function application such as 
+              <code>fn:contains(?, 'e')</code>. This has a dependency on the default
+          collation in the static context, but this is known statically and the partial function
+          application can therefore be evaluated statically.</p></item>
+          <item><p>Similarly, an inline function expression such as <code>fn($e){$e/@code}</code>
+          (which can also be written <code>fn{@code}</code>, if evaluated repeatedly,
+          returns equivalent function items from each evaluation, and the expression
+          can therefore be evaluated statically.</p></item>
+          <item><p>The above cases all involve repeated evaluation of the same expression.
+          There may also be cases where optimizers recognize that different expressions
+          deliver equivalent results. For example, the function items returned by the
+          expressions <code>fn:abs#1</code> and <code>fn:abs(?)</code> are equivalent.</p></item>
+        </olist>
+        
+    <p>There are thus three cases where two intensional function items <code>$f</code>
+      and <code>$g</code> are equivalent:</p>
+        
+        <olist>
+          <item><p>When <code>$f</code>
+      and <code>$g</code> result from the same evaluation of the same expression,
+          for example <code>let $f := sum(?, 0), $g := $f[1]</code>.</p></item>
+          <item><p>When an implementation is able to recognize that repeated evaluation of an expression such
+          as <code>fn:abs#0</code> produces the same result each time, for example
+          <code>let $seq := (1 to 2)!fn:abs#0 let $f := $seq[1], $g := $seq[2]</code>.</p></item>
+          <item><p>When an implementation is able to recognize that two different expressions
+          produce indistinguishable results: for example <code>let $f := fn:doc#1, $g := fn:doc(?, {})</code>.</p></item>
+        </olist>
+        
+    
+        <note><p>The purpose of these rules is not to encourage implementations actively to
+        attempt complex semantic comparisons of function items; rather it is to ensure that expression rewrites
+        performed by an optimizer for performance reasons are never invalidated by the rules 
+        for function item equivalence. The rule allows two function items written in different ways
+        to be treated as equivalent if they have the same internal form after such rewriting.</p></note>
+        
+        <p>In establishing whether two intensional function items are equivalent, the rules
+        are the same whether or not the functions are <xtermref spec="XP40" ref="dt-deterministic"/>.</p>
+        
+        <note><p>Although the rules for function equivalence given here are complex, they are designed
+        to be easy to implement. Many processors may be able to test the equivalence of two function
+        items simply by comparing the object identifiers of their internal representations.</p></note>
+  </div3>
+
+
+    
 
 </div2>
 
@@ -6500,10 +6582,11 @@ position, in the range 1 to the size of the array.</p>
        and <code>array:get</code>.</p>
     
   </div3>
-
-
-    
+  
+  
 </div2>
+    
+   
     
     <div2 id="id-JNodes">
     <head>JNodes</head>
