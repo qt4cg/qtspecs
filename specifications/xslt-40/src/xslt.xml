@@ -17771,8 +17771,15 @@ return $tree =?> depth()]]></eg>
                         <code>yes</code>.</termdef> If a parameter is explicitly mandatory, then the
                      <elcode>xsl:param</elcode> element <rfc2119>must</rfc2119> be empty and
                      <rfc2119>must not</rfc2119> have a <code>select</code> attribute.</p>
+               
+               <p>If a parameter is not <termref def="dt-explicitly-mandatory"/>, then it may have a
+                  default value. The default value is obtained by evaluating the 
+                  <termref def="dt-expression">expression</termref> given in the <code>select</code>
+                  attribute or the contained <termref def="dt-sequence-constructor">sequence
+                     constructor</termref>, as described in <specref ref="variable-values"/>.</p>
 
-               <p diff="add" at="2022-01-01">The static context for evaluating the default value depends on where the
+
+               <p>The static context for evaluating the default value depends on where the
                relevant expression appears in the stylesheet, in the usual way. Note however that
                for <elcode>xsl:param</elcode> elements defining <termref def="dt-function-parameter">function parameters</termref>,
                   the static context does not include variables bound in preceding-sibling <elcode>xsl:param</elcode> elements.</p>
@@ -17788,22 +17795,23 @@ return $tree =?> depth()]]></eg>
                   earlier. It also means, for example, that if the evaluation of the default value invokes
                   <elcode>xsl:next-match</elcode>, the <termref def="dt-current-template-rule"/> is the called
                   template rather than the calling template.</p></item>
-                  <item><p>For <termref def="dt-function-parameter">function parameters</termref>, the dynamic
-                     context for evaluating defaults is the dynamic context of the caller, except that no
-                     local variables are in scope. This means that it is possible to declare a parameter
-                     with <code>&lt;xsl:param name="dot" required="no" select="."/></code> to take its
-                     default value from the context item of the caller.
+                  <item><p>For <termref def="dt-function-parameter">function parameters</termref>, the context
+                        is the same as the context for evaluating global variables, with one exception: if the
+                        expression defining the default value includes a call on the <function>current</function>
+                        function, this evaluates to the context value of the invoking expression.
+                        (The invoking expression is typically a static function
+                        call, but it can also be a named function reference or a partial function application).
+                        The <code>select</code> expression can invoke <code>current()</code> directly
+                        (<code>select="current()")</code>, and 
+                        it is also possible to call <function>current</function> function within
+                        a more complex expression, for example <code>select="string(current())"</code>.
                      
               </p>
                   
                   </item>
                </ulist>
 
-               <p>If a parameter is not <termref def="dt-explicitly-mandatory"/>, then it may have a
-                  default value. The default value is obtained by evaluating the <termref def="dt-expression">expression</termref> given in the <code>select</code>
-                  attribute or the contained <termref def="dt-sequence-constructor">sequence
-                     constructor</termref>, as described in <specref ref="variable-values"/>.</p>
-
+               
                <note>
                   <p>This specification does not dictate whether and when the default value of a
                      parameter is evaluated. For example, if the default is specified as
@@ -17811,12 +17819,27 @@ return $tree =?> depth()]]></eg>
                      it is not specified whether a distinct <code>foo</code> element node will be
                      created on each invocation of the template, or whether the same
                         <code>foo</code> element node will be used for each invocation. However, it
-                     is permissible for the default value to depend on the values of other
+                     is permissible, at least with template parameters and stylesheet parameters,
+                     for the default value to depend on the values of other
                      parameters, or on the evaluation context, in which case the default must
                      effectively be evaluated on each invocation.</p>
                   
  
                </note>
+               
+               <note><p>It is not possible in a user-defined function to define a default parameter value that 
+          depends on the static or dynamic context of the caller, except for the special 
+          case of the context value itself, which can be referenced as <code>current()</code>.
+          There are system-defined functions that declare such defaults (for example, defaulting
+          a parameter to the default collation or the static base URI of the caller); indeed,
+          some functions such as <function>position</function> or <function>static-base-uri</function>
+          exist for the sole purpose of obtaining information from the context of the caller.
+          User-defined functions are not able to emulate this behavior.</p>
+               <p>Note that <code>select="."</code> in a function parameter definition is
+               a reference to the <termref def="dt-global-context-item"/>, while <code>select="current()"</code>
+               is a reference to the context item of the caller.</p>
+               </note>
+    
 
                <p><termdef id="dt-explicit-default" term="explicit default">An <term>explicit
                         default</term> for a parameter is indicated by the presence of either a
@@ -20046,7 +20069,13 @@ return $tree =?> depth()]]></eg>
             </div3>
             <div3 id="function-arguments">
                <head>Parameters</head>
-               <p diff="chg" at="variadicity">The <elcode>xsl:param</elcode> elements define the formal parameters to the
+               <change issue="2853" PR="2858" date="2026-08-22">
+                  Function definitions may now have optional parameters,
+                  provided this does not cause ambiguity across multiple function definitions with the same name.
+                  Optional parameters are given a default value, with an option to default the value using the
+                  context value from the dynamic context of the caller.
+                </change>
+               <p>The <elcode>xsl:param</elcode> elements define the formal parameters to the
                   function. In a static function call, these are referenced either positionally or by name.
                   The rules for associating arguments in a static function call with parameter definitions
                   in the function declaration are given in <xspecref spec="XP40" ref="id-eval-static-function-call"/>.</p>
@@ -20079,43 +20108,14 @@ return $tree =?> depth()]]></eg>
                <p>If the <code>as</code> attribute is omitted, no conversion takes place and any
                   value is accepted.</p>
                
-               <p diff="add" at="2023-05-19">The default value for an optional parameter 
-                  (one with <code>required="no"</code>) will often be supplied using a 
-                  simple literal or constant expression, for example
-                  <code>&lt;xsl:param name="married" as="xs:boolean" select="false()"/></code>,
-                  or <code>&lt;xsl:param name="options" as="map(*)" select="{}"/></code>. 
-                  However, to allow greater flexibility,
-                  the default value can also be context-dependent. For example, 
-                  <code>&lt;xsl:param name="node" as="node()" select="."/></code> declares a parameter whose
-                  default value is the context item from the dynamic context of the caller, while 
-                  <code>&lt;xsl:param name="collation" as="xs:string" select="default-collation()"/></code>
-                  declares a parameter whose default value is the default collation from the dynamic context of the caller.
+               <p>The default value for an optional function parameter is evaluated in the same way as the initial value
+                  of a global variable declaration, with one exception: a call on <function>fn:current</function> within
+                  the <code>select</code> expression — but not within a contained sequence constructor — is interpreted
+                  as a reference to the context value from the dynamic context of the function caller.
+                  It is not possible for a user-defined function to reference other aspects of the static or dynamic
+                  context of the caller, such as the static base URI or the default collation.
                   The detailed rules are as follows. In these rules, the term <term>caller</term> means the function call or function reference
                   that invokes the function being defined.</p>
-               
-               <p diff="add" at="2023-05-19">The <xtermref spec="XP40" ref="dt-static-context"/> for the 
-                  initializing expression of an optional parameter of an <elcode>xsl:function</elcode> declaration
-                  is the same as the static context for a <termref def="dt-static-expression"/>.</p>
-
-               
-               <p diff="add" at="2023-05-19">The <xtermref  spec="XP40" ref="dt-dynamic-context"/> for the initializing 
-                  expression of an optional parameter 
-                  is the same as the dynamic context for the evaluation of a <termref def="dt-static-expression"/>, 
-                  with the following exceptions:</p>
-               
-               <ulist diff="add" at="2023-05-19">
-                  <item><p>The <xtermref spec="XP40" ref="dt-context-value"/>, <xtermref spec="XP40" ref="dt-context-position"/>,
-                     and <xtermref spec="XP40" ref="dt-context-size"/> are taken from the dynamic context of the caller.</p></item>
-                  <item><p>The <xtermref spec="XP40" ref="dt-def-collation"/> and <xtermref spec="XP40" ref="dt-executable-base-uri"/>
-                  are taken from the dynamic context of the caller.</p></item>
-               </ulist>
-               
-               <note><p>The effect of these rules is that the <code>select</code> expression for an optional parameter
-               is evaluated in the same way as a static expression, except that it may contain context-dependent
-               subexpressions such as <code>.</code>, <code>position()</code>, <code>last()</code>,
-               <code>static-base-uri()</code>, and <code>default-collation()</code> to access the
-               dynamic context of the caller. It may also contain expressions such as <code>name()</code>
-               or <code>@x = "abc"</code> that have an implicit dependency on the dynamic context of the caller.</p></note>
                
                
             </div3>
