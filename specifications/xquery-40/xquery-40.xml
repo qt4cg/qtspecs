@@ -11869,6 +11869,12 @@ return $vat(doc('wares.xml')/shop/article)
                      fails if there is no context node, and <code nobreak="false">fn:id(?)</code>
                         <rfc2119>should</rfc2119>
                      fail likewise.</p>
+                     <note>
+                        <p>Where the function defines context-dependent defaults for any of its parameters,
+                     the relevant values are taken from the static and dynamic context of the
+                     partial function application, not from the context of a subsequent dynamic
+                     function call.</p>
+                     </note>
                   </item>
                   <item>
                      <p>
@@ -27914,11 +27920,11 @@ declare context value as document-node()* := collection($uri); </eg>
          <div2 id="FunctionDeclns">
             <head>Function Declarations</head>
             <changes>
-               <change>
+               <change issue="2853" PR="2858" date="2026-08-22">
         Function definitions in the static context may now have optional parameters,
         provided this does not cause ambiguity across multiple function definitions with the same name.
-        Optional parameters are given a default value, which can be any expression, including one that
-        depends on the context of the caller (so an argument can default to the context value).
+        Optional parameters are given a default value, with an option to default the value using the
+        context value from the dynamic context of the caller.
       </change>
                <change issue="657">
         A user-defined function whose name is given as an unprefixed QName is now in no namespace.
@@ -27966,7 +27972,7 @@ declare context value as document-node()* := collection($uri); </eg>
                <prod id="doc-xquery40-FunctionDecl-ParamWithDefault">
                   <lhs>ParamWithDefault</lhs>
                   <rhs>
-                     <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                     <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  (<nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>  |  ("context"  "value")))?</rhs>
                </prod>
 
                <prod id="doc-xquery40-FunctionDecl-VarNameAndType">
@@ -28207,13 +28213,30 @@ local:summary(doc("acme_corp.xml")//employee[location = "Denver"])</eg>
                <p>If a function parameter is declared using a name but no type, its default type is
         <code nobreak="false">item()*</code>. If the result type is omitted from a function declaration, its default
         result type is <code nobreak="false">item()*</code>.</p>
-               <p diff="add" at="variadicity">The function body defines the implementation of the <termref def="dt-function-definition"/>. 
+               <p>The function body defines the implementation of the <termref def="dt-function-definition"/>. 
         The rules for static function calls (see <specref ref="id-eval-static-function-call"/>)
         ensure that a value is available for each parameter, whether required or optional, and that the value
         will always be an instance of the declared type.
       </p>
-               <p>A parameter is
-    optional if a default value is supplied using the construct <code nobreak="false">:= ExprSingle</code>; otherwise it is required. If a parameter
+               <p>A parameter is optional if a default value is supplied. There are two ways a default value
+        can be defined:</p>
+               <ulist>
+                  <item>
+                     <p>The construct <code nobreak="false">:= ExprSingle</code> defines a fixed default; all function calls
+        that default the relevant argument will supply the same value. The <code nobreak="false">ExprSingle</code>
+        is evaluated in the same way as the <termref def="dt-initializing-expression"/> of
+        a variable declaration (see <specref ref="id-variable-declarations"/>).</p>
+                  </item>
+                  <item>
+                     <p>The construct <code nobreak="false">:= context value</code> indicates that the default value of the
+        relevant argument is the context value from the dynamic context of the function call.
+        This will typically be different for every function call that defaults the argument; it may
+        also lead to a type error if the context value is absent or has the wrong type. Using this option
+        is equivalent to expanding the function call with the expression <code nobreak="false">.</code> in the
+        relevant argument position.</p>
+                  </item>
+               </ulist>
+               <p>If a parameter
     is optional, then all subsequent parameters in the list must also be optional; otherwise, a
     <termref def="dt-static-error">static error</termref> is raised <errorref class="ST" code="0148"/>.
     In other words, the parameter list includes
@@ -28221,37 +28244,36 @@ local:summary(doc("acme_corp.xml")//employee[location = "Denver"])</eg>
                <p>The number of arguments that may be supplied in a call to this family of functions is thus in the range <var>M</var> to <var>N</var>,
     where <var>M</var> is the number of required parameters, and <var>N</var> is the total number of parameters (whether required or optional).
     This is refered to as the <termref def="dt-arity-range"/> of the <termref def="dt-function-definition"/>.</p>
-               <p diff="add" at="2023-05-19">The default value for an optional parameter will often be supplied using a 
-       simple literal or constant expression, for example
-     <code nobreak="false">$married as xs:boolean := false()</code> or <code nobreak="false">$options as map(*) := { }</code>. However, to allow greater flexibility,
-     the initial value can also be context-dependent. For example, <code nobreak="false">$node as node() := .</code> declares a parameter whose
-     default value is the context value from the dynamic context of the caller, while <code nobreak="false">$collation as xs:string := default-collation()</code>
-     declares a parameter whose default value is the default collation from the dynamic context of the caller.
-     The detailed rules are as follows. In these rules, the term <term>caller</term> means the function call or function reference
-     that invokes the function being defined.</p>
-               <p diff="add" at="2023-05-19">The <termref def="dt-static-context"/> for the initializing expression of an optional parameter is the same as the static
+               <!--<p diff="add" at="2023-05-19">The <termref def="dt-static-context"/> for the initializing expression of an optional parameter is the same as the static
       context for the <termref def="dt-initializing-expression"/> of a variable declaration (see <specref ref="id-variable-declarations"/>),
       with the following exceptions:</p>
-               <ulist diff="add" at="2023-05-19">
-                  <item>
-                     <p>The <termref def="dt-in-scope-variables"/> component is empty. This means that the 
+      
+      <ulist diff="add" at="2023-05-19">
+        <item><p>The <termref def="dt-in-scope-variables"/> component is empty. This means that the 
           initializing expression cannot refer to any variables, other than local variables declared within the expression itself. 
-          Note in particular that it cannot refer to other parameters of the function.</p>
-                  </item>
-                  <item>
-                     <p>The <termref def="dt-statically-known-function-definitions"/> excludes all user-defined functions.</p>
-                  </item>
-               </ulist>
-               <p diff="add" at="2023-05-19">The <termref def="dt-dynamic-context"/> for the initializing expression of an optional parameter 
+          Note in particular that it cannot refer to other parameters of the function.</p></item>
+        
+        <item><p>The <termref def="dt-statically-known-function-definitions"/> excludes all user-defined functions.</p></item>
+      </ulist>
+      
+      <p diff="add" at="2023-05-19">The <termref def="dt-dynamic-context"/> for the initializing expression of an optional parameter 
         is the same as the dynamic context of the <term>caller</term>, with the following exceptions:</p>
-               <ulist diff="add" at="2023-05-19">
-                  <item>
-                     <p>The <termref def="dt-variable-values"/> component is empty.</p>
-                  </item>
-                  <item>
-                     <p>The <termref def="dt-dynamically-known-function-definitions"/> excludes all user-defined functions.</p>
-                  </item>
-               </ulist>
+      
+      <ulist diff="add" at="2023-05-19">
+        <item><p>The <termref def="dt-variable-values"/> component is empty.</p></item>
+        <item><p>The <termref def="dt-dynamically-known-function-definitions"/> excludes all user-defined functions.</p></item>
+      </ulist>
+      -->
+               <note>
+                  <p>It is not possible in a user-defined function to define a default value that 
+          depends on the static or dynamic context of the caller, except for the special 
+          case of the context value itself.
+          There are system-defined functions that declare such defaults (for example, defaulting
+          a parameter to the default collation or the static base URI of the caller); indeed,
+          some functions such as <function>fn:position</function> or <function>fn:static-base-uri</function>
+          exist for the sole purpose of obtaining information from the context of the caller.
+          User-defined functions are not able to emulate this behavior.</p>
+               </note>
             </div3>
             <div3 id="id-function-annotations">
                <head>Function Annotations</head>
@@ -30693,7 +30715,7 @@ parent. </p>
                   <prod id="prod-xquery40-ParamWithDefault">
                      <lhs>ParamWithDefault</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                        <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  (<nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>  |  ("context"  "value")))?</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-ParenthesizedExpr">
