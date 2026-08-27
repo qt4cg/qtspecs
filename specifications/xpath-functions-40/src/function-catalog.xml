@@ -18,22 +18,6 @@
       <fos:variable id="v-item3" name="item3" select="$po/line-item[3]"/>
    </fos:global-variables>
    
-   <!--<fos:record-type id="key-value-pair">
-      <fos:summary>
-         <p>This record type represents a key and its associated value within an entry of a map.</p>
-      </fos:summary>
-      <fos:field name="key" type="xs:anyAtomicType">
-         <fos:meaning>
-            <p>A key suitable for use in a map entry.</p>
-         </fos:meaning>
-      </fos:field>
-      <fos:field name="value" type="item()*">
-         <fos:meaning>
-            <p>The value corresponding to the key.</p>
-         </fos:meaning>
-      </fos:field>
-   </fos:record-type>-->
-   
    <fos:record-type id="uri-structure-record">
       <fos:summary>
          <p>This record type represents the components of a URI.</p>
@@ -3929,15 +3913,19 @@ format-number(12345, '0,###^0', {
       </fos:rules>
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
 let $alphabet := characters("0123456789abcdefghijklmnopqrstuvwxyz")
+let $codepoint := "http://www.w3.org/2005/xpath-functions/collation/codepoint"
 let $preprocessed := translate(
-  $value, 
-  codepoints-to-string((9, 10, 13, 32, 95)), 
+  $value,
+  codepoints-to-string((9, 10, 13, 32, 95)),
   ""
 )
 let $digits := translate($preprocessed, "+-", "")
-let $abs := sum(
-  for $char at $p in reverse(characters(lower-case($digits)))
-  return (index-of($alphabet, $char) - 1) * xs:integer(math:pow($radix, $p - 1))
+let $abs := fold-left(
+  characters(lower-case($digits)),
+  0,
+  fn($result, $char) {
+    $result * $radix + (index-of($alphabet, $char, $codepoint) - 1)
+  }
 )
 return if (starts-with($preprocessed, "-")) then -$abs else +$abs                 
       </fos:equivalent>
@@ -15686,8 +15674,8 @@ return empty($break)
          
       </fos:rules>
       <fos:equivalent style="xpath-expression">
-if ($node intersect $node/parent::node()/child::node())
-then $node/parent::node()/child::node()
+if ($node intersect $node/parent::gnode()/child::gnode())
+then $node/parent::gnode()/child::gnode()
 else $node
       </fos:equivalent>
       <fos:errors>
@@ -16721,8 +16709,8 @@ filter(
       <fos:rules>
          
          <p>Informally, the function returns the subsequence of <code>$input</code> starting with the
-         first item that matches the <code>$from</code> predicate, and ending with the first subsequent
-         item that matches the <code>$to</code> predicate. If <code>$from</code> is <code>true#0</code>,
+         first item that matches the <code>$from</code> predicate, and ending with the first item at
+         or after that position that matches the <code>$to</code> predicate. If <code>$from</code> is <code>true#0</code>,
          it matches for the first item; if <code>$to</code> is <code>false#0</code>, it accepts all
          remaining items. If <code>$from</code> does not match any items in <code>$input</code>,
          the result is the empty sequence; if <code>$to</code> does not match any items, all items up
@@ -17126,7 +17114,11 @@ for-each($at, fn($index) { subsequence($input, $index, 1) })
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 count($input) ge count($subsequence) and
-every(for-each-pair($input, $subsequence, $compare))        
+every(
+  for-each-pair($input, $subsequence, fn($item1, $item2) {
+    boolean($compare($item1, $item2))
+  })
+)
       </fos:equivalent>
       <fos:notes>
          <p>There is no requirement that the <code>$compare</code> function should have the traditional qualities
@@ -17577,7 +17569,7 @@ return for-each(1 to 10, $mapping otherwise void#0)</eg></fos:expression>
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
 if (count($input) le 1) 
 then $input 
-else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0003))
+else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0003)
       </fos:equivalent>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="RG" code="0003"
@@ -17608,7 +17600,7 @@ else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0003))
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
 if (count($input) ge 1) 
 then $input 
-else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0004))
+else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0004)
       </fos:equivalent>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="RG" code="0004"
@@ -17637,7 +17629,7 @@ else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0004))
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
 if (count($input) eq 1) 
 then $input 
-else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0005))
+else error(#Q{http://www.w3.org/2005/xqt-errors}FORG0005)
       </fos:equivalent>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="RG" code="0005"
@@ -23942,320 +23934,6 @@ return fold-right(
          </fos:change>
       </fos:changes>
    </fos:function>
-   
-       <!--<fos:function name="chain" prefix="fn">
-        <fos:signatures>
-            <fos:proto name="chain" return-type="item()*">
-                <fos:arg name="input" type="item()*"/>
-                <fos:arg name="functions" type="fn(*)*"/>
-            </fos:proto>
-        </fos:signatures>
-        <fos:properties>
-            <fos:property>deterministic</fos:property>
-            <fos:property>context-independent</fos:property>
-            <fos:property>focus-independent</fos:property>
-        </fos:properties>
-        <fos:summary>
-           <p>Applies a sequence of functions starting with an initial
-              input.</p>
-        </fos:summary>
-      <fos:rules>
-         <p>Informally, the function behaves as follows:</p>
-         <olist>
-            <item>
-               <p>If <code>$functions</code> is empty, then <code>$input</code> is returned,
-                  otherwise let <code>$f</code> be the first member of <code>$functions</code>.</p>
-            </item>
-            <item>
-               <p>Let <code>$current-output</code> be the result of <code>fn:apply($f,
-                     $input-array)</code> where <code>$input-array</code> is constructed according
-                  to the following rules. <olist>
-                     <item>
-                        <p>If <code>$f</code> has arity 1, let <code>$input-array</code> be an array
-                           containing <code>$input</code> as a single member.</p>
-                     </item>
-                     <item>
-                        <p>Otherwise (<code>$f</code> has arity not equal to 1) if <code>$input</code> is
-                           not an array then let <code>$input-array</code> be an array containing each
-                           item of <code>$input</code> as a separate member. </p>
-                     </item>
-                     <item>
-                        <p>Otherwise (<code>$f</code> has arity not equal to 1<code> and $input</code> is 
-                           already an array) let <code>$input-array</code> be <code>$input</code> itself.</p>
-                     </item>
-                  </olist>
-               </p>
-            </item>
-            <item>
-               <p>Repeat the process from step 1, passing <code>$current-output</code> as
-                     <code>$input</code> and <code>fn:tail($functions)</code> as
-                     <code>$functions</code>.</p>
-            </item>
-         </olist>
-         
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-let $apply := fn($x, $f)  {
-  fn:apply($f,
-    if (function-arity($f) eq 1) then [ $x ]
-    else if ($x instance of array(*)) then $x 
-    else array { $x }
-  )
-}
-return fn($input as item()*, $functions as fn(*)*) as item()* {
-  fold-left($functions, $input, $apply)
-}                   
-      </fos:equivalent>
-      <fos:errors>
-         <p>An error <errorref class="AP" code="0001" type="type"/> is raised if the arity of any
-            function <code>$f</code> in <code>$functions</code> is different from the number of
-            members in the array that is passed to <function>fn:apply</function>.</p>
-         <p>An error <errorref class="RG" code="0006" type="type"/> is raised if any item supplied as
-              a function argument cannot be coerced to the required type.</p>
-      </fos:errors>
-
-      <fos:notes>
-         <olist>
-            <item>
-               <p>Functions are applied in sequence order, not right-to-left (as might be expected in
-                  mathematical composition).</p>
-            </item>
-            <item>
-               <p>It is not a requirement that every function in <code>$functions</code> must have
-                  arity of one. Any function may have any arity. </p>
-            </item>
-            <item>
-               <p>Using <function>fn:chain</function> may result in more readable XPath expressions than
-                  chaining expressions using arrow operators.</p>
-            </item>
-         </olist>
-      </fos:notes>
-            <fos:examples>
-                <fos:variable name="incr" id="chain-variable-incr"
-                ><![CDATA[fn($x) { op("+")($x, ?) }]]></fos:variable>
-                <fos:variable name="double-all" id="chain-variable-double-all"
-                ><![CDATA[fn($nums) { $nums ! op("*")(., 2) }]]></fos:variable>
-                <fos:variable name="times" id="chain-variable-times"
-                ><![CDATA[fn($y) { op("*")($y,  ?) }]]></fos:variable>
-                <fos:variable name="append-all" id="chain-variable-append-all"
-                ><![CDATA[fn($strings, $add) { $strings ! concat#2(., $add) }]]></fos:variable>
-                <fos:variable name="make-upper-all" id="chain-variable-make-upper-all"
-                ><![CDATA[fn($strings) { $strings ! upper-case(.) }]]></fos:variable>
-                <fos:variable name="count-all" id="chain-variable-count-all"
-                ><![CDATA[fn($ar) { array:for-each($ar, count#1)?* }]]></fos:variable>
-                <fos:variable name="product3" id="chain-variable-product3"
-                ><![CDATA[fn($x, $y, $z) { $x * $y * $z }]]></fos:variable>
-                <fos:variable name="range" id="chain-variable-range"
-                ><![CDATA[fn($n) { 1 to $n }]]></fos:variable>
-                <fos:example>
-                   <fos:test use="chain-variable-incr chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), ($double-all, op("+"), $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>13</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), ($double-all, sum#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>13</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), (op("+"), $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>8</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((2, 3), (sum#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>8</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ 1, (), 2, 3 ], (array:size#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>7</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((1, 2, 3), (count#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>6</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-incr">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ 1, 2, 3 ], (count#1, $incr(3)))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>4</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-range chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain(5, ($range, $double-all, sum#1))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>30</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-range chain-variable-double-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain(2, ($range, $double-all, op("*")))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>8</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-count-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ (1, 2, 3), () ], ($count-all, op("+")))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>3</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-count-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ (1, 2, 3), (), (5, 6) ], ($count-all, sum#1))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>5</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-count-all chain-variable-product3">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain([ (1, 2, 3), (), (5, 6) ], ($count-all, $product3))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>0</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test>
-                        <fos:expression>
-                            <eg><![CDATA[
-chain("abra cadabra", (tokenize#2(?, " "), string-join#2(?, "+")))
-                                ]]></eg>
-                            </fos:expression>
-                        <fos:result>"abra+cadabra"</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test use="chain-variable-append-all chain-variable-make-upper-all">
-                        <fos:expression>
-                            <eg><![CDATA[
-chain("The cat sat on the mat", (
-  tokenize#2(?, " "), 
-  $append-all(?, "."), 
-  $make-upper-all, 
-  string-join#2(?, " ") 
-))]]></eg>
-                            </fos:expression>
-                        <fos:result>"THE. CAT. SAT. ON. THE. MAT."</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                    <fos:test>
-                        <fos:expression>
-                            <eg><![CDATA[
-chain((
-  chain(
-    ("A    long   message   ", "   long "), 
-    (head#1, normalize-space#1, normalize-unicode#1)
-  ),
-  chain(
-    ("A    long   message   ", "   long "),  
-    (tail#1, normalize-space#1, normalize-unicode#1)
-  )
-  ),
-  contains#2
-)]]></eg>
-                            </fos:expression>
-                        <fos:result>true()</fos:result>
-                    </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test>
-                    <fos:expression>
-                       <eg><![CDATA[
-chain((), true#0)
-    ]]></eg>
-                    </fos:expression>
-                    <fos:result>true()</fos:result>                   
-                  </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test>
-                    <fos:expression>
-                      <eg><![CDATA[
-chain(3, (array:append([1], ?), op("+"))) 
-    ]]></eg>
-                    </fos:expression>
-                    <fos:result>4</fos:result>
-                  </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test use="chain-variable-product3">
-                    <fos:expression>
-                      <eg><![CDATA[
-chain((1, 2, 3), ($product3, $product3)) 
-    ]]></eg>
-                    </fos:expression>
-                    <fos:error-result error-code="FOAP0001"/>
-                  </fos:test>
-                </fos:example>
-                <fos:example>
-                  <fos:test use="chain-variable-product3">
-                    <fos:expression>
-                      <eg><![CDATA[
-chain((1, 2, 3, 4), $product3) 
-    ]]></eg>
-                    </fos:expression>
-                    <fos:error-result error-code="FOAP0001"/>
-                  </fos:test>
-                </fos:example>
-            </fos:examples>
-          <fos:changes>
-            <fos:change issue="517" PR="734 1233" date="2022-10-20"><p>New in 4.0</p></fos:change>
-          </fos:changes>            
-        </fos:function>-->
 
    <fos:function name="while-do" prefix="fn">
       <fos:signatures>
@@ -25030,7 +24708,7 @@ return sort-with($persons/person, (
             <code>$node</code> by applying the <code>$step</code> function one or more times.</p>
          
          <p>Although <code>$step</code> may return any sequence of GNodes, the result is treated as a set: the order of GNodes
-            in the sequence is ignored, and duplicates are ignored. The result of of the
+            in the sequence is ignored, and duplicates are ignored. The result of the
             <code>transitive-closure</code> function will always be a sequence of GNodes in document order with no duplicates.</p>
       </fos:rules>
       <fos:equivalent style="xquery-function">
@@ -25046,7 +24724,7 @@ declare %private function tc-inclusive(
 };
 
 declare function transitive-closure (
-  $node as node(),
+  $node as node()?,
   $step as fn($node as node()) as node()*
 ) as node()* {
   tc-inclusive($node/$step(.), $step)
@@ -25936,13 +25614,6 @@ return ($type ? name,
          </olist>
 
       </fos:rules>
- <!--     <fos:equivalent style="xpath-expression">
-map:of-pairs(
-  $maps =!> map:pairs(), 
-  $options[exists(?duplicates)] otherwise { "duplicates": "use-first" }
-)
-      </fos:equivalent>-->
-     
       <fos:errors>
 
          
@@ -26068,303 +25739,6 @@ map:of-pairs(
       </fos:changes>
    </fos:function>
 
-   <!--<fos:function name="of-pairs" prefix="map">
-      <fos:signatures>
-         <fos:proto name="of-pairs" return-type="map(*)">
-            <fos:arg name="input" 
-                     type-ref="key-value-pair" type-ref-occurs="*"
-                     usage="inspection"
-                     example="{ 'key': 'n','value': false() }, { 'key': 'y','value': true() }"/>
-            <fos:arg name="options" type="map(*)?" default="{}" note="default-on-empty"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns a map that combines data from a sequence of 
-            <termref def="dt-key-value-pair-map">key-value pair maps</termref>.</p>
-      </fos:summary>
-      <fos:rules>
-         
-         <p>The function <function>map:of-pairs</function>
-            <phrase>returns a map</phrase> which
-            is formed by combining <termref def="dt-key-value-pair-map">key-value pair maps</termref> supplied in the 
-            <code>$input</code>
-            argument.</p>
-         
-         <p>The <code>$options</code> argument can be used to control 
-            the way in which duplicate keys are handled.
-            The <termref def="option-parameter-conventions">option parameter conventions</termref> apply.
-            
-         </p>
- 
-         <p>The entries that may appear in the <code>$options</code> map are as follows:</p>
-
-         <fos:options>
-  
-            <fos:option key="duplicates">
-               <fos:meaning>Determines the policy for handling duplicate keys: specifically, the action to be
-                  taken if two entries in the input sequence have key values
-                  <var>K1</var> and <var>K2</var> where <var>K1</var> and <var>K2</var> are the 
-                  <termref
-                     def="dt-same-key">same key</termref>. 
-               </fos:meaning>
-               <fos:type>(enum( "reject", "use-first", "use-last", "use-any", "combine") | fn(item()*, item()*) as item()*)?</fos:type>
-               <fos:default>"combine"</fos:default>
-               <fos:values>
-                  <fos:value value='"reject"'>
-                     Equivalent to supplying a function that raises a dynamic error
-                     with error code "FOJS0003". The effect is that duplicate keys
-                     result in an error.
-                  </fos:value>
-                  <fos:value value='"use-first"'
-                        >Equivalent to supplying the function <code>fn($a, $b){ $a }</code>.
-                     The effect is that the first of the duplicates is chosen.
-                  </fos:value>
-                  <fos:value value='"use-last"'
-                        >Equivalent to supplying the function <code>fn($a, $b){ $b }</code>.
-                     The effect is that the last of the duplicates is chosen.
-                  </fos:value>
-                  <fos:value value='"use-any"'
-                        >Equivalent to supplying the function <code>fn($a, $b){ one-of($a, $b) }</code>
-                     where <code>one-of</code> chooses either <code>$a</code> or <code>$b</code> in
-                     an <termref def="implementation-dependent"/> way. The effect is that it is
-                     <termref def="implementation-dependent"/> which of the duplicates is chosen.
-                  </fos:value>
-                  <fos:value value='"combine"'
-                        >Equivalent to supplying the function <code>fn($a, $b){ $a, $b }</code>
-                     (or equivalently, the function <code>op(",")</code>).
-                     The effect is that the result contains the <xtermref spec="XP40" ref="dt-sequence-concatenation"/>
-                     of the values having the same key, retaining order.
-                  </fos:value>
-                  <fos:value value="fn(*)">
-                     A function with signature <code>fn(item()*, item()*) as item()*</code>.
-                     The function is called for any entry in the input sequence that has the 
-                     <termref def="dt-same-key"/> as a previous entry. The first argument
-                     is the existing value associated with the key; the second argument
-                     is the value associated with the key in the duplicate input entry,
-                     and the result is the new value to be associated with the key. The effect
-                     is cumulative: for example if there are three values <var>X</var>, <var>Y</var>,
-                     and <var>Z</var> associated with the same key, and the supplied function is
-                     <var>F</var>, then the result is an entry whose value is 
-                     <code><var>X</var> => <var>F</var>(<var>Y</var>) => <var>F</var>(<var>Z</var>)</code>.
-                  </fos:value>
-               </fos:values>
-                        
-             </fos:option>
-
-         </fos:options>
-
-
-               
-
-      </fos:rules>
-      <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $one-of := fn($a, $b) {
-  (: select either $a or $b at implementation option :)
-  if (environment-variable("X")) then $a else $b
-}
-let $duplicates := $options?duplicates
-let $combine := if ($duplicates instance of xs:string) then (
-  {
-    "reject":    fn($a, $b) { error( #err:FOJS0003 ) },
-    "use-first": fn($a, $b) { $a },
-    "use-last":  fn($a, $b) { $b },
-    "use-any":   fn($a, $b) { $one-of($a, $b) },
-    "combine":   fn($a, $b) { $a, $b }
-  }?$duplicates
-) else if ($duplicates instance of fn(*)) then (
-  $duplicates
-) else (
-  fn($a, $b) { $a, $b }
-)
-return fold-left(
-  $input,
-  {},
-  fn($out, $next) {
-    let $newVal := if (map:contains($out, $next?key)) then (
-      $combine($out?($next?key), $next?value)
-    ) else (
-      $next?value
-    )
-    return map:put($result, $next?key, $newVal)
-  }
-)      </fos:equivalent>
-      <fos:errors>
-         
-         <p>An error is raised <errorref spec="FO" class="JS" code="0003"
-               /> if the value of 
-          <code>$options</code> indicates that duplicates are to be rejected, and a duplicate key is encountered.</p>
-         
-         
-      </fos:errors>
-
-      <fos:notes>
-         <p>In the formal equivalent shown above:</p>
-         <ulist>
-            <item><p>The call on <code>error()</code> is indicative; the implementation
-            is free to raise the error in its own way.</p></item>
-            <item><p>The function <code>$one-of($a, $b)</code> is intended to
-            illustrate that either <code>$a</code> or <code>$b</code> is returned,
-            at the discretion of the implementation. A function body is provided
-            for completeness, but it is not intended as a realistic implementation.</p></item>
-         </ulist>
-         <p>If the input is the empty sequence, the result is the empty map.</p>
-         <p>There is no requirement that the supplied key-value pairs should have the same or compatible
-            types. The type of a map (for example <code>map(xs:integer, xs:string)</code>) is
-            descriptive of the entries it currently contains, but is not a constraint on how the map
-            may be combined with other maps.</p>
-         <p>When duplicate keys are encountered, the effect is that:</p>
-         <ulist>
-            <item><p>In the <xtermref spec="DM40" ref="dt-entry-order"/> 
-               of the result map, the position of the entry containing the result
-               of combining a set of entries with duplicate keys corresponds to 
-               the position of the first of the duplicates in the input sequence.</p></item>
-            <item><p>The key of the combined entry 
-                  will correspond to the key of one of the duplicates: it is
-                  <termref def="implementation-dependent"/> which one is chosen.
-               (Keys may be duplicates even though they differ: 
-            for example they may have different type annotations, or they might be
-            <code>xs:dateTime</code> values in different timezones.)</p></item>
-         </ulist>
-      </fos:notes>
-      <fos:examples>
-         <fos:variable name="week" id="v-map-of-week"
-            select="{&#xa;  0: &quot;Sonntag&quot;, 1: &quot;Montag&quot;, 2: &quot;Dienstag&quot;, 3: &quot;Mittwoch&quot;,&#xa;  4: &quot;Donnerstag&quot;, 5: &quot;Freitag&quot;, 6: &quot;Samstag&quot;&#xa;}"/>
-         <fos:example>
-            <fos:test>
-               <fos:expression>map:of-pairs(())</fos:expression>
-               <fos:result>{}</fos:result>
-               <fos:postamble>Returns the empty map</fos:postamble>
-            </fos:test>
-            <fos:test use="v-map-of-week">
-               <fos:expression>map:of-pairs(map:pairs($week))</fos:expression>
-               <fos:result><eg>{
-  0: &quot;Sonntag&quot;,
-  1: &quot;Montag&quot;, 
-  2: &quot;Dienstag&quot;,
-  3: &quot;Mittwoch&quot;, 
-  4: &quot;Donnerstag&quot;,
-  5: &quot;Freitag&quot;, 
-  6: &quot;Samstag&quot;
-}</eg></fos:result>
-               <fos:postamble>The function <function>map:of-pairs</function> is the inverse of
-                  <function>map:pairs</function>.</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg><![CDATA[map:of-pairs((
-  { "key": 0, "value": "no" },
-  { "key": 1, "value": "yes" }
-))]]></eg></fos:expression>
-               <fos:result>{ 0: "no", 1: "yes" }</fos:result>
-               <fos:postamble>Returns a map with two entries</fos:postamble>
-            </fos:test>
-            <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of-pairs((
-  map:pairs($week),
-  { "key": 7, "value": "Unbekannt" }
-))</eg></fos:expression>
-               <fos:result>{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
-  4: "Donnerstag", 5: "Freitag", 6: "Samstag", 7: "Unbekannt" }</fos:result>
-               <fos:postamble>The value of the existing map is unchanged; the returned map 
-                  contains all the entries from <code>$week</code>, supplemented 
-                  with an additional entry.</fos:postamble>
-            </fos:test>
-            <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of-pairs((
-  map:pairs($week),
-  { "key": 6, "value": "Sonnabend" }
-))</eg></fos:expression>
-               <fos:result>{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
-  4: "Donnerstag", 5: "Freitag", 6: ("Samstag", "Sonnabend") }</fos:result>
-               <fos:postamble>The value of the existing map is unchanged; the returned map
-                  contains all the entries from <code>$week</code>, with one entry replaced by a
-                  new entry. Both input maps contain an entry with the key <code>6</code>; the
-                  one used in the result combines the two supplied values into a single sequence.</fos:postamble>
-            </fos:test>
-            <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of-pairs(
-  (map:pairs($week), { "key": 6, "value": "Sonnabend" }),
-  { "duplicates": "use-last" }
-)</eg></fos:expression>
-               <fos:result>{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
-  4: "Donnerstag", 5: "Freitag", 6: "Sonnabend" }</fos:result>
-               <fos:postamble>The value of the existing map is unchanged; the returned map
-                  contains all the entries from <code>$week</code>, with one entry replaced by a
-                  new entry. Both input maps contain an entry with the key <code>6</code>; the
-                  supplied <code>$duplicates</code> option ensures that the one used in the result 
-                  is the one that comes last in the input sequence.</fos:postamble>
-            </fos:test>
-            <fos:test use="v-map-of-week">
-               <fos:expression><eg>map:of-pairs(
-  (map:pairs($week), { "key": 6, "value": "Sonnabend" }),
-  { "duplicates": concat(?, '|', ?) }
-)</eg></fos:expression>
-               <fos:result>{ 0: "Sonntag", 1: "Montag", 2: "Dienstag", 3: "Mittwoch",
-  4: "Donnerstag", 5: "Freitag", 6: "Samstag|Sonnabend" }</fos:result>
-               <fos:postamble>In the result map, the value for key <code>6</code> is obtained by concatenating the values
-                  from the two input maps, with a separator character.</fos:postamble>
-            </fos:test>
-            
-            <fos:test>
-               <fos:expression><eg>map:of-pairs(
-  (
-    map:pairs({ "England": 2, "Germany": 1 }),
-    map:pairs({ "France": 2, "Germany": 2 }),
-    map:pairs({ "England": 0, "France": 1 })
-  ),
-  { "duplicates": op("+") }
-)</eg></fos:expression>
-            
-            <fos:result>{ "England": 2, "Germany": 3, "France": 3 }</fos:result>
-               <fos:postamble>The values for each distinct key are summed.</fos:postamble>
-            </fos:test>
-            
-            <fos:test>
-               <fos:expression><eg>map:of-pairs(
-  (map:pair("red", 0), map:pair("green", 1), map:pair("blue", 2))
-)
-=> map:keys()</eg></fos:expression>
-               <fos:result>"red", "green", "blue"</fos:result>
-               <fos:postamble>The keys are returned in the order supplied.</fos:postamble>
-            </fos:test>
-            
-            <fos:test>
-               <fos:expression><eg>{ "red": 0, "green": 1, "blue": 2 }
-=> map:pairs()
-=> sort(key := fn { ?key })
-=> map:of-pairs()
-=> map:keys()</eg></fos:expression>
-               <fos:result>"blue", "green", "red"</fos:result>
-               <fos:postamble>Takes any map and produces a map with the same entries, but sorted by key.</fos:postamble>
-            </fos:test>
-            
-            <fos:test>
-               <fos:expression><eg>map:of-pairs(
-  (map:pair("red", 0), map:pair("green", 1), map:pair("blue", 2))
-)
-=> map:put("yellow", -1)
-=> map:keys()</eg></fos:expression>
-               <fos:result>"red", "green", "blue", "yellow"</fos:result>
-               <fos:postamble>New entries are added at the end.</fos:postamble>
-            </fos:test>
-
-         </fos:example>
-         
-         <fos:example>
-            <p>The following expression takes an existing map and sorts its entries into key order:</p>
-            <eg>map:of-pairs(map:pairs($M) => sort(key := fn { ?key }))</eg>
-            
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
-
    <fos:function name="keys" prefix="map">
       <fos:signatures>
          <fos:proto name="keys" return-type="xs:anyAtomicType*">
@@ -26408,100 +25782,6 @@ map:for-each($map, fn($key, $value) { $key })
          </fos:example>
       </fos:examples>
    </fos:function>
-   
-   <!--<fos:function name="keys-where" prefix="map">
-      <fos:signatures>
-         <fos:proto name="keys-where" return-type="xs:anyAtomicType*">
-            <fos:arg name="map" type="map(*)" usage="inspection"/>
-            <fos:arg name="predicate" type="fn($key as xs:anyAtomicType, $value as item()*) as xs:boolean?" usage="inspection"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns a sequence containing selected keys present in a map.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>Informally, the function <function>map:keys</function> takes any
-            <termref def="dt-map">map</termref> as its <code>$map</code> argument. The
-            <code>$predicate</code> function takes the key and the value of the corresponding
-            map entry as an argument, and the result is a sequence containing the keys of those
-            entries for which the predicate function returns <code>true</code>, in 
-            <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref>.</p>
-         
-         <p>A return value of <code>()</code> from the predicate function is 
-            treated as <code>false</code>.</p>
-         
-         <!-\-<p>The function is <term>nondeterministic with respect to ordering</term>
-            (see <specref
-               ref="properties-of-functions"
-            />). This means that two calls with the same argument
-            are not guaranteed to produce the results in the same order.</p>-\->
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-map:for-each($map, fn($key, $value) {
-  if ($predicate($key, $value)) { $key }
-})         
-      </fos:equivalent>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>
-let $numbers := {
-  0: "zero",
-  1: "one",
-  2: "two",
-  3: "three"
-}
-return map:keys-where(
-  $numbers,
-  fn($key, $value) { $value = ("two", "three") }
-)
-               </eg></fos:expression>
-               <fos:result>(2, 3)</fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>
-let $square := map:merge(
-  (1 to 5) ! map:entry(., . * .)
-)
-return map:keys-where(
-  $square,
-  fn($key, $value) { $value &gt; 5 and $value &lt; 20 }
-)
-               </eg></fos:expression>
-               <fos:result>(3, 4)</fos:result>
-            </fos:test>
-         </fos:example>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>
-let $birthdays := {
-  "Agnieszka": xs:date("1980-12-31"),
-  "Jabulile": xs:date("2001-05-05"),
-  "Joel": xs:date("1969-11-10"),
-  "Midori": xs:date("2012-01-08")
-}
-return map:keys-where($birthdays, fn($name, $date) {
-  starts-with($name, "J") and year-from-date($date) = 1969
-})
-               </eg></fos:expression>
-               <fos:result>"Joel"</fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change issue="467 504" PR="478 515" date="2023-05-16"><p>New in 4.0</p></fos:change>
-         <fos:change issue="1171" PR="1182" date="2024-05-07">
-            <p>The <code>$predicate</code> callback function may return the empty sequence (meaning <code>false</code>).</p>
-         </fos:change>
-      </fos:changes>
-   </fos:function>-->
    
    <fos:function name="items" prefix="map">
       <fos:signatures>
@@ -26591,97 +25871,6 @@ map:for-each($map, map:entry#2)
          <fos:change issue="29 314" PR="360" date="2023-03-21"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
-
-   <!--<fos:function name="pairs" prefix="map">
-      <fos:signatures>
-         <fos:proto name="pairs" return-type-ref="key-value-pair" return-type-ref-occurs="*">
-            <fos:arg name="map" type="map(*)" usage="inspection"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns a sequence containing all the key-value pairs present in a map, each represented
-         as a <termref def="dt-key-value-pair-map"/>.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function <function>map:pairs</function> takes any <termref def="dt-map"
-            >map</termref>
-            as its <code>$map</code> argument and returns the keys that are present in the map as
-            a sequence of <termref def="dt-key-value-pair-map">key-value pair maps</termref>, in 
-            <xtermref spec="DM40" ref="dt-entry-order">entry order</xtermref>.</p>
-         <p>A key-value pair map is an instance of type <code>record(key as xs:anyAtomicType, value as item()*)</code>:
-         that is a map with two entries, one (with key <code>"key"</code>) holding the key,
-         and the other (with key <code>"value"</code>) holding the value.</p>
-         
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-map:for-each($map, map:pair#2)
-      </fos:equivalent>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>map:pairs({ 1: "Y", 2: "N" })</eg></fos:expression>
-               <fos:result><eg>({ "key": 1, "value": "Y" }, { "key": 2, "value": "N" })</eg></fos:result>
-               <fos:test-assertion>
-                  <result xmlns="http://www.w3.org/2010/09/qt-fots-catalog">
-                     <any-of>
-                        <assert-deep-eq>{ "key": 1, "value": "Y" }, { "key": 2, "value": "N" }</assert-deep-eq>
-                        <assert-deep-eq>{ "key": 2, "value": "N" }, { "key": 1, "value": "Y" }</assert-deep-eq>
-                     </any-of>
-                  </result>
-               </fos:test-assertion>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
-   
-   <!--<fos:function name="ordered" prefix="map">
-      <fos:signatures>
-         <fos:proto name="ordered" return-type="xs:boolean">
-            <fos:arg name="map" type="map(*)" usage="inspection"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns the <code>ordered</code> property of a map.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function returns the value of the 
-            <xtermref spec="DM40" ref="dt-map-ordered"/> property of a map.</p>
-      </fos:rules>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>map:ordered({ 1: "Y", 2: "N" })</eg></fos:expression>
-               <fos:result>false()</fos:result>
-            </fos:test>
-         </fos:example>
-
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>map:ordered(
-   map:merge(({ 1: "Y" }, { 2: "N" }), 
-   { "retain-order" : true() })
-)</eg></fos:expression>
-               <fos:result>true()</fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
 
    <fos:function name="contains" prefix="map">
       <fos:signatures>
@@ -26801,7 +25990,7 @@ map:size($map) eq 0
 
       </fos:rules>
       <fos:equivalent style="dm-primitive">
-let $entry := dm:iterate-map($map, fn($k, $v) {
+let $entry := dm:iterate-map($map, fn($k, $v, $pos) {
   if (atomic-equal($k, $key)) {
     map:entry($k, $v)
   }
@@ -26927,28 +26116,6 @@ return (
          </olist>
 
       </fos:rules>
-      <!--<fos:equivalent style="xquery-function">
-declare function map:find(
-  $input as item()*, 
-  $key as xs:anyAtomicType
-) as array(*) {
-  array:of-members(                       
-    for $item in $input
-    return typeswitch ($item) {
-      case $a as array(*) return
-        for member $member in $a
-        return map:find($member, $key)
-      case $m as map(*) return
-        for key $k value $v in $m
-        return (
-          if (atomic-equal($k, $key)) { { 'value': $v } },
-          map:find($v, $key)
-        )
-      default return ()
-    }
-  )
-};   
-      </fos:equivalent>-->
       <fos:notes>
          <p>If <code>$input</code> is the empty sequence, map, or array, or if the requested <code>$key</code> is not found,
             the result will be a zero-length array.</p>
@@ -27145,66 +26312,6 @@ map:merge(//book ! map:entry(isbn, .))]]></eg>
       </fos:examples>
    </fos:function>
 
-   <!--<fos:function name="pair" prefix="map">
-      <fos:signatures>
-         <fos:proto name="pair" return-type-ref="key-value-pair">
-            <fos:arg name="key" type="xs:anyAtomicType"/>
-            <fos:arg name="value" type="item()*" usage="navigation"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p><phrase>Returns</phrase> a <termref def="dt-key-value-pair-map"/> that 
-            represents a single key-value pair.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function <function>map:pair</function> returns a <termref def="dt-map"
-            >map</termref> which contains two entries, one (with the key <code>"key"</code>)
-            containing <code>$key</code> and the other (with the key <code>"value"</code>)
-            containing <code>$value</code>.</p>
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-{}
-=> map:put("key", $key)
-=> map:put("value", $value)
-      </fos:equivalent>
-      <fos:notes>
-         <p>The function call <code>map:pair(K, V)</code> produces the same result as the
-         expression <code>{ "key": K, "value": V }</code>.</p>
-         <p>The function <function>map:pair</function> is intended primarily for use in conjunction with
-            the function <function>map:of-pairs</function>. A map may be constructed like this:</p>
-
-         <eg><![CDATA[
-map:of-pairs((
-  map:pair("Su", "Sunday"),
-  map:pair("Mo", "Monday"),
-  map:pair("Tu", "Tuesday"),
-  map:pair("We", "Wednesday"),
-  map:pair("Th", "Thursday"),
-  map:pair("Fr", "Friday"),
-  map:pair("Sa", "Saturday")
-))]]></eg>
-         <p>The <function>map:of-pairs</function> function can be used to construct
-            a map with a variable number of entries, for example:</p>
-         <eg><![CDATA[map:of-pairs(//book ! map:pair(./isbn, .))]]></eg>
-      </fos:notes>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression>map:pair("M", "Monday")</fos:expression>
-               <fos:result>{ "key": "M", "value": "Monday" }</fos:result>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
-
    <fos:function name="remove" prefix="map">
       <fos:signatures>
          <fos:proto name="remove" return-type="map(*)">
@@ -27299,7 +26406,7 @@ map:filter(
       </fos:rules>
       
       <fos:equivalent style="dm-primitive">
-        dm:iterate-map($map, $action, $position)
+        dm:iterate-map($map, $action)
       </fos:equivalent>
 
       <fos:examples>
@@ -27556,14 +26663,15 @@ return map:filter($en-ja, fn($en, $ja, $pos) {
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 for-each(
-  $input, 
+  $input,
   fn($item, $pos) {
-    for-each($key($item, $pos), fn($k) {
-      map:entry($k, $value($item, $pos))
-    }
-  )}
+    for-each(
+      $key($item, $pos),
+      fn($k) { map:entry($k, $value($item, $pos)) }
+    )
+  }
 )
-=> map:merge($options)
+=> map:merge($options[exists(?duplicates)] otherwise { 'duplicates': 'combine' })
       </fos:equivalent>
       <fos:errors>
          
@@ -27824,157 +26932,6 @@ count(map:entries($map))
       </fos:examples>
    </fos:function>
    
-   <!--<fos:function name="sort" prefix="map">
-      <fos:signatures>
-         <fos:proto name="sort" return-type="map(*)">
-            <fos:arg name="map" type="map(*)" usage="inspection"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns a sorted map with the same entries as a supplied map.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function <code>map:sort</code> takes any <termref def="dt-map"
-               >map</termref>
-            as its <code>$map</code> argument and returns a sorted map containing the
-            same entries.</p>
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-map:of-pairs(map:pairs($map), { 'ordering': 'sorted' })
-      </fos:equivalent>
-      <fos:errors>
-         <p>An error is raised <errorref spec="FO" class="JS" code="0008"/> if 
-            the keys in <code>$map</code> are not 
-         <termref def="dt-strictly-comparable"/>.</p>
-      </fos:errors>
-      <fos:notes>
-         <p>If the <code>ordering</code> property of <code>$map</code> is <code>sorted</code>,
-         then <code>$map</code> is returned unchanged.</p>
-      </fos:notes>
-      <fos:examples>
-         <fos:example>
-            <fos:test>
-               <fos:expression>map:sort({ "a": 0, "z": 0, "q": 0 }) => map:keys()</fos:expression>
-               <fos:result>"a", "q", "z"</fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression>map:sort({}) => map:put("x", 0) => map:put("a", 0) => map:keys()</fos:expression>
-               <fos:result>"a", "x"</fos:result>
-               <fos:postamble>Adding entries to a sorted map, even if it is empty, produces a sorted map</fos:postamble>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change issue="564" PR="1609" date="2024-11-27"><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
-   
-   <!--<fos:function name="range" prefix="map">
-      <fos:signatures>
-         <fos:proto name="range" return-type="xs:integer">
-            <fos:arg name="map" type="map(*)" usage="inspection"/>
-            <fos:arg name="min" type="xs:anyAtomicType?" usage="absorption" default="()"/>
-            <fos:arg name="max" type="xs:anyAtomicType?" usage="absorption" default="()"/>
-            <fos:arg name="count" type="xs:integer?"  usage="absorption" default="()"/>
-         </fos:proto>
-      </fos:signatures>
-      <fos:properties>
-         <fos:property>deterministic</fos:property>
-         <fos:property>context-independent</fos:property>
-         <fos:property>focus-independent</fos:property>
-      </fos:properties>
-      <fos:summary>
-         <p>Returns a sorted map containing a subset of the entries of a supplied map.</p>
-      </fos:summary>
-      <fos:rules>
-         <p>The function filters the supplied <code>$map</code> to return those entries that are
-         within a given range of values.</p>
-         <p>The function first selects those entries whose
-            key <var>K</var> satisfies all the following conditions:</p>
-       
-         <ulist>
-            <item><p>If <code>$min</code> is supplied, then <var>K</var> is 
-               greater than or equal to <code>$min</code>.</p></item>
-            <item><p>If <code>$max</code> is supplied, then <var>K</var> is 
-               less than <code>$max</code>.</p></item>
-         </ulist>
-         
-         <p>If <code>$count</code> is specified, then:</p>
-         <ulist>
-            <item><p>If <code>$count</code> is positive and is less than the number of selected
-            entries, it then selects the first <code>$count</code> of these entries, in key order.</p></item>
-            <item><p>If <code>$count</code> is negative and <code>-$count</code> is less than the number of selected
-            entries, it then selects the last <code>-$count</code> of these entries, in key order.</p></item>
-         </ulist>
-         
-         <p>For example, specifying <code>count := 1</code> selects the first qualifying entry, while
-         <code>count := -1</code> selects the last.</p>
-      </fos:rules>
-      <fos:equivalent style="xpath-expression">
-let $CC := "http://www.w3.org/2005/xpath-functions/collation/codepoint"         
-let $pairs := map:pairs(map:sort($map)) [
-   (empty($min) or compare(?key, $min, $CC) ge 0) and  
-   (empty($max) or compare(?key, $max, $CC) lt 0)
-]
-let $slice := 
-  if ($count gt 0) then slice($pairs, 1, $count)
-  else if ($count lt 0) then slice($pairs, -$count, -1)
-  else $pairs
-return
-  map:of-pairs($slice, { "ordering": "sorted" })
-</fos:equivalent>
-      <fos:errors>
-         <p>An error is raised <errorref spec="FO" class="JS" code="0008"/> if 
-            the keys in <code>$map</code> are not 
-         <termref def="dt-strictly-comparable"/>.</p>
-      </fos:errors>
-      <fos:notes>
-         <p>The function is intended primarily to take advantage of efficiencies that
-            become possible when the supplied <code>$map</code> has <code>ordering=sorted</code>,
-            but it still works if the input is not sorted. </p>
-         <p>Note that <code>$min</code> is an inclusive bound, while <code>$max</code> is exclusive.
-         If <code>$min</code> is omitted, the selection starts at the first entry in <code>$map</code>,
-         and if <code>$max</code> is omitted, the selection ends at the last entry.</p>
-      </fos:notes>
-      <fos:examples role="wide">
-         <fos:example>
-            <fos:test>
-               <fos:expression><eg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(count:=1) </eg></fos:expression>
-               <fos:result><eg>{ "a": 1 }</eg></fos:result>
-               <fos:postamble>Selects the first entry in the map, in key order</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(count:=-1) </eg></fos:expression>
-               <fos:result><eg>{ "c": 3 }</eg></fos:result>
-               <fos:postamble>Selects the last entry in the map, in key order</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(max:="b") </eg></fos:expression>
-               <fos:result><eg>{ "a": 1, "b": 2 }</eg></fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eeg>map:sort({ "a": 1, "c": 3, "b": 2 }) => map:range(min:="b", max="d") </eeg></fos:expression>
-               <fos:result><eg>{ "b": 2, "c": 3 }</eg></fos:result>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>map:sort({ "aa": 1, "cc": 3, "bb": 2 }) 
-=> map:range(min:="b", count:=1) 
-=> map:keys() </eg></fos:expression>
-               <fos:result><eg>"bb"</eg></fos:result>
-               <fos:postamble>Returns the first key greater than or equal to the supplied value.</fos:postamble>
-            </fos:test>
-         </fos:example>
-      </fos:examples>
-      <fos:changes>
-         <fos:change issue="564" PR="1609" date="2024-11-27"><p>New in 4.0</p></fos:change>
-      </fos:changes>
-   </fos:function>-->
-
    <fos:function name="collation" prefix="fn">
       <fos:signatures>
          <fos:proto name="collation" return-type="xs:string">
@@ -31141,13 +30098,13 @@ array:size($array) eq 0
          <ednote><edtext>Provide separate "formal equivalents" for the two variants.</edtext></ednote>
       </fos:rules>
       <fos:equivalent style="xpath-expression" covers-error-cases="false">
-(: For the two-argument form: :)           
+(: For the two-argument form: :)
     if ($position = (1 to array:size($array)))
-    then items-at(array:members($array), $position) => jvalue())
-    else error(),
-(: For the three-argument form: :)           
+    then items-at(array:members($array), $position) => jvalue()
+    else error(#Q{http://www.w3.org/2005/xqt-errors}FOAY0001),
+(: For the three-argument form: :)
     if ($position = (1 to array:size($array)))
-    then items-at(array:members($array), $position) => jvalue())
+    then items-at(array:members($array), $position) => jvalue()
     else $default
       </fos:equivalent>
       <fos:errors>
@@ -31535,10 +30492,10 @@ array:index-of(
  
       </fos:rules>
       
-      <fos:equivalent style="xpath-expression">
+      <fos:equivalent style="dm-primitive">
 dm:iterate-array($array, fn($member, $pos) {
   if ($predicate($member, $pos)) { $pos }
-})   
+})
       </fos:equivalent>
       
       <fos:examples>
@@ -31803,7 +30760,7 @@ $array
       <fos:equivalent style="xpath-expression" covers-error-cases="false"><![CDATA[
 $array 
 => array:members() 
-=> insert-before($position, array:members([$member]) })
+=> insert-before($position, array:members([ $member ]))
 => array:of-members()
        ]]></fos:equivalent>
       <fos:errors>
@@ -32095,10 +31052,10 @@ $array
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 array:of-members(
-  for-each(array:members($array), 
-           fn($member, $pos) {
-              jtree($action(jvalue($member), $pos)) }
-           })
+  for-each(
+    array:members($array),
+    fn($member, $pos) { jtree($action(jvalue($member), $pos)) }
+  )
 )
       </fos:equivalent>
       <fos:examples>
@@ -32162,7 +31119,7 @@ array:of-members(
          <p>Informally, the function returns an array containing those members of the input
          array that satisfy the supplied predicate.</p>
       </fos:rules>
-      <fos:equivalent style="xquery-expression">
+      <fos:equivalent style="xpath-expression">
 array:of-members(
   filter(
     array:members($array),
@@ -32171,7 +31128,7 @@ array:of-members(
 )      </fos:equivalent>
       <fos:errors>
          <p>As a consequence of the function signature and the function calling rules, a type error occurs if the supplied
-            function <code>$function</code> returns anything other than a single <code>xs:boolean</code> item
+            function <code>$predicate</code> returns anything other than a single <code>xs:boolean</code> item
             or the empty sequence; there is no conversion to an effective boolean value.</p>
       </fos:errors>
       <fos:examples>
@@ -32242,7 +31199,7 @@ return array:filter(
 fold-left(
   array:members($array),
   $init,
-  fn($result, $member) { $action($result, jvalue($member) }
+  fn($result, $member) { $action($result, jvalue($member)) }
 )
        ]]></fos:equivalent>
       <fos:notes>
@@ -32398,7 +31355,7 @@ array:of-members(
     array:members($array1),
     array:members($array2),
     fn($v1, $v2, $pos) {
-      [$action(jvalue($v1), jvalue($v2), $pos)]/.
+      jtree($action(jvalue($v1), jvalue($v2), $pos))
     }
   )
 )       ]]></fos:equivalent>
@@ -32469,8 +31426,9 @@ array:for-each-pair(
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 array:of-members(
-  for-each($input, 
-    fn($item, $pos) { [$action($item, $pos)]/. }
+  for-each(
+    $input,
+    fn($item, $pos) { jtree($action($item, $pos)) }
   )
 )
       </fos:equivalent>
@@ -32630,9 +31588,9 @@ return deep-equal(
             <xtermref spec="DM40" ref="dt-single-member-array">single-member arrays</xtermref>. 
             Each returned array encapsulates the value of one member of <code>$array</code>.</p>
       </fos:rules>
-      <fos:equivalent style="xpath-expression">
-dm:iterate-array($array, fn($member) { array:append([], $member) })        
-      </fos:equivalent> 
+      <fos:equivalent style="dm-primitive">
+dm:iterate-array($array, fn($member, $pos) { array:append([], $member) })
+      </fos:equivalent>
       <fos:notes>
          <p>The function call <code>array:split($array)</code> produces the same result as the
             expression <code>for member $m in $array return [ $m ]</code>.</p>
@@ -32718,9 +31676,9 @@ fold-left($input, [], fn($array, $jnode) {
          For example, given two arrays <code>$A</code> and <code>$B</code> of the same length,
          they can be combined pairwise into a single array with the expression:</p>
          <eg>array:of-members(
-            for-each-pair(array:of-members($A), 
-                          array:of-members($B), 
-                          op(',')))</eg>     
+            for-each-pair(array:members($A),
+                          array:members($B),
+                          fn($a, $b) { jtree((jvalue($a), jvalue($b))) }))</eg>
       </fos:notes>
       <fos:examples>
          <fos:example>
@@ -32938,9 +31896,9 @@ $array
 => array:members()
 => fn:sort-by(
   for $key-spec in ($keys otherwise {})
-  return map:put($key-spec, 'key', fn($member as record(value)) as xs:anyAtomicType* {
-    map:get($key-spec, 'key', fn:data#1)(map:get($member, 'value'))
-  }
+  return map:put($key-spec, 'key', fn($member as item()) as xs:anyAtomicType* {
+    map:get($key-spec, 'key', fn:data#1)(jvalue($member))
+  })
 )
 => array:of-members()
        ]]></fos:equivalent>
@@ -33186,7 +32144,7 @@ declare function array:flatten(
         
 
       </fos:rules>
-      <fos:equivalent style="xpath-expression">
+      <fos:equivalent style="dm-primitive">
          dm:iterate-array($array, fn($member, $pos) { $member })
       </fos:equivalent>
       <fos:notes>
@@ -37072,10 +36030,14 @@ for-each(
   fn($item, $pos) { { 'item': $item, 'pos': $pos } }
 )
 => fold-left((), fn($partitions, $pair) {
-  if (empty($partitions) or $split-when(foot($partitions)?*, $pair?item, $pair?pos))
-  then ($partitions, [ $pair?item ])
-  else (trunk($partitions), array { foot($partitions)?*, $pair?item })
-})           
+  if (empty($partitions)) then (
+    [ $pair?item ]
+  ) else if ($split-when(foot($partitions)?*, $pair?item, $pair?pos)) then (
+    $partitions, [ $pair?item ]
+  ) else (
+    trunk($partitions), array { foot($partitions)?*, $pair?item }
+  )
+})
       </fos:equivalent>
       <fos:notes>
          <p>The function enables a variety of positional grouping problems to be solved. For example:</p>
