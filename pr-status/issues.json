@@ -66,7 +66,7 @@
     "milestone": null,
     "comments": 0,
     "created_at": "2026-08-27T16:08:17Z",
-    "updated_at": "2026-08-27T16:08:17Z",
+    "updated_at": "2026-08-27T19:43:51Z",
     "closed_at": null,
     "assignee": null,
     "author_association": "MEMBER",
@@ -140,6 +140,15 @@
         "color": "ACE1AF",
         "default": false,
         "description": "Minor typos, wording clarifications, example fixes, etc."
+      },
+      {
+        "id": 6117897637,
+        "node_id": "LA_kwDOEt5Dd88AAAABbKe1pQ",
+        "url": "https://api.github.com/repos/qt4cg/qtspecs/labels/Propose%20Merge%20without%20Discussion",
+        "name": "Propose Merge without Discussion",
+        "color": "6B15F5",
+        "default": false,
+        "description": "Change is editorial or minor"
       }
     ],
     "state": "open",
@@ -148,7 +157,7 @@
     "milestone": null,
     "comments": 0,
     "created_at": "2026-08-27T12:20:13Z",
-    "updated_at": "2026-08-27T12:20:26Z",
+    "updated_at": "2026-08-27T16:24:32Z",
     "closed_at": null,
     "assignee": null,
     "author_association": "MEMBER",
@@ -549,9 +558,9 @@
       }
     ],
     "milestone": null,
-    "comments": 0,
+    "comments": 4,
     "created_at": "2026-08-27T11:07:23Z",
-    "updated_at": "2026-08-27T11:08:02Z",
+    "updated_at": "2026-08-27T19:21:04Z",
     "closed_at": null,
     "assignee": {
       "login": "ChristianGruen",
@@ -589,17 +598,17 @@
       "blocking": 0,
       "total_blocking": 0
     },
-    "body": "I thought I’d give the pending JNode update issue another attempt (@joewiz’s #77 is the oldest one that’s still unresolved). This one tries to…\n\n* define a single XPath update function;\n* work for both JNodes and XNodes; and\n* allow recursive updates, to for example rename all keys `a` as `b`.\n\nThe signature:\n\n```\nfn:update(\n  $input        as gnode(),\n  $select       as fn($node as gnode()) as gnode()*,\n  $replacement  as item()* := ()\n) as item()*\n```\n\n* `$select` is applied once to `$input` and returns the nodes to replace. They must belong to `$input`.\n* `$replacement` is what a selected node becomes. If it is a function item, it is called with the node.\n* Replacements are applied bottom-up, so a node reaches `$replacement` with its descendants already updated.\n* A map or array supplied where `gnode()` is expected becomes a root JNode.\n* A root node in substitution position contributes its children, exactly as a document node does in content position.\n* Inside an array, the key of a substituted entry is ignored, since positions are renumbered.\n\nThe replacement, or the result of the replacement function:\n\nResult | Description\n--- | ---\n`()` | delete the node (default)\none atomic item | replace the node’s value, keeping its key or name\none node, map or array | replace the node, key or name included\nseveral items | replace and insert, each item read as above\n\nAn atomic item replaces the value, everything else replaces the node. To assign a map, an array or a sequence as a value, name the key: `{ jkey($n): [] }`.\n\n## Examples\n\n### Input\n\n```xquery\nlet $store := {\n  'store': {\n    'books': [\n      { 'title': 'XQuery', 'price': 39.95 },\n      { 'title': 'JSON',   'price': 24.50, 'draft': true() }\n    ],\n    'open': true()\n  }\n}\n```\n\n#### Delete `draft` nodes\n\n```xquery\nupdate($store, fn { .//draft })\n```\n\n#### Increase a value\n\n```xquery\nupdate($store, fn { .//price }, fn { . * 2 })\n```\n\n#### Insert a sibling entry\n\n```xquery\nupdate($store, fn { .//price }, fn { ., { 'currency': 'EUR' } })\n```\n\n#### Rename `books` recursively\n\n```xquery\nupdate($store, fn($n) { .//books }, fn($n) { { 'items': jvalue($n) } })\n\n\n```\n\n#### Add a book\n\n```xquery\nupdate(\n  $store,\n  fn($n) { $n//books },\n  fn($n) { { 'books': array:append(jvalue($n), { 'title': 'Update', 'price': 9.95 }) } }\n)\n```\n\n#### Rename all keys `a` as `b`\n\nNested occurrences are covered: the inner nodes are replaced first, so `jvalue($n)` already carries\nthe renamed subtree.\n\n```xquery\nupdate($data, fn($n) { $n//a }, fn($n) { { 'b': jvalue($n) } })\n```\n\n#### Single-pass update\n\n```xquery\nupdate(\n  $store,\n  fn($n) { $n//(price | books | draft) },\n  fn($n) {\n    if ($n/self::price)      then ($n * 2, { 'currency': 'EUR' })\n    else if ($n/self::books) then { 'items': jvalue($n) }\n    else ()\n  }\n)\n\n(: result :)\n{ \"store\": {\n  \"items\": [\n    { \"title\": \"XQuery\", \"price\": 79.9, \"currency\": \"EUR\" },\n    { \"title\": \"JSON\",   \"price\": 49,   \"currency\": \"EUR\" }\n  ],\n  \"open\": true\n} }\n```\n\n#### XML update\n\n```xquery\nlet $store :=\n  <store open=\"true\">\n    <books>\n      <book><title>XQuery</title><price cur=\"EUR\">39.95</price></book>\n      <book draft=\"true\"><title>JSON</title><price cur=\"EUR\">24.50</price></book>\n    </books>\n  </store>\nreturn update(\n  $store,\n  fn($n) { $n//(price | books | @draft) },\n  fn($n) {\n    if ($n/self::price) then ($n * 2, <currency>EUR</currency>)\n    else if ($n/self::books) then <items>{ $n/@*, $n/node() }</items>\n    else ()\n  }\n)\n\n(: result :)\n<store open=\"true\">\n  <items>\n    <book>\n      <title>XQuery</title>\n      <price cur=\"EUR\">79.9</price>\n      <currency>EUR</currency>\n    </book>\n    <book>\n      <title>JSON</title>\n      <price cur=\"EUR\">49</price>\n      <currency>EUR</currency>\n    </book>\n  </items>\n</store>\n```\n\nFeedback is welcome…",
+    "body": "I thought I’d give the pending JNode update issue another attempt (@joewiz’s #77 is the oldest one that’s still unresolved). This one tries to…\n\n* define a single XPath update function;\n* work for both JNodes and XNodes; and\n* allow recursive updates, to for example rename all keys `a` as `b`.\n\nThe signature:\n\n```\nfn:update(\n  $input        as gnode(),\n  $select       as fn($node as gnode()) as gnode()*,\n  $replacement  as item()* := ()\n) as item()*\n```\n\n* `$select` is applied once to `$input` and returns the nodes to replace. They must belong to `$input`.\n* `$replacement` is what a selected node becomes. If it is a function item, it is called with the node.\n* Replacements are applied bottom-up, so a node reaches `$replacement` with its descendants already updated.\n* A map or array supplied where `gnode()` is expected becomes a root JNode.\n* A root node in substitution position contributes its children, exactly as a document node does in content position.\n* Inside an array, the key of a substituted entry is ignored, since positions are renumbered.\n\nThe replacement, or the result of the replacement function:\n\nResult | Description\n--- | ---\n`()` | delete the node (default)\none atomic item | replace the node’s value, keeping its key or name\none node, map or array | replace the node, key or name included\nseveral items | replace and insert, each item read as above\n\nAn atomic item replaces the value, everything else replaces the node. To assign a map, an array or a sequence as a value, name the key: `{ jkey($n): [] }`.\n\n## Examples\n\n### Input\n\n```xquery\nlet $store := {\n  'store': {\n    'books': [\n      { 'title': 'XQuery', 'price': 39.95 },\n      { 'title': 'JSON',   'price': 24.50, 'draft': true() }\n    ],\n    'open': true()\n  }\n}\n```\n\n#### Delete `draft` nodes\n\n```xquery\nupdate($store, fn { .//draft })\n```\n\n#### Increase a value\n\n```xquery\nupdate($store, fn { .//price }, fn { . * 2 })\n```\n\n#### Insert a sibling entry\n\n```xquery\nupdate($store, fn { .//price }, fn { ., { 'currency': 'EUR' } })\n```\n\n#### Rename `books` recursively\n\n```xquery\nupdate($store, fn($n) { $n//books }, fn($n) { { 'items': jvalue($n) } })\n\n\n```\n\n#### Add a book\n\n```xquery\nupdate(\n  $store,\n  fn($n) { $n//books },\n  fn($n) { { 'books': array:append(jvalue($n), { 'title': 'Update', 'price': 9.95 }) } }\n)\n```\n\n#### Rename all keys `a` as `b`\n\nNested occurrences are covered: the inner nodes are replaced first, so `jvalue($n)` already carries\nthe renamed subtree.\n\n```xquery\nupdate($data, fn($n) { $n//a }, fn($n) { { 'b': jvalue($n) } })\n```\n\n#### Single-pass update\n\n```xquery\nupdate(\n  $store,\n  fn($n) { $n//(price | books | draft) },\n  fn($n) {\n    if ($n/self::price)      then ($n * 2, { 'currency': 'EUR' })\n    else if ($n/self::books) then { 'items': jvalue($n) }\n    else ()\n  }\n)\n\n(: result :)\n{ \"store\": {\n  \"items\": [\n    { \"title\": \"XQuery\", \"price\": 79.9, \"currency\": \"EUR\" },\n    { \"title\": \"JSON\",   \"price\": 49,   \"currency\": \"EUR\" }\n  ],\n  \"open\": true\n} }\n```\n\n#### XML update\n\n```xquery\nlet $store :=\n  <store open=\"true\">\n    <books>\n      <book><title>XQuery</title><price cur=\"EUR\">39.95</price></book>\n      <book draft=\"true\"><title>JSON</title><price cur=\"EUR\">24.50</price></book>\n    </books>\n  </store>\nreturn update(\n  $store,\n  fn($n) { $n//(price | books | @draft) },\n  fn($n) {\n    if ($n/self::price) then ($n * 2, <currency>EUR</currency>)\n    else if ($n/self::books) then <items>{ $n/@*, $n/node() }</items>\n    else ()\n  }\n)\n\n(: result :)\n<store open=\"true\">\n  <items>\n    <book>\n      <title>XQuery</title>\n      <price cur=\"EUR\">79.9</price>\n      <currency>EUR</currency>\n    </book>\n    <book>\n      <title>JSON</title>\n      <price cur=\"EUR\">49</price>\n      <currency>EUR</currency>\n    </book>\n  </items>\n</store>\n```\n\nFeedback is welcome…",
     "closed_by": null,
     "reactions": {
       "url": "https://api.github.com/repos/qt4cg/qtspecs/issues/2873/reactions",
-      "total_count": 0,
+      "total_count": 1,
       "+1": 0,
       "-1": 0,
       "laugh": 0,
       "hooray": 0,
       "confused": 0,
-      "heart": 0,
+      "heart": 1,
       "rocket": 0,
       "eyes": 0
     },
