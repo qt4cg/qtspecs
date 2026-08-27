@@ -22921,17 +22921,26 @@ serialize(
             ref="dt-context-value"/> that was in effect at the point where the containing expression
             was invoked. Each host language defines which constructs invoke an expression; between
             two such constructs the result of <function>fn:current</function> does not change, even
-            where the context value does. In particular, within a predicate, or on the right-hand
-            side of the <code>/</code> operator, the result of <function>fn:current</function> is
-            generally different from the context value.</p>
-         <p>In XPath and XQuery, the containing expression is invoked with the context value that was
-            supplied when evaluation was initiated. The exception is the expression that defines the
-            default value of an optional parameter of a function declaration: that expression is
-            invoked by the function call, the named function reference, or the partial function
-            application that leaves the argument unsupplied, and takes its context value from there.
-            The detailed rules are given in <xspecref spec="XQ40" ref="FunctionDeclns"/>.</p>
+            where the context value does.</p>
+         <p>In XPath and XQuery, no expression within the body of a query or expression invokes
+            another, so <function>fn:current</function> returns the context value that is in effect
+            at the outermost level: in XQuery the value established by the context value declaration
+            (see <xspecref spec="XQ40" ref="id-context-value-declarations"/>), in XPath the context
+            value supplied when evaluation was initiated. Path steps, predicates, simple map
+            expressions and pipeline expressions do not affect it. It is available in the same way
+            where the focus is absent, for example in the body of a function declaration or of a
+            variable declaration.</p>
+         <p>The one exception is an expression that defines the default value of an optional
+            parameter of a function declaration. Such an expression is invoked by the function call,
+            the named function reference, or the partial function application that leaves the
+            argument unsupplied. A call on <function>fn:current</function> that appears in the
+            expression itself, but not one that appears in the body of a function that the
+            expression invokes, takes its context value from there. The detailed rules are given in
+            <xspecref spec="XQ40" ref="FunctionDeclns"/>.</p>
          <p>In XSLT, the containing expression is invoked from the stylesheet, so the result is the
             context item established by the innermost XSLT construct that evaluates the expression.
+            Within a predicate, or on the right-hand side of the <code>/</code> operator, it is
+            therefore generally different from the context value.
             If the function is used within a pattern, its value is the item that is being matched
             against the pattern. Where the default value of a function parameter is defined by a
             sequence constructor rather than by the <code>select</code> attribute of
@@ -22943,31 +22952,92 @@ serialize(
             context value of the invoking construct is <xtermref ref="dt-absent" spec="DM40"
             >absent</xtermref>.</p>
       </fos:errors>
+      <fos:notes>
+         <p>How far <function>fn:current</function> reaches differs between host languages, and
+            stylesheet authors moving to XQuery should be aware of the difference. In XSLT, every
+            instruction that evaluates an XPath expression re-establishes the value, so it usually
+            refers to the item being processed by the enclosing <code>xsl:for-each</code> or
+            template rule. In XPath and XQuery, nothing within the query re-establishes it, so it
+            always refers to the value with which the query was started. The expression
+            <code>a/b[current()]</code> therefore filters on the enclosing item in XSLT, and on the
+            query input in XPath and XQuery. Where the value of the previous step is required,
+            <code>.</code> is the correct reference in either language.</p>
+      </fos:notes>
       <fos:examples>
          <fos:example>
-            <p>The function declaration:</p>
-            <eg xml:space="preserve"><![CDATA[declare function local:name($node as node() := current()) { name($node) };]]></eg>
-            <p>declares a function whose argument defaults to the context value of the caller, so
-               that <code>doc("books.xml")//title ! local:name()</code> returns the name of each
-               selected element. Within the default value, <code>.</code> would instead refer to the
-               context value of the query prolog.</p>
+            <p>The following examples assume that the query is evaluated with this context value:</p>
+            <eg xml:space="preserve"><![CDATA[<catalog default-category="fiction">
+  <item category="fiction"/>
+  <item category="poetry"/>
+</catalog>]]></eg>
+            <p>A path step and a predicate both change the context value. To compare the items with
+               an attribute of the <code>catalog</code> element, that element has to be bound to a
+               variable first:</p>
+            <eg xml:space="preserve"><![CDATA[let $in := . return $in/item[@category = $in/@default-category]]]></eg>
+            <p>The expression selects one <code>item</code> element.</p>
          </fos:example>
          <fos:example>
-            <p>The instruction:</p>
-            <eg xml:space="preserve"><![CDATA[<xsl:apply-templates select="//glossary/entry[@name=current()/@ref]"/>]]></eg>
-            <p>will process all <code>entry</code> elements that have a <code>glossary</code> parent
-               element and that have a <code>name</code> attribute with value equal to the value of
-               the current item’s <code>ref</code> attribute. This is different from</p>
-            <eg xml:space="preserve"><![CDATA[<xsl:apply-templates select="//glossary/entry[@name=./@ref]"/>]]></eg>
-            <p>which means the same as</p>
-            <eg xml:space="preserve"><![CDATA[<xsl:apply-templates select="//glossary/entry[@name=@ref]"/>]]></eg>
-            <p>and so would process all <code>entry</code> elements that have a
-               <code>glossary</code> parent element and that have a <code>name</code> attribute
-               and a <code>ref</code> attribute with the same value.</p>
+            <p>With <function>fn:current</function>, the variable is not needed:</p>
+            <eg xml:space="preserve"><![CDATA[item[@category = current()/@default-category]]]></eg>
+            <p>Although the path step and the predicate change the context value,
+               <function>fn:current</function> still refers to the <code>catalog</code> element with
+               which the query was started.</p>
+         </fos:example>
+         <fos:example>
+            <p>A simple map expression does not affect <function>fn:current</function> either:</p>
+            <eg xml:space="preserve"><![CDATA[item ! current()/@default-category]]></eg>
+            <p>The expression returns two attributes, one for each <code>item</code>.</p>
+         </fos:example>
+         <fos:example>
+            <p>Where <function>fn:current</function> supplies the default value of a function
+               parameter, it refers to the context value of the caller:</p>
+            <eg xml:space="preserve"><![CDATA[declare function local:name($node as node() := current()) {
+  name($node)
+};]]></eg>
+            <p>The expression <code>item ! local:name()</code> returns <code>item item</code>.</p>
+         </fos:example>
+         <fos:example>
+            <p>A default value can also derive its result from the context value of the caller:</p>
+            <eg xml:space="preserve"><![CDATA[declare function local:label($name as xs:string := name(current())) {
+  "[" || $name || "]"
+};]]></eg>
+            <p>The expression <code>&lt;book/> ! local:label()</code> returns
+               <code>[book]</code>.</p>
+         </fos:example>
+         <fos:example>
+            <p>Within a default value, <code>.</code> and <code>current()</code> refer to different
+               values:</p>
+            <eg xml:space="preserve"><![CDATA[declare function local:context-name($node as node() := .) {
+  name($node)
+};]]></eg>
+            <p>The expression <code>&lt;book/> ! (local:name(), local:context-name())</code> returns
+               <code>book catalog</code>. The first call takes its default from the caller, the
+               second from the query prolog.</p>
+         </fos:example>
+         <fos:example>
+            <p>In XSLT, the context value is re-established by every instruction. The equivalent of
+               the second example is therefore written as:</p>
+            <eg xml:space="preserve"><![CDATA[<xsl:template match="catalog">
+  <xsl:apply-templates select="item[@category = current()/@default-category]"/>
+</xsl:template>]]></eg>
+            <p>The instruction processes one <code>item</code> element.
+               <function>fn:current</function> refers to the <code>catalog</code> element because
+               that is the item the template rule is processing, not because it is the item with
+               which the transformation was started.</p>
+         </fos:example>
+         <fos:example>
+            <p>The difference becomes visible as soon as an instruction changes the context
+               value:</p>
+            <eg xml:space="preserve"><![CDATA[<xsl:for-each select="item">
+  <xsl:value-of select="name(current())"/>
+</xsl:for-each>]]></eg>
+            <p>The instruction outputs <code>item</code> for each of the two items, whereas the
+               XQuery expression <code>item ! name(current())</code> returns <code>catalog</code>
+               twice.</p>
          </fos:example>
       </fos:examples>
       <fos:changes>
-         <fos:change issue="2853" date="2026-08-26"><p>Moved from XSLT; the function is now available in XPath and XQuery, and its return type is generalized to <code>item()*</code>.</p></fos:change>
+         <fos:change issue="2867" PR="2868" date="2026-08-26"><p>Moved from XSLT; the function is now available in XPath and XQuery, and its return type is generalized to <code>item()*</code>.</p></fos:change>
          <fos:change issue="407" PR="2274" date="2026-01-06"><p>In XSLT 4.0, the function item <code>current#0</code> retains the value of the current item within its captured context.</p></fos:change>
       </fos:changes>
    </fos:function>
