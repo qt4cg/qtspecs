@@ -1,0 +1,125 @@
+<item>
+   <title>Issue #2873 created</title>
+   <pubDate>2026-08-27T11:07:23Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/2873</link>
+   <guid>https://qt4cg.org/@qt4cg/2026/#created-2873</guid>
+   <description>&lt;div&gt;&lt;p&gt;`fn:update`: another attempt&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;I thought I’d give the pending JNode update issue another attempt (@joewiz’s #77 is the oldest one that’s still unresolved). This one tries to…&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;define a single XPath update function;&lt;/li&gt;
+&lt;li&gt;work for both JNodes and XNodes; and&lt;/li&gt;
+&lt;li&gt;allow recursive updates, to for example rename all keys &lt;code&gt;a&lt;/code&gt; as &lt;code&gt;b&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The signature:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;fn:update(
+  $input        as gnode(),
+  $select       as fn($node as gnode()) as gnode()*,
+  $replacement  as item()* := ()
+) as item()*
+&lt;/code&gt;&lt;/pre&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;$select&lt;/code&gt; is applied once to &lt;code&gt;$input&lt;/code&gt; and returns the nodes to replace. They must belong to &lt;code&gt;$input&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;$replacement&lt;/code&gt; is what a selected node becomes. If it is a function item, it is called with the node.&lt;/li&gt;
+&lt;li&gt;Replacements are applied bottom-up, so a node reaches &lt;code&gt;$replacement&lt;/code&gt; with its descendants already updated.&lt;/li&gt;
+&lt;li&gt;A map or array supplied where &lt;code&gt;gnode()&lt;/code&gt; is expected becomes a root JNode.&lt;/li&gt;
+&lt;li&gt;A root node in substitution position contributes its children, exactly as a document node does in content position.&lt;/li&gt;
+&lt;li&gt;Inside an array, the key of a substituted entry is ignored, since positions are renumbered.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The replacement, or the result of the replacement function:&lt;/p&gt;
+&lt;p&gt;Result | Description
+--- | ---
+&lt;code&gt;()&lt;/code&gt; | delete the node (default)
+one atomic item | replace the node’s value, keeping its key or name
+one node, map or array | replace the node, key or name included
+several items | replace and insert, each item read as above&lt;/p&gt;
+&lt;p&gt;An atomic item replaces the value, everything else replaces the node. To assign a map, an array or a sequence as a value, name the key: &lt;code&gt;{ jkey($n): [] }&lt;/code&gt;.&lt;/p&gt;
+&lt;h2&gt;Examples&lt;/h2&gt;
+&lt;h3&gt;Input&lt;/h3&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;let $store := {
+  'store': {
+    'books': [
+      { 'title': 'XQuery', 'price': 39.95 },
+      { 'title': 'JSON',   'price': 24.50, 'draft': true() }
+    ],
+    'open': true()
+  }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;Delete &lt;code&gt;draft&lt;/code&gt; nodes&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;update($store, fn { .//draft })
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;Increase a value&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;update($store, fn { .//price }, fn { . * 2 })
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;Insert a sibling entry&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;update($store, fn { .//price }, fn { ., { 'currency': 'EUR' } })
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;Rename &lt;code&gt;books&lt;/code&gt; recursively&lt;/h4&gt;
+&lt;p&gt;Nested occurrences are covered: the inner nodes are replaced first, so &lt;code&gt;jvalue($n)&lt;/code&gt; already carries the renamed subtree.&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;update($store, fn($n) { $n//books }, fn($n) { { 'items': jvalue($n) } })
+
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;Add a book&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;update(
+  $store,
+  fn($n) { $n//books },
+  fn($n) { { 'books': array:append(jvalue($n), { 'title': 'Update', 'price': 9.95 }) } }
+)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;Single-pass update&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;update(
+  $store,
+  fn($n) { $n//(price | books | draft) },
+  fn($n) {
+    if ($n/self::price)      then ($n * 2, { 'currency': 'EUR' })
+    else if ($n/self::books) then { 'items': jvalue($n) }
+    else ()
+  }
+)
+
+(: result :)
+{ "store": {
+  "items": [
+    { "title": "XQuery", "price": 79.9, "currency": "EUR" },
+    { "title": "JSON",   "price": 49,   "currency": "EUR" }
+  ],
+  "open": true
+} }
+&lt;/code&gt;&lt;/pre&gt;
+&lt;h4&gt;XML update&lt;/h4&gt;
+&lt;pre&gt;&lt;code class="language-xquery"&gt;let $store :=
+  &amp;lt;store open="true"&amp;gt;
+    &amp;lt;books&amp;gt;
+      &amp;lt;book&amp;gt;&amp;lt;title&amp;gt;XQuery&amp;lt;/title&amp;gt;&amp;lt;price cur="EUR"&amp;gt;39.95&amp;lt;/price&amp;gt;&amp;lt;/book&amp;gt;
+      &amp;lt;book draft="true"&amp;gt;&amp;lt;title&amp;gt;JSON&amp;lt;/title&amp;gt;&amp;lt;price cur="EUR"&amp;gt;24.50&amp;lt;/price&amp;gt;&amp;lt;/book&amp;gt;
+    &amp;lt;/books&amp;gt;
+  &amp;lt;/store&amp;gt;
+return update(
+  $store,
+  fn($n) { $n//(price | books | @draft) },
+  fn($n) {
+    if ($n/self::price) then ($n * 2, &amp;lt;currency&amp;gt;EUR&amp;lt;/currency&amp;gt;)
+    else if ($n/self::books) then &amp;lt;items&amp;gt;{ $n/@*, $n/node() }&amp;lt;/items&amp;gt;
+    else ()
+  }
+)
+
+(: result :)
+&amp;lt;store open="true"&amp;gt;
+  &amp;lt;items&amp;gt;
+    &amp;lt;book&amp;gt;
+      &amp;lt;title&amp;gt;XQuery&amp;lt;/title&amp;gt;
+      &amp;lt;price cur="EUR"&amp;gt;79.9&amp;lt;/price&amp;gt;
+      &amp;lt;currency&amp;gt;EUR&amp;lt;/currency&amp;gt;
+    &amp;lt;/book&amp;gt;
+    &amp;lt;book&amp;gt;
+      &amp;lt;title&amp;gt;JSON&amp;lt;/title&amp;gt;
+      &amp;lt;price cur="EUR"&amp;gt;49&amp;lt;/price&amp;gt;
+      &amp;lt;currency&amp;gt;EUR&amp;lt;/currency&amp;gt;
+    &amp;lt;/book&amp;gt;
+  &amp;lt;/items&amp;gt;
+&amp;lt;/store&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Feedback is welcome…&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>
