@@ -28,11 +28,7 @@
         <tr class="arg">
           <td>
             <code>
-              <xsl:if test="@occur">
-                <xsl:attribute name="class" select="@occur"/>
-              </xsl:if>
               <xsl:value-of select="@name"/>
-              <xsl:if test="@occur = 'opt'">?</xsl:if>
             </code>
           </td>
           <td>
