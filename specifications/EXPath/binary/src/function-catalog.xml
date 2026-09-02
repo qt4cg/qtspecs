@@ -120,10 +120,10 @@
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
 $value ! (
-  replace(., '[_\s]', '') 
-  -> concat(if (string-length(.) mod 2 eq 1) { "0" }, .)
-  -> xs:hexBinary(.)
-  -> xs:base64Binary(.)
+  replace(., '[_\s]', '')
+  ! concat(if (string-length(.) mod 2 eq 1) { '0' }, .)
+  ! xs:hexBinary(.)
+  ! xs:base64Binary(.)
 )
         </fos:equivalent>
         <fos:errors>
@@ -187,18 +187,18 @@ $value ! (
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
 $value ! ( (: process input if present, otherwise return () :)
-     (: strip underscores and whitespace :)
-     replace(., '[_\s]', '')
-     (: extend to a multiple of 8 binary digits :)
-  -> concat(replicate("0", 7 - (string-length(.) - 1) mod 8), .)
-     (: insert a separator after every 8 digits :)
-  -> replace(., "(.{8})", "$1/")
-     (: split into groups of 8 digits :)
-  -> tokenize(., "/")[.]
-     (: parse each group of 8 binary digits as a radix-2 integer :)
-   ! parse-integer(., 2)
-     (: construct a binary value from these octets :)
-  -> bin:from-octets(.) 
+  (: strip underscores and whitespace :)
+  replace(., '[_\s]', '')
+  (: extend to a multiple of 8 binary digits :)
+  !  concat(replicate('0', 7 - (string-length(.) - 1) mod 8), .)
+  (: insert a separator after every 8 digits :)
+  !  replace(., '(.{8})', '$1/')
+  (: split into groups of 8 digits :)
+  !  tokenize(., '/')[.]
+  (: parse each group of 8 binary digits as a radix-2 integer :)
+  !  parse-integer(., 2)
+  (: construct a binary value from these octets :)
+  => bin:from-octets()
 )
         </fos:equivalent>
         <fos:errors>
@@ -276,12 +276,12 @@ $value ! ( (: process input if present, otherwise return () :)
         </fos:rules>
           <fos:equivalent style="xpath-expression" covers-error-cases="false">
 $value ! (
-  replace(., '[_\s]', '') 
+  replace(., '[_\s]', '')
   =>  characters()
-  =!> { "0": "000", "1": "001", "2": "010", "3": "011", 
-        "4": "100", "5": "101", "6": "110", "7": "111" }()
-  =!> replace("^0?0?", "")     
+  =!> { '0': '000', '1': '001', '2': '010', '3': '011',
+        '4': '100', '5': '101', '6': '110', '7': '111' }()
   =>  string-join()
+  =>  replace('^0?0?', '')
   =>  bin:bin()
 )
         </fos:equivalent>
@@ -407,7 +407,9 @@ $value ! (
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-$value => bin:to-octets() => subsequence($offset + 1, $size) => bin:from-octets()         
+$value ! (
+  bin:to-octets(.) => subsequence($offset + 1, $size) => bin:from-octets()
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$offset</code> is
@@ -490,10 +492,11 @@ $value => bin:to-octets() => subsequence($offset + 1, $size) => bin:from-octets(
 
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-$value
-=> bin:to-octets() 
-=> insert-before($offset + 1, bin:to-octets($extra)) 
-=> bin:from-octets()         
+$value ! (
+  bin:to-octets(.)
+  => insert-before($offset + 1, $extra ! bin:to-octets(.))
+  => bin:from-octets()
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$offset</code> is
@@ -626,8 +629,10 @@ $values =!> bin:to-octets() => bin:from-octets()
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-(replicate($octet, $count), bin:to-octets($value)) 
-=> bin:from-octets()         
+$value ! (
+  (replicate($octet, $count), bin:to-octets(.))
+  => bin:from-octets()
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="negative-size"/> is raised if <code>$size</code> is
@@ -689,8 +694,10 @@ $values =!> bin:to-octets() => bin:from-octets()
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-(bin:to-octets($value), replicate($octet, $count))
-=> bin:from-octets()         
+$value ! (
+  (bin:to-octets(.), replicate($octet, $count))
+  => bin:from-octets()
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="negative-size"/> is raised if <code>$size</code> is
@@ -747,7 +754,7 @@ $values =!> bin:to-octets() => bin:from-octets()
                 sequence.</p>
             <p>Otherwise, the function returns the lowest value of <var>P</var> that is greater than
                 or equal to <code>$offset</code>,
-                such that <code>bin:part($value, <var>P</var>, bin:length($search)) eq <var>P</var></code>.
+                such that <code>bin:part($value, <var>P</var>, bin:length($search)) eq $search</code>.
                 If there is no such value (that is, if <code>$search</code> is not found), 
                 the function returns the empty sequence.</p>
             <p>If <code>$search</code> is <termref def="dt-zero-length"/> 
@@ -760,8 +767,10 @@ $values =!> bin:to-octets() => bin:from-octets()
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-($offset to (bin:length($value) - bin:length($search)))
-  [bin:part($value, 0, bin:length($search)) eq $search][1] 
+$value ! (
+  ($offset to (bin:length($value) - bin:length($search)))
+    [bin:part($value, ., bin:length($search)) eq $search][1]
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$offset</code> is
@@ -1452,18 +1461,20 @@ return bin:decode-string($input, $encoding, $offset)</eg></fos:expression>
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $octet-chars := fn($x) {
-  bin:to-octets($x) 
-  =!> format-integer('2^xxxxxxxx') 
-  =>  string-join()
-  =>  characters()
-}
-let $A := $octet-chars($value1)
-let $B := $octet-chars($value2)
-let $R := for-each-pair($A, $B, fn($p, $q) {
-  if ($p eq '1' or $q eq '1') then '1' else '0'
-})
-return bin:bin(string-join($R))
+if (empty($value1) or empty($value2)) then () else (
+  let $octet-chars := fn($x) {
+    bin:to-octets($x)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+    =>  characters()
+  }
+  let $A := $octet-chars($value1)
+  let $B := $octet-chars($value2)
+  let $R := for-each-pair($A, $B, fn($p, $q) {
+    if ($p eq '1' or $q eq '1') then '1' else '0'
+  })
+  return bin:bin(string-join($R))
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="differing-length-arguments"/> is raised if the input
@@ -1497,18 +1508,20 @@ return bin:bin(string-join($R))
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $octet-chars := fn($x) {
-  bin:to-octets($x) 
-  =!> format-integer('2^xxxxxxxx') 
-  =>  string-join()
-  =>  characters()
-}
-let $A := $octet-chars($value1)
-let $B := $octet-chars($value2)
-let $R := for-each-pair($A, $B, fn($p, $q) {
-  if ($p ne $q) then '1' else '0'
-})
-return bin:bin(string-join($R))
+if (empty($value1) or empty($value2)) then () else (
+  let $octet-chars := fn($x) {
+    bin:to-octets($x)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+    =>  characters()
+  }
+  let $A := $octet-chars($value1)
+  let $B := $octet-chars($value2)
+  let $R := for-each-pair($A, $B, fn($p, $q) {
+    if ($p ne $q) then '1' else '0'
+  })
+  return bin:bin(string-join($R))
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="differing-length-arguments"/> is raised if the input
@@ -1541,18 +1554,20 @@ return bin:bin(string-join($R))
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $octet-chars := fn($x) {
-  bin:to-octets($x) 
-  =!> format-integer('2^xxxxxxxx') 
-  =>  string-join()
-  =>  characters()
-}
-let $A := $octet-chars($value1)
-let $B := $octet-chars($value2)
-let $R := for-each-pair($A, $B, fn($p, $q) {
-  if ($p eq '1' and $q eq '1') then '1' else '0'
-})
-return bin:bin(string-join($R))
+if (empty($value1) or empty($value2)) then () else (
+  let $octet-chars := fn($x) {
+    bin:to-octets($x)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+    =>  characters()
+  }
+  let $A := $octet-chars($value1)
+  let $B := $octet-chars($value2)
+  let $R := for-each-pair($A, $B, fn($p, $q) {
+    if ($p eq '1' and $q eq '1') then '1' else '0'
+  })
+  return bin:bin(string-join($R))
+)
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="differing-length-arguments"/> is raised if the input
@@ -1579,15 +1594,17 @@ return bin:bin(string-join($R))
             <p>If the argument is the empty sequence, an empty sequence is returned.</p>
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $octet-chars := fn($x) {
-  bin:to-octets($x) 
-  =!> format-integer('2^xxxxxxxx') 
-  =>  string-join()
-}
-return (
-  $octet-chars($value)
-  => translate('01', '10')
-  => bin:bin()
+$value ! (
+  let $octet-chars := fn($x) {
+    bin:to-octets($x)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+  }
+  return (
+    $octet-chars(.)
+    => translate('01', '10')
+    => bin:bin()
+  )
 )
         </fos:equivalent>
     </fos:function>
@@ -1625,20 +1642,22 @@ return (
             
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $string := (
-  bin:to-octets($value) 
-  =!> format-integer('2^xxxxxxxx') 
-  =>  string-join()
+$value ! (
+  let $string := (
+    bin:to-octets(.)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+  )
+  let $len := string-length($string)
+  let $shifted := if (abs($by) >= $len) then (
+    string-join(replicate('0', $len))
+  ) else if ($by >= 0) then (
+    substring($string, $by + 1) || string-join(replicate('0', $by))
+  ) else (
+    string-join(replicate('0', -$by)) || substring($string, 1, $len + $by)
+  )
+  return bin:bin($shifted)
 )
-let $len := string-length($string)
-let $shifted := if (abs($by) >= $len) then (
-  string-join(replicate('0', $len))
-) else if ($by >= 0) then (
-  substring($string, $by + 1) || replicate('0', $by)
-) else (
-  replicate('0', -$by) || substring($string, 1, -$by)
-)
-return bin:bin($shifted)
         </fos:equivalent>
         <fos:notes>
             <p>Bit shifting across byte boundaries implies “big-endian treatment”, i.e. the leftmost
@@ -1685,14 +1704,16 @@ return bin:bin($shifted)
                 bit-length, or a multiple of it, returns <code>$value</code> unchanged.</p>
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $string := (
-  bin:to-octets($value)
-  =!> format-integer('2^xxxxxxxx')
-  =>  string-join()
+$value ! (
+  let $string := (
+    bin:to-octets(.)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+  )
+  let $len := string-length($string)
+  let $r := (($by mod $len) + $len) mod $len
+  return bin:bin(substring($string, $r + 1) || substring($string, 1, $r))
 )
-let $len := string-length($string)
-let $r := (($by mod $len) + $len) mod $len
-return bin:bin(substring($string, $r + 1) || substring($string, 1, $r))
         </fos:equivalent>
         <fos:notes>
             <p>Like <function>bin:shift</function>, rotation across byte boundaries follows
@@ -1741,12 +1762,14 @@ return bin:bin(substring($string, $r + 1) || substring($string, 1, $r))
                 significant bit of the second octet, and so on.</p>
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-let $bits := (
-  bin:to-octets($value)
-  =!> format-integer('2^xxxxxxxx')
-  =>  string-join()
+$value ! (
+  let $bits := (
+    bin:to-octets(.)
+    =!> format-integer('2^xxxxxxxx')
+    =>  string-join()
+  )
+  return substring($bits, $index + 1, 1) = '1'
 )
-return substring($bits, $index + 1, 1) = '1'
         </fos:equivalent>
         <fos:errors>
             <p><errorref spec="BIN40" code="index-out-of-range"/> is raised if <code>$index</code> is
@@ -1798,21 +1821,23 @@ return substring($bits, $index + 1, 1) = '1'
                 <code>$indices</code> is empty, the result is identical to <code>$value</code>.</p>
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-fold-left(
-  $indices,
-  $value,
-  fn($result, $index) {
-    let $bits := (
-      bin:to-octets($result)
-      =!> format-integer('2^xxxxxxxx')
-      =>  string-join()
-    )
-    return bin:bin(
-      substring($bits, 1, $index) ||
-      (if ($set) then '1' else '0') ||
-      substring($bits, $index + 2)
-    )
-  }
+$value ! (
+  fold-left(
+    $indices,
+    .,
+    fn($result, $index) {
+      let $bits := (
+        bin:to-octets($result)
+        =!> format-integer('2^xxxxxxxx')
+        =>  string-join()
+      )
+      return bin:bin(
+        substring($bits, 1, $index) ||
+        (if ($set) then '1' else '0') ||
+        substring($bits, $index + 2)
+      )
+    }
+  )
 )
         </fos:equivalent>
         <fos:errors>
@@ -1858,11 +1883,13 @@ fold-left(
                 <code>$value</code>.</p>
         </fos:rules>
         <fos:equivalent style="xpath-expression" covers-error-cases="false">
-bin:to-octets($value)
+$value ! (
+  bin:to-octets(.)
   =!> format-integer('2^xxxxxxxx')
   =>  string-join()
   =>  replace('0')
   =>  string-length()
+)
         </fos:equivalent>
         <fos:notes>
             <p>The result is also known as the <emph>population count</emph>.</p>
