@@ -6899,10 +6899,10 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
                   to maps suitable for serialization as JSON. Unlike the <function>fn:xml-to-json</function> function
                   retained from 3.1, this can handle arbitrary XML as input.
                </change>
-               <change issue="2699" date="2026-07-18">
-                  A <code>validation</code> option is added to <function>fn:element-to-map</function>:
-                  in the default <code>strict</code> mode, content that cannot be cast to a prescribed
-                  type raises an error rather than being silently retained in its original form.
+               <change issue="2699" PR="2797" date="2026-07-18">
+                  A <code>liberal</code> option is added to <function>fn:element-to-map</function>:
+                  by default, content that cannot be cast to a prescribed type raises an error rather
+                  than being silently retained in its original form.
                </change>
             </changes>
             <p>The <function>fn:element-to-map</function> function converts a tree rooted at an XML element node to 
@@ -7992,8 +7992,9 @@ map( xs:string,
                            <code>local-name</code> for a name in no namespace, or <code>Q{uri}local-name</code> for a
                            name in a namespace.</p>
                         </item>
-                        <item><p>The <code>type</code> entry is non-empty if and only if the 
-                              <code>layout</code> is <code>simple</code> or <code>simple-plus</code>.</p>
+                        <item><p>The <code>type</code> entry is empty unless the
+                              <code>layout</code> is <code>simple</code> or <code>simple-plus</code>.
+                              An empty entry is equivalent to <code>string</code>.</p>
                         </item>
                      </olist>
                   </item>
@@ -8001,7 +8002,8 @@ map( xs:string,
                      <p>In an <specref ref="attribute-conversion-plan-record"/>:</p>
                      <olist>
                         <item>
-                           <p>The <code>type</code> entry is always present.</p>
+                           <p>The <code>type</code> entry may be empty or absent, which is
+                              equivalent to <code>string</code>.</p>
                         </item>
                      </olist>
                      
@@ -8297,22 +8299,25 @@ map( xs:string,
                <p>The conversion plan may indicate that element content is to be output
                   as type <code>string</code>, <code>integer</code>, <code>decimal</code>,
                   <code>double</code>, or <code>boolean</code>: the default
-               is <code>string</code>. When a type other than <code>string</code> is explicitly
-               prescribed, the <code>validation</code> option controls what happens if a value
-               cannot be represented as that type: with the default value <code>strict</code>,
-               a dynamic error <errorref class="JS" code="0010"/> is raised; with <code>lax</code>,
-               the value is retained in its original form. In all cases, if the content to be
-               converted is empty or consists entirely of whitespace, the prescribed type is not
-               applied, and the value is produced as it would be in the absence of a prescribed
-               type.</p>
+               is <code>string</code>. Because <code>string</code> is the default and may be
+               omitted, a plan that supplies the type <code>string</code> prescribes no type:
+               it is treated throughout in the same way as a plan that supplies no type at all.
+               When any other type is prescribed, the <code>liberal</code> option controls what
+               happens if a value cannot be represented as that type: with the default value
+               <code>false</code>, a dynamic error <errorref class="JS" code="0010"/> is raised;
+               with <code>true</code>, the value is retained in its original form. In all cases,
+               if the content to be converted is empty or consists entirely of whitespace, the
+               prescribed type is not applied, and the value is produced as it would be in the
+               absence of a prescribed type.</p>
 
                <p>In the case of untyped elements and attributes, the value is
                output as an instance of a string, numeric, or boolean type, according to this
                prescription (applying the rules in order):</p>
                
                <ulist>
-                  <item><p>If the prescribed type is <code>string</code>, then the value is output
-                  as an instance of <code>xs:untypedAtomic</code>, retaining its original lexical form.</p></item>
+                  <item><p>If the value is empty or consists entirely of whitespace, or if no type
+                  other than <code>string</code> is prescribed, then the value is output as an
+                  instance of <code>xs:untypedAtomic</code>, retaining its original lexical form.</p></item>
 
                   <item><p>If the prescribed type is <code>boolean</code> and the value is castable
                   as <code>xs:boolean</code>, then it is output as the <code>xs:boolean</code> value
@@ -8330,9 +8335,9 @@ map( xs:string,
                      as <code>xs:double</code>, then it is output as an instance of <code>xs:double</code>.</p></item>
                   
                   <item><p>In all other cases the value is not castable to the prescribed type.
-                     If <code>validation</code> is <code>lax</code>, the value is output as an instance
+                     If <code>liberal</code> is <code>true</code>, the value is output as an instance
                      of <code>xs:untypedAtomic</code>, retaining its original lexical form; if
-                     <code>validation</code> is <code>strict</code>, a dynamic error
+                     <code>liberal</code> is <code>false</code>, a dynamic error
                      <errorref class="JS" code="0010"/> is raised.</p></item>
                </ulist>
                
@@ -8355,15 +8360,16 @@ map( xs:string,
                   for example items of type <code>xs:date</code> remain items of type <code>xs:date</code>
                   in the result.</p></item>
                   <item><p>In all other cases <var>AV</var> will be a single atomic item.
-                     If the conversion plan explicitly prescribes a content type for the node, then
-                     <var>AV</var> is cast to the corresponding atomic type (<code>xs:string</code>,
-                     <code>xs:boolean</code>, <code>xs:integer</code>, <code>xs:decimal</code>, or
-                     <code>xs:double</code>): if the cast succeeds, the resulting item is used; if it
-                     fails, then with <code>validation</code> <code>lax</code> the value <var>AV</var>
-                     is used <emph>as is</emph>, retaining its type, and with <code>validation</code>
-                     <code>strict</code> a dynamic error <errorref class="JS" code="0010"/> is raised.
-                     Otherwise (no content type is explicitly prescribed) <var>AV</var> is used
-                     <emph>as is</emph>, retaining its type.</p></item>
+                     If the conversion plan prescribes a content type other than <code>string</code>
+                     for the node, and <var>AV</var> is neither empty nor whitespace-only, then
+                     <var>AV</var> is cast to the corresponding atomic type (<code>xs:boolean</code>,
+                     <code>xs:integer</code>, <code>xs:decimal</code>, or <code>xs:double</code>):
+                     if the cast succeeds, the resulting item is used; if it fails, then with
+                     <code>liberal</code> set to <code>true</code> the value <var>AV</var> is used
+                     <emph>as is</emph>, retaining its type, and with <code>liberal</code> set to
+                     <code>false</code> a dynamic error <errorref class="JS" code="0010"/> is raised.
+                     In all other cases <var>AV</var> is used <emph>as is</emph>, retaining its
+                     type.</p></item>
                   
                </olist>
                
@@ -14944,8 +14950,8 @@ ISBN 0 521 77752 6.</bibl>
             </error>
 
             <error class="JS" code="0010" label="Value not convertible to prescribed type." type="dynamic">
-               <p>Raised by <function>fn:element-to-map</function>, when the <code>validation</code> option
-                  is <code>strict</code>, if the content of an element or attribute cannot be cast to the
+               <p>Raised by <function>fn:element-to-map</function>, when the <code>liberal</code> option
+                  is <code>false</code>, if the content of an element or attribute cannot be cast to the
                   type prescribed for it by the conversion plan.</p>
             </error>
             
