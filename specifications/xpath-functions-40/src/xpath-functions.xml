@@ -615,20 +615,22 @@ Michael Sperberg-McQueen (1954–2024).</p>
                      an ellipsis (<code>...</code>)</p></item>-->
                   <item><p>If the parameter is optional, then an expression giving the default value 
                      (preceded by the symbol <code>:=</code>).</p>
-                        <p diff="add" at="2023-12-04">The default value expression is evaluated using the static and
+                        <p>Although the syntax for parameter defaults corresponds to the syntax
+                           used in XQuery function declarations, the semantics are different.
+                           Specifically, the default value expression is evaluated using the static and
                         dynamic context of the function caller (or of a named function reference). For example, 
                         if the default value is given as <code>.</code>, then it evaluates to the context value 
                         from the dynamic context of the function caller; if it is given as <code>default-collation</code>,
                         then its value is the default collation from the static context of the function caller;
-                        if it is given as <code>deep-equal#2</code>, then the third argument supplied to <code>deep-equal</code>
-                        is the default collation from the static context of the caller.</p></item>
+                        if it is given as <code>deep-equal#2</code>, then the options supplied to <code>deep-equal</code>
+                        include the default collation from the static context of the caller.</p></item>
                </ulist>
                <note><p id="default-on-empty">
                   If no argument is supplied for a parameter that has a default value, the default
                   value is used. If the parameter is marked <code role="arg-note">(:default-on-empty:)</code>,
                   the default value is also used when the supplied argument is the empty sequence.
                   Otherwise, the empty sequence is treated according to the function-specific rules.</p>
-                  <p>The marker is only used on parameters that have default values.</p>
+                  <p>This marker is only used on parameters that have default values.</p>
                </note>
 
                <p>If there are two or more parameter declarations, they are separated by a comma.</p> 
@@ -1134,7 +1136,7 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                
                <p>The following definition explains more precisely what it means for two function calls to return the same result:</p>
                
-               <p><termdef id="dt-identical" term="identical" diff="chg" at="2023-05-25">Two values <code>$V1</code> and <code>$V2</code> are
+               <p><termdef id="dt-identical" term="identical" diff="chg" at="2026-07-20">Two values <code>$V1</code> and <code>$V2</code> are
                   defined to be <term>identical</term> if they contain the same number of items and the items are pairwise identical. Two items are identical
                   if and only if one of the following conditions applies:</termdef></p>
                   
@@ -1150,16 +1152,81 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                      and the corresponding values <var>V1</var> and <var>V2</var> are <termref def="dt-identical"/>.</p></item>
                   <item><p>Both items are arrays, both arrays have the same number of members, and the members
                      are pairwise <termref def="dt-identical"/>.</p></item>
-                  <item><p>Both items are function items, 
-                     neither item is a map or array, and the two function items have the same function identity.
-                  The concept of function identity is explained in <xspecref spec="DM40" ref="function-items"/>.</p>
-                  </item>
+                  <item><p diff="chg" at="2026-08-19">Both items are function items, neither is a map or array,
+                     and they are <termref def="dt-function-equivalent">equivalent</termref>.</p></item>
                </olist>
   
                
-               <p>Some functions produce results that depend not only on their explicit arguments, 
+               <p diff="add" at="2026-08-19"><termdef id="dt-function-equivalent" term="equivalent">Two
+                  function items <code>$F1</code> and <code>$F2</code> that are neither maps nor arrays are
+                  <term>equivalent</term> if either of the following applies:</termdef></p>
+
+               <olist diff="add" at="2026-08-19">
+                  <item><p><code>$F1</code> and <code>$F2</code> have both of the following:</p>
+                     <olist>
+                        <item><p>the same <term>static form</term>: the abstract syntax of the expression from which the
+                           function item was constructed (for a function supplied by the processor or implemented in
+                           external code, a reference to that implementation), compared ignoring the function’s name and
+                           annotations, up to the renaming of bound variables, and ignoring any optimizations the
+                           processor may have applied; and</p></item>
+                        <item><p>the same captured context (see <xspecref spec="DM40" ref="function-items"/>): the
+                           nonlocal variable bindings, the focus, and the static context captured when the function item
+                           was created. Two function items need agree only on the parts of the captured context on which
+                           the result of calling them depends, and captured variable values are compared using
+                           deep-equal.</p></item>
+                     </olist>
+                  </item>
+                  <item><p>It is <termref def="implementation-dependent"/> whether the processor additionally treats
+                     <code>$F1</code> and <code>$F2</code> as equivalent by establishing that calls on them with
+                     pairwise deep-equal argument lists always return deep-equal results.</p></item>
+               </olist>
+
+               <p diff="add" at="2026-08-19">Maps and arrays are compared by their content;
+                  see <function>fn:deep-equal</function>.</p>
+
+               <p diff="add" at="2026-08-19">For example, applying the first rule and without any further optimizations:</p>
+
+               <ulist diff="add" at="2026-08-19">
+                  <item><p><code>true#0</code> and <code>true#0</code> are equivalent: both references identify the
+                     same function.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn($y) {  $y  }</code> are equivalent: they differ only
+                     in the name of a bound variable and in whitespace.</p></item>
+                  <item><p>The two function items in <code>let $n := &lt;a/&gt; return (fn() { $n }, fn() { $n })</code>
+                     are equivalent: they have the same static form and the same captured context.</p></item>
+                  <item><p><code>fn() { error() }</code> and <code>fn() { error() }</code> are equivalent: they have
+                     the same static form; they are compared without being called.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn($x) { $x + 1 }</code> are not equivalent: they can
+                     return different results.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn($x, $y) { $x }</code> are not equivalent: they have
+                     different arity.</p></item>
+                  <item><p>The two function items in <code>(let $n := 1 return fn() { $n }, let $m := 2 return fn()
+                     { $m })</code> are not equivalent: their captured context differs.</p></item>
+                  <item><p>The two function items in <code>for $x in (1, 2) return fn() { $x }</code> are not
+                     equivalent: they have the same static form but a different captured context (a different value of
+                     <code>$x</code>).</p></item>
+                  <item><p>The two function items in <code>(&lt;a/&gt;, &lt;b/&gt;) ! fn:name#0</code> are not equivalent:
+                     <code>fn:name#0</code> is context-dependent, so each captures a different context node.</p></item>
+               </ulist>
+
+               <p diff="add" at="2026-08-19">Whether the two function items in each of the following pairs are
+                  equivalent is <termref def="implementation-dependent"/>. In every case they always return equal
+                  results, so the second rule permits a processor to treat them as equivalent; but their static forms
+                  differ, so no processor is required to do so:</p>
+
+               <ulist diff="add" at="2026-08-19">
+                  <item><p><code>fn($x) { $x + $x }</code> and <code>fn($x) { 2 * $x }</code>: the two functions are
+                     equal by an arithmetic identity that a processor may or may not recognize.</p></item>
+                  <item><p><code>fn() { 1 + 1 }</code> and <code>fn() { 2 }</code>: a processor that folds constants
+                     may treat the two bodies as equal.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn:identity#1</code>: both compute the identity
+                     function, but one is written inline and the other is a reference to a built-in function.</p></item>
+                  <item><p><code>fn { . + 1 }</code> and <code>fn($n) { $n + 1 }</code>: both add one to their
+                     argument, but one uses the context-item shorthand and the other a named parameter.</p></item>
+               </ulist>
+
+               <p>Some functions produce results that depend not only on their explicit arguments,
                   but also on the static and dynamic context.</p>
-               
+
                <p><termdef id="dt-context-dependent" term="context-dependent">A 
                   <phrase diff="chg" at="2023-03-12"><xtermref spec="XP40" ref="dt-function-definition">function definition</xtermref></phrase> 
                   may have  the property of being <term>context-dependent</term>: the result of such a
@@ -1278,7 +1345,8 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                
                <item><p>Some functions (such as <function>fn:analyze-string</function>,
                   <function>fn:parse-xml</function>, <function>fn:parse-xml-fragment</function>, 
-                  <function>fn:parse-html</function>, and <function>fn:json-to-xml</function>) 
+                  <function>fn:parse-html</function>, <function>fn:json-to-xml</function>, and
+                  <function>fn:csv-to-xml</function>)
                   construct a tree of nodes to
                represent their results. There is no guarantee that repeated calls with the same
                arguments will return the same identical node (in the sense of the <code>is</code>
@@ -1303,7 +1371,7 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                identical results.</p>
                
                <p><termdef id="dt-variadic" term="variadic">The function <function>fn:concat</function>
-                  is defined to be variadic: it accepts any number of arguments. No other function
+                  is defined to be <term>variadic</term>: it accepts any number of arguments. No other function
                   has this property.</termdef></p>
             </div3>           
          </div2>
@@ -6483,9 +6551,6 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
             <div2 id="func-function-arity">
                <head><?function fn:function-arity?></head>
             </div2>
-            <div2 id="func-function-identity">
-               <head><?function fn:function-identity?></head>
-            </div2>
             <div2 id="func-function-annotations">
                <head><?function fn:function-annotations?></head>
             </div2>
@@ -8578,7 +8643,7 @@ map( xs:string,
          element’s content:</p>
 
       <olist>
-         <item><p>If <var>V</var> is an atomic value, it contributes a single text-node child
+         <item><p>If <var>V</var> is an atomic item, it contributes a single text-node child
             whose string value is the lexical representation of <var>V</var>. (Numeric and boolean
             values therefore lose their type and reappear as text, just as type annotations are
             lost in the forward direction.) The zero-length string contributes no child, which is
@@ -8595,7 +8660,7 @@ map( xs:string,
                   an attribute whose name is the decoded key and whose value is the lexical
                   representation of the entry value.</p></item>
                <item><p>If the key is equal to the <code>content-key</code>, it contributes simple
-                  text content (atomic value) or a nilled marker (value <code>#fn:null</code>).</p></item>
+                  text content (atomic item) or a nilled marker (value <code>#fn:null</code>).</p></item>
                <item><p>Otherwise the key contributes one or more child elements named by the
                   decoded key: an atomic or map value contributes a single child; an array value
                   contributes one child per array member, each member being interpreted recursively
@@ -8629,13 +8694,16 @@ map( xs:string,
             <errorref class="JS" code="0009"/>.</p></item>
 
          <item><p>If the <code>plan</code> selects <code>xml</code> layout, <var>V</var> is a string
-            containing serialized XML; it is parsed as an XML fragment and the resulting node is
-            used as the element content.</p></item>
+            containing the serialization of the element itself, start and end tags included. It is
+            parsed as an XML fragment, and the resulting element node is the result of the
+            conversion; unlike the other cases, it supplies not only the content of the element but
+            also its name. The map key is therefore redundant: it must still decode to a valid
+            element name, but that name plays no part in the result.</p></item>
       </olist>
 
       <p>In every case the result must be a well-formed element. The function fails with
          <errorref class="JS" code="0009"/> if a value that contributes attribute, simple, or text
-         content is not a single atomic value, if simple content is combined with child elements, or
+         content is not a single atomic item, if simple content is combined with child elements, or
          if a comment or processing instruction reconstructed from the map would not be well-formed
          (for example, an invalid processing-instruction target).</p>
    </div4>
@@ -8756,15 +8824,12 @@ map( xs:string,
             
             <ulist diff="chg" at="2023-02-20">
                <item><p>The function <function>array:members</function> decomposes an array to a sequence of 
-                  <term>value records</term>.</p></item>
+                  JNodes.</p></item>
                <item><p>The function <function>array:of-members</function> composes an array from a sequence of 
-               <term>value records</term>.</p></item>
+               JNodes.</p></item>
             </ulist>
             
-            <p diff="chg" at="2023-02-20">A <term>value record</term> here is an item that encapsulates an arbitrary value; the representation
-            chosen for a value record is <code>record(value as item()*)</code>, that is, a map containing a single
-            entry whose key is the string <code>"value"</code> and whose value is the encapsulated sequence.</p>
- 
+            
             <p>Note that when the required type of an argument to a function such as <function>array:build</function>
             is an array type, then the coercion rules ensure that a JNode can be supplied in the function call:
             if the <term>·jvalue·</term> property of the JNode is an array, then the array is automatically
@@ -11661,8 +11726,7 @@ $gen2ToInf := f:generator(initialized := true(),
                  <xtermref spec="XP40" ref="dt-named-item-type">named item types</xtermref>.
               </p>
                  <p>These constructor functions always take a single argument.</p></item>
-              <item><p>Record types defined as 
-                 <xtermref spec="XP40" ref="dt-named-item-type">named item types</xtermref>.</p>
+              <item><p>Named record types declared in XQuery or XSLT.</p>
               <p>These take one argument for each named field of the record type.
               Constructor functions for record types are defined in 
                  <specref ref="id-constructors-for-record-tests"/>.
@@ -12279,14 +12343,22 @@ There is no constructor function for <code>xs:NOTATION</code>. Constructors are 
                  <change issue="617" PR="953" date="2024-02-20">
                     Constructor functions for named record types have been introduced.
                  </change>
+                 <change issue="2740" date="2026-07-05">
+                    Constructor functions are optional: a named record type does not necessarily
+                    have an associated constructor function.
+                 </change>
               </changes>
               
               <p>Both XQuery 4.0 and XSLT 4.0 provide syntax to declare named record types;
                  such a declaration implicitly adds a constructor function for values of that
                  type to the static context (See <xspecref spec="XP40"
                     ref="static_context"/>).</p>
-              
-              <p>For example, if there is a named item type with the XQuery definition:</p>
+
+              <p diff="add" at="issue2740">A named record type does not necessarily have an associated
+                 constructor function. In particular, the built-in record types listed in
+                 <specref ref="id-built-in-named-record-types"/> have none.</p>
+
+              <p>For example, if there is a named record type with the XQuery definition:</p>
               
               <eg>declare record my:location (
   latitude  as xs:double,
@@ -15115,7 +15187,7 @@ ISBN 0 521 77752 6.</bibl>
             <error class="DC" code="0016" label="External resources not available: call is untrusted."
                type="dynamic">
                <p>Raised by (for example) <function>fn:doc</function> and <function>fn:parse-xml</function>
-                  if external resources are required (such as external entities) and the <code>trusted</code>
+                  if external resources are required (such as external entities) and the <code>trust-external</code>
                   option is not set to <code>true</code>.</p>
             </error>
 			<error class="DF" code="1280" label="Invalid decimal format name."
@@ -15389,11 +15461,6 @@ ISBN 0 521 77752 6.</bibl>
                <p>Raised by <function>fn:string</function>, or by implicit string conversion, if the input sequence contains
                   a function item.</p>
             </error>
-            <!--<error class="TY" code="0015" label="An argument to fn:deep-equal contains a function item."
-               type="dynamic">
-               <p>Raised by <function>fn:deep-equal</function> if either input sequence contains a
-                  function item.</p> 
-            </error>-->
             <error class="TY" code="0016" label="Key value not defined in record type"
                type="type">
                <p>Raised by <function>map:get</function> when requesting
@@ -15477,15 +15544,36 @@ ISBN 0 521 77752 6.</bibl>
                Named record types used in the signatures of built-in functions are now available as standard
                in the static context.
             </change>
+            <change issue="2740" date="2026-07-05">
+               These built-in named record types do not have an associated constructor function.
+            </change>
          </changes>
-         
+
          <p>This appendix lists the named record types that are used in function signatures in this function library,
          and that are available in the static context of every application.</p>
-         
+
          <p>These definitions are all in the standard function namespace <code>http://www.w3.org/2005/xpath-functions</code>,
          which is normally bound to the prefix <code>fn</code>. Because this will not usually be the default namespace for
          types, the names will usually be written with the prefix <code>fn</code>.</p>
-         
+
+         <p diff="add" at="issue2740">Unlike a named record type declared in XQuery or XSLT, these
+         record types have no associated constructor function
+         (see <specref ref="id-constructors-for-record-tests"/>). A function that expects one of these records also
+         accepts a <termref def="dt-map">map</termref>, which the
+         <xtermref spec="XP40" ref="dt-coercion-rules">coercion rules</xtermref> convert to the required
+         record type (see <specref ref="applying-functions-to-records"/>).</p>
+
+         <p diff="add" at="issue2740">For example, a map can be coerced to
+         <code>fn:uri-structure-record</code>, but need not be, by binding it to a variable of that type before it
+         is passed to <function>fn:build-uri</function>:</p>
+
+         <eg diff="add" at="issue2740">let $parts as fn:uri-structure-record := {
+  'scheme': 'https',
+  'host': 'qt4cg.org',
+  'path': '/specifications/index.html'
+}
+return fn:build-uri($parts)</eg>
+
          <?record-description-index?>
 
       </div1>
@@ -15835,12 +15923,12 @@ ISBN 0 521 77752 6.</bibl>
               of the <code>xs:double</code> value written as <code>0.2e0</code> is 
                  <code>0.200000000000000011102230246251565404236316680908203125</code>.</p>
               
-              <p>To reduce the impact of this change, the rules for general comparisons between an untyped atomic value and
-              a numeric value now convert the node to the specific type of atomic value, rather than converting
+              <p>To reduce the impact of this change, the rules for general comparisons between an untyped atomic item and
+              a numeric value now convert the node to the specific type of atomic item, rather than converting
               it unconditionally to <code>xs:double</code>. A comparison such as <code><![CDATA[<a>1.1</a> = 1.1]]></code>
               therefore succeeds.</p>
               
-              <p>Note however that the default conversion for untyped atomic values appearing in arithmetic
+              <p>Note however that the default conversion for untyped atomic items appearing in arithmetic
               expressions remains <code>xs:double</code>.</p>
            </item>
            <item diff="add" at="2024-06-18">
@@ -15945,7 +16033,7 @@ ISBN 0 521 77752 6.</bibl>
            <item>
               <p>Functions with the ability to access external resources (for example <function>fn:doc</function>
               and <function>fn:parse-xml</function>) are now designed to be secure by default. If they are to continue
-              operating as before, it may be necessary to set the option <code>{"trusted":true()}</code> or to
+              operating as before, it may be necessary to set the option <code>{"trust-external":true()}</code> or to
               set some implementation-dependent configuration option that makes this the default.</p>
            </item>
 

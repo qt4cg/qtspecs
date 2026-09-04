@@ -103,12 +103,11 @@
          <xsl:if test="position() ne 1">, </xsl:if>
          <xsl:apply-templates select="."/>
       </xsl:for-each>
-      <xsl:if test="xs:boolean(@extensible)">, *</xsl:if>
       <xsl:text>)</xsl:text>
    </xsl:template>
-   
+
    <xsl:template match="field">
-      <xsl:text>{@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}</xsl:text>
+      <xsl:text>{@name} as {@type}</xsl:text>
    </xsl:template>
    
  

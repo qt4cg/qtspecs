@@ -303,8 +303,8 @@
 				</xsl:if>
 				<!--<xsl:text>record {$name} (&#xa;</xsl:text>-->
 				<xsl:for-each select="$definition/fos:field">
-					<arg name="{@name}" type="{@type}" occur="{if (xs:boolean(@required)) then 'req' else 'opt'}"/>
-					<!--<xsl:text>   {@name}{if (xs:boolean(@required)) then "" else "?"} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>-->
+					<arg name="{@name}" type="{@type}"/>
+					<!--<xsl:text>   {@name} as {@type}{if (position() ne last()) then "," else ""}&#xa;</xsl:text>-->
 				</xsl:for-each>
 				<!--<xsl:text>)&#xa;</xsl:text>-->
 			</record>
@@ -357,9 +357,8 @@
 			<xsl:attribute name="type">
 				<xsl:variable name="fields" as="map(*)*">
 					<xsl:for-each select="fos:record/fos:field">
-						<xsl:sequence select="map{'name':string(@name), 'type':string(@type), 'required':xs:boolean(@required)}"/>
+						<xsl:sequence select="map{'name':string(@name), 'type':string(@type)}"/>
 					</xsl:for-each>
-					<xsl:sequence select="map{'extensible':xs:boolean(fos:record/@extensible)}"/>
 				</xsl:variable>
 				<xsl:value-of select="serialize(array{$fields}, map{'method':'json'})"/>
 			</xsl:attribute>
@@ -370,15 +369,14 @@
 	<xsl:template match="fos:record">
 		<example role="record" id="{../@id}">
 			<record>
-				<xsl:copy-of select="@* except @extensible"/>
+				<xsl:copy-of select="@*"/>
 				<xsl:apply-templates/>
-            <xsl:if test="xs:boolean(@extensible)"><arg name="*"/></xsl:if>
 			</record>
 		</example>
 	</xsl:template>
 
 	<xsl:template match="fos:field">
-		<arg occur="{if (xs:boolean(@required)) then 'req' else 'opt'}">
+		<arg>
 			<xsl:copy-of select="@name, @type, @type-ref, @diff, @at"/>
 		</arg>
 	</xsl:template>
@@ -638,12 +636,6 @@
 		  </thead>
 		  <tbody>
 		    <xsl:apply-templates select="$record/fos:field" mode="narrative"/>
-		    <xsl:if test="xs:boolean($record/@extensible)">
-		    	<tr>
-		    		<td><p><code>*</code></p></td>
-		    		<td><p>The record type is extensible (it may contain additional fields beyond those listed).</p></td>
-		    	</tr>
-		    </xsl:if> 
 		  </tbody>
 		</table>
 
@@ -663,13 +655,8 @@
                   <xsl:if test="fos:type">
                     <xsl:attribute name="type" select="fos:type"/>
                   </xsl:if>
-                  <xsl:attribute name="occur"
-                                 select="if (fos:required = true()) then 'req' else 'opt'"/>
                 </arg>
               </xsl:for-each>
-              <xsl:if test="@extensible != false()">
-                <arg name="*"/>
-              </xsl:if>
 	    </record>
 	  </example>-->
 
@@ -702,7 +689,6 @@
     <p>
       <code>
 	     <xsl:value-of select="@key|@name"/>
-      	<!--<xsl:if test="not(xs:boolean(@required))">?</xsl:if>-->
       </code>
     </p>
   </td>
