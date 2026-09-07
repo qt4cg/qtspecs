@@ -2140,5 +2140,11 @@
       </ul>
     </xsl:if>
   </xsl:template>
+  
+  <xsl:template match="gitem[label='Examples']//td/p[preceding-sibling::eg]">
+    <p class="note">
+      <xsl:apply-templates select="node()"/>
+    </p>
+  </xsl:template>
 
 </xsl:stylesheet>
