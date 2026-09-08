@@ -78,7 +78,7 @@
 </xsl:variable>
 
 <xsl:variable name="html-list" as="element()*">
-  <xsl:for-each select="tokenize(unparsed-text('/tmp/pr-list.txt'), '\s+')[starts-with(., 'pr/')]">
+  <xsl:for-each select="tokenize(unparsed-text('../build/pr-list.txt'), '\s+')[starts-with(., 'pr/')]">
     <xsl:variable name="parts" select="tokenize(., '/')"/>
     <xsl:if test="$parts[2] castable as xs:integer">
       <document number="{$parts[2]}" spec="{$parts[3]}" html="{$parts[4]}"/>
