@@ -1,5 +1,7 @@
 import java.util.Date
+import java.io.PrintStream
 import java.io.FileOutputStream
+import java.io.ByteArrayOutputStream
 
 plugins {
   id("java")
@@ -117,9 +119,16 @@ tasks.register("updateLocalIssues") {
 tasks.register<Exec>("prlist") {
   inputs.dir(layout.projectDirectory.file("pr"))
   outputs.file(layout.buildDirectory.file("pr-list.txt"))
-  val recordBranch = FileOutputStream(layout.buildDirectory.file("pr-list.txt").get().asFile)
-  standardOutput = recordBranch
+  val recordPR = ByteArrayOutputStream()
+  standardOutput = recordPR
   commandLine("find", "pr", "-type", "f", "-print")
+  doFirst {
+    mkdir(layout.buildDirectory)
+  }
+  doLast {
+    val recordBranch = PrintStream(layout.buildDirectory.file("pr-list.txt").get().asFile)
+    recordBranch.println(recordPR.toString())
+  }
 }
 
 tasks.register<JavaExec>("dashboard") {
