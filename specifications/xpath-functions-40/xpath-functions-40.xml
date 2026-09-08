@@ -9402,6 +9402,10 @@ return (
                   A new function <function>fn:element-to-map</function> is provided for converting XDM trees
                   to maps suitable for serialization as JSON. Unlike the <function>fn:xml-to-json</function> function
                   retained from 3.1, this can handle arbitrary XML as input.
+               </change><change issue="2699" PR="2797" date="2026-07-18">
+                  A <code nobreak="false">liberal</code> option is added to <function>fn:element-to-map</function>:
+                  by default, content that cannot be cast to a prescribed type raises an error rather
+                  than being silently retained in its original form.
                </change></changes><p>The <function>fn:element-to-map</function> function converts a tree rooted at an XML element node to 
                a corresponding tree of maps, in a form suitable for serialization as JSON. In effect it provides
                a mechanism for converting XML to JSON.</p><p>This section describes the mappings used by this function.</p><p>This mapping is designed with three objectives:</p><ulist><item><p>It should be possible to represent any XML element as a map suitable for JSON serialization.</p></item><item><p>The resulting JSON should be intuitive and easy to use.</p></item><item><p>The JSON should be consistent and stable: small variations in the input should not result
@@ -9812,8 +9816,10 @@ map( xs:string,
                      must be of type <code nobreak="false">fn:element-conversion-plan-record</code>.</p></item><item><p>In an <specref ref="element-conversion-plan-record"/>:</p><olist><item><p>The <code nobreak="false">layout</code> entry is always non-empty.</p></item><item><p>The <code nobreak="false">child</code> entry is non-empty if and only if the value of <code nobreak="false">layout</code> is
                            <code nobreak="false">list</code> or <code nobreak="false">list-plus</code>. It represents an element name in the format
                            <code nobreak="false">local-name</code> for a name in no namespace, or <code nobreak="false">Q{uri}local-name</code> for a
-                           name in a namespace.</p></item><item><p>The <code nobreak="false">type</code> entry is non-empty if and only if the 
-                              <code nobreak="false">layout</code> is <code nobreak="false">simple</code> or <code nobreak="false">simple-plus</code>.</p></item></olist></item><item><p>In an <specref ref="attribute-conversion-plan-record"/>:</p><olist><item><p>The <code nobreak="false">type</code> entry is always present.</p></item></olist></item></olist><p>If additional entries (beyond those described above) are present in any of the maps, they
+                           name in a namespace.</p></item><item><p>The <code nobreak="false">type</code> entry is empty unless the
+                              <code nobreak="false">layout</code> is <code nobreak="false">simple</code> or <code nobreak="false">simple-plus</code>.
+                              An empty entry is equivalent to <code nobreak="false">string</code>.</p></item></olist></item><item><p>In an <specref ref="attribute-conversion-plan-record"/>:</p><olist><item><p>The <code nobreak="false">type</code> entry may be empty, which is
+                              equivalent to <code nobreak="false">string</code>.</p></item></olist></item></olist><p>If additional entries (beyond those described above) are present in any of the maps, they
                are ignored, provided that the map is coercible to the given type definition.</p><p>The fallback rule (with key <code nobreak="false">"*"</code>) is used to process elements whose name has no
                specific entry, and also for elements where normal processing fails (for example when the
                selected layout is <code nobreak="false">"empty"</code>, but the element has children). If no fallback rule
@@ -9833,8 +9839,9 @@ map( xs:string,
             to atomic items during evaluation of <function>fn:element-to-map</function>.</p><table class="fos-options"><thead><tr><th rowspan="1" colspan="1">Name</th><th rowspan="1" colspan="1">Meaning</th></tr></thead><tbody><tr><td rowspan="1" colspan="1"><p><code nobreak="false">type</code></p></td><td class="fos-thin" rowspan="1" colspan="1">
             <p>Defines whether attributes should be represented
                as numbers or booleans instead of the default representation as strings;
-               alternatively, indicates that the attribute should be omitted.</p>
-         <ulist><item><p><term>Type: </term><code nobreak="false">enum('integer', 'decimal', 'double', 'boolean', 'string', 'skip')</code></p></item></ulist></td></tr></tbody></table></div4></div3><div3 id="id-schema-based-conversion"><head>Schema-based conversion</head><p>As an alternative to constructing a conversion plan by analyzing a corpus of specimen documents,
+               alternatively, indicates that the attribute should be omitted.
+               The field may be empty, which is equivalent to <code nobreak="false">string</code>.</p>
+         <ulist><item><p><term>Type: </term><code nobreak="false">enum('integer', 'decimal', 'double', 'boolean', 'string', 'skip')?</code></p></item></ulist></td></tr></tbody></table></div4></div3><div3 id="id-schema-based-conversion"><head>Schema-based conversion</head><p>As an alternative to constructing a conversion plan by analyzing a corpus of specimen documents,
                conversion may be controlled using type annotations derived from schema validation.</p><p>If the function <function>element-to-map</function> encounters an element whose name is
                not present in the conversion plan (including the case where no plan is supplied), and if the
                element has a type annotation <var>T</var> other than <code nobreak="false">xs:anyType</code> or <code nobreak="false">xs:untyped</code>, then
@@ -9926,17 +9933,31 @@ map( xs:string,
                between the names of attributes and child elements reverts the marker to <code nobreak="false">"@"</code>,
                decided separately for each element. This preserves the round trip; entries that are combined
                into an array, by contrast, cannot be reconverted by <function>fn:map-to-element</function>.</p></div3><div3 id="element-and-attribute-content"><head>Element and Attribute Content</head><p>The conversion plan may indicate that element content is to be output
-                  as type <code nobreak="false">string</code>, <code nobreak="false">integer</code>, <code nobreak="false">decimal</code>, 
+                  as type <code nobreak="false">string</code>, <code nobreak="false">integer</code>, <code nobreak="false">decimal</code>,
                   <code nobreak="false">double</code>, or <code nobreak="false">boolean</code>: the default
-               is <code nobreak="false">string</code>. In the case of untyped elements and attributes, the value is
+               is <code nobreak="false">string</code>. Because <code nobreak="false">string</code> is the default and may be
+               omitted, a plan that supplies the type <code nobreak="false">string</code> prescribes no type:
+               it is treated throughout in the same way as a plan that supplies no type at all.
+               When any other type is prescribed, the <code nobreak="false">liberal</code> option controls what
+               happens if a value cannot be represented as that type: with the default value
+               <code nobreak="false">false</code>, a dynamic error <errorref class="JS" code="0010"/> is raised;
+               with <code nobreak="false">true</code>, the value is retained in its original form. In all cases,
+               if the content to be converted is empty or consists entirely of whitespace, the
+               prescribed type is not applied, and the value is produced as it would be in the
+               absence of a prescribed type.</p><p>In the case of untyped elements and attributes, the value is
                output as an instance of a string, numeric, or boolean type, according to this
-               prescription. Specifically (applying the rules in order):</p><ulist><item><p>If the prescribed type is <code nobreak="false">boolean</code> and the value is castable
-                  as <code nobreak="false">xs:boolean</code>, then it is output as the <code nobreak="false">xs:boolean</code> value 
+               prescription (applying the rules in order):</p><ulist><item><p>If the value is empty or consists entirely of whitespace, or if no type
+                  other than <code nobreak="false">string</code> is prescribed, then the value is output as an
+                  instance of <code nobreak="false">xs:untypedAtomic</code>, retaining its original lexical form.</p></item><item><p>If the prescribed type is <code nobreak="false">boolean</code> and the value is castable
+                  as <code nobreak="false">xs:boolean</code>, then it is output as the <code nobreak="false">xs:boolean</code> value
                      <code nobreak="false">true</code> or <code nobreak="false">false</code>.</p></item><item><p>If the prescribed type is <code nobreak="false">integer</code> and the value is castable
                   as <code nobreak="false">xs:integer</code>, then it is output as an instance of <code nobreak="false">xs:integer</code>.</p><note><p>Casting to <code nobreak="false">xs:integer</code> may lose precision.</p></note></item><item><p>If the prescribed type is <code nobreak="false">decimal</code> and the value is castable
                      as <code nobreak="false">xs:decimal</code>, then it is output as an instance of <code nobreak="false">xs:decimal</code>.</p><note><p>This does not rule out using a subtype of <code nobreak="false">xs:decimal</code> if appropriate.</p></note></item><item><p>If the prescribed type is <code nobreak="false">double</code> and the value is castable
-                     as <code nobreak="false">xs:double</code>, then it is output as an instance of <code nobreak="false">xs:double</code>.</p></item><item><p>In all other cases the value is output as an instance of <code nobreak="false">xs:untypedAtomic</code>,
-                     retaining its original lexical form.</p></item></ulist><p>Where the element or attribute is schema-validated, however:</p><olist><item><p>If an element has the <code nobreak="false">nilled</code> property (that is, <code nobreak="false">xsi:nil="true"</code>),
+                     as <code nobreak="false">xs:double</code>, then it is output as an instance of <code nobreak="false">xs:double</code>.</p></item><item><p>In all other cases the value is not castable to the prescribed type.
+                     If <code nobreak="false">liberal</code> is <code nobreak="false">true</code>, the value is output as an instance
+                     of <code nobreak="false">xs:untypedAtomic</code>, retaining its original lexical form; if
+                     <code nobreak="false">liberal</code> is <code nobreak="false">false</code>, a dynamic error
+                     <errorref class="JS" code="0010"/> is raised.</p></item></ulist><p>Where the element or attribute is schema-validated, however:</p><olist><item><p>If an element has the <code nobreak="false">nilled</code> property (that is, <code nobreak="false">xsi:nil="true"</code>),
                   then the mapping for nilled elements with the chosen layout is used.</p></item><item><p>Let <var>AV</var> be the typed value of the node (that is, the result
                   of atomization).</p></item><item><p>If, however, an element is annotated with a type that does not allow atomization
                   (specifically, a complex type with element-only content) then let <var>AV</var> be the string value
@@ -9948,8 +9969,17 @@ map( xs:string,
                      represented by the XPath expression <code nobreak="false">array{<var>AV</var>}</code>. This applies whether or not the
                   atomized value actually contains multiple atomic items. The individual atomic items in the array retain their type,
                   for example items of type <code nobreak="false">xs:date</code> remain items of type <code nobreak="false">xs:date</code>
-                  in the result.</p></item><item><p>In all other cases <var>AV</var> will be a single atomic item, and this value
-                     is used <emph>as is</emph>, retaining its type.</p></item></olist><note><p>Atomic items in the result of the <function>fn:element-to-map</function> function
+                  in the result.</p></item><item><p>In all other cases <var>AV</var> will be a single atomic item.
+                     If the conversion plan prescribes a content type other than <code nobreak="false">string</code>
+                     for the node, and <var>AV</var> is neither empty nor whitespace-only, then
+                     <var>AV</var> is cast to the corresponding atomic type (<code nobreak="false">xs:boolean</code>,
+                     <code nobreak="false">xs:integer</code>, <code nobreak="false">xs:decimal</code>, or <code nobreak="false">xs:double</code>):
+                     if the cast succeeds, the resulting item is used; if it fails, then with
+                     <code nobreak="false">liberal</code> set to <code nobreak="false">true</code> the value <var>AV</var> is used
+                     <emph>as is</emph>, retaining its type, and with <code nobreak="false">liberal</code> set to
+                     <code nobreak="false">false</code> a dynamic error <errorref class="JS" code="0010"/> is raised.
+                     In all other cases <var>AV</var> is used <emph>as is</emph>, retaining its
+                     type.</p></item></olist><note><p>Atomic items in the result of the <function>fn:element-to-map</function> function
                   may thus be of any atomic type. The type information is lost if the result is 
                   subsequently serialized as JSON.</p></note></div3><div3 id="id-loss-of-xdm-information"><head>Lost XDM Information</head><p>This section is non-normative. Its purpose is to explain what information available
                in the XDM nodes supplied as input to the <function>fn:element-to-map</function> function
@@ -10216,7 +10246,7 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
   'b': { 'layout': 'empty', 'child': (), 'type': () },
   'c': { 'layout': 'empty', 'child': (), 'type': () }
 }
-               </eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-element-to-map"><head>fn:element-to-map</head><changes><change issue="1797 2661 2664" PR="1906 2666 2675" date="2025-04-29">New in 4.0.</change></changes><glist><gitem><label>Summary</label><def><p>Converts an element node into a map that is suitable for
+               </eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-element-to-map"><head>fn:element-to-map</head><changes><change issue="1797 2661 2664" PR="1906 2666 2675" date="2025-04-29">New in 4.0.</change><change issue="2699" PR="2797" date="2026-07-18">Added the <code nobreak="false">liberal</code> option.</change></changes><glist><gitem><label>Summary</label><def><p>Converts an element node into a map that is suitable for
             JSON serialization.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="element-to-map" return-type="map(xs:string, item()?)?" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="element" type="(document-node(*) | element())?"/><arg name="options" type="map(*)?" default="{}" note="default-on-empty"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>Supplying a well-formed document node as the value of the first argument
          has the same effect as supplying the single element node child of that document node.</p><p>This function returns a map derived from
             the element node supplied in <code nobreak="false">$element</code>. The map is in a form
@@ -10247,7 +10277,11 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
                      All other names are output in the format <code nobreak="false">"Q{uri}local"</code> if in a namespace, 
                      or <code nobreak="false">"Q{}local"</code> if in no namespace. "Top-level" here means that the element
                      is one that appears explicitly in the sequence of elements passed in the <code nobreak="false">$elements</code> argument,
-                     as distinct from a descendant of such an element.</td></tr></tbody></table><p>If <code nobreak="false">$element</code> is the empty sequence, the result is the empty sequence.</p><p>The principles for conversion from elements to maps are described
+                     as distinct from a descendant of such an element.</td></tr><tr><td rowspan="3" colspan="1"><p><code nobreak="false">liberal</code></p></td><td class="fos-thick" colspan="2" rowspan="1">Determines whether content that cannot be cast to the type prescribed
+                  for it by the conversion plan is tolerated.<ulist><item><p><term>Type: </term><code nobreak="false">xs:boolean</code></p></item><item><p><term>Default: </term><code nobreak="false">false</code></p></item></ulist></td></tr><tr><td class="fos-thin" rowspan="1" colspan="1"><code nobreak="false">false</code></td><td rowspan="1" colspan="1">A value that cannot be cast to the type prescribed for it
+                     raises a dynamic error <errorref class="JS" code="0010"/>.</td></tr><tr><td class="fos-thick" rowspan="1" colspan="1"><code nobreak="false">true</code></td><td rowspan="1" colspan="1">A value that cannot be cast to the type prescribed for it is
+                     retained in its original form: as an instance of <code nobreak="false">xs:untypedAtomic</code> for
+                     untyped input, or as its typed value for schema-validated input.</td></tr></tbody></table><p>If <code nobreak="false">$element</code> is the empty sequence, the result is the empty sequence.</p><p>The principles for conversion from elements to maps are described
             in <specref ref="id-element-layouts"/>, and the rules for selecting
          an element layout for each element are given in 
             <specref ref="id-selecting-element-layout"/>.</p><p>In general, every descendant element within the tree rooted at the supplied
@@ -10255,7 +10289,9 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
          corresponding value represents the attributes and children of the element. This key-value pair will be added 
          to the content representing its parent element, in a way that depends on the parent element's layout.</p><p>The representation of a node of any other kind depends on the layout chosen for its parent element.</p></def></gitem><gitem><label>Error Conditions</label><def><p>A dynamic error <errorref class="JS" code="0008"/> occurs if any element cannot
             be processed using the selected layout for that element, unless fallback processing
-            is defined; or if error action is explicitly requested for an element.</p><p>Any error in the conversion plan is treated as a type error <xerrorref spec="XP" class="TY" code="0004"/> whether or not it is technically
+            is defined; or if error action is explicitly requested for an element.</p><p>A dynamic error <errorref class="JS" code="0010"/> occurs if the <code nobreak="false">liberal</code>
+            option is <code nobreak="false">false</code> and the content of an element or attribute cannot be cast
+            to the type prescribed for it by the conversion plan.</p><p>Any error in the conversion plan is treated as a type error <xerrorref spec="XP" class="TY" code="0004"/> whether or not it is technically
             a contravention of the defined type for the value. This relieves users and implementers
             of the burden of distinguishing different kinds of error in the plan.</p></def></gitem><gitem><label>Examples</label><def role="example"><table role="medium"><tbody><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">element-to-map(())</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">()</code></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">element-to-map(&lt;foo&gt;bar&lt;/foo&gt;)</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">{ "foo": "bar" }</code></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">element-to-map(&lt;price currency="USD"&gt;12.16&lt;/price&gt;,
     { 'attribute-marker': '', 'content-key': 'value' })</code></p></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><p><code nobreak="false">{ "price": {'currency': 'USD', 'value': 12.16 }}</code></p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">element-to-map(
@@ -10301,11 +10337,18 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
               },
       'name-format' : 'local'
     }
-  )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "name": { 
+  )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "name": {
     "first": "Jane",
-    "last": "Smith" 
-  } 
-}</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-to-element"><head>fn:map-to-element</head><changes><change issue="1962" PR="2707" date="2026-06-24">New in 4.0.</change></changes><glist><gitem><label>Summary</label><def><p>Converts a map into an element node.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="map-to-element" return-type="element()?" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="map" type="map(*)?"/><arg name="options" type="map(*)?" default="{}" note="default-on-empty"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>This function performs the inverse of <function>element-to-map</function>:
+    "last": "Smith"
+  }
+}</eg></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">element-to-map(
+    &lt;a&gt;haha&lt;/a&gt;,
+    { 'plan': { 'a': { 'layout': 'simple', 'type': 'boolean' } } }
+  )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><p>Raises error FOJS0010.</p></td></tr><tr class="testdiv"><th valign="top" rowspan="1" colspan="1">Expression:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">element-to-map(
+    &lt;a&gt;haha&lt;/a&gt;,
+    { 'plan': { 'a': { 'layout': 'simple', 'type': 'boolean' } },
+      'liberal': true() }
+  )</eg></td></tr><tr><th valign="top" rowspan="1" colspan="1">Result:</th><td valign="top" rowspan="1" colspan="1"><eg xml:space="preserve">{ "a": "haha" }</eg></td></tr></tbody></table></def></gitem></glist></div3><div3 id="func-map-to-element"><head>fn:map-to-element</head><changes><change issue="1962" PR="2707" date="2026-06-24">New in 4.0.</change></changes><glist><gitem><label>Summary</label><def><p>Converts a map into an element node.</p></def></gitem><gitem><label>Signature</label><def><example role="signature"><proto isOp="no" prefix="fn" name="map-to-element" return-type="element()?" returnEmptyOk="no" returnSeq="no" returnVaries="no" isSchema="no" isDatatype="no" isSpecial="no"><arg name="map" type="map(*)?"/><arg name="options" type="map(*)?" default="{}" note="default-on-empty"/></proto></example></def></gitem><gitem><label>Properties</label><def><p>This function is <termref def="dt-deterministic">deterministic</termref>, <termref def="dt-context-independent">context-independent</termref>,  and <termref def="dt-focus-independent">focus-independent</termref>. </p></def></gitem><gitem><label>Rules</label><def><p>This function performs the inverse of <function>element-to-map</function>:
             it reconstructs an element node from the <termref def="dt-single-entry-map"/>
             supplied in <code nobreak="false">$map</code>. The key of the entry represents the element name,
             and the value of the entry represents the element’s attributes and children.</p><p>If <code nobreak="false">$map</code> is the empty sequence, the result is the empty sequence.</p><p>Because <function>element-to-map</function> does not preserve all information present
@@ -16165,7 +16208,9 @@ ISBN 0 521 77752 6.</bibl><bibl xmlns:xlink="http://www.w3.org/1999/xlink" id="C
                   structure does not have the form required by the selected layout; where a
                   reconstructed element or attribute name is not a valid <code nobreak="false">xs:QName</code>;
                   or where <code nobreak="false">list</code> layout is selected for an array but the conversion
-                  plan supplies no <code nobreak="false">child</code> element name.</p></error><error class="NS" code="0004" label="No namespace found for prefix." type="dynamic"><p>Raised by <function>fn:resolve-QName</function> and analogous functions if a supplied QName has a 
+                  plan supplies no <code nobreak="false">child</code> element name.</p></error><error class="JS" code="0010" label="Value not convertible to prescribed type." type="dynamic"><p>Raised by <function>fn:element-to-map</function>, when the <code nobreak="false">liberal</code> option
+                  is <code nobreak="false">false</code>, if the content of an element or attribute cannot be cast to the
+                  type prescribed for it by the conversion plan.</p></error><error class="NS" code="0004" label="No namespace found for prefix." type="dynamic"><p>Raised by <function>fn:resolve-QName</function> and analogous functions if a supplied QName has a 
                   prefix that has no binding to a namespace.</p></error><error class="NS" code="0005" label="Base-uri not defined in the static context." type="dynamic"><p>Raised by <function>fn:resolve-uri</function> if no base URI is available for resolving a relative URI.</p></error><error class="PA" code="0001" label="Origin node is not an ancestor of the target node." type="dynamic"><p>Raised by <function>fn:path</function> if the node supplied in the <code nobreak="false">origin</code>
                   option is not an ancestor of the <code nobreak="false">$node</code> whose relative path is required.</p></error><error class="QM" code="0001" label="Module URI is a zero-length string." type="dynamic"><p>Raised by <function>fn:load-xquery-module</function> if the supplied module URI is zero-length.</p></error><error class="QM" code="0002" label="Module URI not found." type="dynamic"><p>Raised by <function>fn:load-xquery-module</function> if no module can be found with the supplied module URI.</p></error><error class="QM" code="0003" label="Static error in dynamically loaded XQuery module." type="dynamic"><p>Raised by <function>fn:load-xquery-module</function> if a static error 
                   (including a statically detected type error) is encountered when processing the library module.</p></error><error class="QM" code="0005" label="Invalid parameter for dynamically loaded XQuery module." type="dynamic"><p>Raised by <function>fn:load-xquery-module</function> if a value is supplied for the initial context
