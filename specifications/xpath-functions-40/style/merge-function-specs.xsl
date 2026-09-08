@@ -22,6 +22,49 @@
 	<xsl:variable name="isFO" select="contains(/spec/header/title, 'Functions and Operators')"
 		as="xs:boolean"/>
 
+	<!-- Properties that every function has unless stated otherwise; they are defined once in
+		"Properties of Functions" and are not repeated in the individual function definitions -->
+	<xsl:variable name="default-properties" as="xs:string+"
+		select="'deterministic', 'context-independent', 'focus-independent'"/>
+
+	<!-- The order in which properties are reported -->
+	<xsl:variable name="property-order" as="xs:string+"
+		select="'nondeterministic', 'nondeterministic-wrt-ordering', 'variadic',
+			'context-dependent', 'focus-dependent'"/>
+
+	<!-- Properties that are used by other stylesheets, but not reported in the specification -->
+	<xsl:variable name="silent-properties" as="xs:string+" select="'special-streaming-rules'"/>
+
+	<!-- Determines whether a property is reported in the "Properties" section -->
+	<xsl:function name="fos:is-notable" as="xs:boolean">
+		<xsl:param name="property" as="element(fos:property)"/>
+		<xsl:sequence select="not($property = ($default-properties, $silent-properties))"/>
+	</xsl:function>
+
+	<!-- Returns the properties of a block that are reported -->
+	<xsl:function name="fos:notable-properties" as="element(fos:property)*">
+		<xsl:param name="block" as="element(fos:properties)"/>
+		<xsl:sequence select="$block/fos:property[fos:is-notable(.)]"/>
+	</xsl:function>
+
+	<!-- Returns the context dependencies of a block -->
+	<xsl:function name="fos:dependencies" as="xs:string*">
+		<xsl:param name="block" as="element(fos:properties)"/>
+		<xsl:sequence select="distinct-values($block/fos:property/@dependency ! tokenize(., '\s+'))"/>
+	</xsl:function>
+
+	<!-- Returns the block with the properties that apply to all arities -->
+	<xsl:function name="fos:general-block" as="element(fos:properties)?">
+		<xsl:param name="block" as="element(fos:properties)"/>
+		<xsl:sequence select="$block/../fos:properties[not(@arity)]"/>
+	</xsl:function>
+
+	<!-- Returns the readable name of a context dependency -->
+	<xsl:function name="fos:dependency-name" as="xs:string">
+		<xsl:param name="dependency" as="xs:string"/>
+		<xsl:sequence select="replace(translate($dependency, '-', ' '), 'uri', 'URI')"/>
+	</xsl:function>
+
    <xsl:key name="id" match="*" use="@id"/>
    <xsl:variable name="new-functions"
                 select="key('id', 'new-functions')//code/string()"/>
@@ -119,30 +162,19 @@
 					<xsl:apply-templates select="$fspec/fos:signatures/fos:proto"/>
 				</def>
 			</gitem>
-			<xsl:if test="$fspec/fos:properties">
+			<xsl:variable name="properties" as="element(fos:properties)*"
+				select="$fspec/fos:properties[exists(fos:notable-properties(.))]"/>
+			<xsl:if test="exists($properties)">
 				<gitem>
 					<label>Properties</label>
 					<def>
-						<xsl:copy-of select="$fspec/fos:properties/(@diff, @at)"/>
-						<xsl:for-each select="$fspec/fos:properties">
+						<!-- the properties that apply to all arities are reported first -->
+						<xsl:for-each select="$properties[not(@arity)], $properties[@arity]">
 							<p>
-								<xsl:choose>
-									<xsl:when test="last() = 1">
-										<xsl:text>This function is </xsl:text>
-									</xsl:when>
-									<xsl:otherwise>
-										<xsl:text>The </xsl:text>
-										<xsl:number value="@arity" format="w" lang="en"/>
-										<xsl:text>-argument form of this function is </xsl:text>
-									</xsl:otherwise>
-								</xsl:choose>
-								<xsl:for-each select="fos:property[not(. = 'special-streaming-rules')]">
-									<xsl:call-template name="make-property-termref"/>
-									<xsl:if test="position() != last()">, </xsl:if>
-									<xsl:if test="position() = last() - 1"> and </xsl:if>
-								</xsl:for-each>
-								<xsl:text>. </xsl:text>
-								<xsl:apply-templates select="fos:property/@dependency"/>
+								<xsl:copy-of select="(@diff, @at)"/>
+								<xsl:call-template name="make-property-sentence">
+									<xsl:with-param name="fspec" select="$fspec"/>
+								</xsl:call-template>
 							</p>
 						</xsl:for-each>
 					</def>
@@ -275,17 +307,20 @@
 	</xsl:template>
 
 	<xsl:template name="make-property-termref">
+		<xsl:variable name="name" as="xs:string"
+			select="if (. = 'nondeterministic-wrt-ordering')
+				then 'nondeterministic with respect to ordering' else string(.)"/>
 		<xsl:choose>
 			<xsl:when test="$isFO">
 				<!-- Functions and Operators spec -->
 				<termref def="dt-{.}">
-					<xsl:value-of select="."/>
+					<xsl:value-of select="$name"/>
 				</termref>
 			</xsl:when>
 			<xsl:otherwise>
 				<!-- Typically the XSLT spec -->
 				<xtermref spec="FO40" ref="dt-{.}">
-					<xsl:value-of select="."/>
+					<xsl:value-of select="$name"/>
 				</xtermref>
 			</xsl:otherwise>
 		</xsl:choose>
@@ -311,10 +346,86 @@
 		</example>
 	</xsl:template>
 
-	<xsl:template match="@dependency"> It depends on 
-		<xsl:value-of
-			select="replace(translate(string-join(tokenize(., '\s+'), ', and '), '-', ' '), 'uri', 'URI')"
-		/>.
+	<!-- Reports the properties of a function that deviate from the default properties -->
+	<xsl:template name="make-property-sentence">
+		<xsl:param name="fspec" as="element(fos:function)"/>
+		<xsl:variable name="properties" as="element(fos:property)*" select="fos:notable-properties(.)"/>
+		<xsl:variable name="dependencies" as="xs:string*" select="fos:dependencies(.)"/>
+		<xsl:variable name="protos" as="element(fos:proto)*"
+			select="$fspec/fos:signatures/fos:proto"/>
+		<xsl:variable name="proto" as="element(fos:proto)?"
+			select="$protos[count(fos:arg) = max($protos ! count(fos:arg))][1]"/>
+		<!-- the properties may be restricted to an arity; if so, the first argument that is
+			absent at this arity is reported -->
+		<xsl:variable name="arity" as="xs:integer?" select="@arity ! xs:integer(.)"/>
+		<xsl:variable name="absent" as="element(fos:arg)?"
+			select="$proto/fos:arg[position() = $arity + 1]"/>
+		<!-- properties that are reported for all arities are supplemented, not repeated -->
+		<xsl:variable name="also" as="xs:string"
+			select="if (exists($arity) and exists(fos:general-block(.)[exists(fos:notable-properties(.))]))
+				then 'also ' else ''"/>
+		<xsl:if test="exists($properties)">
+			<xsl:call-template name="make-property-subject">
+				<xsl:with-param name="absent" select="$absent"/>
+			</xsl:call-template>
+			<xsl:text>is {$also}</xsl:text>
+			<xsl:for-each select="$properties">
+				<xsl:sort select="(index-of($property-order, string(.)), count($property-order) + 1)[1]"/>
+				<xsl:call-template name="make-property-termref"/>
+				<xsl:call-template name="make-list-separator"/>
+			</xsl:for-each>
+			<xsl:value-of select="if (exists($dependencies) and exists($absent)) then '' else '. '"/>
+		</xsl:if>
+		<xsl:if test="exists($dependencies)">
+			<xsl:choose>
+				<!-- a condition applies to the whole sentence, so it is not split -->
+				<xsl:when test="exists($properties) and exists($absent)">
+					<xsl:text> and depends on </xsl:text>
+				</xsl:when>
+				<xsl:when test="exists($properties)">
+					<xsl:text>It depends on </xsl:text>
+				</xsl:when>
+				<xsl:otherwise>
+					<xsl:call-template name="make-property-subject">
+						<xsl:with-param name="absent" select="$absent"/>
+					</xsl:call-template>
+					<xsl:text>{$also}depends on </xsl:text>
+				</xsl:otherwise>
+			</xsl:choose>
+			<xsl:for-each select="$dependencies">
+				<xsl:value-of select="fos:dependency-name(.)"/>
+				<xsl:call-template name="make-list-separator"/>
+			</xsl:for-each>
+			<xsl:text>.</xsl:text>
+		</xsl:if>
+	</xsl:template>
+
+	<!-- Introduces a sentence that reports properties, naming the omitted argument if the
+		properties are restricted to an arity -->
+	<xsl:template name="make-property-subject">
+		<xsl:param name="absent" as="element(fos:arg)?"/>
+		<xsl:if test="exists($absent)">
+			<xsl:text>If </xsl:text>
+			<code>$<xsl:value-of select="$absent/@name"/></code>
+			<xsl:text> is absent, </xsl:text>
+		</xsl:if>
+		<xsl:value-of select="if (exists($absent)) then 'this function ' else 'This function '"/>
+	</xsl:template>
+
+	<!-- Separates the items of an enumeration -->
+	<xsl:template name="make-list-separator">
+		<xsl:choose>
+			<xsl:when test="position() = last()"/>
+			<xsl:when test="position() = last() - 1 and last() = 2">
+				<xsl:text> and </xsl:text>
+			</xsl:when>
+			<xsl:when test="position() = last() - 1">
+				<xsl:text>, and </xsl:text>
+			</xsl:when>
+			<xsl:otherwise>
+				<xsl:text>, </xsl:text>
+			</xsl:otherwise>
+		</xsl:choose>
 	</xsl:template>
 	
 	<xsl:template match="fos:changes">
