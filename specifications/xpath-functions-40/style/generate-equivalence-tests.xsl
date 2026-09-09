@@ -122,7 +122,6 @@
    
    <!-- Tests temporarily excluded because not implemented in Saxon -->
    <xsl:template match="fos:function[@prefix='array'][@name='sort']//fos:test" priority="100"/>
-   <xsl:template match="fos:function[@prefix='fn'][@name='chain']//fos:test" priority="100"/>
    
    
    
