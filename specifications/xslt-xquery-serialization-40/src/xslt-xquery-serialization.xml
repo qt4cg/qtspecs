@@ -4223,8 +4223,8 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
 <head>CSV Output Method</head>
 
   <changes>
-    <change issue="2748" PR="2794" date="2026-07-02">
-      The CSV output method was added, providing an inverse of the
+    <change issue="2748 2861" PR="2794 2862" date="2026-07-02">
+      The CSV output method has been added, providing an inverse of the
       <code>fn:parse-csv</code> and <code>fn:csv-to-arrays</code> functions.
     </change>
   </changes>
@@ -4235,92 +4235,118 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
     <code>fn:csv-to-arrays</code> functions: applying the CSV output method to the result of
     one of these functions recovers CSV data equivalent to the original input.
     Sequence normalization is not performed for this output method.</p>
+  
+  <div2 id="input-to-csv-serialization">
+    <head>Input to CSV Serialization</head>
+  
 
   <p>The <termref def="dt-input-value"/> <rfc2119>MUST</rfc2119> take one of the following two
     forms:</p>
 
   <ulist>
-    <item><p>A single <termref def="dt-map-item">map</termref> having the structure returned by
-      the <code>fn:parse-csv</code> function (a <emph>parsed CSV structure</emph>). The map
-      <rfc2119>MUST</rfc2119> contain an entry whose key is the string <code>rows</code> and whose
-      associated value is a sequence of <termref def="dt-array-item">arrays</termref>, each array
-      representing one record. The map <rfc2119>MAY</rfc2119> contain an entry whose key is the
-      string <code>columns</code> and whose associated value is a sequence of atomic items
-      supplying the column names. Any other entries in the map are ignored.</p></item>
+    <item><p>A single <termref def="dt-map-item">map</termref>, which is coerced
+        using the <xtermref spec="XP40" ref="dt-coercion-rules"/> to the record
+        type <code>record(rows as array(xs:anyAtomicType)*, columns as xs:string*)</code>.
+        A serialization error occurs if this coercion fails: <errorref code="0025" class="RE"/>.</p>
+      
+      <note><p>The structure returned by the <code>fn:parse-csv</code> function
+      meets these criteria: see <xspecref spec="FO40" ref="parsed-csv-structure-record"/>.</p>
+      </note>
+    </item>
+       
 
-    <item><p>A sequence of <termref def="dt-array-item">arrays</termref>, as returned by the
-      <code>fn:csv-to-arrays</code> function, each array representing one record.</p></item>
-  </ulist>
+    <item><p>A sequence of <termref def="dt-array-item">arrays</termref>, which is coerced
+        using the <xtermref spec="XP40" ref="dt-coercion-rules"/> to the type <code>array(xs:anyAtomicType)*</code>.
+        A serialization error occurs if this coercion fails: <errorref code="0025" class="RE"/>.</p>
+      <note><p>The structure returned by the <code>fn:csv-to-arrays</code> function
+      meets these criteria.</p></note></item>
+    </ulist>
+    
+    <p><termdef id="dt-csv-input-rows" term="input rows">The term <term>input rows</term> (applied to the input
+        of CSV serialization) refers to the sequence
+    of arrays in the <code>rows</code> field when a map is supplied, or to the entire input value when a sequence of arrays
+    is supplied, after the required coercion.</termdef></p>
+  
+  </div2>
 
   <div2 id="serializing-csv">
     <head>Serializing a CSV Structure</head>
 
-    <p>The output consists of a sequence of <term>records</term>, one for each row, separated by
-      the string supplied in the <code>line-ending</code> parameter. This string is also written
-      after the final record. If the parameter is absent, the string used is
-      <termref def="impdef">implementation-defined</termref>.</p>
 
-    <p>Records are written as follows:</p>
-
-    <olist>
-      <item><p>If the input is a map, and the <code>csv-header</code> parameter is
-        <code>true</code>, a header record is written first. This record is derived from the value
-        of the <code>columns</code> entry of the map; each field of the record is the
+    <p>The output consists of a sequence of <term>output rows</term>, 
+      comprising an optional header row followed by a sequence of data rows,
+      one for each of the <termref def="dt-csv-input-rows"/>. Each output row,
+      including the optional header row, is a sequence of strings, formatted according
+      to the rules described below.</p>
+    
+    <p>If the <code>csv-header</code> parameter is
+        <code>true</code>, and the input is a map with a non-empty <code>columns</code> entry,
+        then a header row is written first. The sequence of strings for the header row
+        is the value of the <code>columns</code> entry. <!--This row is derived from the value
+        of the <code>columns</code> entry of the map. Each field of the row is the
         <termref def="dt-string-value">string value</termref> of the corresponding item. If the
         map has no <code>columns</code> entry, a serialization error
-        <errorref code="0025" class="RE"/> occurs. If the <code>csv-header</code> parameter is
-        <code>false</code> (the default), no header record is written.</p></item>
+        <errorref code="0025" class="RE"/> occurs.--> If the <code>csv-header</code> parameter is
+        <code>false</code> (the default), no header row is written.</p>
+    
+    <p>One data row is then written for each of the <termref def="dt-csv-input-rows"/>. 
+          The sequence of strings for each data row is the 
+          sequence concatenation of the result of casting each member of the 
+          input row, in order, to the type <code>xs:string</code>.</p>
+    
+    
+      <p>Each output row (whether a header row or a data row) 
+        consists of a sequence of strings separated by a separator character and 
+      followed by an end-of-line representation. The separator character is the value of
+      the <code>csv-separator</code> parameter if specified, or a single <char>U+002C</char> otherwise. 
+      The end-of-line representation is the value
+      of the <code>line-ending</code> parameter if specified, or a single <char>U+000A</char>
+      otherwise. Each string (whether in a header row or a data row) is processed by applying the
+      following steps in order:</p>
 
-      <item><p>One record is then written for each array in the input (the value of the
-        <code>rows</code> entry if the input is a map, or the arrays of the input sequence
-        otherwise). The fields of the record are the
-        <termref def="dt-string-value">string values</termref> of the members of the array, in
-        order.</p></item>
-    </olist>
 
-    <p>Within a record, fields are separated by the character supplied in the
-      <code>csv-separator</code> parameter (default: <char>U+002C</char>, a comma). Each field is
-      derived from the <termref def="dt-string-value">string value</termref> of the corresponding
-      item by applying the following procedure:</p>
+    
 
     <olist>
       <item><p>Any character in the string for which character mapping is defined (see
         <specref ref="character-maps"/>) is substituted by the replacement string defined in the
         character map.</p></item>
 
-      <item><p>Any other character in the string (but not a character produced by character mapping)
-        is a candidate for <termref def="unicode-normalization">Unicode Normalization</termref> if
-        requested by the <code>normalization-form</code> parameter. In addition, the field requires
-        quoting if it contains the separator character, the quote character, a <char>U+000A</char>
-        character, or a <char>U+000D</char> character; and any line ending (<char>U+000D</char>,
+      <item><p>The string is subjected to <termref def="unicode-normalization">unicode normalization</termref> if
+        requested by the <code>normalization-form</code> parameter.</p></item>
+      
+      <item><p>If the string contains the separator character, the quote character, a <char>U+000A</char>
+        character, or a <char>U+000D</char> character, then each occurrence of the quote character is doubled, 
+          and the resulting field is enclosed between two occurrences of the quote character.
+          The term <term>quote character</term> means the value of
+        the <code>csv-quote-character</code> parameter, defaulting to <char>U+0022</char>.</p></item>
+        
+        <item><p>Any line ending within the string (<char>U+000D</char>,
         <char>U+000A</char>, or <char>U+000D</char> followed by <char>U+000A</char>) is replaced by
-        the same string that separates records.</p></item>
+        the value of the <code>line-ending</code> parameter, defaulting to <char>U+000A</char>.</p>
+        
+        <note><p>The <code>fn:parse-csv</code> and <code>fn:csv-to-arrays</code> functions normalize
+      all line endings to <char>U+000A</char>, including line endings within quoted fields, so
+      this replacement does not affect the result of reparsing the serialized output.</p></note></item>
 
-      <item><p>If the field requires quoting, each occurrence of the quote character (but not one
-        produced by character mapping) is doubled, and the resulting field is enclosed in the
-        character supplied in the <code>csv-quote-character</code> parameter (default:
-        <char>U+0022</char>, a quotation mark). Otherwise the field is written unchanged.</p></item>
+      
     </olist>
 
-    <note><p>The <code>fn:parse-csv</code> and <code>fn:csv-to-arrays</code> functions normalize
-      all line endings to <char>U+000A</char>, including line endings within quoted fields, so
-      this replacement does not affect the result of reparsing the serialized output.</p></note>
+    
 
-    <p>A serialization error <errorref code="0025" class="RE"/> occurs if the
-      <termref def="dt-input-value"/> is not one of the two forms described above; in particular,
-      if a member of a row array is not a single <xtermref spec="XP40" ref="dt-atomic-item">atomic
-      value</xtermref>.</p>
-
-    <note><p>Because every field is written using its
-      <termref def="dt-string-value">string value</termref>, the distinction between the different
+    <note><p>Because every field is cast to the type <code>xs:string</code>, the distinction between the different
       atomic types of the members is not preserved. When CSV data produced by
       <code>fn:parse-csv</code> or <code>fn:csv-to-arrays</code> is serialized, all fields are
-      already strings, so this has no effect.</p></note>
+      already strings, so this is of no consequence.</p></note>
 
     <note><p>To reproduce a header row when serializing the result of
       <code>fn:parse-csv($input, { "header": true() })</code>, the <code>csv-header</code>
       parameter must be set to <code>true</code>; the column names are otherwise available in the
-      <code>columns</code> entry but are not written to the output.</p></note>
+      <code>columns</code> entry but are not written to the output.</p>
+    
+      <p>Because header rows take exactly the same form as data rows, it is also possible
+    to generate a CSV header by prepending an array containing the required column names to the sequence of 
+    input rows.</p></note>
   </div2>
 
   <div2 id="CSV_PARAMS">
@@ -4338,19 +4364,19 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
     <div3 id="CSV_SEPARATOR">
       <head>CSV Output Method: <code>csv-separator</code></head>
       <p>The <code>csv-separator</code> parameter supplies the character used to separate the
-        fields within a record. The default is <char>U+002C</char> (a comma).
+        fields within a record. The default is <char>U+002C</char>.
         A <termref def="serial-err">serialization error</termref> <errorref code="0016" class="PM"/>
-        occurs if the value is <char>U+000A</char>, if it is not a string consisting of exactly
-        one character, or if it is the same character as the value of the
+        occurs if the value is <char>U+000A</char> or <char>U+000D</char>, if it is not a string consisting of exactly
+        one character, or if it is the same character as the effective value of the
         <code>csv-quote-character</code> parameter.</p>
     </div3>
 
     <div3 id="CSV_QUOTE-CHARACTER">
       <head>CSV Output Method: <code>csv-quote-character</code></head>
       <p>The <code>csv-quote-character</code> parameter supplies the character used to enclose a
-        field whose content requires quoting. The default is <char>U+0022</char> (a quotation
-        mark). A <termref def="serial-err">serialization error</termref> <errorref code="0016" class="PM"/>
-        occurs if the value is <char>U+000A</char>, if it is not a string consisting of exactly
+        field whose content requires quoting. The default is <char>U+0022</char>. 
+        A <termref def="serial-err">serialization error</termref> <errorref code="0016" class="PM"/>
+        occurs if the value is <char>U+000A</char> or <char>U+000D</char>, if it is not a string consisting of exactly
         one character, or if it is the same character as the value of the
         <code>csv-separator</code> parameter.</p>
     </div3>
@@ -4367,14 +4393,10 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
       <head>CSV Output Method: <code>line-ending</code></head>
       <p>The <code>line-ending</code> parameter is applicable to the CSV output method; see
         <specref ref="XML_LINE-ENDING"/> for more information. Its value is used to separate
-        records, and it replaces line endings occurring in the content of fields, as described in
-        <specref ref="serializing-csv"/>. If the parameter is absent, the string used is
-        <termref def="impdef">implementation-defined</termref>.</p>
 
-      <note><p><bibref ref="rfc4180"/> prescribes <char>U+000D</char> <char>U+000A</char> as the
-        record separator, while much CSV data in circulation uses <char>U+000A</char> alone. The
-        choice does not affect round-tripping: the <code>fn:parse-csv</code> and
-        <code>fn:csv-to-arrays</code> functions normalize all line endings on input.</p></note>
+        output rows, and it replaces line endings occurring in the content of fields, as described in
+        <specref ref="serializing-csv"/>. If the parameter is absent, <char>U+000A</char> is
+        used.</p>
     </div3>
 
     <div3 id="CSV_ENCODING">
