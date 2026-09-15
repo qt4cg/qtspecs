@@ -1767,6 +1767,19 @@ the number of items in the sequence obtained by evaluating <var role="parse-test
                   </item>
                   <item>
                      <p>
+                        <termdef id="dt-current-value" term="current value">The <term>current
+                        value</term> is the value returned by the expression <code role="parse-test" nobreak="false">fn:current()</code>.</termdef> Unlike the <termref def="dt-context-value"/>, it is not affected by path expressions,
+                     predicates, simple map expressions, or pipeline expressions. The way in which
+                     it is initialized, and the constructs that change it, are defined by the host
+                     language.</p>
+                     <p role="xquery">In XQuery, the current value is initialized to the <termref def="dt-context-value"/> of the query prolog. While an expression that defines
+                     the default value of an optional function parameter is evaluated, it is set to
+                     the context value of the construct that invokes the function (see <specref ref="FunctionDeclns"/>). While the body of a function declaration or the
+                     <termref def="dt-initializing-expression"/> of a variable declaration is
+                     evaluated, it reverts to the context value of the query prolog.</p>
+                  </item>
+                  <item>
+                     <p>
                         <termdef id="dt-variable-values" term="variable values">
                            <term>Variable values</term>. 
         This is a mapping from <termref def="dt-expanded-qname">expanded QNames</termref> to values. 
@@ -11364,10 +11377,14 @@ At evaluation time, the value of a variable reference is the value to which the 
                         required that an argument be evaluated if the function body can be evaluated without evaluating
                         that argument.</p>
                         <note>
-                           <p>All argument expressions, including default value expressions, are evaluated in the dynamic
-                     context of the function call. It is therefore possible to use a default value expression such as 
-                     <code nobreak="false">.</code>, or <code nobreak="false">/</code>, or <code nobreak="false">fn:current-dateTime()</code>, whose value depends on the
-                     dynamic context of the function call.</p>
+                           <p>For a <termref def="dt-system-function"/>, all argument expressions, including
+                     default value expressions, are evaluated in the dynamic context of the function call. It is
+                     therefore possible for such a function to declare a default value expression such as
+                     <code nobreak="false">.</code>, or <code nobreak="false">/</code>, or <code nobreak="false">fn:default-collation()</code>, whose value depends on
+                     the dynamic context of the function call.</p>
+                           <p role="xquery">For a function declared in a query, the default value expression is evaluated as
+                     described in <specref ref="FunctionDeclns"/>: only the <termref def="dt-current-value"/> is taken
+                     from the dynamic context of the function call.</p>
                         </note>
                         <p>If the expression used for the default value of a parameter has no dependencies on the dynamic
                      context, then an implementation <rfc2119>may</rfc2119> choose to reuse the same value on repeated
@@ -28097,7 +28114,7 @@ declare context value as document-node()* := collection($uri); </eg>
                <prod id="doc-xquery40-FunctionDecl-ParamWithDefault">
                   <lhs>ParamWithDefault</lhs>
                   <rhs>
-                     <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  (<nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>  |  ("context"  "value")))?</rhs>
+                     <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                </prod>
 
                <prod id="doc-xquery40-FunctionDecl-VarNameAndType">
@@ -28343,24 +28360,30 @@ local:summary(doc("acme_corp.xml")//employee[location = "Denver"])</eg>
         ensure that a value is available for each parameter, whether required or optional, and that the value
         will always be an instance of the declared type.
       </p>
-               <p>A parameter is optional if a default value is supplied. There are two ways a default value
-        can be defined:</p>
-               <ulist>
-                  <item>
-                     <p>The construct <code nobreak="false">:= ExprSingle</code> defines a fixed default; all function calls
-        that default the relevant argument will supply the same value. The <code nobreak="false">ExprSingle</code>
-        is evaluated in the same way as the <termref def="dt-initializing-expression"/> of
-        a variable declaration (see <specref ref="id-variable-declarations"/>).</p>
-                  </item>
-                  <item>
-                     <p>The construct <code nobreak="false">:= context value</code> indicates that the default value of the
-        relevant argument is the context value from the dynamic context of the function call.
-        This will typically be different for every function call that defaults the argument; it may
-        also lead to a type error if the context value is absent or has the wrong type. Using this option
-        is equivalent to expanding the function call with the expression <code nobreak="false">.</code> in the
-        relevant argument position.</p>
-                  </item>
-               </ulist>
+               <p>A parameter is optional if a default value is supplied using the construct
+        <code nobreak="false">:= ExprSingle</code>; otherwise it is required. The <code nobreak="false">ExprSingle</code> is
+        evaluated in the same way as the <termref def="dt-initializing-expression"/> of a variable
+        declaration (see <specref ref="id-variable-declarations"/>), with one exception: the
+        <termref def="dt-current-value"/> is set to the context value of the construct that invokes
+        the function, which may be a static function call, a named function reference, or a partial
+        function application. A call on <function>fn:current</function> in the
+        <code nobreak="false">ExprSingle</code> therefore returns that value.</p>
+               <p>A default value that does not call <function>fn:current</function> is fixed: every function
+        call that defaults the relevant argument supplies the same value. A default value that calls
+        <function>fn:current</function> will typically supply a different value for every such call;
+        it may also lead to a type error if the context value is absent or has the wrong type. The
+        default <code nobreak="false">:= current()</code> is equivalent to expanding the function call with the
+        expression <code nobreak="false">.</code> in the relevant argument position; a call such as
+        <code nobreak="false">:= string(current())</code> can be used to derive the default from the context value
+        of the caller. Because the current value reverts to the context value of the query prolog
+        while the body of a function declaration is evaluated, a call on
+        <function>fn:current</function> in a function invoked by the <code nobreak="false">ExprSingle</code> does
+        not return the context value of the caller.</p>
+               <note>
+                  <p>Within a default value, <code nobreak="false">.</code> is a reference to the context value from the
+        dynamic context of the query prolog, while <code nobreak="false">current()</code> is a reference to the
+        context value of the caller.</p>
+               </note>
                <p>If a parameter
     is optional, then all subsequent parameters in the list must also be optional; otherwise, a
     <termref def="dt-static-error">static error</termref> is raised <errorref class="ST" code="0148"/>.
@@ -28390,9 +28413,9 @@ local:summary(doc("acme_corp.xml")//employee[location = "Denver"])</eg>
       </ulist>
       -->
                <note>
-                  <p>It is not possible in a user-defined function to define a default value that 
-          depends on the static or dynamic context of the caller, except for the special 
-          case of the context value itself.
+                  <p>It is not possible in a user-defined function to define a default value that
+          depends on the static or dynamic context of the caller, except for the special
+          case of the context value itself, which can be referenced as <code nobreak="false">current()</code>.
           There are system-defined functions that declare such defaults (for example, defaulting
           a parameter to the default collation or the static base URI of the caller); indeed,
           some functions such as <function>fn:position</function> or <function>fn:static-base-uri</function>
@@ -30836,7 +30859,7 @@ parent. </p>
                   <prod id="prod-xquery40-ParamWithDefault">
                      <lhs>ParamWithDefault</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  (<nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>  |  ("context"  "value")))?</rhs>
+                        <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-ParenthesizedExpr">
