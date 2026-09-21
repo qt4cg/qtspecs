@@ -1,0 +1,53 @@
+<item>
+   <title>Issue #2922 created</title>
+   <pubDate>2026-09-18T02:11:20Z</pubDate>
+   <link>https://github.com/qt4cg/qtspecs/issues/2922</link>
+   <guid>https://qt4cg.org/@qt4cg/2026/#created-2922</guid>
+   <description>&lt;div&gt;&lt;p&gt;Representation of sequence of items as a sequence of JNodes&lt;/p&gt;&lt;div class="markup"&gt;&lt;p&gt;Some ideas for discussion.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;In the approach where sequences are represented as adjacent JNodes with the same jkey, a single JNode cannot serve to group an arbitrary sequence of items.  Therefore, &lt;a href="https://qt4cg.org/specifications/xslt-40/Overview.html#element-array-member"&gt;&lt;code&gt;xsl:array-member&lt;/code&gt;&lt;/a&gt; should likely return a single-member array (and the sequence of them are concatenated with &lt;code&gt;array:join&lt;/code&gt;), much like &lt;a href="https://qt4cg.org/specifications/xslt-40/Overview.html#element-map-entry"&gt;&lt;code&gt;xsl:map-entry&lt;/code&gt;&lt;/a&gt; returns a single-entry map (and a sequence of them are concatenated with &lt;code&gt;map:merge&lt;/code&gt;).&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;&lt;em&gt;Originally posted by @ruv in &lt;a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-5682702247"&gt;#2073&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;This approach was roughly described in my comments on &lt;a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-3613350338"&gt;2025-12-04&lt;/a&gt; and &lt;a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-5495615995"&gt;2026-09-01&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Example:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xml"&gt;&amp;lt;jnode kind='map' key='()' value='{ "d": (7, [ 8, (9,10) ], 11), "e": (12,13), "f":14 }'&amp;gt;
+    &amp;lt;jnode kind='leaf' key='d' value='7'/&amp;gt;
+    &amp;lt;jnode kind='array' key='d' value='[ 8, (9,10) ]'&amp;gt;
+      &amp;lt;jnode kind='leaf' key='1' value='8'/&amp;gt;
+      &amp;lt;jnode kind='leaf' key='2' value='9'/&amp;gt;
+      &amp;lt;jnode kind='leaf' key='2' value='10'/&amp;gt;
+    &amp;lt;/jnode&amp;gt;
+    &amp;lt;jnode kind='leaf' key='d' value='11'/&amp;gt;
+    &amp;lt;jnode kind='leaf' key='e' value='12'/&amp;gt;
+    &amp;lt;jnode kind='leaf' key='e' value='13'/&amp;gt;
+    &amp;lt;jnode kind='leaf' key='f' value='14'/&amp;gt;
+&amp;lt;/jnode&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Some problems of this approach are:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;when copy a JNode (by &lt;code&gt;xsl:copy-of&lt;/code&gt; or &lt;code&gt;xsl:copy&lt;/code&gt;), jkey should be erased if the parent type is &lt;code&gt;jnode(*,array(.*))&lt;/code&gt;, but we still have to separate new jnodes per array members.&lt;/li&gt;
+&lt;li&gt;it is unclear how to handle jkey conflicts when constructing &lt;code&gt;jnode(*,map(.*))&lt;/code&gt;.&lt;/li&gt;
+&lt;li&gt;selecting the next JNode withing the same array-member (or map-entry) without knowing the jkey is too verbose.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;To address these problems, a peer binary relation (a partial order) can be introduced in addition to the sibling relation. The peer relation should be preserved when JNodes are copied.  Only JNodes that wrap items from the same sequence (e.g., from the same array-member) stand in the peer relationship to each other. Perhaps, it may be advisable to disjoin the peer and the sibling relations (that is, two JNodes cannot be in both peer and sibling relations at the same time).&lt;/p&gt;
+&lt;p&gt;The corresponding axes: &lt;code&gt;preceding-peer::&lt;/code&gt;, &lt;code&gt;following-peer::&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;/e[1] =&amp;gt; jvalue()&lt;/code&gt; returns &lt;code&gt;12&lt;/code&gt;
+&lt;code&gt;/e[1]/following-peer::*[1] =&amp;gt; jvalue()&lt;/code&gt; returns &lt;code&gt;13&lt;/code&gt;
+&lt;code&gt;/e[1]/following-sibling::*[1] =&amp;gt; jvalue()&lt;/code&gt; returns &lt;code&gt;14&lt;/code&gt;
+&lt;code&gt;/d[last()] =&amp;gt; jvalue()&lt;/code&gt; returns &lt;code&gt;11&lt;/code&gt;
+&lt;code&gt;/d[last()]/following-sibling::* =&amp;gt; count()&lt;/code&gt; returns &lt;code&gt;3&lt;/code&gt;
+&lt;code&gt;/*[not(preceding-peer::*)]&lt;/code&gt; returns &lt;code&gt;/( d[1] | e[1] | f[1] )&lt;/code&gt;
+&lt;code&gt;/*[not(following-peer::*)]/jvalue()&lt;/code&gt; returns &lt;code&gt;(11, 13, 14)&lt;/code&gt;&lt;/p&gt;
+&lt;p&gt;To construct an array from a sequence &lt;code&gt;$s&lt;/code&gt; of JNodes:&lt;/p&gt;
+&lt;pre&gt;&lt;code class="language-xslt"&gt;  &amp;lt;xsl:array&amp;gt;
+    &amp;lt;xsl:for-each-group select="$s" group-start-with="*[ not(preceding-peer::*) ]"&amp;gt;
+      &amp;lt;xsl:array-member select="current-group()/jvalue()"/&amp;gt;
+    &amp;lt;/xsl:for-each&amp;gt;
+  &amp;lt;/xsl:array&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Probably, it should be an error if peer JNodes in &lt;code&gt;$s&lt;/code&gt; are not transitively adjacent.&lt;/p&gt;
+&lt;p&gt;If two nodes are not peers and have the same jkey, this is only case requiring duplicate keys handling.&lt;/p&gt;
+&lt;hr/&gt;
+&lt;p&gt;Update: to make the "peer" relation useful for XNodes too, the "sibling" relation should not change (i.e., it should not be disjoint from "peer").&lt;/p&gt;
+&lt;/div&gt;&lt;/div&gt;</description>
+</item>

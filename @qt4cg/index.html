@@ -1,7 +1,143 @@
 <!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses</title></head><body><main><article><h1>@qt4cg statuses</h1><p>This page displays recent status
             updates
             about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2026/">2026</a>, <a href="2025/">2025</a>, <a href="2024/">2024</a>, <a href="2023/">2023</a>, <a href="2022/">2022</a>, <a href="2021/">2021</a>, <a href="2020/">2020</a></p><div class="toots">
+<div class="toot" id="agenda-09-22"><h2>QT4 CG meeting 181 draft agenda<span class="toot-id"> #agenda-09-22</span></h2><div class="pubdate">21 Sep at 11:00:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2026/09-22">https://qt4cg.org/meeting/agenda/2026/09-22</a></div><p>Draft agenda published.</p></div>
+<div class="toot" id="created-2922"><h2>Issue #2922 created<span class="toot-id"> #created-2922</span></h2><div class="pubdate">18 Sep at 02:11:20 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2922">https://github.com/qt4cg/qtspecs/issues/2922</a></div><details><summary>Representation of sequence of items as a sequence of JNodes</summary><div class="markup"><p>Some ideas for discussion.</p>
+<blockquote>
+<p>In the approach where sequences are represented as adjacent JNodes with the same jkey, a single JNode cannot serve to group an arbitrary sequence of items.  Therefore, <a href="https://qt4cg.org/specifications/xslt-40/Overview.html#element-array-member"><code>xsl:array-member</code></a> should likely return a single-member array (and the sequence of them are concatenated with <code>array:join</code>), much like <a href="https://qt4cg.org/specifications/xslt-40/Overview.html#element-map-entry"><code>xsl:map-entry</code></a> returns a single-entry map (and a sequence of them are concatenated with <code>map:merge</code>).</p>
+</blockquote>
+<p><em>Originally posted by @ruv in <a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-5682702247">#2073</a></em></p>
+<p>This approach was roughly described in my comments on <a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-3613350338">2025-12-04</a> and <a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-5495615995">2026-09-01</a>.</p>
+<p>Example:</p>
+<pre><code class="language-xml">&lt;jnode kind='map' key='()' value='{ "d": (7, [ 8, (9,10) ], 11), "e": (12,13), "f":14 }'&gt;
+    &lt;jnode kind='leaf' key='d' value='7'/&gt;
+    &lt;jnode kind='array' key='d' value='[ 8, (9,10) ]'&gt;
+      &lt;jnode kind='leaf' key='1' value='8'/&gt;
+      &lt;jnode kind='leaf' key='2' value='9'/&gt;
+      &lt;jnode kind='leaf' key='2' value='10'/&gt;
+    &lt;/jnode&gt;
+    &lt;jnode kind='leaf' key='d' value='11'/&gt;
+    &lt;jnode kind='leaf' key='e' value='12'/&gt;
+    &lt;jnode kind='leaf' key='e' value='13'/&gt;
+    &lt;jnode kind='leaf' key='f' value='14'/&gt;
+&lt;/jnode&gt;
+</code></pre>
+<p>Some problems of this approach are:</p>
+<ul>
+<li>when copy a JNode (by <code>xsl:copy-of</code> or <code>xsl:copy</code>), jkey should be erased if the parent type is <code>jnode(*,array(.*))</code>, but we still have to separate new jnodes per array members.</li>
+<li>it is unclear how to handle jkey conflicts when constructing <code>jnode(*,map(.*))</code>.</li>
+<li>selecting the next JNode withing the same array-member (or map-entry) without knowing the jkey is too verbose.</li>
+</ul>
+<p>To address these problems, a peer binary relation (a partial order) can be introduced in addition to the sibling relation. The peer relation should be preserved when JNodes are copied.  Only JNodes that wrap items from the same sequence (e.g., from the same array-member) stand in the peer relationship to each other. Perhaps, it may be advisable to disjoin the peer and the sibling relations (that is, two JNodes cannot be in both peer and sibling relations at the same time).</p>
+<p>The corresponding axes: <code>preceding-peer::</code>, <code>following-peer::</code></p>
+<p><code>/e[1] =&gt; jvalue()</code> returns <code>12</code>
+<code>/e[1]/following-peer::*[1] =&gt; jvalue()</code> returns <code>13</code>
+<code>/e[1]/following-sibling::*[1] =&gt; jvalue()</code> returns <code>14</code>
+<code>/d[last()] =&gt; jvalue()</code> returns <code>11</code>
+<code>/d[last()]/following-sibling::* =&gt; count()</code> returns <code>3</code>
+<code>/*[not(preceding-peer::*)]</code> returns <code>/( d[1] | e[1] | f[1] )</code>
+<code>/*[not(following-peer::*)]/jvalue()</code> returns <code>(11, 13, 14)</code></p>
+<p>To construct an array from a sequence <code>$s</code> of JNodes:</p>
+<pre><code class="language-xslt">  &lt;xsl:array&gt;
+    &lt;xsl:for-each-group select="$s" group-start-with="*[ not(preceding-peer::*) ]"&gt;
+      &lt;xsl:array-member select="current-group()/jvalue()"/&gt;
+    &lt;/xsl:for-each&gt;
+  &lt;/xsl:array&gt;
+</code></pre>
+<p>Probably, it should be an error if peer JNodes in <code>$s</code> are not transitively adjacent.</p>
+<p>If two nodes are not peers and have the same jkey, this is only case requiring duplicate keys handling.</p>
+<hr>
+<p>Update: to make the "peer" relation useful for XNodes too, the "sibling" relation should not change (i.e., it should not be disjoint from "peer").</p>
+</div></details></div>
+<div class="toot" id="created-2921"><h2>Issue #2921 created<span class="toot-id"> #created-2921</span></h2><div class="pubdate">17 Sep at 20:43:59 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2921">https://github.com/qt4cg/qtspecs/issues/2921</a></div><details><summary>Lax record coercions</summary><div class="markup"><p>We’ve decided that…</p>
+<pre><code class="language-xquery">let $coord as record(x, y) := { 'x': 1, 'y': 2, 'z': 3 }
+return $coord
+</code></pre>
+<p>…raises an error. We could redesignate the deprecated extensibility syntax and use…</p>
+<pre><code class="language-xquery">(: yields { 'x': 1, 'y': 2 } :)
+let $coord as record(x, y, *) := { 'x': 1, 'y': 2, 'z': 3 }
+return $coord
+</code></pre>
+<p>…to create a record with two entries that discards the remaining ones.</p>
+</div></details></div>
+<div class="toot" id="created-2920"><h2>Pull request #2920 created<span class="toot-id"> #created-2920</span></h2><div class="pubdate">16 Sep at 22:12:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2920">https://github.com/qt4cg/qtspecs/pull/2920</a></div><details><summary>2813 clarifications for xsl:result-document</summary><div class="markup"><p>The primary purpose of this PR is to clarify the situation when an xsl:result-document instruction has an empty or absent href attribute, and thus writes to the principal output destination.</p>
+<p>However, it also takes the opportunity to add many more clarifications to the serialization part of the XSLT spec, to improve the order of presentation, and to remove some redundancy</p>
+<p>Fix #2813</p>
+</div></details></div>
+<div class="toot" id="created-2919"><h2>Issue #2919 created<span class="toot-id"> #created-2919</span></h2><div class="pubdate">16 Sep at 12:45:05 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2919">https://github.com/qt4cg/qtspecs/issues/2919</a></div><details><summary>XQFO: feature requests from users</summary><div class="markup"><p>Some requests of “early adopters” (not sure whether that’s still the right term ;·), for functions that would be simple to add or modify:</p>
+<h3>1. <code>fn:trim</code></h3>
+<p>Many functions come with a function for removing leading and trailing whitespace. It would be an easy-to-read shortcut for <code>replace($line, '^\s+|\s+$')</code>, i.e. for users who are not into regex.</p>
+<h3>2. <code>fn:index-of-substring($string, $substring, $start?)</code></h3>
+<p>An alternatives for strings would simplify life (<code>fn:index-of</code> compares items, not strings).</p>
+<h3>3. <code>fn:random-number-generator()?take(n)</code></h3>
+<p>Retrieving <em>n</em> random numbers is hard to achieve for non-experts. A shortcut would be desirable, for code like:</p>
+<pre><code class="language-xquery">fold-left(1 to $n, random-number-generator(), fn { head(.) ! (?next(), ?number), tail(.) })
+=&gt; tail()
+</code></pre>
+</div></details></div>
+<div class="toot" id="created-2918"><h2>Pull request #2918 created<span class="toot-id"> #created-2918</span></h2><div class="pubdate">16 Sep at 11:17:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2918">https://github.com/qt4cg/qtspecs/pull/2918</a></div><details><summary>2600 Options on fn:collection()</summary><div class="markup"><p>Defines an options parameter for the fn:collection and fn:uri-collection functions.</p>
+<p>Fix #2600
+Fix #285</p>
+</div></details></div>
+<div class="toot" id="created-2917"><h2>Issue #2917 created<span class="toot-id"> #created-2917</span></h2><div class="pubdate">16 Sep at 08:18:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2917">https://github.com/qt4cg/qtspecs/issues/2917</a></div><details><summary>Implementation-defined features</summary><div class="markup"><p>Some of the specifications have an appendix listing implementation-defined features. In some cases at least this is based on markup within the document text. In all cases, it has not been systematically reviewed or updated for changes in 4.0. We should either drop these appendixes or ensure they are accurate.</p>
+</div></details></div>
+<div class="toot" id="created-2916"><h2>Pull request #2916 created<span class="toot-id"> #created-2916</span></h2><div class="pubdate">15 Sep at 18:50:31 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2916">https://github.com/qt4cg/qtspecs/pull/2916</a></div><details><summary>2915 `fn:current`: inline functions and `fn:function-lookup`</summary><div class="markup"><p>Closes #2915</p>
+</div></details></div>
+<div class="toot" id="created-2915"><h2>Issue #2915 created<span class="toot-id"> #created-2915</span></h2><div class="pubdate">15 Sep at 18:47:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2915">https://github.com/qt4cg/qtspecs/issues/2915</a></div><details><summary>`fn:current`: inline functions and `fn:function-lookup`</summary><div class="markup"><p>The current spec says:</p>
+<blockquote>
+<p>While the body of a function declaration or the initializing expression of a variable declaration is evaluated, it reverts to the context value of the query prolog.</p>
+</blockquote>
+<p>It is unclear what <code>current()</code> returns in an inline function called from a default value. I think the current value should revert in every function body, just as the focus is absent in every function body.</p>
+<p>The spec also lists the constructs that pass the caller’s context value to a default:</p>
+<blockquote>
+<p>a static function call, a named function reference, or a partial function application</p>
+</blockquote>
+<p>We should add <code>fn:function-lookup</code> (it can also create a function item with an omitted argument).</p>
+</div></details></div>
+<div class="toot" id="closed-1459"><h2>Issue #1459 closed<span class="toot-id"> #closed-1459</span></h2><div class="pubdate">15 Sep at 18:23:15 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1459">https://github.com/qt4cg/qtspecs/issues/1459</a></div><p>Function properties and arities</p></div>
+<div class="toot" id="closed-2886"><h2>Issue #2886 closed<span class="toot-id"> #closed-2886</span></h2><div class="pubdate">15 Sep at 18:23:14 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2886">https://github.com/qt4cg/qtspecs/pull/2886</a></div><p>1459 Function properties and arities</p></div>
+<div class="toot" id="closed-2901"><h2>Issue #2901 closed<span class="toot-id"> #closed-2901</span></h2><div class="pubdate">15 Sep at 18:19:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2901">https://github.com/qt4cg/qtspecs/issues/2901</a></div><p>element-to-map: errors in the conversion plan</p></div>
+<div class="toot" id="closed-2903"><h2>Issue #2903 closed<span class="toot-id"> #closed-2903</span></h2><div class="pubdate">15 Sep at 18:19:34 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2903">https://github.com/qt4cg/qtspecs/pull/2903</a></div><p>2901 element-to-map: errors in the conversion plan</p></div>
+<div class="toot" id="closed-2906"><h2>Issue #2906 closed<span class="toot-id"> #closed-2906</span></h2><div class="pubdate">15 Sep at 18:19:02 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2906">https://github.com/qt4cg/qtspecs/issues/2906</a></div><p>Alternative for `+:=`: `put`?</p></div>
+<div class="toot" id="closed-2907"><h2>Issue #2907 closed<span class="toot-id"> #closed-2907</span></h2><div class="pubdate">15 Sep at 18:19:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2907">https://github.com/qt4cg/qtspecs/pull/2907</a></div><p>2906 Alternative for +:=: put</p></div>
+<div class="toot" id="closed-2883"><h2>Issue #2883 closed<span class="toot-id"> #closed-2883</span></h2><div class="pubdate">15 Sep at 17:53:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2883">https://github.com/qt4cg/qtspecs/issues/2883</a></div><p>parse-xml: strip-space=conditional</p></div>
+<div class="toot" id="closed-2894"><h2>Issue #2894 closed<span class="toot-id"> #closed-2894</span></h2><div class="pubdate">15 Sep at 17:53:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2894">https://github.com/qt4cg/qtspecs/pull/2894</a></div><p>2883 Effect of strip-space="conditional" on parse-xml[-fragment]</p></div>
 <div class="toot" id="minutes-09-15"><h2>QT4 CG meeting 180 draft minutes<span class="toot-id"> #minutes-09-15</span></h2><div class="pubdate">15 Sep at 16:45:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/minutes/2026/09-15">https://qt4cg.org/meeting/minutes/2026/09-15</a></div><p>Draft minutes published.</p></div>
+<div class="toot" id="created-2914"><h2>Issue #2914 created<span class="toot-id"> #created-2914</span></h2><div class="pubdate">15 Sep at 16:57:27 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2914">https://github.com/qt4cg/qtspecs/issues/2914</a></div><details><summary>Define a new char/codepoint type.</summary><div class="markup"><p>Some functions operate on values that are restricted to the XML <code>Char</code> production to specify a character/Unicode codepoint. Some possible names:</p>
+<ul>
+<li><code>xs:char</code> -- could be confused with the C <code>char</code> type, but is consistent with the XML <code>Char</code> production;</li>
+<li><code>xs:codepoint</code> -- clearer that this is a Unicode codepoint but could be confusing to people not familiar with Unicode terminology.</li>
+</ul>
+<p>This type has two representations:</p>
+<ul>
+<li>an <code>xs:string</code> of length 1 (assuming that length is in terms of codepoints);</li>
+<li>an <code>xs:integer</code> (or <code>xs:long</code> or <code>xs:unsignedLong if using a minimal sized underlying type) with allowed values limited to those defined by the XML </code>Char` production.</li>
+</ul>
+<p>As such, such a type should/would be coercible to either type resulting in either a 1 character string or an integer respectively.</p>
+</div></details></div>
+<div class="toot" id="created-2913"><h2>Issue #2913 created<span class="toot-id"> #created-2913</span></h2><div class="pubdate">15 Sep at 16:46:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2913">https://github.com/qt4cg/qtspecs/issues/2913</a></div><details><summary>Analysis and design of restricted integer types for functions.</summary><div class="markup"><p>A <em>ranged value</em> is a restriction on an <code>xs:integer</code> type where the allowed values can be defined as a <code>RangeExpr</code> with one of the following forms:</p>
+<ul>
+<li><code>A to B</code> -- for the range <code>A &lt;= x &lt;= B</code> for any value <code>x</code> in the type (i.e. with a restricted upper and lower bound);</li>
+<li><code>() to B</code> for the range <code>x &lt;= B</code> for any value <code>x</code> in the type (i.e. with an unrestricted lower bound and a restricted upper bound);</li>
+<li><code>A to ()</code> for the range <code>|A &lt;= x</code> for any value <code>x</code> in the type (i.e. with a restricted lower bound and an unrestricted upper bound);</li>
+<li><code>() to ()</code> -- for any value <code>x</code> in the type (i.e. with an unrestricted upper and lower bound).</li>
+</ul>
+<p>For predefined types this gives for example:</p>
+<ul>
+<li><code>xs:integer</code> = <code>() to ()</code></li>
+<li><code>xs:nonNegativeInteger</code> = <code>0 to ()</code></li>
+<li><code>xs:positiveInteger</code> = <code>1 to ()</code></li>
+<li><code>xs:negativeInteger</code> = <code>() to -1</code></li>
+<li><code>xs:short</code> = <code>-32_768 to 32_767</code></li>
+</ul>
+<p>Possible syntax example:</p>
+<pre><code>let $x as xs:integer in range 1 to 10 := 4;
+</code></pre>
+<p>i.e. it is an extension of a <code>TypeDeclaration</code>.</p>
+<p><strong>Note:</strong> This could be extended to the other <code>xs:numeric</code> types as ranges are not just limited to <code>xs:integer</code> values.</p>
+<p><strong>Note</strong>: A processor could use this information to generate something along the lines of "value is not an instance of xs:long in the range 2 to 20" which would be more helpful to the user.</p>
+<p><strong>Note:</strong> This should cover most use cases. The only missing case is a unicode codepoint type which is outside the scope of this proposal.</p>
+</div></details></div>
 <div class="toot" id="closed-2900"><h2>Issue #2900 closed<span class="toot-id"> #closed-2900</span></h2><div class="pubdate">15 Sep at 16:24:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2900">https://github.com/qt4cg/qtspecs/issues/2900</a></div><p>Map to Record Coercion</p></div>
 <div class="toot" id="closed-2905"><h2>Issue #2905 closed<span class="toot-id"> #closed-2905</span></h2><div class="pubdate">15 Sep at 16:24:25 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2905">https://github.com/qt4cg/qtspecs/pull/2905</a></div><p>2900 Map to Record Coercion</p></div>
 <div class="toot" id="closed-2898"><h2>Issue #2898 closed<span class="toot-id"> #closed-2898</span></h2><div class="pubdate">15 Sep at 16:21:21 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2898">https://github.com/qt4cg/qtspecs/issues/2898</a></div><p>Errors in "castable" expression</p></div>
@@ -11,105 +147,5 @@
 <div class="toot" id="closed-2896"><h2>Issue #2896 closed<span class="toot-id"> #closed-2896</span></h2><div class="pubdate">15 Sep at 16:15:37 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2896">https://github.com/qt4cg/qtspecs/pull/2896</a></div><p>Add Christian Grün as joint editor</p></div>
 <div class="toot" id="closed-2893"><h2>Issue #2893 closed<span class="toot-id"> #closed-2893</span></h2><div class="pubdate">15 Sep at 16:12:24 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2893">https://github.com/qt4cg/qtspecs/pull/2893</a></div><p>Improve formatting of F&amp;O examples</p></div>
 <div class="toot" id="closed-2867"><h2>Issue #2867 closed<span class="toot-id"> #closed-2867</span></h2><div class="pubdate">15 Sep at 16:06:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2867">https://github.com/qt4cg/qtspecs/issues/2867</a></div><p>`fn:current` everywhere</p></div>
-<div class="toot" id="closed-2868"><h2>Issue #2868 closed<span class="toot-id"> #closed-2868</span></h2><div class="pubdate">15 Sep at 16:06:56 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2868">https://github.com/qt4cg/qtspecs/pull/2868</a></div><p>2867 fn:current everywhere</p></div>
-<div class="toot" id="closed-2679"><h2>Issue #2679 closed<span class="toot-id"> #closed-2679</span></h2><div class="pubdate">15 Sep at 16:04:44 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2679">https://github.com/qt4cg/qtspecs/issues/2679</a></div><p>List of recent pull requests is not useful</p></div>
-<div class="toot" id="closed-2902"><h2>Issue #2902 closed<span class="toot-id"> #closed-2902</span></h2><div class="pubdate">15 Sep at 16:03:50 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2902">https://github.com/qt4cg/qtspecs/issues/2902</a></div><p>fn:document "trusted" =&gt; "trust-external"</p></div>
-<div class="toot" id="closed-2904"><h2>Issue #2904 closed<span class="toot-id"> #closed-2904</span></h2><div class="pubdate">15 Sep at 16:03:49 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2904">https://github.com/qt4cg/qtspecs/pull/2904</a></div><p>2902 Document option trusted =&gt; trust-external</p></div>
-<div class="toot" id="created-2912"><h2>Pull request #2912 created<span class="toot-id"> #created-2912</span></h2><div class="pubdate">14 Sep at 16:28:20 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2912">https://github.com/qt4cg/qtspecs/pull/2912</a></div><details><summary>1777 Revise XSLT shallow copy for JNodes</summary><div class="markup"><p>This PR:</p>
-<p>(a) Adds semantics for xsl:copy and xsl:copy-of when the selected item is a JNode
-(b) Revises the rules for the shallow-copy built-in mode so it does the right thing when processing a JTree
-(c) drops the shallow-copy-all built-in mode, which is no longer needed
-(d) adds some simple examples of recursive-descent processing on JTrees using template rules</p>
-<p>Fix #1777</p>
-</div></details></div>
-<div class="toot" id="created-2911"><h2>Pull request #2911 created<span class="toot-id"> #created-2911</span></h2><div class="pubdate">14 Sep at 12:00:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2911">https://github.com/qt4cg/qtspecs/pull/2911</a></div><details><summary>2693 Drop type patterns (and other revisions)</summary><div class="markup"><p>Fix #2693</p>
-</div></details></div>
-<div class="toot" id="created-2910"><h2>Pull request #2910 created<span class="toot-id"> #created-2910</span></h2><div class="pubdate">14 Sep at 09:32:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2910">https://github.com/qt4cg/qtspecs/pull/2910</a></div><details><summary>2909 Binary functions: Base64 URL en-/decoding</summary><div class="markup"><p>Closes #2909</p>
-</div></details></div>
-<div class="toot" id="created-2909"><h2>Issue #2909 created<span class="toot-id"> #created-2909</span></h2><div class="pubdate">14 Sep at 09:21:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2909">https://github.com/qt4cg/qtspecs/issues/2909</a></div><details><summary>Binary functions: Base64 URL en-/decoding</summary><div class="markup"><p>The encoding behind JWT or PKCE is called <code>base64url</code> (see <a href="https://datatracker.ietf.org/doc/html/rfc4648">RFC 4648, §5</a>), and our languages offer no way to produce or consume it: <code>xs:base64Binary</code> only speaks the standard alphabet with mandatory padding, so every implementation of these protocols hand-rolls translate and replace chains.</p>
-<p>Two functions, <code>bin:from-base64url</code> and <code>bin:to-base64url</code>, would close that gap alongside <code>bin:hex</code>, <code>bin:octal</code> and <code>bin:bin</code>, which already cover the other textual octet encodings.</p>
-</div></details></div>
-<div class="toot" id="created-2908"><h2>Issue #2908 created<span class="toot-id"> #created-2908</span></h2><div class="pubdate">13 Sep at 20:04:05 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2908">https://github.com/qt4cg/qtspecs/issues/2908</a></div><details><summary>Named, Unnamed, and Recursive record types</summary><div class="markup"><p>The subtyping rules currently make a distinction between recursive record types (which are necessarily named types) and non-recursive types (which may be named or unnamed). This permeates through to the rules for matching types against instances, which are defined in terms of the subtyping rules.</p>
-<p>It's not totally clear which rules apply: for example does 3.3.2.9 [Subtyping Non-recursive Record Types] only apply when both types are non-recursive? What are the rules when one type is recursive and the other is not?</p>
-<p>In addition it seems awkward, and likely to lead to confusion, if the rules are different depending on whether the definition is recursive: one can imagine this changing over time as the type is refined, and being recursive is a property that may not immediately be apparent to the reader when the chain of references is long.</p>
-<p>I think we may get more consistent and predictable results if we draw the distinction between named and unnamed record types, rather than between recursive and non-recursive types (so non-recursive named types behave like recursive named types, minus the recursion). We can then use "named typing" for named types, and "structural typing" for unnamed types.</p>
-<ul>
-<li>
-<p>For named record types the identity of a type is essentially its name (modulo rules that allow the same name to be used for different types in different modules). Rules for "instance of" and "subtype of" are then based on type names: a record is an instance of a named record type if it is annotated with that type name, and one named record type is a subtype of another if it is explicitly defined as such.</p>
-</li>
-<li>
-<p>For unnamed record types, the identity of a type is essentially its definition, and "instance of" and "subtype of" relationships are determined by comparing structure.</p>
-</li>
-<li>
-<p>A named record type can then be defined to be a subtype of the corresponding unnamed type (it imposes an additional constraint on instances, namely that the type name must match).</p>
-</li>
-</ul>
-<p>But I'm inclined to be more radical: eliminate unnamed record types. It's probably good software engineering practice (DRY principles) to define types once and give them a name that reflects their semantic purpose, and it certainly simplifies the rules.</p>
-</div></details></div>
-<div class="toot" id="created-2907"><h2>Pull request #2907 created<span class="toot-id"> #created-2907</span></h2><div class="pubdate">13 Sep at 12:21:03 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2907">https://github.com/qt4cg/qtspecs/pull/2907</a></div><details><summary>2906 Alternative for +:=: put</summary><div class="markup"><p>Closes #2906</p>
-</div></details></div>
-<div class="toot" id="created-2906"><h2>Issue #2906 created<span class="toot-id"> #created-2906</span></h2><div class="pubdate">13 Sep at 12:18:38 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2906">https://github.com/qt4cg/qtspecs/issues/2906</a></div><details><summary>Alternative for `+:=`: `put`?</summary><div class="markup"><p>I met with resistance while trying to popularize <code>+:=</code> among users: the plus character implies that something is <em>added</em>, not <em>replaced</em>, and 3 special characters seem over the top.</p>
-<p>What about the keyword <code>put</code>?</p>
-<pre><code class="language-xquery">let $coord as record(x, y, z) := { 'x': 1, 'y': 2, 'z': 0 }
-return $coord put { 'x': 0, 'y': 0 }
-</code></pre>
-</div></details></div>
-<div class="toot" id="created-2905"><h2>Pull request #2905 created<span class="toot-id"> #created-2905</span></h2><div class="pubdate">11 Sep at 18:55:44 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2905">https://github.com/qt4cg/qtspecs/pull/2905</a></div><details><summary>2900 Map to Record Coercion</summary><div class="markup"><p>…like this?</p>
-<p>Closes #2900</p>
-</div></details></div>
-<div class="toot" id="created-2904"><h2>Pull request #2904 created<span class="toot-id"> #created-2904</span></h2><div class="pubdate">11 Sep at 18:11:47 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2904">https://github.com/qt4cg/qtspecs/pull/2904</a></div><details><summary>2902 Document option trusted =&gt; trust-external</summary><div class="markup"><p>Fix #2902</p>
-<p>Rename the option "trusted" on fn:document to "trust-external", to align with fn:doc.</p>
-<p>Also updates some of the relevant change metadata.</p>
-</div></details></div>
-<div class="toot" id="created-2903"><h2>Pull request #2903 created<span class="toot-id"> #created-2903</span></h2><div class="pubdate">11 Sep at 18:08:47 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2903">https://github.com/qt4cg/qtspecs/pull/2903</a></div><details><summary>2901 element-to-map: errors in the conversion plan</summary><div class="markup"><p>Closes #2901</p>
-</div></details></div>
-<div class="toot" id="created-2902"><h2>Issue #2902 created<span class="toot-id"> #created-2902</span></h2><div class="pubdate">11 Sep at 15:37:00 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2902">https://github.com/qt4cg/qtspecs/issues/2902</a></div><details><summary>fn:document "trusted" =&gt; "trust-external"</summary><div class="markup"><p>The "trusted" option of fn:document (in XSLT) needs to be renamed "trust-external" for alignment with the fn:doc function</p>
-</div></details></div>
-<div class="toot" id="created-2901"><h2>Issue #2901 created<span class="toot-id"> #created-2901</span></h2><div class="pubdate">11 Sep at 15:15:12 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2901">https://github.com/qt4cg/qtspecs/issues/2901</a></div><details><summary>element-to-map: errors in the conversion plan</summary><div class="markup"><p>F+O §14.6.5, "Structure of the conversion plan" makes some statements using "must" (without special markup), for example</p>
-<blockquote>
-<p>the corresponding value must be of type fn:attribute-conversion-plan-record</p>
-</blockquote>
-<p>and makes other statements of the form:</p>
-<blockquote>
-<p>The layout entry is always non-empty.</p>
-</blockquote>
-<p>It's not clear how violations of these constraints are to be handled. There's a general rule:</p>
-<blockquote>
-<p>Any error in the conversion plan is treated as a type error [<a href="https://www.w3.org/TR/xpath20/#ERRXPTY0004">err:XPTY0004</a>]XP</p>
-</blockquote>
-<p>But it's not 100% clear whether violations of these constraints are errors in this sense; and this is particularly true when there is a fallback layout.</p>
-<p>There are two cases where non-conformance with the rules is explicitly tolerated:</p>
-<blockquote>
-<p>Any entries whose keys are not in this format will be ignored.</p>
-</blockquote>
-<blockquote>
-<p>If additional entries (beyond those described above) are present in any of the maps, they are ignored, provided that the map is coercible to the given type definition.</p>
-</blockquote>
-<p>Does "entries (beyond those described above)" include entries that violate the rules described above, and thus imply that entries violating the rules should be ignored?</p>
-<p>Clarification is needed.</p>
-</div></details></div>
-<div class="toot" id="created-2900"><h2>Issue #2900 created<span class="toot-id"> #created-2900</span></h2><div class="pubdate">11 Sep at 09:07:10 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2900">https://github.com/qt4cg/qtspecs/issues/2900</a></div><details><summary>Map to Record Coercion</summary><div class="markup"><p>I know this has been raised before, but I can't find an open issue on it.</p>
-<p>In the rules for coercing a map to a record type, the Notes say:</p>
-<blockquote>
-<p>But if the supplied value is { "latitude": 53.2, "longitude": 0, "altitude": 3_500 }, then a type error occurs because the field "altitude" is not defined in the record type.</p>
-</blockquote>
-<p>However, there is nothing in the normative rules to justify this.</p>
-<p>In my view we should retain the rules as they are. But I know there is an alternative view that coercion should fail if the map contains excess entries. Either view is workable; they have different pros and cons. I'm inclined to the current rules partly because they are easier to specify, easier and more efficient to implement. However, now that users have the option of casting the map to the record type (which does drop unwanted entries), there's a workaround when that's the behaviour that users want.</p>
-</div></details></div>
-<div class="toot" id="created-2899"><h2>Pull request #2899 created<span class="toot-id"> #created-2899</span></h2><div class="pubdate">09 Sep at 17:15:42 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2899">https://github.com/qt4cg/qtspecs/pull/2899</a></div><details><summary>2898 Errors in castable expression</summary><div class="markup"><p>Fix #2898</p>
-</div></details></div>
-<div class="toot" id="created-2898"><h2>Issue #2898 created<span class="toot-id"> #created-2898</span></h2><div class="pubdate">09 Sep at 15:00:21 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2898">https://github.com/qt4cg/qtspecs/issues/2898</a></div><details><summary>Errors in "castable" expression</summary><div class="markup"><p>The text currently says:</p>
-<blockquote>
-<p>If evaluation of E fails with a dynamic error, the castable expression as a whole fails.</p>
-</blockquote>
-<p>We should clarify:</p>
-<ul>
-<li>If the target type does not conform to the grammar, static error XPST0003 is raised.</li>
-<li>If the target type does not conform to semantic constraints, for example if it is a choice type that is not a generalized atomic type, or if it is given as a QName that does not resolve to any type defined in the static context, then static error XPST0080 is raised.</li>
-<li>E is evaluated with a required type of item()*, so it will never fail with a type error on the grounds that E delivers values of the wrong type. It may however fail with a type error for other reasons: for example if E is 1 + {} it will fail with a type error because a map cannot be used as an operand of +.</li>
-<li>If evaluation of E (given a required type of item()*), fails with a static error, a dynamic error, or a type error (whether detected statically or dynamically), this is raised as an error in the evaluation of the castable expression.</li>
-<li>If any coercions described as part of the semantics of the equivalent cast expression fail, this results in the castable expression returning false. For example this may apply (depending on the target type) if E evaluates to a sequence of two or more items, or if atomization fails, or if the value of E is a JNode whose jvalue is not a singleton map or array.</li>
-</ul>
-</div></details></div>
-<div class="toot" id="closed-2874"><h2>Issue #2874 closed<span class="toot-id"> #closed-2874</span></h2><div class="pubdate">09 Sep at 09:24:32 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2874">https://github.com/qt4cg/qtspecs/issues/2874</a></div><p>Formal equivalencies: bugs</p></div></div><p>See 6022
+<div class="toot" id="closed-2868"><h2>Issue #2868 closed<span class="toot-id"> #closed-2868</span></h2><div class="pubdate">15 Sep at 16:06:56 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2868">https://github.com/qt4cg/qtspecs/pull/2868</a></div><p>2867 fn:current everywhere</p></div></div><p>See 6041
             more statuses in yearly archives.</p></article></main></body></html>
