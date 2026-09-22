@@ -84,6 +84,15 @@
                    xlink:show="new"
                    xlink:actuate="onRequest">http://www.saxonica.com/</email>
          </author>
+         <author>
+            <name>Christian Grün</name>
+            <affiliation>BaseX</affiliation>
+            <email xmlns:xlink="http://www.w3.org/1999/xlink"
+                   href="https://basex.org/"
+                   xlink:type="simple"
+                   xlink:show="new"
+                   xlink:actuate="onRequest">https://basex.org/</email>
+         </author>
       </authlist>
       <status>
          <p>
@@ -1764,6 +1773,19 @@ expression <code role="parse-test" nobreak="false">fn:last()</code>. When an exp
                            <var>E1</var>[<var>E2</var>]</code> is evaluated, the context size in the
 inner focus for an evaluation of <var role="parse-test">E2</var> is
 the number of items in the sequence obtained by evaluating <var role="parse-test">E1</var>. </p>
+                  </item>
+                  <item>
+                     <p>
+                        <termdef id="dt-current-value" term="current value">The <term>current
+                        value</term> is the value returned by the expression <code role="parse-test" nobreak="false">fn:current()</code>.</termdef> Unlike the <termref def="dt-context-value"/>, it is not affected by path expressions,
+                     predicates, simple map expressions, or pipeline expressions. The way in which
+                     it is initialized, and the constructs that change it, are defined by the host
+                     language.</p>
+                     <p role="xquery">In XQuery, the current value is initialized to the <termref def="dt-context-value"/> of the query prolog. While an expression that defines
+                     the default value of an optional function parameter is evaluated, it is set to
+                     the context value of the construct that invokes the function (see <specref ref="FunctionDeclns"/>). While the body of a function declaration or the
+                     <termref def="dt-initializing-expression"/> of a variable declaration is
+                     evaluated, it reverts to the context value of the query prolog.</p>
                   </item>
                   <item>
                      <p>
@@ -6015,7 +6037,9 @@ name.</p>
                   <p>binds the variable <code nobreak="false">$complex</code> to a newly constructed record. Coercion of maps
                to records is described in <specref ref="id-item-coercion-rules"/>. The rules for the coercion operation
                ensure that the resulting record has one entry for every field in the corresponding record definition,
-               and that the values of those entries are instances of the required type for the relevant field.</p>
+               and that the values of those entries are instances of the required type for the relevant field.
+               A map containing an entry whose key is not the name of a declared field cannot be coerced
+               to the record type; a cast expression can be used instead (see <specref ref="casting-to-record"/>).</p>
                   <p>Record types inherit all operations available for maps, but offer the possibility
                   of stronger type checking, because the names of the fields (keys) are generally
                   known statically. Record types are useful in many cases to describe more accurately the
@@ -6051,12 +6075,6 @@ name.</p>
 		                entry must be a single <code>xs:string</code>. Declaring the type as 
 		                <code>record(first as xs:string, middle? as xs:string?, last as xs:string)</code> also allows
 		             the entry with key <code>"middle"</code> to be present but empty.</p>
-               -->
-                  <!--<p>A map that contains an entry whose key does not correspond to any field in the record type fails to
-               match the record type. However, it can be coerced to such a record type when the <termref def="dt-coercion-rules"/>
-               are applied. In practice this means that when the required type of a function argument is declared as being a record
-               type, the map that is supplied as a value for this argument may contain additional fields, which are discarded
-               so they are invisible to the called function.</p>
                -->
                   <p>The names of the fields in a record type must be distinct <errorref class="ST" code="0021"/>.</p>
                   <p>Record types may be named, or they may be anonymous. Naming a record type has
@@ -8953,8 +8971,11 @@ declare record Particle (
                               </item>
                            </olist>
                         </item>
-                        <!--<item><p>Entries in <var>J</var> whose key does not match the name of
-                        any field in <var>R</var> are discarded.</p></item>-->
+                        <item>
+                           <p>If <var>J</var> contains an entry whose key does not match the name of
+                        any field declared in <var>R</var>, a type error is raised
+                        <errorref class="TY" code="0004"/>.</p>
+                        </item>
                         <item>
                            <p>The order of entries in <var>N</var> corresponds to the order
                         of field declarations in <var>R</var>.</p>
@@ -8962,12 +8983,18 @@ declare record Particle (
                      </olist>
                      <note>
                         <p>For example, if the required type is
-                     <code nobreak="false">record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is 
+                     <code nobreak="false">record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is
                         <code nobreak="false">{ "latitude": 53.2, "longitude": 0}</code>,
                         then the map is converted to the record <code nobreak="false">{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.
                      But if the supplied value is <code nobreak="false">{ "latitude": 53.2, "longitude": 0, "altitude": 3_500 }</code>,
-                     then a type error occurs because the field <code nobreak="false">"altitude"</code> is not defined
+                     then a type error occurs because the field <code nobreak="false">"altitude"</code> is not declared
                      in the record type.</p>
+                     </note>
+                     <note>
+                        <p>Surplus entries are rejected rather than discarded, so that a map cannot be
+                     coerced to an unrelated record type by accident. A record can be constructed from a map
+                     that contains surplus entries, discarding them, by means of a cast expression:
+                     see <specref ref="casting-to-record"/>.</p>
                      </note>
                   </item>
                   <item>
@@ -11364,10 +11391,14 @@ At evaluation time, the value of a variable reference is the value to which the 
                         required that an argument be evaluated if the function body can be evaluated without evaluating
                         that argument.</p>
                         <note>
-                           <p>All argument expressions, including default value expressions, are evaluated in the dynamic
-                     context of the function call. It is therefore possible to use a default value expression such as 
-                     <code nobreak="false">.</code>, or <code nobreak="false">/</code>, or <code nobreak="false">fn:current-dateTime()</code>, whose value depends on the
-                     dynamic context of the function call.</p>
+                           <p>For a <termref def="dt-system-function"/>, all argument expressions, including
+                     default value expressions, are evaluated in the dynamic context of the function call. It is
+                     therefore possible for such a function to declare a default value expression such as
+                     <code nobreak="false">.</code>, or <code nobreak="false">/</code>, or <code nobreak="false">fn:default-collation()</code>, whose value depends on
+                     the dynamic context of the function call.</p>
+                           <p role="xquery">For a function declared in a query, the default value expression is evaluated as
+                     described in <specref ref="FunctionDeclns"/>: only the <termref def="dt-current-value"/> is taken
+                     from the dynamic context of the function call.</p>
                         </note>
                         <p>If the expression used for the default value of a parameter has no dependencies on the dynamic
                      context, then an implementation <rfc2119>may</rfc2119> choose to reuse the same value on repeated
@@ -15304,13 +15335,13 @@ the value <code nobreak="false">10.50</code>, the result of this expression is t
                   <prod id="doc-xquery40-UnionExpr-IntersectExceptExpr">
                      <lhs>IntersectExceptExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-RecordPutExpr">RecordPutExpr<!--$idref_lang_part = xquery40- --></nt>  (("intersect"  |  "except")  <nt def="prod-xquery40-RecordPutExpr">RecordPutExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
+                        <nt def="prod-xquery40-ButWithExpr">ButWithExpr<!--$idref_lang_part = xquery40- --></nt>  (("intersect"  |  "except")  <nt def="prod-xquery40-ButWithExpr">ButWithExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
                   </prod>
 
-                  <prod id="doc-xquery40-UnionExpr-RecordPutExpr">
-                     <lhs>RecordPutExpr</lhs>
+                  <prod id="doc-xquery40-UnionExpr-ButWithExpr">
+                     <lhs>ButWithExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>  ("+:="  <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
+                        <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>  ("but"  "with"  <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
                   </prod>
                </scrap>
                <p>XQuery 4.0 provides the following operators for combining sequences of
@@ -23046,53 +23077,53 @@ return $r?z</eg>
                </div4>
             </div3>
             <div3 id="id-with-expression">
-               <head>The <code nobreak="false">+:=</code> (Record Put) Operator</head>
+               <head>The <code nobreak="false">but with</code> Operator</head>
                <changes>
-                  <change issue="1979" PR="2566" date="2026-04-18">The <code nobreak="false">+:=</code> operator
+                  <change issue="1979" PR="2566" date="2026-04-18">The <code nobreak="false">but with</code> operator
                   provides a convenient way of updating records, with appropriate type
                   checking.</change>
                </changes>
                <scrap headstyle="show">
-                  <prod id="doc-xquery40-RecordPutExpr">
-                     <lhs>RecordPutExpr</lhs>
+                  <prod id="doc-xquery40-ButWithExpr">
+                     <lhs>ButWithExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>  ("+:="  <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
+                        <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>  ("but"  "with"  <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
                   </prod>
 
-                  <prod id="doc-xquery40-RecordPutExpr-InstanceofExpr">
+                  <prod id="doc-xquery40-ButWithExpr-InstanceofExpr">
                      <lhs>InstanceofExpr</lhs>
                      <rhs>
                         <nt def="prod-xquery40-TreatExpr">TreatExpr<!--$idref_lang_part = xquery40- --></nt>  ("instance"  "of"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
                </scrap>
-               <p>A <nt def="doc-xquery40-RecordPutExpr">RecordPutExpr<!--$spec = xquery40--></nt> can be used to update a record:
+               <p>A <nt def="doc-xquery40-ButWithExpr">ButWithExpr<!--$spec = xquery40--></nt> can be used to update a record:
             more precisely, to construct a new <termref def="dt-record"/> whose content differs from a supplied
             record. The new record has the same type annotation as the original, and must
             match the <termref def="dt-record-type"/> of the original.</p>
                <p>For example, consider the expression:</p>
-               <eg xml:space="preserve">(parts-of-dateTime(current-date()) +:= {"timezone" : ()}) =&gt; build-dateTime()</eg>
+               <eg xml:space="preserve">(parts-of-dateTime(current-date()) but with {"timezone" : ()}) =&gt; build-dateTime()</eg>
                <p>The first part of this expression, <code nobreak="false">parts-of-dateTime(current-date())</code>, returns
             a record of type <code nobreak="false">fn:dateTime-record</code> containing seven fields (<code nobreak="false">year</code>,
             <code nobreak="false">month</code>, <code nobreak="false">day</code>, <code nobreak="false">hours</code>, <code nobreak="false">minutes</code>, <code nobreak="false">seconds</code>, and
             <code nobreak="false">timezone</code>) of which the first three are empty (the value of the field is an empty
-            sequence). The <nt def="doc-xquery40-RecordPutExpr">RecordPutExpr<!--$spec = xquery40--></nt> expression takes this record as input, 
+            sequence). The <nt def="doc-xquery40-ButWithExpr">ButWithExpr<!--$spec = xquery40--></nt> expression takes this record as input, 
                and produces another
             record, also of type <code nobreak="false">fn:dateTime-record</code>, in which the <code nobreak="false">timezone</code>
             field is set to an empty sequence. The final part of the expression (<code nobreak="false">=&gt; build-dateTime())</code>
             converts this record to an <code nobreak="false">xs:date</code> value having no timezone.</p>
-               <p>The <code nobreak="false">+:=</code> expression is type-safe, in that a type error is raised if the
+               <p>The <code nobreak="false">but with</code> expression is type-safe, in that a type error is raised if the
                name of a field in the right-hand operand does not correspond to one of the named
                fields defined by the relevant record type, or if the supplied value does not
                conform to the required type for that field.</p>
-               <p>A <nt def="doc-xquery40-RecordPutExpr">RecordPutExpr<!--$spec = xquery40--></nt> is a binary expression evaluated from left to right:
-            that is, <code nobreak="false">A +:= B +:= C</code> is evaluated as <code nobreak="false">(A +:= B) +:= C</code>. The operands
+               <p>A <nt def="doc-xquery40-ButWithExpr">ButWithExpr<!--$spec = xquery40--></nt> is a binary expression evaluated from left to right:
+            that is, <code nobreak="false">A but with B but with C</code> is evaluated as <code nobreak="false">(A but with B) but with C</code>. The operands
             are arbitrary expressions.</p>
                <p>The required type for the left hand operand is <code nobreak="false">record(*)</code>, and for the right
             hand operand, <code nobreak="false">map(*)</code>. In both cases the supplied value will be coerced to the
             required type by applying the coercion rules. This means that a JNode can be supplied, provided
             it has an appropriate <term>·jvalue·</term>.</p>
                <p>If the left-hand operand is a record with type annotation <var>R</var>, then the effect
-            of the expression <code nobreak="false">$A +:= $B</code> is equivalent to:</p>
+            of the expression <code nobreak="false">$A but with $B</code> is equivalent to:</p>
                <eg xml:space="preserve">let $temp as <var>R</var> := map:merge(($A, $B), {'duplicates':'use-last'})
 return $temp</eg>
                <p>That is: the values of the two operands are merged as maps, with the value from the second
@@ -23192,8 +23223,8 @@ let $rectangle := {
                  2 × ($rect?height + $rect?width) 
                },
   'resize':    fn ($rect, $factor) { 
-                  $rect +:= {'height': $rect?height × $factor}
-                        +:= {'width': $rect?width × $factor}
+                  $rect but with {'height': $rect?height × $factor}
+                            but with {'width': $rect?width × $factor}
                }
 }
                </eg>
@@ -23316,7 +23347,7 @@ return $lib =?&gt; product((1.2, 1.3, 1.4))
                enlarged rectangle.</p>
                   <note>
                      <p>Note how the <code nobreak="false">resize</code> function is implemented using a
-                     <nt def="doc-xquery40-RecordPutExpr">RecordPutExpr<!--$spec = xquery40--></nt> (see <specref ref="id-with-expression"/>), which
+                     <nt def="doc-xquery40-ButWithExpr">ButWithExpr<!--$spec = xquery40--></nt> (see <specref ref="id-with-expression"/>), which
                ensures that the map entries holding function items (<code nobreak="false">area</code>, <code nobreak="false">perimeter</code>, and
                <code nobreak="false">resize</code>) are automatically present and unchanged in the modified map.</p>
                   </note>
@@ -23339,9 +23370,9 @@ declare record my:rectangle (
      := fn{?height × ?width},
    resize as fn(my:rectangle, xs:double) as my:rectangle 
      := fn($rect, $factor) {
-           $rect +:= {'height': $rect?height × $factor,
-                      'width': $rect?width × $factor,
-                      'children': $rect?children =?&gt; resize($factor)}
+           $rect but with {'height': $rect?height × $factor,
+                            'width': $rect?width × $factor,
+                            'children': $rect?children =?&gt; resize($factor)}
         },
    contents as fn(my:rectangle) as my:rectangle*
      := fn{?children}
@@ -24957,7 +24988,12 @@ input expression is called the <term>input type</term>. </p>
                         </ulist>
                      </item>
                   </ulist>
-                  <p>Note that unreferenced entries in the map are simply ignored (that is, they are effectively discarded).</p>
+                  <note>
+                     <p>Entries in <var>M0</var> whose key is not the name of a field in the target
+                  record type are discarded. This differs from the
+                  <termref def="dt-coercion-rules">coercion rules</termref>, under which such entries
+                  cause a type error.</p>
+                  </note>
                   <p>For example, <code nobreak="false">{"first": "John", "middle": "Ignatius", "last": "Smith"} cast as record(title, first, last)</code> returns 
                   <code nobreak="false">{"title": (), "first": "John", "last": "Smith"}</code> as an instance of the target record type.</p>
                </div4>
@@ -25052,9 +25088,79 @@ The <phrase diff="chg" at="A">target type</phrase> is subject to the same
                <p>The expression <code role="parse-test" nobreak="false">E castable as T</code> returns <code nobreak="false">true</code> 
 if the result of evaluating <code nobreak="false">E</code>  
 can be successfully cast into the target type <code nobreak="false">T</code> by using a <code nobreak="false">cast</code> expression; 
-otherwise it returns <code nobreak="false">false</code>. 
-If evaluation of <code nobreak="false">E</code> fails with a dynamic error, 
-the <code nobreak="false">castable</code> expression as a whole fails.</p>
+otherwise it returns <code nobreak="false">false</code>.</p>
+               <p>Errors are handled as follows:</p>
+               <olist>
+                  <item>
+                     <p>If the target type is invalid, a static error is raised. For example:</p>
+                     <olist>
+                        <item>
+                           <p>If the input does not conform to the grammar: <errorref class="ST" code="0003"/>.</p>
+                        </item>
+                        <item>
+                           <p>If there is a reference to a named type that is not present in the static
+                        context: <errorref class="ST" code="0051"/>.</p>
+                        </item>
+                        <item>
+                           <p>If there is a QName whose prefix is unbound: <errorref class="ST" code="0081"/>.</p>
+                        </item>
+                        <item>
+                           <p>If the <nt def="prod-xquery40-CastTarget">CastTarget<!--$spec = xquery40--></nt> is not a valid cast target,
+                        for example if it is a named item type that resolves to a function type:
+                        <errorref class="ST" code="0080"/>.</p>
+                        </item>
+                     </olist>
+                  </item>
+                  <item>
+                     <p>The operand expression <var>E</var> is evaluated with a required type of
+                  <code nobreak="false">item()*</code>. This means that evaluation will never fail because <var>E</var>
+                  returns the wrong type of value. However, other failures may occur when evaluating
+                  <var>E</var>, and these result in the <code nobreak="false">castable</code> expression as a whole
+                  raising an error. For example:</p>
+                     <olist>
+                        <item>
+                           <p>A static error in <var>E</var> is raised as a static error.</p>
+                        </item>
+                        <item>
+                           <p>A dynamic error that occurs when evaluating <var>E</var> is raised as a dynamic error.</p>
+                        </item>
+                        <item>
+                           <p>A type error that occurs when evaluating <var>E</var>, whether detected statically
+                     or dynamically, is raised as a type error. Note however that this only happens for type errors
+                     internal to <var>E</var>: for example a type error would be raised for the expression
+                     <code nobreak="false">({} + 42) castable as xs:int</code>, because a map cannot be used as an 
+                     operand of <code nobreak="false">+</code>. No type error is raised for the expression <code nobreak="false">{"a": 42} castable as xs:int</code>,
+                     because the problem is not with the evaluation of <code nobreak="false">{"a": 42}</code> itself, but rather with the ability
+                     to cast the resulting value to an integer. Instead, this expression returns <code nobreak="false">false</code>.</p>
+                        </item>
+                     </olist>
+                  </item>
+                  <item>
+                     <p>If any coercions defined as part of the semantics of the corresponding <code nobreak="false">cast</code>
+                  operation fail, this results in the <code nobreak="false">castable</code> expression returning false; no error
+                  is reported. For example:</p>
+                     <olist>
+                        <item>
+                           <p>If <var>$X</var> is an element node that cannot be atomized because it has
+                     element-only content, then the expression <code nobreak="false">$X castable as xs:string</code>
+                     returns false.</p>
+                        </item>
+                        <item>
+                           <p>If <var>$X</var> is a sequence of two or more items, then the expression 
+                           <code nobreak="false">$X castable as xs:string</code> returns false.</p>
+                        </item>
+                        <item>
+                           <p>If <var>$X</var> is an element node with a type annotation based on a list type,
+                           and the result of atomization is a sequence of two or more atomic items,
+                           then the expression <code nobreak="false">$X castable as xs:string</code> returns false.</p>
+                        </item>
+                        <item>
+                           <p>If <var>$X</var> is a JNode whose ·jvalue· property is a map, then
+                     the expression <code nobreak="false">$X castable as array(*)</code> returns false.</p>
+                        </item>
+                     </olist>
+                  </item>
+               </olist>
                <note>
                   <p>In earlier versions of this specification, an error in atomizing the operand resulted
             in the expression failing with an error; it now causes the expression to return false. This is because
@@ -28097,7 +28203,7 @@ declare context value as document-node()* := collection($uri); </eg>
                <prod id="doc-xquery40-FunctionDecl-ParamWithDefault">
                   <lhs>ParamWithDefault</lhs>
                   <rhs>
-                     <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  (<nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>  |  ("context"  "value")))?</rhs>
+                     <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                </prod>
 
                <prod id="doc-xquery40-FunctionDecl-VarNameAndType">
@@ -28343,24 +28449,30 @@ local:summary(doc("acme_corp.xml")//employee[location = "Denver"])</eg>
         ensure that a value is available for each parameter, whether required or optional, and that the value
         will always be an instance of the declared type.
       </p>
-               <p>A parameter is optional if a default value is supplied. There are two ways a default value
-        can be defined:</p>
-               <ulist>
-                  <item>
-                     <p>The construct <code nobreak="false">:= ExprSingle</code> defines a fixed default; all function calls
-        that default the relevant argument will supply the same value. The <code nobreak="false">ExprSingle</code>
-        is evaluated in the same way as the <termref def="dt-initializing-expression"/> of
-        a variable declaration (see <specref ref="id-variable-declarations"/>).</p>
-                  </item>
-                  <item>
-                     <p>The construct <code nobreak="false">:= context value</code> indicates that the default value of the
-        relevant argument is the context value from the dynamic context of the function call.
-        This will typically be different for every function call that defaults the argument; it may
-        also lead to a type error if the context value is absent or has the wrong type. Using this option
-        is equivalent to expanding the function call with the expression <code nobreak="false">.</code> in the
-        relevant argument position.</p>
-                  </item>
-               </ulist>
+               <p>A parameter is optional if a default value is supplied using the construct
+        <code nobreak="false">:= ExprSingle</code>; otherwise it is required. The <code nobreak="false">ExprSingle</code> is
+        evaluated in the same way as the <termref def="dt-initializing-expression"/> of a variable
+        declaration (see <specref ref="id-variable-declarations"/>), with one exception: the
+        <termref def="dt-current-value"/> is set to the context value of the construct that invokes
+        the function, which may be a static function call, a named function reference, or a partial
+        function application. A call on <function>fn:current</function> in the
+        <code nobreak="false">ExprSingle</code> therefore returns that value.</p>
+               <p>A default value that does not call <function>fn:current</function> is fixed: every function
+        call that defaults the relevant argument supplies the same value. A default value that calls
+        <function>fn:current</function> will typically supply a different value for every such call;
+        it may also lead to a type error if the context value is absent or has the wrong type. The
+        default <code nobreak="false">:= current()</code> is equivalent to expanding the function call with the
+        expression <code nobreak="false">.</code> in the relevant argument position; a call such as
+        <code nobreak="false">:= string(current())</code> can be used to derive the default from the context value
+        of the caller. Because the current value reverts to the context value of the query prolog
+        while the body of a function declaration is evaluated, a call on
+        <function>fn:current</function> in a function invoked by the <code nobreak="false">ExprSingle</code> does
+        not return the context value of the caller.</p>
+               <note>
+                  <p>Within a default value, <code nobreak="false">.</code> is a reference to the context value from the
+        dynamic context of the query prolog, while <code nobreak="false">current()</code> is a reference to the
+        context value of the caller.</p>
+               </note>
                <p>If a parameter
     is optional, then all subsequent parameters in the list must also be optional; otherwise, a
     <termref def="dt-static-error">static error</termref> is raised <errorref class="ST" code="0148"/>.
@@ -28390,9 +28502,9 @@ local:summary(doc("acme_corp.xml")//employee[location = "Denver"])</eg>
       </ulist>
       -->
                <note>
-                  <p>It is not possible in a user-defined function to define a default value that 
-          depends on the static or dynamic context of the caller, except for the special 
-          case of the context value itself.
+                  <p>It is not possible in a user-defined function to define a default value that
+          depends on the static or dynamic context of the caller, except for the special
+          case of the context value itself, which can be referenced as <code nobreak="false">current()</code>.
           There are system-defined functions that declare such defaults (for example, defaulting
           a parameter to the default collation or the static base URI of the caller); indeed,
           some functions such as <function>fn:position</function> or <function>fn:static-base-uri</function>
@@ -29917,6 +30029,12 @@ parent. </p>
                      <rhs>"{"  <nt def="prod-xquery40-TypeswitchCases">TypeswitchCases<!--$idref_lang_part = xquery40- --></nt>  "}"</rhs>
                   </prod>
 
+                  <prod id="prod-xquery40-ButWithExpr">
+                     <lhs>ButWithExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>  ("but"  "with"  <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
+                  </prod>
+
                   <prod id="prod-xquery40-CaseClause">
                      <lhs>CaseClause</lhs>
                      <rhs>"case"  (<nt def="prod-xquery40-VarName">VarName<!--$idref_lang_part = xquery40- --></nt>  "as")?  <nt def="prod-xquery40-SequenceTypeUnion">SequenceTypeUnion<!--$idref_lang_part = xquery40- --></nt>  "return"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>
@@ -30500,7 +30618,7 @@ parent. </p>
                   <prod id="prod-xquery40-IntersectExceptExpr">
                      <lhs>IntersectExceptExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-RecordPutExpr">RecordPutExpr<!--$idref_lang_part = xquery40- --></nt>  (("intersect"  |  "except")  <nt def="prod-xquery40-RecordPutExpr">RecordPutExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
+                        <nt def="prod-xquery40-ButWithExpr">ButWithExpr<!--$idref_lang_part = xquery40- --></nt>  (("intersect"  |  "except")  <nt def="prod-xquery40-ButWithExpr">ButWithExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-ItemType">
@@ -30836,7 +30954,7 @@ parent. </p>
                   <prod id="prod-xquery40-ParamWithDefault">
                      <lhs>ParamWithDefault</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  (<nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>  |  ("context"  "value")))?</rhs>
+                        <nt def="prod-xquery40-VarNameAndType">VarNameAndType<!--$idref_lang_part = xquery40- --></nt>  (":="  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-ParenthesizedExpr">
@@ -30982,12 +31100,6 @@ parent. </p>
                      <lhs>RangeExpr</lhs>
                      <rhs>
                         <nt def="prod-xquery40-AdditiveExpr">AdditiveExpr<!--$idref_lang_part = xquery40- --></nt>  ("to"  <nt def="prod-xquery40-AdditiveExpr">AdditiveExpr<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
-                  </prod>
-
-                  <prod id="prod-xquery40-RecordPutExpr">
-                     <lhs>RecordPutExpr</lhs>
-                     <rhs>
-                        <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>  ("+:="  <nt def="prod-xquery40-InstanceofExpr">InstanceofExpr<!--$idref_lang_part = xquery40- --></nt>)*</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-RecordType">
@@ -31670,6 +31782,7 @@ parent. </p>
         is not one of the following <termref def="dt-literal-terminal">literal terminals</termref>:</p>
                   <p>
                      <code nobreak="false">and</code>
+                     <code nobreak="false">but</code>
                      <code nobreak="false">case</code>
                      <code nobreak="false">div</code>
                      <code nobreak="false">else</code>
@@ -31949,7 +32062,6 @@ parent. </p>
                      <code>)</code>
                      <code>*</code>
                      <code>+</code>
-                     <code>+:=</code>
                      <code>,</code>
                      <code>.</code>
                      <code>..</code>
@@ -31991,6 +32103,7 @@ parent. </p>
                      <code>attribute</code>
                      <code>base-uri</code>
                      <code>boundary-space</code>
+                     <code>but</code>
                      <code>by</code>
                      <code>case</code>
                      <code>cast</code>
@@ -32129,6 +32242,7 @@ parent. </p>
                      <code>where</code>
                      <code>while</code>
                      <code>window</code>
+                     <code>with</code>
                      <code>xnode</code>
                      <code>xquery</code>
                      <code>zero-digit</code> 
@@ -32639,7 +32753,6 @@ parent. </p>
                      <code>*</code>
                      <code>*:</code>
                      <code>+</code>
-                     <code>+:=</code>
                      <code>,</code>
                      <code>-</code>
                      <code>--&gt;</code>
@@ -32707,6 +32820,7 @@ parent. </p>
                      <code>attribute</code>
                      <code>base-uri</code>
                      <code>boundary-space</code>
+                     <code>but</code>
                      <code>by</code>
                      <code>case</code>
                      <code>cast</code>
@@ -32845,6 +32959,7 @@ parent. </p>
                      <code>where</code>
                      <code>while</code>
                      <code>window</code>
+                     <code>with</code>
                      <code>xnode</code>
                      <code>xquery</code>
                      <code>zero-digit</code>
@@ -33182,7 +33297,7 @@ parent. </p>
                   <tr>
                      <td rowspan="1" colspan="1">13</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xquery40-RecordPutExpr">+:=<!--$spec = xquery40--></nt>
+                        <nt def="doc-xquery40-ButWithExpr">but with<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
