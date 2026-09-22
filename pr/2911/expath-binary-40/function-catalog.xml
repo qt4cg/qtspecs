@@ -83,6 +83,156 @@
         </fos:changes>
     </fos:function>
 
+    <fos:function name="to-base64url" prefix="bin">
+        <fos:signatures>
+            <fos:proto name="to-base64url" return-type="xs:string?">
+                <fos:arg name="value" type="(xs:hexBinary | xs:base64Binary)?"/>
+            </fos:proto>
+        </fos:signatures>
+        <fos:properties>
+            <fos:property>deterministic</fos:property>
+            <fos:property>context-independent</fos:property>
+            <fos:property>focus-independent</fos:property>
+        </fos:properties>
+        <fos:summary>
+            <p>Returns the Base64url representation of a binary value: Base64 with the
+                URL and filename safe alphabet, and without padding.</p>
+        </fos:summary>
+        <fos:rules>
+            <p>If <code>$value</code> is the empty sequence, the function returns an empty
+                sequence.</p>
+            <p>Otherwise:</p>
+            <olist>
+                <item><p><code>$value</code> is cast to <code>xs:base64Binary</code>, and its canonical
+                    lexical representation is taken.</p></item>
+                <item><p>Each <code>"+"</code> character is replaced by <code>"-"</code>, and each
+                    <code>"/"</code> character by <code>"_"</code>.</p></item>
+                <item><p>Trailing <code>"="</code> padding characters are removed.</p></item>
+            </olist>
+        </fos:rules>
+        <fos:equivalent style="xpath-expression" covers-error-cases="true">
+$value ! (
+  xs:base64Binary(.)
+  =>  string()
+  =>  translate('+/', '-_')
+  =>  replace('=+$', '')
+)
+        </fos:equivalent>
+        <fos:notes>
+            <p>The alphabet is defined in section 5 of
+                <loc href="https://www.rfc-editor.org/rfc/rfc4648#section-5">RFC 4648</loc>.
+                The unpadded form is the one required by protocols such as JSON Web Signatures
+                (<loc href="https://www.rfc-editor.org/rfc/rfc7515#section-2">RFC 7515</loc>),
+                JSON Web Keys and WebAuthn.</p>
+            <p>The result never contains whitespace.</p>
+        </fos:notes>
+        <fos:examples>
+            <fos:example>
+                <fos:test>
+                    <fos:expression>bin:to-base64url(bin:hex(''))</fos:expression>
+                    <fos:result>""</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:to-base64url(bin:hex('FBFF'))</fos:expression>
+                    <fos:result>"-_8"</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:to-base64url(bin:hex('FBFFBF'))</fos:expression>
+                    <fos:result>"-_-_"</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:to-base64url(bin:encode-string('Hello'))</fos:expression>
+                    <fos:result>"SGVsbG8"</fos:result>
+                </fos:test>
+            </fos:example>
+        </fos:examples>
+        <fos:changes>
+            <fos:change issue="2909" date="2026-09-14"><p>New in 4.0</p></fos:change>
+        </fos:changes>
+    </fos:function>
+
+    <fos:function name="from-base64url" prefix="bin">
+        <fos:signatures>
+            <fos:proto name="from-base64url" return-type="xs:base64Binary?">
+                <fos:arg name="value" type="xs:string?"/>
+            </fos:proto>
+        </fos:signatures>
+        <fos:properties>
+            <fos:property>deterministic</fos:property>
+            <fos:property>context-independent</fos:property>
+            <fos:property>focus-independent</fos:property>
+        </fos:properties>
+        <fos:summary>
+            <p>Constructs a binary value from a string in Base64url representation: Base64 with the
+                URL and filename safe alphabet, with or without padding.</p>
+        </fos:summary>
+        <fos:rules>
+            <p>If <code>$value</code> is the empty sequence, the function returns an empty
+                sequence.</p>
+            <p>Otherwise:</p>
+            <olist>
+                <item><p>Any whitespace characters are stripped from <code>$value</code>.</p></item>
+                <item><p>Trailing <code>"="</code> padding characters are removed.</p></item>
+                <item><p>Each <code>"-"</code> character is replaced by <code>"+"</code>, and each
+                    <code>"_"</code> character by <code>"/"</code>.</p></item>
+                <item><p>The string is padded with <code>"="</code> characters to a length that is a
+                    multiple of four.</p></item>
+                <item><p>The resulting string is cast to <code>xs:base64Binary</code>.</p></item>
+            </olist>
+        </fos:rules>
+        <fos:equivalent style="xpath-expression" covers-error-cases="false">
+$value ! (
+  let $string := replace(., '\s', '')
+    =>  replace('=+$', '')
+    =>  translate('-_', '+/')
+  let $padding := (4 - string-length($string) mod 4) mod 4
+  return xs:base64Binary($string || substring('===', 1, $padding))
+)
+        </fos:equivalent>
+        <fos:errors>
+            <p><errorref spec="BIN40" code="conversion-error"/> is raised if, after whitespace and
+                padding have been stripped, <code>$value</code> contains characters other than
+                <code>[A-Za-z0-9_-]</code>, or if the resulting string is not a valid lexical
+                representation of <code>xs:base64Binary</code>.</p>
+        </fos:errors>
+        <fos:notes>
+            <p>The function is the inverse of <function>bin:to-base64url</function>. Padding is
+                accepted because some producers emit it, and rejected characters include those of the
+                standard Base64 alphabet (<code>"+"</code> and <code>"/"</code>), so a value in the
+                standard representation must be converted using the <code>xs:base64Binary</code>
+                constructor instead.</p>
+            <p>If <code>$value</code> is a zero-length string, the result will be a
+                <termref def="dt-zero-length"/> <code>xs:base64Binary</code> value.</p>
+        </fos:notes>
+        <fos:examples>
+            <fos:example>
+                <fos:test>
+                    <fos:expression>bin:from-base64url('')</fos:expression>
+                    <fos:result>bin:hex('')</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:from-base64url('-_8')</fos:expression>
+                    <fos:result>bin:hex('FBFF')</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:from-base64url('-_8=')</fos:expression>
+                    <fos:result>bin:hex('FBFF')</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:from-base64url('SGVsbG8') => bin:decode-string()</fos:expression>
+                    <fos:result>"Hello"</fos:result>
+                </fos:test>
+                <fos:test>
+                    <fos:expression>bin:from-base64url('+/8=')</fos:expression>
+                    <fos:error-result error-code="bin:conversion-error"/>
+                </fos:test>
+            </fos:example>
+        </fos:examples>
+        <fos:changes>
+            <fos:change issue="2909" date="2026-09-14"><p>New in 4.0</p></fos:change>
+        </fos:changes>
+    </fos:function>
+
     <fos:function name="hex" prefix="bin">
         <fos:signatures>
             <fos:proto name="hex" return-type="xs:base64Binary?">
