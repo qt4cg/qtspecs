@@ -1713,8 +1713,26 @@ the number of items in the sequence obtained by evaluating <var
                         role="parse-test">E1</var>. </p>
                </item>
 
-
-
+               <item>
+                  <p>
+                     <termdef id="dt-current-value" term="current value">The <term>current
+                        value</term> is the value returned by the expression <code
+                        role="parse-test">fn:current()</code>.</termdef> Unlike the <termref
+                        def="dt-context-value"/>, it is not affected by path expressions,
+                     predicates, simple map expressions, or pipeline expressions. The way in which
+                     it is initialized, and the constructs that change it, are defined by the host
+                     language.</p>
+                  <p role="xpath">In XPath, the current value is initialized to the <termref
+                     def="dt-context-value"/> that is supplied when evaluation of the expression is
+                     initiated, and no construct changes it.</p>
+                  <p role="xquery">In XQuery, the current value is initialized to the <termref
+                     def="dt-context-value"/> of the query prolog. While an expression that defines
+                     the default value of an optional function parameter is evaluated, it is set to
+                     the context value of the construct that invokes the function (see <specref
+                     ref="FunctionDeclns"/>). While the body of a function declaration or the
+                     <termref def="dt-initializing-expression"/> of a variable declaration is
+                     evaluated, it reverts to the context value of the query prolog.</p>
+               </item>
 
                <item>
                   <p>
@@ -6285,7 +6303,9 @@ name.</p>
                <p>binds the variable <code>$complex</code> to a newly constructed record. Coercion of maps
                to records is described in <specref ref="id-item-coercion-rules"/>. The rules for the coercion operation
                ensure that the resulting record has one entry for every field in the corresponding record definition,
-               and that the values of those entries are instances of the required type for the relevant field.</p>
+               and that the values of those entries are instances of the required type for the relevant field.
+               A map containing an entry whose key is not the name of a declared field cannot be coerced
+               to the record type; a cast expression can be used instead (see <specref ref="casting-to-record"/>).</p>
                
                <p>Record types inherit all operations available for maps, but offer the possibility
                   of stronger type checking, because the names of the fields (keys) are generally
@@ -6335,14 +6355,6 @@ name.</p>
 		                <code>record(first as xs:string, middle? as xs:string?, last as xs:string)</code> also allows
 		             the entry with key <code>"middle"</code> to be present but empty.</p>
                -->
-               <!--<p>A map that contains an entry whose key does not correspond to any field in the record type fails to
-               match the record type. However, it can be coerced to such a record type when the <termref def="dt-coercion-rules"/>
-               are applied. In practice this means that when the required type of a function argument is declared as being a record
-               type, the map that is supplied as a value for this argument may contain additional fields, which are discarded
-               so they are invisible to the called function.</p>
-               -->
-               
-               
                <p>The names of the fields in a record type must be distinct <errorref class="ST" code="0021"/>.</p>
                
                <p>Record types may be named, or they may be anonymous. Naming a record type has
@@ -8565,21 +8577,27 @@ declare record Particle (
                               if the empty sequence does not match the declared type of <var>F</var>.</p></item>
                            </olist>
                         </item>
-                        <!--<item><p>Entries in <var>J</var> whose key does not match the name of
-                        any field in <var>R</var> are discarded.</p></item>-->
+                        <item><p>If <var>J</var> contains an entry whose key does not match the name of
+                        any field declared in <var>R</var>, a type error is raised
+                        <errorref class="TY" code="0004"/>.</p></item>
                         <item><p>The order of entries in <var>N</var> corresponds to the order
-                        of field declarations in <var>R</var>.</p> 
+                        of field declarations in <var>R</var>.</p>
                         </item>
-                        
+
                      </olist>
 
                      <note><p>For example, if the required type is
-                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is 
+                     <code>record(longitude as xs:double, latitude as xs:double)</code> and the supplied value is
                         <code>{ "latitude": 53.2, "longitude": 0}</code>,
                         then the map is converted to the record <code>{ "longitude": 0.0e0, "latitude": 53.2e0 }</code>.
                      But if the supplied value is <code>{ "latitude": 53.2, "longitude": 0, "altitude": 3_500 }</code>,
-                     then a type error occurs because the field <code>"altitude"</code> is not defined
+                     then a type error occurs because the field <code>"altitude"</code> is not declared
                      in the record type.</p></note>
+
+                     <note><p>Surplus entries are rejected rather than discarded, so that a map cannot be
+                     coerced to an unrelated record type by accident. A record can be constructed from a map
+                     that contains surplus entries, discarding them, by means of a cast expression:
+                     see <specref ref="casting-to-record"/>.</p></note>
 
                   </item>
 
@@ -10743,10 +10761,14 @@ At evaluation time, the value of a variable reference is the value to which the 
                         required that an argument be evaluated if the function body can be evaluated without evaluating
                         that argument.</p>
                      
-                     <note><p>All argument expressions, including default value expressions, are evaluated in the dynamic
-                     context of the function call. It is therefore possible to use a default value expression such as 
-                     <code>.</code>, or <code>/</code>, or <code>fn:current-dateTime()</code>, whose value depends on the
-                     dynamic context of the function call.</p></note>
+                     <note><p>For a <termref def="dt-system-function"/>, all argument expressions, including
+                     default value expressions, are evaluated in the dynamic context of the function call. It is
+                     therefore possible for such a function to declare a default value expression such as
+                     <code>.</code>, or <code>/</code>, or <code>fn:default-collation()</code>, whose value depends on
+                     the dynamic context of the function call.</p>
+                     <p role="xquery">For a function declared in a query, the default value expression is evaluated as
+                     described in <specref ref="FunctionDeclns"/>: only the <termref def="dt-current-value"/> is taken
+                     from the dynamic context of the function call.</p></note>
                      
                      <p>If the expression used for the default value of a parameter has no dependencies on the dynamic
                      context, then an implementation <rfc2119>may</rfc2119> choose to reuse the same value on repeated
@@ -22997,45 +23019,45 @@ return $r?z</eg>
          </div3>
          
          <div3 id="id-with-expression">
-               <head>The <code>+:=</code> (Record Put) Operator</head>
+               <head>The <code>but with</code> Operator</head>
             
                <changes>
-                  <change issue="1979" PR="2566" date="2026-04-18">The <code>+:=</code> operator
+                  <change issue="1979" PR="2566" date="2026-04-18">The <code>but with</code> operator
                   provides a convenient way of updating records, with appropriate type
                   checking.</change>
                </changes>
             
             <scrap>
-               <prodrecap ref="RecordPutExpr"/>
+               <prodrecap ref="ButWithExpr"/>
             </scrap>
             
-            <p>A <nt def="RecordPutExpr">RecordPutExpr</nt> can be used to update a record:
+            <p>A <nt def="ButWithExpr">ButWithExpr</nt> can be used to update a record:
             more precisely, to construct a new <termref def="dt-record"/> whose content differs from a supplied
             record. The new record has the same type annotation as the original, and must
             match the <termref def="dt-record-type"/> of the original.</p>
             
             <p>For example, consider the expression:</p>
             
-            <eg>(parts-of-dateTime(current-date()) +:= {"timezone" : ()}) => build-dateTime()</eg>
+            <eg>(parts-of-dateTime(current-date()) but with {"timezone" : ()}) => build-dateTime()</eg>
             
             <p>The first part of this expression, <code>parts-of-dateTime(current-date())</code>, returns
             a record of type <code>fn:dateTime-record</code> containing seven fields (<code>year</code>,
             <code>month</code>, <code>day</code>, <code>hours</code>, <code>minutes</code>, <code>seconds</code>, and
             <code>timezone</code>) of which the first three are empty (the value of the field is an empty
-            sequence). The <nt def="RecordPutExpr">RecordPutExpr</nt> expression takes this record as input, 
+            sequence). The <nt def="ButWithExpr">ButWithExpr</nt> expression takes this record as input, 
                and produces another
             record, also of type <code>fn:dateTime-record</code>, in which the <code>timezone</code>
             field is set to an empty sequence. The final part of the expression (<code>=> build-dateTime())</code>
             converts this record to an <code>xs:date</code> value having no timezone.</p>
             
            
-            <p>The <code>+:=</code> expression is type-safe, in that a type error is raised if the
+            <p>The <code>but with</code> expression is type-safe, in that a type error is raised if the
                name of a field in the right-hand operand does not correspond to one of the named
                fields defined by the relevant record type, or if the supplied value does not
                conform to the required type for that field.</p>
             
-            <p>A <nt def="RecordPutExpr">RecordPutExpr</nt> is a binary expression evaluated from left to right:
-            that is, <code>A +:= B +:= C</code> is evaluated as <code>(A +:= B) +:= C</code>. The operands
+            <p>A <nt def="ButWithExpr">ButWithExpr</nt> is a binary expression evaluated from left to right:
+            that is, <code>A but with B but with C</code> is evaluated as <code>(A but with B) but with C</code>. The operands
             are arbitrary expressions.</p>
             
             <p>The required type for the left hand operand is <code>record(*)</code>, and for the right
@@ -23044,7 +23066,7 @@ return $r?z</eg>
             it has an appropriate <term>·jvalue·</term>.</p>
             
             <p>If the left-hand operand is a record with type annotation <var>R</var>, then the effect
-            of the expression <code>$A +:= $B</code> is equivalent to:</p>
+            of the expression <code>$A but with $B</code> is equivalent to:</p>
             
             <eg>let $temp as <var>R</var> := map:merge(($A, $B), {'duplicates':'use-last'})
 return $temp</eg>
@@ -23105,8 +23127,8 @@ let $rectangle := {
                  2 × ($rect?height + $rect?width) 
                },
   'resize':    fn ($rect, $factor) { 
-                  $rect +:= {'height': $rect?height × $factor}
-                        +:= {'width': $rect?width × $factor}
+                  $rect but with {'height': $rect?height × $factor}
+                            but with {'width': $rect?width × $factor}
                }
 }
                </eg>
@@ -23226,7 +23248,7 @@ return $lib =?> product((1.2, 1.3, 1.4))
                enlarged rectangle.</p>
                
                <note><p>Note how the <code>resize</code> function is implemented using a
-                     <nt def="RecordPutExpr">RecordPutExpr</nt> (see <specref ref="id-with-expression"/>), which
+                     <nt def="ButWithExpr">ButWithExpr</nt> (see <specref ref="id-with-expression"/>), which
                ensures that the map entries holding function items (<code>area</code>, <code>perimeter</code>, and
                <code>resize</code>) are automatically present and unchanged in the modified map.</p></note>
                
@@ -23252,9 +23274,9 @@ declare record my:rectangle (
      := fn{?height × ?width},
    resize as fn(my:rectangle, xs:double) as my:rectangle 
      := fn($rect, $factor) {
-           $rect +:= {'height': $rect?height × $factor,
-                      'width': $rect?width × $factor,
-                      'children': $rect?children =?> resize($factor)}
+           $rect but with {'height': $rect?height × $factor,
+                            'width': $rect?width × $factor,
+                            'children': $rect?children =?> resize($factor)}
         },
    contents as fn(my:rectangle) as my:rectangle*
      := fn{?children}
@@ -24721,7 +24743,10 @@ input expression is called the <term>input type</term>. </p>
                   </item>
                </ulist>
                
-               <p>Note that unreferenced entries in the map are simply ignored (that is, they are effectively discarded).</p>
+               <note><p>Entries in <var>M0</var> whose key is not the name of a field in the target
+                  record type are discarded. This differs from the
+                  <termref def="dt-coercion-rules">coercion rules</termref>, under which such entries
+                  cause a type error.</p></note>
                
                           
                <p>For example, <code>{"first": "John", "middle": "Ignatius", "last": "Smith"} cast as record(title, first, last)</code> returns 
@@ -24763,9 +24788,59 @@ The <phrase diff="chg" at="A">target type</phrase> is subject to the same
                   >E castable as T</code> returns <code>true</code> 
 if the result of evaluating <code>E</code>  
 can be successfully cast into the target type <code>T</code> by using a <code>cast</code> expression; 
-otherwise it returns <code>false</code>. 
-If evaluation of <code>E</code> fails with a dynamic error, 
-the <code>castable</code> expression as a whole fails.</p> 
+otherwise it returns <code>false</code>.</p> 
+            
+            <p>Errors are handled as follows:</p>
+            
+            <olist>
+               <item><p>If the target type is invalid, a static error is raised. For example:</p>
+                  <olist>
+                     <item><p>If the input does not conform to the grammar: <errorref class="ST" code="0003"/>.</p></item>
+                     <item><p>If there is a reference to a named type that is not present in the static
+                        context: <errorref class="ST" code="0051"/>.</p></item>
+                     <item><p>If there is a QName whose prefix is unbound: <errorref class="ST" code="0081"/>.</p></item>
+                     <item><p>If the <nt def="CastTarget">CastTarget</nt> is not a valid cast target,
+                        for example if it is a named item type that resolves to a function type:
+                        <errorref class="ST" code="0080"/>.</p></item>
+                  </olist>
+               </item>
+               <item><p>The operand expression <var>E</var> is evaluated with a required type of
+                  <code>item()*</code>. This means that evaluation will never fail because <var>E</var>
+                  returns the wrong type of value. However, other failures may occur when evaluating
+                  <var>E</var>, and these result in the <code>castable</code> expression as a whole
+                  raising an error. For example:</p>
+                  <olist>
+                     <item><p>A static error in <var>E</var> is raised as a static error.</p></item>
+                     <item><p>A dynamic error that occurs when evaluating <var>E</var> is raised as a dynamic error.</p></item>
+                     <item><p>A type error that occurs when evaluating <var>E</var>, whether detected statically
+                     or dynamically, is raised as a type error. Note however that this only happens for type errors
+                     internal to <var>E</var>: for example a type error would be raised for the expression
+                     <code>({} + 42) castable as xs:int</code>, because a map cannot be used as an 
+                     operand of <code>+</code>. No type error is raised for the expression <code>{"a": 42} castable as xs:int</code>,
+                     because the problem is not with the evaluation of <code>{"a": 42}</code> itself, but rather with the ability
+                     to cast the resulting value to an integer. Instead, this expression returns <code>false</code>.</p></item>
+                  </olist>
+               </item>
+               <item>
+                  <p>If any coercions defined as part of the semantics of the corresponding <code>cast</code>
+                  operation fail, this results in the <code>castable</code> expression returning false; no error
+                  is reported. For example:</p>
+                  <olist>
+                     <item><p>If <var>$X</var> is an element node that cannot be atomized because it has
+                     element-only content, then the expression <code>$X castable as xs:string</code>
+                     returns false.</p></item>
+                     <item><p>If <var>$X</var> is a sequence of two or more items, then the expression 
+                           <code>$X castable as xs:string</code> returns false.</p></item>
+                     <item><p>If <var>$X</var> is an element node with a type annotation based on a list type,
+                           and the result of atomization is a sequence of two or more atomic items,
+                           then the expression <code>$X castable as xs:string</code> returns false.</p></item>
+                     <item><p>If <var>$X</var> is a JNode whose ·jvalue· property is a map, then
+                     the expression <code>$X castable as array(*)</code> returns false.</p></item>
+                     
+                  </olist>
+               </item>
+            </olist>
+               
             
             <note><p>In earlier versions of this specification, an error in atomizing the operand resulted
             in the expression failing with an error; it now causes the expression to return false. This is because
