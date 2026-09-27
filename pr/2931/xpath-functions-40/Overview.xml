@@ -10456,7 +10456,21 @@ map( xs:string,
                   prefix to be associated with a namespace URI, so this format is suitable only when prefixes 
                   in the input documents are used predictably.</p></li></ul><p>Regardless of the chosen <code>name-format</code>, and regardless of the above rules, 
                   attributes in the <code>xml</code> namespace (<code>http://www.w3.org/XML/1998/namespace</code>)
-                  are output using a lexical QName, with the prefix <code>xml</code>.</p><p>Attribute names in the output are typically prefixed with the character <code>"@"</code>.
+                  are output using a lexical QName, with the prefix <code>xml</code>.</p><p>If the option <code>escape-names</code> is enabled, the local parts of names are
+                  escaped based on the mapping of SQL identifiers to XML names of
+                  <a href="#SQLXML">[SQL/XML]</a>, so that map keys that are not valid names can be represented.
+                  The <a href="#func-map-to-element"><code>fn:map-to-element</code></a> function encodes keys, and
+                  <a href="#func-element-to-map"><code>fn:element-to-map</code></a> decodes names, as follows:</p><ul><li><p>A character that is not permitted at its position in an
+                     <code>NCName</code> is written as <code>_x</code>, followed by the upper-case
+                     hexadecimal representation of its codepoint, padded to four digits (six digits
+                     for codepoints above <code>xFFFF</code>), followed by <code>_</code>. For example,
+                     the key <code>"first name"</code> becomes <code>first_x0020_name</code>, and the
+                     key <code>"1st"</code> becomes <code>_x0031_st</code>.</p></li><li><p>An underscore that is followed by <code>x</code> is written as
+                     <code>_x005F_</code>.</p></li><li><p>The empty key is written as <code>_x_</code>.</p></li><li><p>The URI of a <code>Q{uri}local</code> key, the prefix <code>xml</code>,
+                     and, if the <code>name-format</code> is <code>lexical</code>, any other prefix
+                     are retained; any other colon is escaped.</p></li></ul><p>When names are decoded, each sequence of <code>_x</code>, four or six hexadecimal
+                  digits, and <code>_</code> is replaced by the character with the given codepoint,
+                  and the name <code>_x_</code> is replaced by the empty string.</p><p>Attribute names in the output are typically prefixed with the character <code>"@"</code>.
                   The option <code>attribute-marker</code> allows this to be changed to a different
                   prefix or none.</p><p>Whichever format of names is chosen, if the rules for the selected layout would result in an output
                map having two entries with the same key, the conflict is resolved by combining these
@@ -10646,20 +10660,16 @@ map( xs:string,
       <i>  [Issue <a href="https://github.com/qt4cg/qtspecs/issues/1962">1962</a> PR <a href="https://github.com/qt4cg/qtspecs/pull/2707">2707</a> 24 June 2026]</i></p></li></ol></div><p>The <a href="#func-map-to-element"><code>fn:map-to-element</code></a> function performs the inverse of
       <a href="#func-element-to-map"><code>fn:element-to-map</code></a>: it reconstructs an element node from a
       <a title="single-entry map" class="termref" href="#dt-single-entry-map">single-entry map</a> of the form produced
-      by that function. The function is designed so that for any element
-      <var>E</var> and options map <var>OPTS</var>,</p><div class="exampleInner"><pre><var>E</var> =&gt; element-to-map(<var>OPTS</var>) =&gt; map-to-element(<var>OPTS</var>)</pre></div><p>reconstructs an element that is <a href="#func-deep-equal"><code>fn:deep-equal</code></a> to <var>E</var>,
-      except for the information identified as lost in <a href="#id-loss-of-xdm-information"><b>14.6.10 Lost XDM Information</b></a>.
-      Supplying the same <code>plan</code>, <code>attribute-marker</code>, <code>content-key</code>,
-      and <code>name-format</code> options that were used for the forward conversion is generally
-      necessary to achieve this round trip. In particular, <code>list</code> layout (requested
-      explicitly, or selected automatically when an element’s children all share a name) does not
-      preserve the child element names; reconstructing them requires an explicit <code>plan</code>
-      supplying the <code>child</code> name, failing which the function raises
-      [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>].</p><div class="note"><p class="prefix"><b>Note:</b></p><p>This function is not intended as a general-purpose converter from arbitrary JSON to
+      by that function. The function is designed so that, for an element
+      <var>E</var> and an options map <var>OPTS</var> whose <code>plan</code> is the result of
+      <code>element-to-map-plan(<var>E</var>)</code>,</p><div class="exampleInner"><pre><var>E</var> =&gt; element-to-map(<var>OPTS</var>) =&gt; map-to-element(<var>OPTS</var>)</pre></div><p>generally reconstructs an element that is <a href="#func-deep-equal"><code>fn:deep-equal</code></a> to
+      <var>E</var>, except for the information identified as lost in
+      <a href="#id-loss-of-xdm-information"><b>14.6.10 Lost XDM Information</b></a>. Without a plan, layouts are inferred from the
+      map values (see <a href="#id-map-to-element-plan"><b>14.6.12.1 Selecting a layout</b></a>), and the round trip may fail or
+      yield a different element.</p><div class="note"><p class="prefix"><b>Note:</b></p><p>This function is not intended as a general-purpose converter from arbitrary JSON to
       XML. It expects the specific structure produced by <a href="#func-element-to-map"><code>fn:element-to-map</code></a>
       (a single-entry map, attribute keys prefixed with the <code>attribute-marker</code>, arrays
-      of like-named children, and so on), and it raises [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>] for
-      input that does not follow those conventions. To construct XML from arbitrary JSON, use
+      of like-named children, and so on). To construct XML from arbitrary JSON, use
       <a href="#func-json-to-xml"><code>fn:json-to-xml</code></a>, or <a href="#func-parse-json"><code>fn:parse-json</code></a> together with a
       bespoke transformation.</p><p>A JSON object with more than one entry can still be converted by wrapping it in a
       single-entry map whose key supplies the name of the element: for example,
@@ -10672,39 +10682,41 @@ map( xs:string,
          applicable the content <code>type</code> and the <code>child</code> element name) that
          was used in the forward direction, and hence how the corresponding map value is to be
          interpreted. Layouts are those recorded by <a href="#id-selecting-element-layout"><b>14.6.7 Selecting an element layout</b></a>.
-         Entries with the layout <code>deep-skip</code> are ignored; the layout <code>error</code>
-         is not relevant to this function.</p></li><li><p>The <code>content-key</code> and the <code>attribute-marker</code> determine the
-         role of a map key. The first of the following rules that applies is used:</p><ol class="enumar"><li><p>A key equal to the <code>content-key</code> is the <b>content
-               key</b>. Its value is simple element content or a nilled marker.</p></li><li><p>Within an array, the keys <code>#comment</code> and
+         Entries with the layouts <code>deep-skip</code> and <code>error</code> are
+         ignored.</p></li><li><p>The <code>content-key</code> and the <code>attribute-marker</code> determine the
+         role of a map key (by its string value). The first matching rule applies:</p><ol class="enumar"><li><p>The <b>content key</b> is the key equal to the <code>content-key</code>
+               or, in a map that is not a member of an array, the longest key consisting of the
+               <code>content-key</code> preceded by zero or more <code>#</code> characters (which
+               the forward conversion prepends to avoid conflicts). Its value is simple element
+               content or a nilled marker.</p></li><li><p>Within an array, the keys <code>#comment</code> and
                <code>#processing-instruction</code> denote a comment and a processing
                instruction.</p></li><li><p>A key beginning with the <code>attribute-marker</code> is an <b>attribute
                key</b>; the marker is removed to recover the attribute name. If the
                <code>attribute-marker</code> does not start with <code>@</code>, and a map contains
-               a key that starts with <code>@</code>, then <code>@</code> is used as the marker for
-               all keys of that map instead: this is the inverse of the rule in
-               <a href="#element-and-attribute-names"><b>14.6.8 Element and Attribute Names</b></a> that reverts to <code>@</code> if the
-               names of attributes and child elements conflict.</p></li><li><p>All other keys are <b>element keys</b>.</p></li></ol><p>Attributes round-trip as attributes only if the <code>attribute-marker</code> is
-            distinctive, that is, if no genuine child-element key begins with it. An empty
-            <code>attribute-marker</code> leaves attributes and child elements indistinguishable,
-            so such a configuration does not round-trip in general.</p></li><li><p>The <code>name-format</code> governs how keys are decoded into names, as the
+               a key other than the content key that starts with <code>@</code>, then
+               <code>@</code> is used as the marker for that map instead, inverting the conflict
+               rule in <a href="#element-and-attribute-names"><b>14.6.8 Element and Attribute Names</b></a>.</p></li><li><p>All other keys are <b>element keys</b>.</p></li></ol><p>Attributes round-trip only if no child-element key begins with the
+            <code>attribute-marker</code>; in particular, an empty marker does not
+            round-trip.</p></li><li><p>The <code>name-format</code> governs how keys are decoded into names, as the
          inverse of <a href="#element-and-attribute-names"><b>14.6.8 Element and Attribute Names</b></a>. A key of the form
          <code>Q{uri}local</code> always yields a name in the namespace <code>uri</code>.
-         When <code>name-format</code> is <code>default</code>, a key consisting of a local name
-         alone yields a name in no namespace if it is the top-level element, and otherwise a name
-         in the namespace of the parent element; this is the inverse of the rule that omits the
-         namespace for a child in the same namespace as its parent. When <code>name-format</code>
-         is <code>eqname</code>, a key consisting of a local name alone always yields a name in no
-         namespace, since names in a namespace are invariably encoded as <code>Q{uri}local</code>.
-         Namespace prefixes are always synthesized; under <code>name-format</code> <code>local</code> or <code>lexical</code>,
-         namespace URIs cannot be recovered. Under <code>name-format</code> <code>lexical</code>,
-         a prefixed name is recovered only if its prefix is bound in the static context of the
-         function call.</p></li></ul><p>If the supplied map is not a single-entry map, the function fails with a dynamic error
+         When <code>name-format</code> is <code>default</code>, an element key consisting of a
+         local name alone yields a name in no namespace if it is the top-level element, and
+         otherwise a name in the namespace of the parent element; this is the inverse of the rule
+         that omits the namespace for a child in the same namespace as its parent. Any other key
+         consisting of a local name alone yields a name in no namespace. A key of the form
+         <code>prefix:local</code> is resolved against the statically known namespaces of the
+         function call (the prefix <code>xml</code> is always bound; the default element namespace
+         is not used), and its prefix is retained. Other namespace prefixes are
+         synthesized.</p></li><li><p>If <code>escape-names</code> is enabled, keys are escaped as described in
+         <a href="#element-and-attribute-names"><b>14.6.8 Element and Attribute Names</b></a> after their role has been determined and
+         the <code>attribute-marker</code> removed, and before a prefix is resolved: an escaped
+         colon does not separate a prefix.</p></li></ul><p>If the supplied map is not a single-entry map, the function fails with a dynamic error
       [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>]. Otherwise its key is decoded into the element name, a
       layout is selected for the value as described in <a href="#id-map-to-element-plan"><b>14.6.12.1 Selecting a layout</b></a>,
       and the element is reconstructed from the value by the rules of that layout, as described
       in <a href="#id-map-to-element-value"><b>14.6.12.2 Reconstructing an element</b></a>. Child elements are reconstructed in the same
-      way. A key that does not decode to a valid, non-empty element or attribute name causes the
-      function to fail with [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>].</p><div class="div4">
+      way.</p><div class="div4">
 <h5><a id="id-map-to-element-plan"/>14.6.12.1 <a href="#id-map-to-element-plan" style="text-decoration: none">Selecting a layout</a></h5><p>Wherever a value is expected, the empty sequence is treated as the zero-length string.
          For example, a JSON <code>null</code> parsed by <a href="#func-parse-json"><code>fn:parse-json</code></a> with
          default options yields an element without content.</p><p>The <b>candidate layouts</b> of an element name are the layout of the
@@ -10719,50 +10731,52 @@ map( xs:string,
             <code>simple</code> and <code>record</code> layouts reconstruct the same elements. The
             <code>list</code> layout cannot be inferred, as the child element names are not part of
             the value; an array is therefore interpreted as <code>mixed</code> layout, which
-            reconstructs the <code>sequence</code> layout as well.</p><p>A value produced by the fallback layout is recognized only if it does not happen to
+            reconstructs the <code>sequence</code> layout as well. Likewise, an array that is the
+            value of an element key is interpreted as a sequence of repeated children if possible,
+            even if it was produced for a single child with <code>mixed</code> or
+            <code>sequence</code> layout.</p><p>A value produced by the fallback layout is recognized only if it does not happen to
             match the layout given for the element name. For example, if the plan assigns
             <code>simple</code> layout to an element name and <code>xml</code> as the fallback
             layout, the string produced by the fallback is interpreted as simple content.
             Similarly, an array of empty arrays is interpreted as a sequence of empty children,
             not as a single child with empty children.</p></div></div><div class="div4">
 <h5><a id="id-map-to-element-value"/>14.6.12.2 <a href="#id-map-to-element-value" style="text-decoration: none">Reconstructing an element</a></h5><p>A <b>nilled marker</b> is the value <code>#fn:null</code>, supplied as the value
-         of an element, as the value of the content key in a map, or as the value of the content
-         key in a single-entry map within an array. It makes the element nilled: the attribute
+         of an element or of the content key. It makes the element nilled: the attribute
          <code>xsi:nil="true"</code> is added, together with a declaration of the
          <code>xsi</code> namespace. If the value of an element is <code>#fn:null</code>, it
          matches every layout, and the element has no other content. In maps, the content key may
          only have the value <code>#fn:null</code>, except for the <code>simple-plus</code>
          layout.</p><p>Other values match the layouts, and the element is reconstructed from them, as
          follows:</p><table class="data"><thead><tr><th>Layout</th><th>Matching values</th><th>Reconstruction</th></tr></thead><tbody><tr><td><code>empty</code></td><td>The zero-length string.</td><td>The element has no content.</td></tr><tr><td><code>simple</code></td><td>An atomic item.</td><td>Unless the value is the zero-length string, the element has a single text node
-                  child whose string value is the lexical representation of the value. (Numeric
-                  and boolean values therefore lose their type and reappear as text, just as type
-                  annotations are lost in the forward direction.)</td></tr><tr><td><code>record</code></td><td>A map.</td><td><p>Each entry of the map contributes to the element:</p>
+                  child whose string value is the lexical representation of the value.</td></tr><tr><td><code>record</code></td><td>A map.</td><td><p>The entries of the map contribute to the element in order:</p>
                   <ul><li><p>An attribute key contributes an attribute whose name is the decoded
                         key and whose value is the lexical representation of the entry value.</p></li><li><p>The content key contributes a text node, as for the
                         <code>simple</code> layout, or a nilled marker.</p></li><li><p>An element key contributes child elements named by the decoded key:
                         one child per array member if the value is a non-empty array whose
-                        members all match the decoded name, and a single child otherwise.</p></li></ul></td></tr><tr><td><code>empty-plus</code></td><td>A map without element keys.</td><td>As for <code>record</code>.</td></tr><tr><td><code>simple-plus</code></td><td>A map with the content key and without element keys.</td><td>As for <code>record</code>.</td></tr><tr><td><code>list-plus</code></td><td>A map with at most one element key, whose value is an array.</td><td>As for <code>record</code>, except that each member of the array contributes
+                        members all match the decoded name, and a single child otherwise.</p></li></ul></td></tr><tr><td><code>empty-plus</code></td><td>A map without element keys.</td><td>As for <code>record</code>.</td></tr><tr><td><code>simple-plus</code></td><td>A map with the content key and without element keys.</td><td>As for <code>record</code>.</td></tr><tr><td><code>list-plus</code></td><td>A map with at most one element key, which decodes to the <code>child</code>
+                  element name of the plan and whose value is an array.</td><td>As for <code>record</code>, except that each member of the array contributes
                   one child.</td></tr><tr><td><code>list</code></td><td>An array whose members match the <code>child</code> element name.</td><td>Each member of the array contributes one child, named by the
                   <code>child</code> entry of the plan.</td></tr><tr><td><code>mixed</code></td><td>An array whose members are strings or single-entry maps.</td><td><p>The members of the array contribute to the element in order:</p>
                   <ul><li><p>A map with an attribute key contributes an attribute, as for the
                         <code>record</code> layout.</p></li><li><p>A map with the content key contributes a nilled marker.</p></li><li><p>A string contributes a text node.</p></li><li><p>A map with the key <code>#comment</code> contributes a comment
                         node.</p></li><li><p>A map with the key <code>#processing-instruction</code>, whose value
                         is a map with the keys <code>#target</code> and <code>#data</code>,
-                        contributes a processing-instruction node.</p></li><li><p>A map with an element key contributes a child element, whose value
-                        is the entry value.</p></li></ul>
+                        contributes a processing-instruction node.</p></li><li><p>A map with an element key contributes a child element named by the
+                        decoded key, whose value is the entry value.</p></li></ul>
                   <p>The function fails with a dynamic error [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>]
-                     if an attribute or the nilled marker follows another member, if two strings
-                     are adjacent, or if the value of the content key is not
-                     <code>#fn:null</code>.</p></td></tr><tr><td><code>sequence</code></td><td>An array whose members are single-entry maps.</td><td>As for <code>mixed</code>.</td></tr><tr><td><code>xml</code></td><td>A string.</td><td>The value contains the serialization of the element itself, start and end tags
-                  included. It is parsed as an XML fragment, and the resulting element node is the
-                  result of the conversion; unlike the other cases, it supplies not only the
-                  content of the element but also its name. The map key is therefore redundant: it
-                  must still decode to a valid element name, but that name plays no part in the
-                  result.</td></tr></tbody></table><p>In every case the result must be a well-formed element. The function fails with
-         [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>] if a value that contributes attribute or text content
-         is not a single atomic item, or if a comment or processing instruction reconstructed from
-         the map would not be well-formed (for example, an invalid processing-instruction
-         target).</p></div></div><div class="div3">
+                     if an attribute or the nilled marker follows a member that is not an
+                     attribute, or if two strings are adjacent.</p></td></tr><tr><td><code>sequence</code></td><td>An array whose members are single-entry maps.</td><td>As for <code>mixed</code>.</td></tr><tr><td><code>xml</code></td><td>A string.</td><td>The value is the serialized element, including its start and end tags. It is
+                  parsed as by <a href="#func-parse-xml"><code>fn:parse-xml</code></a> with default options, and the
+                  element of the resulting document is the result; the map key plays no part in
+                  it. The function fails with a dynamic error [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>]
+                  if the value cannot be parsed, or if the document contains anything other than
+                  a single element.</td></tr></tbody></table><p>The function fails with [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>] if a key does not decode to a
+         valid, non-empty name, if a value that contributes attribute or text content is not a
+         single atomic item, or if the result would not be a well-formed element: for example,
+         if an attribute is named <code>xmlns</code> or a name is in the namespace
+         <code>http://www.w3.org/2000/xmlns/</code>, if two attributes have the same name
+         (including an <code>xsi:nil</code> attribute supplied together with a nilled marker), or
+         if a processing-instruction target is invalid.</p></div></div><div class="div3">
 <h4><a id="func-element-to-map-plan"/>14.6.13 <a href="#func-element-to-map-plan" style="text-decoration: none">fn:element-to-map-plan</a></h4><div class="changes"><p class="changesHeading">
         Changes in 4.0
         (<a href="#func-element-to-map">next</a> | <a href="#id-converting-maps-to-elements">previous</a>)</p><ol><li><p>New in 4.0<i>  [Issue <a href="https://github.com/qt4cg/qtspecs/issues/1797">1797</a> PR <a href="https://github.com/qt4cg/qtspecs/pull/1906">1906</a> 29 April 2025]</i></p></li></ol></div><dl><dt class="label">Summary</dt><dd><p>Analyzes sample data to generate a conversion plan suitable for use by the <a href="#func-element-to-map"><code>element-to-map</code></a>
@@ -10835,7 +10849,9 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
                      All other names are output in the format <code>"Q{uri}local"</code> if in a namespace, 
                      or <code>"Q{}local"</code> if in no namespace. "Top-level" here means that the element
                      is one that appears explicitly in the sequence of elements passed in the <code>$elements</code> argument,
-                     as distinct from a descendant of such an element.</td></tr><tr><td rowspan="3"><p><code>liberal</code></p></td><td class="fos-thick" colspan="2">Determines whether content that cannot be cast to the type prescribed
+                     as distinct from a descendant of such an element.</td></tr><tr><td rowspan="3"><p><code>escape-names</code></p></td><td class="fos-thick" colspan="2">Determines whether escape sequences in the local names of elements and
+                  attributes are decoded, so that keys that are not valid names can be represented
+                  (see <a href="#element-and-attribute-names"><b>14.6.8 Element and Attribute Names</b></a>).<ul><li><p><b>Type: </b><code>xs:boolean</code></p></li><li><p><b>Default: </b><code>false</code></p></li></ul></td></tr><tr><td class="fos-thin"><code>false</code></td><td>Names are output unchanged.</td></tr><tr><td class="fos-thick"><code>true</code></td><td>Escape sequences in local names are decoded.</td></tr><tr><td rowspan="3"><p><code>liberal</code></p></td><td class="fos-thick" colspan="2">Determines whether content that cannot be cast to the type prescribed
                   for it by the conversion plan is tolerated. Empty and whitespace-only content is
                   never cast, so it is not affected by this option
                   (see <a href="#element-and-attribute-content"><b>14.6.9 Element and Attribute Content</b></a>).<ul><li><p><b>Type: </b><code>xs:boolean</code></p></li><li><p><b>Default: </b><code>false</code></p></li></ul></td></tr><tr><td class="fos-thin"><code>false</code></td><td>A value that cannot be cast to the type prescribed for it
@@ -10852,7 +10868,9 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
             is defined; or if error action is explicitly requested for an element.</p><p>A dynamic error [<a href="#ERRFOJS0010" title="err:FOJS0010">err:FOJS0010</a>] occurs if the <code>liberal</code>
             option is <code>false</code> and the content of an element or attribute cannot be cast
             to the type prescribed for it by the conversion plan. Empty and whitespace-only content
-            is never cast and therefore never raises this error.</p><p>Any error in the conversion plan, including any violation of the rules in
+            is never cast and therefore never raises this error.</p><p>A dynamic error [<a href="#ERRFOCH0001" title="err:FOCH0001">err:FOCH0001</a>] occurs if the
+            <code>escape-names</code> option is <code>true</code> and a decoded escape sequence
+            represents a codepoint that is not a valid XML character.</p><p>Any error in the conversion plan, including any violation of the rules in
             <a href="#id-creating-a-conversion-plan"><b>14.6.2 Creating a conversion plan</b></a>, is treated as a type error [<a href="https://www.w3.org/TR/xpath20/#ERRXPTY0004" title="err:XPTY0004">err:XPTY0004</a>]<sup><small>XP</small></sup> whether or not it is technically
             a contravention of the defined type for the value. This relieves users and implementers
             of the burden of distinguishing different kinds of error in the plan. Such errors are
@@ -10911,23 +10929,20 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
     &lt;a&gt;haha&lt;/a&gt;,
     { 'plan': { 'a': { 'layout': 'simple', 'type': 'boolean' } },
       'liberal': true() }
-  )</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>{ "a": "haha" }</pre></div></td></tr></tbody></table></div></dd></dl></div><div class="div3">
+  )</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>{ "a": "haha" }</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>element-to-map(
+    &lt;first_x0020_name&gt;Jane&lt;/first_x0020_name&gt;,
+    { 'escape-names': true() }
+  )</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>{ "first name": "Jane" }</pre></div></td></tr></tbody></table></div></dd></dl></div><div class="div3">
 <h4><a id="func-map-to-element"/>14.6.15 <a href="#func-map-to-element" style="text-decoration: none">fn:map-to-element</a></h4><div class="changes"><p class="changesHeading">
         Changes in 4.0
         (<a href="#func-array-build">next</a> | <a href="#func-element-to-map">previous</a>)</p><ol><li><p>New in 4.0.<i>  [Issue <a href="https://github.com/qt4cg/qtspecs/issues/1962">1962</a> PR <a href="https://github.com/qt4cg/qtspecs/pull/2707">2707</a> 24 June 2026]</i></p></li></ol></div><dl><dt class="label">Summary</dt><dd><p>Converts a map into an element node.</p></dd><dt class="label">Signature</dt><dd><div class="proto"><table class="proto" border="0"><tr class="name"><td colspan="2"><code class="function">fn:map-to-element</code>(</td></tr><tr class="arg"><td><code>$map</code></td><td><span class="rt"><code class="as">as </code><code class="type"><code>map(*)?</code></code>,</span></td></tr><tr class="arg"><td><code>$options</code></td><td><span class="rt"><code class="as">as </code><code class="type"><code>map(*)?</code></code></span><code class="arg-note"> (:<a href="#default-on-empty">default-on-empty</a>:)</code><code class="assign"> := </code><code>{}</code></td></tr><tr class="return-type"><td colspan="2">)<span class="rt"><code class="as"> as </code><code><code>element()?</code></code></span></td></tr></table></div></dd><dt class="label">Rules</dt><dd><p>This function performs the inverse of <a href="#func-element-to-map"><code>element-to-map</code></a>:
             it reconstructs an element node from the <a title="single-entry map" class="termref" href="#dt-single-entry-map">single-entry map</a>
             supplied in <code>$map</code>. The key of the entry represents the element name,
-            and the value of the entry represents the element’s attributes and children.</p><p>If <code>$map</code> is the empty sequence, the result is the empty sequence.</p><p>Because <a href="#func-element-to-map"><code>element-to-map</code></a> does not preserve all information present
-            in its input (see <a href="#id-loss-of-xdm-information"><b>14.6.10 Lost XDM Information</b></a>), the reconstruction is
-            exact only up to that loss of information, and generally only when the same
-            <code>$options</code> are supplied as were used for the forward conversion.</p><p>The entries that may appear in the <code>$options</code> map are the same as for
-            <a href="#func-element-to-map"><code>element-to-map</code></a> but are interpreted in the reverse direction.</p><p>The rules for converting a map to an element are described in
-            <a href="#id-converting-maps-to-elements"><b>14.6.12 Converting maps to elements</b></a>; the rules for selecting a layout from
-            the conversion plan are the inverse of those in <a href="#id-selecting-element-layout"><b>14.6.7 Selecting an element layout</b></a>.</p></dd><dt class="label">Error Conditions</dt><dd><p>A dynamic error [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>] occurs if <code>$map</code>
-            is not a single-entry map, if a map key or the <code>#processing-instruction</code>
-            structure does not have the form required by the selected layout, if a reconstructed
-            element or attribute name is not a valid <code>xs:QName</code>, or if no layout can be
-            selected for a value.</p><p>Any error in the conversion plan is treated as a type error [<a href="https://www.w3.org/TR/xpath20/#ERRXPTY0004" title="err:XPTY0004">err:XPTY0004</a>]<sup><small>XP</small></sup>, as for <a href="#func-element-to-map"><code>element-to-map</code></a>.</p></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><tbody><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(())</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>()</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element({ "foo": "bar" })</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;foo&gt;bar&lt;/foo&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(
+            and the value of the entry represents the element’s attributes and children.</p><p>If <code>$map</code> is the empty sequence, the result is the empty sequence.</p><p>The <code>$options</code> are those of <a href="#func-element-to-map"><code>element-to-map</code></a>,
+            interpreted in the reverse direction. The rules are described in
+            <a href="#id-converting-maps-to-elements"><b>14.6.12 Converting maps to elements</b></a>.</p></dd><dt class="label">Error Conditions</dt><dd><p>A dynamic error [<a href="#ERRFOJS0009" title="err:FOJS0009">err:FOJS0009</a>] occurs if <code>$map</code> does
+            not have the form described in <a href="#id-converting-maps-to-elements"><b>14.6.12 Converting maps to elements</b></a>, or if
+            the element reconstructed from it would not be well-formed.</p><p>Any error in the conversion plan is treated as a type error [<a href="https://www.w3.org/TR/xpath20/#ERRXPTY0004" title="err:XPTY0004">err:XPTY0004</a>]<sup><small>XP</small></sup>, as for <a href="#func-element-to-map"><code>element-to-map</code></a>.</p></dd><dt class="label">Examples</dt><dd><div class="example"><table class="medium"><tbody><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(())</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>()</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element({ "foo": "bar" })</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;foo&gt;bar&lt;/foo&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(
   { "price": { "@currency": "USD", "#content": 12.16 } }
 )</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;price currency="USD"&gt;12.16&lt;/price&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre class="small">map-to-element({ "name": {
   "first": "Jane",
@@ -10940,9 +10955,14 @@ element-to-map-plan((&lt;a&gt;&lt;b/&gt;&lt;b/&gt;&lt;/a&gt;, &lt;a&gt;&lt;b/&gt
   &lt;middle&gt;Mary&lt;/middle&gt;
   &lt;last&gt;Smith&lt;/last&gt;
 &lt;/name&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre class="small">map-to-element(
-  { "years": [ "2023", "2023" ] },
+  { "years": [ "2023", "2024" ] },
   { "plan": { "years": { "layout": "list", "child": "year" } } }
-)</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;years&gt;&lt;year&gt;2023&lt;/year&gt;&lt;year&gt;2023&lt;/year&gt;&lt;/years&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(
+)</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;years&gt;&lt;year&gt;2023&lt;/year&gt;&lt;year&gt;2024&lt;/year&gt;&lt;/years&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre class="small">let $e := &lt;years&gt;&lt;year&gt;2023&lt;/year&gt;&lt;year&gt;2024&lt;/year&gt;&lt;/years&gt;
+let $opts := { "plan": element-to-map-plan($e) }
+return $e =&gt; element-to-map($opts) =&gt; map-to-element($opts)</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;years&gt;&lt;year&gt;2023&lt;/year&gt;&lt;year&gt;2024&lt;/year&gt;&lt;/years&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(
+  { "first name": "Jane" },
+  { "escape-names": true() }
+)</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;first_x0020_name&gt;Jane&lt;/first_x0020_name&gt;</pre></div></td></tr><tr class="testdiv"><th style="vertical-align:top">Expression:</th><td style="vertical-align:top"><div class="exampleInner"><pre>map-to-element(
   { "para": [ { "@id": "x" }, "A ", { "i": "fine" }, " mess!" ] }
 )</pre></div></td></tr><tr><th style="vertical-align:top">Result:</th><td style="vertical-align:top"><div class="exampleInner"><pre>&lt;para id="x"&gt;A &lt;i&gt;fine&lt;/i&gt; mess!&lt;/para&gt;</pre></div></td></tr></tbody></table></div></dd><dt class="label">See also</dt><dd><blockquote><p><a href="#func-element-to-map"><code>fn:element-to-map</code></a><br/><a href="#func-element-to-map-plan"><code>fn:element-to-map-plan</code></a></p></blockquote></dd></dl></div></div><div class="div2">
 <h3><a id="map-operations"/>14.7 <a href="#map-operations" style="text-decoration: none">Other operations on maps </a></h3><p><em>This section is non-normative.</em></p><p>Because a map is a function item, functions that apply to functions also apply
@@ -13319,7 +13339,7 @@ return data($typed-result) instance of xs:decimal</pre></div></td></tr><tr><th s
                      (a) JSON numbers are not exactly representable as double-precision floating point, or (b) duplicate key
                      values appear within a JSON object.</p></div><p>The following example demonstrates the correspondence of a JSON text and the corresponding XML
                      representation. </p><div class="example">
-<div class="exampleHeader"><a id="d6e73229"/>Example: A JSON Text and its XML Representation</div><p>Consider the following JSON text:</p><div class="exampleInner"><pre class="small">
+<div class="exampleHeader"><a id="d6e73366"/>Example: A JSON Text and its XML Representation</div><p>Consider the following JSON text:</p><div class="exampleInner"><pre class="small">
 {
   "desc"    : "Distances between several cities, in kilometers.",
   "updated" : "2014-02-04T18:50:45",
@@ -14052,7 +14072,7 @@ return json-to-xml($json, $options)</pre></div></td></tr></tbody></table></div><
                   each row is represented as an array of <code>xs:string</code> values.</p><p>The first row of the CSV is returned in the same way as all the other rows.
                   <a href="#func-csv-to-arrays"><code>fn:csv-to-arrays</code></a> does not distinguish between a header row and data
                   rows, and returns all of them.</p><div class="example">
-<div class="exampleHeader"><a id="d6e75966"/>Example: A CSV with fixed-width rows</div><p>For example, given the input:</p><div class="exampleInner"><pre>
+<div class="exampleHeader"><a id="d6e76103"/>Example: A CSV with fixed-width rows</div><p>For example, given the input:</p><div class="exampleInner"><pre>
 'Column 1,Column 2,Column 3
 Field 1A,Field 1B,Field 1C
 Field 2A,Field 2B,Field 2C'</pre></div><p>the <a href="#func-csv-to-arrays"><code>fn:csv-to-arrays</code></a> function produces</p><div class="exampleInner"><pre class="small">
@@ -14061,7 +14081,7 @@ Field 2A,Field 2B,Field 2C'</pre></div><p>the <a href="#func-csv-to-arrays"><cod
   [ "Field 1A", "Field 1B", "Field 1C" ],
   [ "Field 2A", "Field 2B", "Field 2C" ]
 )</pre></div></div><div class="example">
-<div class="exampleHeader"><a id="d6e75977"/>Example: A CSV with variable-width rows</div><p>It is common practice for all rows in a CSV to
+<div class="exampleHeader"><a id="d6e76114"/>Example: A CSV with variable-width rows</div><p>It is common practice for all rows in a CSV to
                   have the same number of columns, but this is not required.</p><div class="exampleInner"><pre class="small">
 'Column 1,Column 2,Column 3
 Field 1A,Field 1B,Field 1C
@@ -15934,7 +15954,7 @@ There is no constructor function for <code>xs:NOTATION</code>. Constructors are 
                   union types defined in a schema.</p><p>Special rules apply to constructor functions for namespace-sensitive types, that is,
                             atomic types derived from <code>xs:QName</code> and <code>xs:NOTATION</code>, list types that have
    a namespace-sensitive item type, and union types that have a namespace-sensitive member type. See <a href="#constructor-qname-notation"><b>22.2 Constructor functions for xs:QName and xs:NOTATION</b></a>.</p><div class="example">
-<div class="exampleHeader"><a id="d6e83398"/>Example: Using a Constructor Function for a User-Defined Atomic Type</div><p>Consider a situation where the static context contains an atomic type
+<div class="exampleHeader"><a id="d6e83535"/>Example: Using a Constructor Function for a User-Defined Atomic Type</div><p>Consider a situation where the static context contains an atomic type
                     called <code>hatSize</code> defined in a schema whose target namespace is bound
                     to the prefix <code>eg</code>. In such a case the following constructor function is available to users:</p><div class="proto"><table class="proto" border="0"><tr class="name"><td colspan="2"><code class="function">eg:hatSize</code>(</td></tr><tr class="arg"><td><code>$value</code></td><td><span class="rt"><code class="as">as </code><code class="type"><code>xs:anyAtomicType</code></code></span></td></tr><tr class="return-type"><td colspan="2">)<span class="rt"><code class="as"> as </code><code><code>my:hatSize</code>?</code></span></td></tr></table></div><p>The resulting function may be used in an expression such as <code>eg:hatSize("10½")</code>.</p></div><div class="note"><p class="prefix"><b>Note:</b></p><p> To construct an instance of a user-defined type 
                   that is not in a namespace, it is possible to use an
@@ -17025,6 +17045,9 @@ ISBN 0 521 77752 6.</div></dd><dt class="label"><span><a id="CLDR"/>Unicode CLDR
                   <a href="http://www.ietf.org/rfc/rfc2616.txt">http://www.ietf.org/rfc/rfc2616.txt</a>.
                </div></dd><dt class="label"><span><a id="rfc3339"/>RFC 3339</span></dt><dd><div>IETF. <em>RFC 3339: Date and Time on the Internet: Timestamps. </em> Available at:
                   <a href="http://www.ietf.org/rfc/rfc3339.txt">http://www.ietf.org/rfc/rfc3339.txt</a>.
+               </div></dd><dt class="label"><span><a id="SQLXML"/>SQL/XML</span></dt><dd><div>ISO (International Organization for Standardization).
+                  <em>ISO/IEC 9075-14: Information technology — Database languages SQL — Part 14:
+                  XML-Related Specifications (SQL/XML)</em>.
                </div></dd><dt class="label"><span><a id="UNICODE-TR18"/>UTS #18</span></dt><dd><div><em>Unicode
                   Technical Standard #18: Unicode Regular Expressions</em>. 
                   Ed. Mark Davis and Andy Heniger, Unicode Consortium. The current version is 17, dated 2013-11-19. Available at:
