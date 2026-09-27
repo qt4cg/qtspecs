@@ -8293,6 +8293,31 @@ map( xs:string,
                 <p>Regardless of the chosen <code>name-format</code>, and regardless of the above rules, 
                   attributes in the <code>xml</code> namespace (<code>http://www.w3.org/XML/1998/namespace</code>)
                   are output using a lexical QName, with the prefix <code>xml</code>.</p>
+
+                <p>If the option <code>escape-names</code> is enabled, the local parts of names are
+                  escaped based on the mapping of SQL identifiers to XML names of
+                  <bibref ref="SQLXML"/>, so that map keys that are not valid names can be represented.
+                  The <function>fn:map-to-element</function> function encodes keys, and
+                  <function>fn:element-to-map</function> decodes names, as follows:</p>
+
+                <ulist>
+                  <item><p>A character that is not permitted at its position in an
+                     <code>NCName</code> is written as <code>_x</code>, followed by the upper-case
+                     hexadecimal representation of its codepoint, padded to four digits (six digits
+                     for codepoints above <code>xFFFF</code>), followed by <code>_</code>. For example,
+                     the key <code>"first name"</code> becomes <code>first_x0020_name</code>, and the
+                     key <code>"1st"</code> becomes <code>_x0031_st</code>.</p></item>
+                  <item><p>An underscore that is followed by <code>x</code> is written as
+                     <code>_x005F_</code>.</p></item>
+                  <item><p>The empty key is written as <code>_x_</code>.</p></item>
+                  <item><p>The URI of a <code>Q{uri}local</code> key, the prefix <code>xml</code>,
+                     and, if the <code>name-format</code> is <code>lexical</code>, any other prefix
+                     are retained; any other colon is escaped.</p></item>
+                </ulist>
+
+                <p>When names are decoded, each sequence of <code>_x</code>, four or six hexadecimal
+                  digits, and <code>_</code> is replaced by the character with the given codepoint,
+                  and the name <code>_x_</code> is replaced by the empty string.</p>
               
                
                <p>Attribute names in the output are typically prefixed with the character <code>"@"</code>.
@@ -8612,26 +8637,22 @@ map( xs:string,
    <p>The <function>fn:map-to-element</function> function performs the inverse of
       <function>fn:element-to-map</function>: it reconstructs an element node from a
       <termref def="dt-single-entry-map">single-entry map</termref> of the form produced
-      by that function. The function is designed so that for any element
-      <var>E</var> and options map <var>OPTS</var>,</p>
+      by that function. The function is designed so that, for an element
+      <var>E</var> and an options map <var>OPTS</var> whose <code>plan</code> is the result of
+      <code>element-to-map-plan(<var>E</var>)</code>,</p>
 
    <eg><var>E</var> => element-to-map(<var>OPTS</var>) => map-to-element(<var>OPTS</var>)</eg>
 
-   <p>reconstructs an element that is <function>fn:deep-equal</function> to <var>E</var>,
-      except for the information identified as lost in <specref ref="id-loss-of-xdm-information"/>.
-      Supplying the same <code>plan</code>, <code>attribute-marker</code>, <code>content-key</code>,
-      and <code>name-format</code> options that were used for the forward conversion is generally
-      necessary to achieve this round trip. In particular, <code>list</code> layout (requested
-      explicitly, or selected automatically when an element’s children all share a name) does not
-      preserve the child element names; reconstructing them requires an explicit <code>plan</code>
-      supplying the <code>child</code> name, failing which the function raises
-      <errorref class="JS" code="0009"/>.</p>
+   <p>generally reconstructs an element that is <function>fn:deep-equal</function> to
+      <var>E</var>, except for the information identified as lost in
+      <specref ref="id-loss-of-xdm-information"/>. Without a plan, layouts are inferred from the
+      map values (see <specref ref="id-map-to-element-plan"/>), and the round trip may fail or
+      yield a different element.</p>
 
    <note><p>This function is not intended as a general-purpose converter from arbitrary JSON to
       XML. It expects the specific structure produced by <function>fn:element-to-map</function>
       (a single-entry map, attribute keys prefixed with the <code>attribute-marker</code>, arrays
-      of like-named children, and so on), and it raises <errorref class="JS" code="0009"/> for
-      input that does not follow those conventions. To construct XML from arbitrary JSON, use
+      of like-named children, and so on). To construct XML from arbitrary JSON, use
       <function>fn:json-to-xml</function>, or <function>fn:parse-json</function> together with a
       bespoke transformation.</p>
       <p>A JSON object with more than one entry can still be converted by wrapping it in a
@@ -8650,42 +8671,46 @@ map( xs:string,
          applicable the content <code>type</code> and the <code>child</code> element name) that
          was used in the forward direction, and hence how the corresponding map value is to be
          interpreted. Layouts are those recorded by <specref ref="id-selecting-element-layout"/>.
-         Entries with the layout <code>deep-skip</code> are ignored; the layout <code>error</code>
-         is not relevant to this function.</p></item>
+         Entries with the layouts <code>deep-skip</code> and <code>error</code> are
+         ignored.</p></item>
       <item><p>The <code>content-key</code> and the <code>attribute-marker</code> determine the
-         role of a map key. The first of the following rules that applies is used:</p>
+         role of a map key (by its string value). The first matching rule applies:</p>
          <olist>
-            <item><p>A key equal to the <code>content-key</code> is the <term>content
-               key</term>. Its value is simple element content or a nilled marker.</p></item>
+            <item><p>The <term>content key</term> is the key equal to the <code>content-key</code>
+               or, in a map that is not a member of an array, the longest key consisting of the
+               <code>content-key</code> preceded by zero or more <code>#</code> characters (which
+               the forward conversion prepends to avoid conflicts). Its value is simple element
+               content or a nilled marker.</p></item>
             <item><p>Within an array, the keys <code>#comment</code> and
                <code>#processing-instruction</code> denote a comment and a processing
                instruction.</p></item>
             <item><p>A key beginning with the <code>attribute-marker</code> is an <term>attribute
                key</term>; the marker is removed to recover the attribute name. If the
                <code>attribute-marker</code> does not start with <code>@</code>, and a map contains
-               a key that starts with <code>@</code>, then <code>@</code> is used as the marker for
-               all keys of that map instead: this is the inverse of the rule in
-               <specref ref="element-and-attribute-names"/> that reverts to <code>@</code> if the
-               names of attributes and child elements conflict.</p></item>
+               a key other than the content key that starts with <code>@</code>, then
+               <code>@</code> is used as the marker for that map instead, inverting the conflict
+               rule in <specref ref="element-and-attribute-names"/>.</p></item>
             <item><p>All other keys are <term>element keys</term>.</p></item>
          </olist>
-         <p>Attributes round-trip as attributes only if the <code>attribute-marker</code> is
-            distinctive, that is, if no genuine child-element key begins with it. An empty
-            <code>attribute-marker</code> leaves attributes and child elements indistinguishable,
-            so such a configuration does not round-trip in general.</p></item>
+         <p>Attributes round-trip only if no child-element key begins with the
+            <code>attribute-marker</code>; in particular, an empty marker does not
+            round-trip.</p></item>
       <item><p>The <code>name-format</code> governs how keys are decoded into names, as the
          inverse of <specref ref="element-and-attribute-names"/>. A key of the form
          <code>Q{uri}local</code> always yields a name in the namespace <code>uri</code>.
-         When <code>name-format</code> is <code>default</code>, a key consisting of a local name
-         alone yields a name in no namespace if it is the top-level element, and otherwise a name
-         in the namespace of the parent element; this is the inverse of the rule that omits the
-         namespace for a child in the same namespace as its parent. When <code>name-format</code>
-         is <code>eqname</code>, a key consisting of a local name alone always yields a name in no
-         namespace, since names in a namespace are invariably encoded as <code>Q{uri}local</code>.
-         Namespace prefixes are always synthesized; under <code>name-format</code> <code>local</code> or <code>lexical</code>,
-         namespace URIs cannot be recovered. Under <code>name-format</code> <code>lexical</code>,
-         a prefixed name is recovered only if its prefix is bound in the static context of the
-         function call.</p></item>
+         When <code>name-format</code> is <code>default</code>, an element key consisting of a
+         local name alone yields a name in no namespace if it is the top-level element, and
+         otherwise a name in the namespace of the parent element; this is the inverse of the rule
+         that omits the namespace for a child in the same namespace as its parent. Any other key
+         consisting of a local name alone yields a name in no namespace. A key of the form
+         <code>prefix:local</code> is resolved against the statically known namespaces of the
+         function call (the prefix <code>xml</code> is always bound; the default element namespace
+         is not used), and its prefix is retained. Other namespace prefixes are
+         synthesized.</p></item>
+      <item><p>If <code>escape-names</code> is enabled, keys are escaped as described in
+         <specref ref="element-and-attribute-names"/> after their role has been determined and
+         the <code>attribute-marker</code> removed, and before a prefix is resolved: an escaped
+         colon does not separate a prefix.</p></item>
    </ulist>
 
    <p>If the supplied map is not a single-entry map, the function fails with a dynamic error
@@ -8693,8 +8718,7 @@ map( xs:string,
       layout is selected for the value as described in <specref ref="id-map-to-element-plan"/>,
       and the element is reconstructed from the value by the rules of that layout, as described
       in <specref ref="id-map-to-element-value"/>. Child elements are reconstructed in the same
-      way. A key that does not decode to a valid, non-empty element or attribute name causes the
-      function to fail with <errorref class="JS" code="0009"/>.</p>
+      way.</p>
 
    <div4 id="id-map-to-element-plan">
       <head>Selecting a layout</head>
@@ -8720,7 +8744,10 @@ map( xs:string,
             <code>simple</code> and <code>record</code> layouts reconstruct the same elements. The
             <code>list</code> layout cannot be inferred, as the child element names are not part of
             the value; an array is therefore interpreted as <code>mixed</code> layout, which
-            reconstructs the <code>sequence</code> layout as well.</p>
+            reconstructs the <code>sequence</code> layout as well. Likewise, an array that is the
+            value of an element key is interpreted as a sequence of repeated children if possible,
+            even if it was produced for a single child with <code>mixed</code> or
+            <code>sequence</code> layout.</p>
          <p>A value produced by the fallback layout is recognized only if it does not happen to
             match the layout given for the element name. For example, if the plan assigns
             <code>simple</code> layout to an element name and <code>xml</code> as the fallback
@@ -8734,8 +8761,7 @@ map( xs:string,
       <head>Reconstructing an element</head>
 
       <p>A <term>nilled marker</term> is the value <code>#fn:null</code>, supplied as the value
-         of an element, as the value of the content key in a map, or as the value of the content
-         key in a single-entry map within an array. It makes the element nilled: the attribute
+         of an element or of the content key. It makes the element nilled: the attribute
          <code>xsi:nil="true"</code> is added, together with a declaration of the
          <code>xsi</code> namespace. If the value of an element is <code>#fn:null</code>, it
          matches every layout, and the element has no other content. In maps, the content key may
@@ -8763,14 +8789,12 @@ map( xs:string,
                <td><code>simple</code></td>
                <td>An atomic item.</td>
                <td>Unless the value is the zero-length string, the element has a single text node
-                  child whose string value is the lexical representation of the value. (Numeric
-                  and boolean values therefore lose their type and reappear as text, just as type
-                  annotations are lost in the forward direction.)</td>
+                  child whose string value is the lexical representation of the value.</td>
             </tr>
             <tr>
                <td><code>record</code></td>
                <td>A map.</td>
-               <td><p>Each entry of the map contributes to the element:</p>
+               <td><p>The entries of the map contribute to the element in order:</p>
                   <ulist>
                      <item><p>An attribute key contributes an attribute whose name is the decoded
                         key and whose value is the lexical representation of the entry value.</p></item>
@@ -8793,7 +8817,8 @@ map( xs:string,
             </tr>
             <tr>
                <td><code>list-plus</code></td>
-               <td>A map with at most one element key, whose value is an array.</td>
+               <td>A map with at most one element key, which decodes to the <code>child</code>
+                  element name of the plan and whose value is an array.</td>
                <td>As for <code>record</code>, except that each member of the array contributes
                   one child.</td>
             </tr>
@@ -8817,13 +8842,12 @@ map( xs:string,
                      <item><p>A map with the key <code>#processing-instruction</code>, whose value
                         is a map with the keys <code>#target</code> and <code>#data</code>,
                         contributes a processing-instruction node.</p></item>
-                     <item><p>A map with an element key contributes a child element, whose value
-                        is the entry value.</p></item>
+                     <item><p>A map with an element key contributes a child element named by the
+                        decoded key, whose value is the entry value.</p></item>
                   </ulist>
                   <p>The function fails with a dynamic error <errorref class="JS" code="0009"/>
-                     if an attribute or the nilled marker follows another member, if two strings
-                     are adjacent, or if the value of the content key is not
-                     <code>#fn:null</code>.</p></td>
+                     if an attribute or the nilled marker follows a member that is not an
+                     attribute, or if two strings are adjacent.</p></td>
             </tr>
             <tr>
                <td><code>sequence</code></td>
@@ -8833,21 +8857,23 @@ map( xs:string,
             <tr>
                <td><code>xml</code></td>
                <td>A string.</td>
-               <td>The value contains the serialization of the element itself, start and end tags
-                  included. It is parsed as an XML fragment, and the resulting element node is the
-                  result of the conversion; unlike the other cases, it supplies not only the
-                  content of the element but also its name. The map key is therefore redundant: it
-                  must still decode to a valid element name, but that name plays no part in the
-                  result.</td>
+               <td>The value is the serialized element, including its start and end tags. It is
+                  parsed as by <function>fn:parse-xml</function> with default options, and the
+                  element of the resulting document is the result; the map key plays no part in
+                  it. The function fails with a dynamic error <errorref class="JS" code="0009"/>
+                  if the value cannot be parsed, or if the document contains anything other than
+                  a single element.</td>
             </tr>
          </tbody>
       </table>
 
-      <p>In every case the result must be a well-formed element. The function fails with
-         <errorref class="JS" code="0009"/> if a value that contributes attribute or text content
-         is not a single atomic item, or if a comment or processing instruction reconstructed from
-         the map would not be well-formed (for example, an invalid processing-instruction
-         target).</p>
+      <p>The function fails with <errorref class="JS" code="0009"/> if a key does not decode to a
+         valid, non-empty name, if a value that contributes attribute or text content is not a
+         single atomic item, or if the result would not be a well-formed element: for example,
+         if an attribute is named <code>xmlns</code> or a name is in the namespace
+         <code>http://www.w3.org/2000/xmlns/</code>, if two attributes have the same name
+         (including an <code>xsi:nil</code> attribute supplied together with a nilled marker), or
+         if a processing-instruction target is invalid.</p>
    </div4>
 </div3>
 
@@ -14747,6 +14773,10 @@ ISBN 0 521 77752 6.</bibl>
                </bibl>
                <bibl id="rfc3339" key="RFC 3339">IETF. <emph>RFC 3339: Date and Time on the Internet: Timestamps. </emph> Available at:
                   <loc href="http://www.ietf.org/rfc/rfc3339.txt">http://www.ietf.org/rfc/rfc3339.txt</loc>.
+               </bibl>
+               <bibl id="SQLXML" key="SQL/XML">ISO (International Organization for Standardization).
+                  <emph>ISO/IEC 9075-14: Information technology — Database languages SQL — Part 14:
+                  XML-Related Specifications (SQL/XML)</emph>.
                </bibl>
                <bibl id="UNICODE-TR18" key="UTS #18"><emph>Unicode
                   Technical Standard #18: Unicode Regular Expressions</emph>. 
