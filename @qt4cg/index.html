@@ -1,6 +1,257 @@
 <!DOCTYPE HTML><html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta charset="UTF-8"><meta http-equiv="x-ua-compatible" content="ie=edge"><meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1"><link rel="stylesheet" href="/css/status.css"><title>@qt4cg statuses</title></head><body><main><article><h1>@qt4cg statuses</h1><p>This page displays recent status
             updates
             about the QT4CG project.</p><p>The are also captured in <a href="status.rss">an RSS feed</a>.</p><p>By year: <a href="2026/">2026</a>, <a href="2025/">2025</a>, <a href="2024/">2024</a>, <a href="2023/">2023</a>, <a href="2022/">2022</a>, <a href="2021/">2021</a>, <a href="2020/">2020</a></p><div class="toots">
+<div class="toot" id="agenda-09-28"><h2>QT4 CG meeting 182 draft agenda<span class="toot-id"> #agenda-09-28</span></h2><div class="pubdate">28 Sep at 10:30:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/agenda/2026/09-28">https://qt4cg.org/meeting/agenda/2026/09-28</a></div><p>Draft agenda published.</p></div>
+<div class="toot" id="created-2935"><h2>Issue #2935 created<span class="toot-id"> #created-2935</span></h2><div class="pubdate">28 Sep at 08:11:47 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2935">https://github.com/qt4cg/qtspecs/issues/2935</a></div><details><summary>Proposal: opt-in commercial arithmetic for XPath, XQuery and XSLT 4.0</summary><div class="markup"><h1>Proposal: opt-in commercial arithmetic for XPath, XQuery and XSLT 4.0</h1>
+<h2>Summary</h2>
+<p>Add two components to the static context, each set per module and with a default that
+keeps today's behaviour:</p>
+<ol>
+<li><strong>Default rounding mode</strong>, used by <code>fn:round</code> when <code>$mode</code> is absent.
+Default <code>half-to-ceiling</code>, as today.</li>
+<li><strong>Arithmetic mode</strong>: <code>double</code> (default, as today) or <code>decimal</code>, as Michael Kay considered
+in <a href="https://github.com/qt4cg/qtspecs/issues/986">#986</a>. With <code>decimal</code>, a module calculates
+in decimal floating-point throughout: untyped values, <code>fn:number</code>, numeric literals and
+mixed decimal/double arithmetic give <code>xs:decimal</code>. Binary floating-point remains only for
+values that have no decimal equivalent (<code>NaN</code>, <code>INF</code>) and for functions defined on
+<code>xs:double</code>, such as <code>math:sqrt</code>.</li>
+</ol>
+<p>A stylesheet or query for commercial calculations, such as the validation of electronic
+invoices, could then declare once that it rounds commercially and calculates in decimal,
+instead of repeating casts and rounding modes in every expression. Nothing changes for
+modules that do not opt in.</p>
+<h2>Motivation</h2>
+<p>Commercial calculations have legal requirements that differ from the defaults of XPath:</p>
+<ul>
+<li><strong>Commercial rounding.</strong> VAT in Germany must be rounded half away from zero
+(§ 14 Abs. 4 UStG with Abschn. 14.5 Abs. 20 UStAE; DIN 1333), and the French
+e-invoicing standard AFNOR XP Z12-012 (§ 4.4.6) requires the same, so that "rounding two
+strictly opposite numbers gives strictly opposite rounded numbers". EN 16931 recommends
+it as well. <code>fn:round(-2.5)</code> returns −2, but −3 is required.</li>
+<li><strong>Decimal arithmetic.</strong> Amounts are decimal numbers. Without a schema, which is the normal
+case in Schematron validation, every amount is <code>xs:untypedAtomic</code>, and arithmetic converts
+it to <code>xs:double</code>: with <code>&lt;a&gt;0.1&lt;/a&gt;</code> and <code>&lt;b&gt;0.2&lt;/b&gt;</code>, <code>a + b</code> is 0.30000000000000004 and
+<code>a + b = 0.3</code> is false; <code>round(&lt;p&gt;1.005&lt;/p&gt;, 2)</code> returns 1, not 1.01.</li>
+</ul>
+<p>Rule authors can avoid both problems today, with <code>xs:decimal()</code> casts on every operand and
+the <code>$mode</code> argument on every <code>fn:round</code> call. In practice they miss some. The official
+EN 16931 validation artefacts (<a href="https://github.com/ConnectingEurope/eInvoicing-EN16931/releases/tag/validation-1.3.16">release 1.3.16</a>),
+maintained by CEN and used across the EU, are an example. Rule BR-S-08 in UBL tolerates
+a deviation of the VAT category taxable amount below 1.00 and tests</p>
+<pre><code>xs:decimal(cbc:TaxableAmount + 1) &gt; sum(…xs:decimal(cbc:LineExtensionAmount)…)
+</code></pre>
+<p>The cast comes after the addition, so the addition is done in <code>xs:double</code>. For an invoice
+whose lines add up to 197.37 and whose declared taxable amount is 196.37, exactly 1.00 too
+low, 196.37 + 1 gives 197.37000000000000455 in binary, which is greater than 197.37, and the
+invalid invoice is accepted. The same amount 1.00 too high (198.37) is rejected, and so is the
+same invoice in CII syntax, whose rule compares exactly. About half of all two-decimal amounts
+behave like 196.37 in one of the two directions. The CII rules BR-AE-08, BR-E-08, BR-G-08,
+BR-IC-08 and BR-Z-08 compute <code>../ram:BasisAmount - 1</code> on the untyped amount in the same way.
+The verdict of the reference validation depends on binary arithmetic, not on the rule.
+<a href="https://github.com/svanteschubert/Saxon-HE-enhanced-accuracy/blob/accuracy-feature/docs/en16931-comparison.md">Test invoices and a reproducible comparison</a>.</p>
+<p>Rules like these are written by domain experts, not by XPath specialists. EN 16931 alone
+has several hundred of them, and national extensions (XRechnung, Factur-X/ZUGFeRD, Peppol)
+and company rules add more. A single declaration per rule set is realistic; a cast on
+every operand is not.</p>
+<h2>Relation to earlier work in this group</h2>
+<ul>
+<li><a href="https://github.com/qt4cg/qtspecs/issues/1187">#1187</a> and <a href="https://github.com/qt4cg/qtspecs/issues/1274">#1274</a> added the rounding modes to <code>fn:round</code>, following a request about
+financial rounding (Saxon issue <a href="https://saxonica.plan.io/issues/6408">6408</a>). This
+proposal only adds a way to change the default of <code>$mode</code> for a module.</li>
+<li>In <a href="https://github.com/qt4cg/qtspecs/issues/986">#986</a>, Michael Kay considered "an 'arithmetic mode' in the dynamic context, set to either
+'double' or 'decimal'", and later proposed to "change conversion from untypedAtomic to
+numeric to depend on the lexical form of the value, as it does for numeric literals".
+<a href="https://github.com/qt4cg/qtspecs/pull/2218">#2218</a> adopted a related rule for general comparisons: an untyped value compared with a
+number is cast to the type of the numeric operand, with <code>xs:double</code> as fallback. This
+proposal takes the arithmetic mode further, to decimal arithmetic throughout a module, as an
+opt-in, so that existing code is not affected.</li>
+</ul>
+<h2>Proposal</h2>
+<h3>1. Default rounding mode</h3>
+<p>A new static context component, <strong>default rounding mode</strong>, whose value is one of the modes
+of <code>fn:round</code>. Its default is <code>half-to-ceiling</code>.</p>
+<p><code>fn:round#1</code> and <code>fn:round#2</code>, and <code>fn:round#3</code> with an empty <code>$mode</code>, use the default
+rounding mode of the static context of the call. Dynamic calls such as <code>round#1</code> bind it at
+the point where the function item is created, as for the default collation.</p>
+<h3>2. Arithmetic mode</h3>
+<p>A new static context component, <strong>arithmetic mode</strong>, with the values <code>double</code> (the default)
+and <code>decimal</code>. The mode <code>double</code> is today's behaviour. The mode <code>decimal</code> avoids binary
+floating-point wherever a decimal value can represent the number, which gives exact results
+for every calculation that XPath can express in decimals:</p>
+<ul>
+<li><strong>Untyped values.</strong> Wherever an <code>xs:untypedAtomic</code> value is converted to a number without an
+explicit required type of <code>xs:double</code> or <code>xs:float</code>, a lexical form that is valid as a
+numeric literal (after whitespace normalization) is cast to <code>xs:integer</code> or <code>xs:decimal</code>,
+including scientific notation such as <code>1.5E3</code>. Other values, such as <code>NaN</code> and <code>INF</code>, are
+cast to <code>xs:double</code> as today, and invalid input raises the same errors. This applies to
+arithmetic operators, <code>fn:sum</code>, <code>fn:avg</code>, <code>fn:min</code>, <code>fn:max</code>, and the coercion of arguments
+whose required type is <code>xs:numeric</code> (such as <code>fn:round</code> and <code>fn:abs</code>).</li>
+<li><strong><code>fn:number</code></strong> returns an <code>xs:decimal</code> for such a lexical form, and <code>NaN</code> as today for
+anything else.</li>
+<li><strong>Numeric literals.</strong> A <code>DoubleLiteral</code> such as <code>1.5e0</code> denotes an <code>xs:decimal</code>.</li>
+<li><strong>Mixed arithmetic.</strong> An operation with an <code>xs:decimal</code> and an <code>xs:double</code> or <code>xs:float</code>
+operand converts the binary operand to <code>xs:decimal</code> and returns an <code>xs:decimal</code>, the reverse
+of today's promotion, unless that operand is <code>NaN</code> or infinite.</li>
+</ul>
+<p>Binary floating-point then remains only where decimal cannot represent the value (<code>NaN</code>,
+positive and negative infinity), in functions defined on <code>xs:double</code> such as <code>math:sqrt</code>,
+<code>math:log</code> or <code>math:pow</code>, whose results are mostly irrational, and in operations whose
+operands are all explicitly typed as <code>xs:double</code> or <code>xs:float</code>. General comparisons keep the
+rules of <a href="https://github.com/qt4cg/qtspecs/pull/2218">#2218</a>.</p>
+<h3>Syntax</h3>
+<ul>
+<li>
+<p><strong>XSLT:</strong> standard attributes <code>[xsl:]default-rounding-mode</code> and
+<code>[xsl:]arithmetic-mode</code>, allowed on any element and scoped like
+<code>[xsl:]default-collation</code>:</p>
+<pre><code class="language-xml">&lt;xsl:stylesheet version="4.0" default-rounding-mode="half-away-from-zero"
+                arithmetic-mode="decimal" …&gt;
+</code></pre>
+</li>
+<li>
+<p><strong>XQuery:</strong> prolog declarations such as
+<code>declare default rounding-mode "half-away-from-zero";</code> and
+<code>declare arithmetic-mode decimal;</code></p>
+</li>
+<li>
+<p><strong>XPath hosted by other languages:</strong> static context properties set by the host language
+or API. Schematron could pass them through from a rule set to the generated XSLT; that
+is a matter for ISO Schematron, not for this group.</p>
+</li>
+</ul>
+<h2>Why the static context</h2>
+<ul>
+<li><strong>Compatibility.</strong> The defaults are today's behaviour. Only modules that declare the new
+settings change, so no existing stylesheet or query breaks.</li>
+<li><strong>Visibility.</strong> The declaration is part of the module. A reader sees how it calculates, and
+it gives the same results on every conforming processor, unlike a processor configuration.</li>
+<li><strong>Scope.</strong> A validation service runs rule sets and unrelated stylesheets in the same
+process. A module-level setting affects only the rule set that asks for it.</li>
+<li><strong>Precedent.</strong> XPath 1.0 compatibility mode is a static context component that already
+changes the semantics of arithmetic and comparisons for a whole module.</li>
+</ul>
+<h2>Costs of the decimal mode</h2>
+<p>Decimal floating-point is more accurate for every value that has a decimal representation,
+which is what commercial data consists of. Its main cost is performance: decimal arithmetic
+needs more memory and CPU time than hardware binary floating-point. It also changes some
+results, which is why the mode is opt-in:</p>
+<ul>
+<li><strong>Division by zero</strong> raises <code>FOAR0001</code> instead of returning <code>INF</code> or <code>NaN</code>.</li>
+<li><strong>Nonterminating division</strong>, such as 1 div 3, is rounded to an implementation-defined
+precision, as for <code>xs:decimal</code> today, where <code>xs:double</code> gives about 17 significant digits.
+<code>fn:divide-decimals</code> (<a href="https://github.com/qt4cg/qtspecs/issues/1261">#1261</a>) gives explicit
+control.</li>
+<li><strong>Extreme magnitudes</strong> such as <code>1e308</code> are exact in decimal but need correspondingly large
+values; an implementation may convert exponents beyond a limit to <code>xs:double</code>.</li>
+</ul>
+<h2>Open questions</h2>
+<ul>
+<li>How is an <code>xs:double</code> operand converted in mixed arithmetic: to its exact binary value
+(0.1000000000000000055511151231257827…), or to the shortest decimal that identifies it
+(0.1)? The second matches what users see and what the value usually came from.</li>
+<li>Should the decimal mode also apply to the arithmetic of XPath 1.0 compatibility mode?</li>
+</ul>
+<h2>Implementation experience</h2>
+<p><a href="https://github.com/svanteschubert/Saxon-HE-enhanced-accuracy">Saxon-HE-enhanced-accuracy</a>,
+a fork of Saxon-HE 13.0, implements both settings as fixed defaults in a few hundred lines:
+half away from zero, and decimal arithmetic for untyped values, <code>fn:number</code>, scientific
+notation and XPath 1.0 compatibility mode. It keeps mixed arithmetic with explicitly typed
+<code>xs:double</code> values binary. Saxon's existing rounding modes and the <a href="https://github.com/qt4cg/qtspecs/pull/2218">#2218</a> comparison code carried
+most of the work. <a href="https://github.com/svanteschubert/Saxon-HE-enhanced-accuracy#simple-calculations">32 example calculations</a>
+are run as tests against both the stock and the modified processor, and the official EN 16931
+validation artefacts are run unchanged on both. The code is available under the Mozilla Public
+License 2.0, as Saxon-HE, and could serve as a starting point for an opt-in implementation.</p>
+</div></details></div>
+<div class="toot" id="created-2934"><h2>Pull request #2934 created<span class="toot-id"> #created-2934</span></h2><div class="pubdate">27 Sep at 18:11:28 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2934">https://github.com/qt4cg/qtspecs/pull/2934</a></div><details><summary>2908 Nominative and Structural Record Types</summary><div class="markup"><p>This PR provides a more conservative alternative to the rather over-ambitious proposal made in PR #2815.</p>
+<p>We already have two kinds of record type in our spec, this proposal attempts to differentiate them more clearly.</p>
+<p>The terms "nominative record type" and "structural record type" are introduced: the term "named record type" was confusing because it could apply either to "declare type record" or "declare record", which have rather different semantics. The rules for type matching and subtyping in both cases are clarified. The special characteristics of "recursive record types" are now ascribed to "nominative record types" whether or not they happen to be recursive.</p>
+<p>The PR paves the way for introducing nominative record types derived by extension and restriction in a separate proposal.</p>
+<p>Fix #2908</p>
+</div></details></div>
+<div class="toot" id="created-2933"><h2>Issue #2933 created<span class="toot-id"> #created-2933</span></h2><div class="pubdate">27 Sep at 16:13:48 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2933">https://github.com/qt4cg/qtspecs/issues/2933</a></div><details><summary>Validation of records</summary><div class="markup"><p>I propose that it should be possible (perhaps by means of an annotation) to identify one of the methods on a record type as being a validation method. The validation method will be automatically invoked whenever an instance of the record type is constructed or modified (using "but with"), and will trigger a dynamic error if it returns false.</p>
+<p>Alternatively we could allow a predicate on the record definition:</p>
+<p><code>declare record (x as integer, y as integer,  z as integer) where empty(duplicate-values((?x, ?y, ?z)))</code></p>
+</div></details></div>
+<div class="toot" id="created-2932"><h2>Pull request #2932 created<span class="toot-id"> #created-2932</span></h2><div class="pubdate">27 Sep at 14:24:57 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2932">https://github.com/qt4cg/qtspecs/pull/2932</a></div><details><summary>2919 XQFO: feature requests from users</summary><div class="markup"><p>Closes #2919 …and no further XQFO functions from our side.</p>
+</div></details></div>
+<div class="toot" id="closed-2921"><h2>Issue #2921 closed<span class="toot-id"> #closed-2921</span></h2><div class="pubdate">27 Sep at 09:16:03 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2921">https://github.com/qt4cg/qtspecs/issues/2921</a></div><p>Lax record coercions</p></div>
+<div class="toot" id="created-2931"><h2>Pull request #2931 created<span class="toot-id"> #created-2931</span></h2><div class="pubdate">27 Sep at 08:53:23 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2931">https://github.com/qt4cg/qtspecs/pull/2931</a></div><details><summary>2930 fn:map-to-element: tweaks</summary><div class="markup"><p>…and some more, which I hope will improve usability:</p>
+<ul>
+<li>Layout selection: each element’s layout is chosen from the plan entry, then the <code>*</code> fallback, or otherwise inferred from the value’s shape.</li>
+<li>One table: each layout has one row that says which values it accepts and how the element is rebuilt.</li>
+<li>One child or several: the plan decides whether an array under a key means one child or repeated children.</li>
+<li>Stricter arrays: attributes come first, and forms that element-to-map never produces are rejected.</li>
+<li>Marker clash: a key starting with <code>@</code> is read as an attribute, even with a custom attribute-marker.</li>
+<li><code>()</code> is <code>""</code>, so JSON <code>null</code> from <code>parse-json</code> works.</li>
+<li>Note: how to convert JSON objects with several keys, and JSON arrays, by wrapping them.</li>
+<li>Error list: simplified in <code>function-catalog.xml</code>.</li>
+</ul>
+<p>Only 2, 3 existing test cases will need to be changed.</p>
+<p>Closes #2930</p>
+</div></details></div>
+<div class="toot" id="created-2930"><h2>Issue #2930 created<span class="toot-id"> #created-2930</span></h2><div class="pubdate">27 Sep at 08:09:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2930">https://github.com/qt4cg/qtspecs/issues/2930</a></div><details><summary>`fn:map-to-element`: tweaks</summary><div class="markup"><p>Proposed changes, to improve roundtripping:</p>
+<ol>
+<li>One child or several: under a child key, create one child if the value has the shape of the child’s planned layout, and one child per member if it’s an array of such values. Only <code>list</code> treats an array as the content of a single child; <code>list-plus</code> does not.</li>
+<li>Fallback: if a value doesn't have the shape of its planned layout, use the plan’s <code>*</code> layout. If that doesn’t fit either, or there is none, raise an error.</li>
+<li>Shapes: add a table of what each layout’s value looks like, as the basis for 1 and&nbsp;2.</li>
+<li>Limit: add a note that a fallback result which happens to have the shape of the planned layout is converted back with the planned layout, so the element comes back different.</li>
+</ol>
+</div></details></div>
+<div class="toot" id="created-2929"><h2>Pull request #2929 created<span class="toot-id"> #created-2929</span></h2><div class="pubdate">27 Sep at 07:41:19 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2929">https://github.com/qt4cg/qtspecs/pull/2929</a></div><details><summary>2928 file:read-text: minor unifications</summary><div class="markup"><p>…and some cleanups.</p>
+<p>Closes #2928</p>
+</div></details></div>
+<div class="toot" id="created-2928"><h2>Issue #2928 created<span class="toot-id"> #created-2928</span></h2><div class="pubdate">27 Sep at 07:28:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2928">https://github.com/qt4cg/qtspecs/issues/2928</a></div><details><summary>`file:read-text`: minor unifications</summary><div class="markup"><p><code>file:read-text</code> should be further aligned with <code>fn:unparsed-text</code>:</p>
+<ul>
+<li><code>file:read-text</code>, <code>file:read-text-lines</code>: Change default encoding from <code>utf-8</code> to <code>()</code></li>
+<li><code>file:read-text</code>: Add option <code>normalize-newlines</code>.</li>
+</ul>
+</div></details></div>
+<div class="toot" id="created-2927"><h2>Issue #2927 created<span class="toot-id"> #created-2927</span></h2><div class="pubdate">25 Sep at 08:54:39 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2927">https://github.com/qt4cg/qtspecs/issues/2927</a></div><details><summary>JNode subtypes and naming</summary><div class="markup"><h3>Discussion of JNode subtypes and naming conventions</h3>
+<p>Currently we have the <code>jnode()</code> type, <code>jkey</code> and <code>jvalue()</code> functions. It is quite likely that we will need a few more functions and a number of <code>jnode()</code> subtypes (useful when using path selectors and templates).</p>
+<p>I think, we will need the following subtypes of <code>jnode()</code>: <code>jmap()</code>, <code>jarray</code>, <code>jsequence()</code>, <code>jatom()</code>, <code>jempy-node()</code>.</p>
+<p>Perhaps, a better naming option: <code>map-jnode()</code>, <code>array-jnode()</code>, <code>sequence-jnode()</code>, <code>atom-jnode()</code>, <code>empty-jnode()</code>.</p>
+<p>Does it make sense to move them all to a separate namespace with a default <code>j</code> prefix?</p>
+<p>Using a separate namespace, the subtyping relationships are as follows:</p>
+<ul>
+<li><code>j:empty-node() ≡ j:node(*, empty-sequence() )</code></li>
+<li><code>j:empty-node(N) ≡ j:node(N, empty-sequence() )</code></li>
+<li><code>j:item-node() ≡ j:node(*, item() )</code></li>
+<li><code>j:item-node(N) ≡ j:node(N, item() )</code></li>
+<li><code>j:sequence() ⊆ j:node()</code>
+<ul>
+<li>note that an item can be an instance of both <code>j:sequence()</code> and <code>j:empty-node()</code></li>
+</ul>
+</li>
+<li><code>j:sequence(N) ⊆ j:node(N)</code></li>
+<li><code>j:map() ≡ j:node(*, map(*) )</code></li>
+<li><code>j:map(N) ≡ j:node(N, map(*) )</code></li>
+<li><code>j:array() ≡ j:node(*, array(*) )</code></li>
+<li><code>j:array(N) ≡ j:node(N, array(*) )</code></li>
+<li><code>j:atom() ≡ j:node() \ ( j:sequence() | j:map() | j:array() ) </code>
+<ul>
+<li>its instances are all and only instances of <code>j:node()</code> that are not instances of <code>( j:sequence() | j:map() | j:array() )</code></li>
+<li>note that it includes instances of <code>j:empty-node()</code> that are not instances of <code>j:sequence()</code> (should that be changed?)</li>
+</ul>
+</li>
+<li><code>j:atom(N) ≡ j:node(N) \ ( j:sequence() | j:map() | j:array() )</code></li>
+</ul>
+<p>In the JNode mapping scheme I <a href="https://github.com/qt4cg/qtspecs/issues/2922#issuecomment-5822014425">propose</a>, nodes of the  <code>j:sequence()</code> type are located only on the <code>seq::</code> axis, and this axis can contain only nodes of the <code>j:sequence()</code> type.</p>
+<p>Update: <code>j:item-node()</code> added.</p>
+</div></details></div>
+<div class="toot" id="created-2926"><h2>Issue #2926 created<span class="toot-id"> #created-2926</span></h2><div class="pubdate">23 Sep at 14:15:22 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2926">https://github.com/qt4cg/qtspecs/issues/2926</a></div><details><summary>XSLT Shallow copy of a JNode map</summary><div class="markup"><p>11.9.1.2 <a href="https://qt4cg.org/specifications/xslt-40/Overview.html#id-shallow-copy-jnode">Shallow Copy: JNodes</a> currently says:</p>
+<blockquote>
+<p>A new map is constructed as if by evaluating the instruction <code>&lt;xsl:map select="S" duplicates="'use-last'"/&gt;</code>, and <strong>V1</strong> is this map.
+Note:
+This means that each item in <strong>S</strong> must either be a map, or a JNode whose ·jvalue· is a map;</p>
+</blockquote>
+<p>It seems, this spec does not meet a reasonable expectation that the following instruction should create a JNode whose jvalue is the same as in <code>@select</code>:</p>
+<pre><code class="language-xslt">&lt;xsl:copy select='{ "a":(10), "b":(20) }/.'&gt;
+  &lt;xsl:copy-of select="*"/&gt;
+&lt;/xsl:copy&gt;
+</code></pre>
+<p>Since in this case each item of <strong>S</strong> is a JNode whose value is an instance of <code>xs:integer</code> (rather than <code>map(*)</code>).</p>
+<p>In <a href="https://github.com/qt4cg/qtspecs/issues/2922#issuecomment-5732779493:~:text=S1%20must%20be%20transformed%20to%20S2%20by%20converting%20each%20group%20of%20adjacent%20JTrees%2C%20whose%20origins%20are%20peers%2C%20into%20a%20singleton%20map">#2922 comment</a> I suggested to transform <strong>S</strong>, by converting JNodes (or JTrees as far as they are parentless) to singleton maps, before applying <code>map:merge</code>. Their <code>jkey</code> value should be used for the map key.</p>
+</div></details></div>
 <div class="toot" id="minutes-09-22"><h2>QT4 CG meeting 181 draft minutes<span class="toot-id"> #minutes-09-22</span></h2><div class="pubdate">22 Sep at 16:40:00 GMT</div><div class="link">Link: <a href="https://qt4cg.org/meeting/minutes/2026/09-22">https://qt4cg.org/meeting/minutes/2026/09-22</a></div><p>Draft minutes published.</p></div>
 <div class="toot" id="closed-2789"><h2>Issue #2789 closed<span class="toot-id"> #closed-2789</span></h2><div class="pubdate">22 Sep at 17:02:26 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2789">https://github.com/qt4cg/qtspecs/pull/2789</a></div><p>2787 XQuery changes to merge declare record and declare type</p></div>
 <div class="toot" id="closed-2909"><h2>Issue #2909 closed<span class="toot-id"> #closed-2909</span></h2><div class="pubdate">22 Sep at 16:32:04 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2909">https://github.com/qt4cg/qtspecs/issues/2909</a></div><p>Binary functions: Base64 URL en-/decoding</p></div>
@@ -60,17 +311,17 @@ return $f(12.3)
 <p><em>Originally posted by @ruv in <a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-5682702247">#2073</a></em></p>
 <p>This approach was roughly described in my comments on <a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-3613350338">2025-12-04</a> and <a href="https://github.com/qt4cg/qtspecs/issues/2073#issuecomment-5495615995">2026-09-01</a>.</p>
 <p>Example:</p>
-<pre><code class="language-xml">&lt;jnode kind='map' key='()' value='{ "d": (7, [ 8, (9,10) ], 11), "e": (12,13), "f":14 }'&gt;
-    &lt;jnode kind='leaf' key='d' value='7'/&gt;
-    &lt;jnode kind='array' key='d' value='[ 8, (9,10) ]'&gt;
-      &lt;jnode kind='leaf' key='1' value='8'/&gt;
-      &lt;jnode kind='leaf' key='2' value='9'/&gt;
-      &lt;jnode kind='leaf' key='2' value='10'/&gt;
+<pre><code class="language-xml">&lt;jnode key='()' kind='map' value='{ "d": (7, [ 8, (9,10) ], 11), "e": (12,13), "f":14 }'&gt;
+    &lt;jnode key='d' kind='leaf' value='7'/&gt;
+    &lt;jnode key='d' kind='array' value='[ 8, (9,10) ]'&gt;
+      &lt;jnode key='1' kind='leaf' value='8'/&gt;
+      &lt;jnode key='2' kind='leaf' value='9'/&gt;
+      &lt;jnode key='2' kind='leaf' value='10'/&gt;
     &lt;/jnode&gt;
-    &lt;jnode kind='leaf' key='d' value='11'/&gt;
-    &lt;jnode kind='leaf' key='e' value='12'/&gt;
-    &lt;jnode kind='leaf' key='e' value='13'/&gt;
-    &lt;jnode kind='leaf' key='f' value='14'/&gt;
+    &lt;jnode key='d' kind='leaf' value='11'/&gt;
+    &lt;jnode key='e' kind='leaf' value='12'/&gt;
+    &lt;jnode key='e' kind='leaf' value='13'/&gt;
+    &lt;jnode key='f' kind='leaf' value='14'/&gt;
 &lt;/jnode&gt;
 </code></pre>
 <p>Some problems of this approach are:</p>
@@ -114,42 +365,5 @@ return $coord
 <div class="toot" id="created-2920"><h2>Pull request #2920 created<span class="toot-id"> #created-2920</span></h2><div class="pubdate">16 Sep at 22:12:51 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2920">https://github.com/qt4cg/qtspecs/pull/2920</a></div><details><summary>2813 clarifications for xsl:result-document</summary><div class="markup"><p>The primary purpose of this PR is to clarify the situation when an xsl:result-document instruction has an empty or absent href attribute, and thus writes to the principal output destination.</p>
 <p>However, it also takes the opportunity to add many more clarifications to the serialization part of the XSLT spec, to improve the order of presentation, and to remove some redundancy</p>
 <p>Fix #2813</p>
-</div></details></div>
-<div class="toot" id="created-2919"><h2>Issue #2919 created<span class="toot-id"> #created-2919</span></h2><div class="pubdate">16 Sep at 12:45:05 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2919">https://github.com/qt4cg/qtspecs/issues/2919</a></div><details><summary>XQFO: feature requests from users</summary><div class="markup"><p>Some requests of “early adopters” (not sure whether that’s still the right term ;·), for functions that would be simple to add or modify:</p>
-<h3>1. <code>fn:trim</code></h3>
-<p>Many functions come with a function for removing leading and trailing whitespace. It would be an easy-to-read shortcut for <code>replace($line, '^\s+|\s+$')</code>, i.e. for users who are not into regex.</p>
-<h3>2. <code>fn:index-of-substring($string, $substring, $start?)</code></h3>
-<p>An alternatives for strings would simplify life (<code>fn:index-of</code> compares items, not strings).</p>
-<h3>3. <code>fn:random-number-generator()?take(n)</code></h3>
-<p>Retrieving <em>n</em> random numbers is hard to achieve for non-experts. A shortcut would be desirable, for code like:</p>
-<pre><code class="language-xquery">fold-left(1 to $n, random-number-generator(), fn { head(.) ! (?next(), ?number), tail(.) })
-=&gt; tail()
-</code></pre>
-</div></details></div>
-<div class="toot" id="created-2918"><h2>Pull request #2918 created<span class="toot-id"> #created-2918</span></h2><div class="pubdate">16 Sep at 11:17:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2918">https://github.com/qt4cg/qtspecs/pull/2918</a></div><details><summary>2600 Options on fn:collection()</summary><div class="markup"><p>Defines an options parameter for the fn:collection and fn:uri-collection functions.</p>
-<p>Fix #2600
-Fix #285</p>
-</div></details></div>
-<div class="toot" id="created-2917"><h2>Issue #2917 created<span class="toot-id"> #created-2917</span></h2><div class="pubdate">16 Sep at 08:18:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2917">https://github.com/qt4cg/qtspecs/issues/2917</a></div><details><summary>Implementation-defined features</summary><div class="markup"><p>Some of the specifications have an appendix listing implementation-defined features. In some cases at least this is based on markup within the document text. In all cases, it has not been systematically reviewed or updated for changes in 4.0. We should either drop these appendixes or ensure they are accurate.</p>
-</div></details></div>
-<div class="toot" id="created-2916"><h2>Pull request #2916 created<span class="toot-id"> #created-2916</span></h2><div class="pubdate">15 Sep at 18:50:31 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2916">https://github.com/qt4cg/qtspecs/pull/2916</a></div><details><summary>2915 `fn:current`: inline functions and `fn:function-lookup`</summary><div class="markup"><p>Closes #2915</p>
-</div></details></div>
-<div class="toot" id="created-2915"><h2>Issue #2915 created<span class="toot-id"> #created-2915</span></h2><div class="pubdate">15 Sep at 18:47:29 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2915">https://github.com/qt4cg/qtspecs/issues/2915</a></div><details><summary>`fn:current`: inline functions and `fn:function-lookup`</summary><div class="markup"><p>The current spec says:</p>
-<blockquote>
-<p>While the body of a function declaration or the initializing expression of a variable declaration is evaluated, it reverts to the context value of the query prolog.</p>
-</blockquote>
-<p>It is unclear what <code>current()</code> returns in an inline function called from a default value. I think the current value should revert in every function body, just as the focus is absent in every function body.</p>
-<p>The spec also lists the constructs that pass the caller’s context value to a default:</p>
-<blockquote>
-<p>a static function call, a named function reference, or a partial function application</p>
-</blockquote>
-<p>We should add <code>fn:function-lookup</code> (it can also create a function item with an omitted argument).</p>
-</div></details></div>
-<div class="toot" id="closed-1459"><h2>Issue #1459 closed<span class="toot-id"> #closed-1459</span></h2><div class="pubdate">15 Sep at 18:23:15 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/1459">https://github.com/qt4cg/qtspecs/issues/1459</a></div><p>Function properties and arities</p></div>
-<div class="toot" id="closed-2886"><h2>Issue #2886 closed<span class="toot-id"> #closed-2886</span></h2><div class="pubdate">15 Sep at 18:23:14 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2886">https://github.com/qt4cg/qtspecs/pull/2886</a></div><p>1459 Function properties and arities</p></div>
-<div class="toot" id="closed-2901"><h2>Issue #2901 closed<span class="toot-id"> #closed-2901</span></h2><div class="pubdate">15 Sep at 18:19:35 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2901">https://github.com/qt4cg/qtspecs/issues/2901</a></div><p>element-to-map: errors in the conversion plan</p></div>
-<div class="toot" id="closed-2903"><h2>Issue #2903 closed<span class="toot-id"> #closed-2903</span></h2><div class="pubdate">15 Sep at 18:19:34 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2903">https://github.com/qt4cg/qtspecs/pull/2903</a></div><p>2901 element-to-map: errors in the conversion plan</p></div>
-<div class="toot" id="closed-2906"><h2>Issue #2906 closed<span class="toot-id"> #closed-2906</span></h2><div class="pubdate">15 Sep at 18:19:02 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2906">https://github.com/qt4cg/qtspecs/issues/2906</a></div><p>Alternative for `+:=`: `put`?</p></div>
-<div class="toot" id="closed-2907"><h2>Issue #2907 closed<span class="toot-id"> #closed-2907</span></h2><div class="pubdate">15 Sep at 18:19:01 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/pull/2907">https://github.com/qt4cg/qtspecs/pull/2907</a></div><p>2906 Alternative for +:=: put</p></div>
-<div class="toot" id="closed-2883"><h2>Issue #2883 closed<span class="toot-id"> #closed-2883</span></h2><div class="pubdate">15 Sep at 17:53:52 GMT</div><div class="link">Link: <a href="https://github.com/qt4cg/qtspecs/issues/2883">https://github.com/qt4cg/qtspecs/issues/2883</a></div><p>parse-xml: strip-space=conditional</p></div></div><p>See 6055
+</div></details></div></div><p>See 6067
             more statuses in yearly archives.</p></article></main></body></html>
