@@ -13,16 +13,22 @@ declare namespace proc = 'http://basex.org/modules/proc';
 declare record spec-sections(title as xs:string, sections as map(*), anchors as map(*));
 (:~ Remaining old and new blocks, and the diff created so far. :)
 declare record alignment(old as xs:string*, new as xs:string*, result as element(p)*);
+(:~ Diff algorithm: shortest edit script (Myers), or common prefix and suffix. :)
+declare type diff-mode as enum('simple', 'words');
 
 declare variable $BASE := 'master';
 declare variable $SOURCES := ('specifications', 'style');
 declare variable $REPO := file:parent(file:base-dir());
 declare variable $WWW := $REPO || 'build/www/';
-declare variable $OUT := $REPO || 'build/rendered-diff.html';
+declare variable $OUTPUTS := {
+  'simple': $REPO || 'build/rendered-diff.html',
+  'words' : $REPO || 'build/rendered-diff-words.html'
+};
 declare variable $CACHE := $REPO || 'build/rendered-diff/';
 declare variable $STATE := $CACHE || 'state.txt';
 declare variable $HEADINGS := ('h1', 'h2', 'h3', 'h4', 'h5', 'h6');
 declare variable $BLOCKS := ($HEADINGS, 'p', 'pre', 'dt', 'dd', 'li', 'td', 'th');
+declare variable $MAX-DIFFS := 1000;
 
 (:~
  : Runs an external command and returns its output.
@@ -164,25 +170,126 @@ declare function block-text($block as element()) as xs:string {
 };
 
 (:~
- : Renders a word-level diff of two blocks: the words between the common prefix and suffix
- : are marked as deleted and inserted.
- : @param $a old text
- : @param $b new text
- : @return paragraph
+ : Computes the edit script of two sequences with the given algorithm.
+ : @param $old old items
+ : @param $new new items
+ : @param $mode diff algorithm
+ : @return operations, each with a type ('=', '-' or '+') and an item
  :)
-declare function diff-words($a as xs:string, $b as xs:string) as element(p) {
-  let $x := tokenize($a)
-  let $y := tokenize($b)
+declare function edit-script(
+  $old as xs:string*,
+  $new as xs:string*,
+  $mode as diff-mode
+) as array(xs:string)* {
+  if ($mode = 'words') then myers-script($old, $new) else affix-script($old, $new)
+};
+
+(:~
+ : Computes an edit script in which the items between the common prefix and suffix are replaced.
+ : @param $old old items
+ : @param $new new items
+ : @return operations, each with a type ('=', '-' or '+') and an item
+ :)
+declare function affix-script($old as xs:string*, $new as xs:string*) as array(xs:string)* {
   let $common := fn($c, $d) {
     count(for $equal in for-each-pair($c, $d, op('=')) while $equal return $equal)
   }
-  let $pre := $common($x, $y)
-  let $suf := min(($common(reverse($x), reverse($y)), count($x) - $pre, count($y) - $pre))
-  let $middle := fn($z) { string-join(subsequence($z, $pre + 1, count($z) - $pre - $suf), ' ') }
-  return <p>{
-    string-join(subsequence($x, 1, $pre), ' '), ' ',
-    <del>{ $middle($x) }</del>, ' ', <ins>{ $middle($y) }</ins>, ' ',
-    string-join(subsequence($x, count($x) - $suf + 1), ' ')
+  let $pre := $common($old, $new)
+  let $suf := min(($common(reverse($old), reverse($new)), count($old) - $pre, count($new) - $pre))
+  return (
+    subsequence($old, 1, $pre) ! [ '=', . ],
+    subsequence($old, $pre + 1, count($old) - $pre - $suf) ! [ '-', . ],
+    subsequence($new, $pre + 1, count($new) - $pre - $suf) ! [ '+', . ],
+    subsequence($old, count($old) - $suf + 1) ! [ '=', . ]
+  )
+};
+
+(:~
+ : Computes the shortest edit script of two sequences with the Myers algorithm.
+ : @param $old old items
+ : @param $new new items
+ : @return operations, each with a type ('=', '-' or '+') and an item
+ :)
+declare function myers-script($old as xs:string*, $new as xs:string*) as array(xs:string)* {
+  let $n := count($old)
+  let $m := count($new)
+  (: for each number of differences, the furthest position in $old per diagonal (x - y) :)
+  let $done := fn($trace) { $trace[last()]($n - $m) >= $n }
+  let $trace := while-do(
+    { 1: 0 },
+    fn($trace) { not($done($trace)) and count($trace) <= $MAX-DIFFS },
+    fn($trace) {
+      let $d := count($trace) - 1
+      let $v := $trace[last()]
+      return ($trace, fold-left((-$d to $d)[(. + $d) mod 2 = 0], $v, fn($next, $k) {
+        let $x := if ($k = -$d or ($k != $d and $v($k - 1) < $v($k + 1)))
+          then $v($k + 1) else $v($k - 1) + 1
+        return map:put($next, $k, snake($old, $new, $x, $x - $k))
+      }))
+    }
+  )
+  return if (not($done($trace))) then (
+    (: too many differences: everything is replaced :)
+    $old ! [ '-', . ], $new ! [ '+', . ]
+  ) else (
+    (: walk back from the end, and prepend each change and the unchanged items after it :)
+    fold-left(reverse(0 to count($trace) - 2), { 'x': $n, 'y': $m, 'ops': () }, fn($s, $d) {
+      let $v := $trace[$d + 1]
+      let $k := $s?x - $s?y
+      let $pk := if ($k = -$d or ($k != $d and $v($k - 1) < $v($k + 1))) then $k + 1 else $k - 1
+      let $px := $v($pk)
+      let $py := $px - $pk
+      let $equal := min(($s?x - $px, $s?y - $py))
+      return {
+        'x': $px,
+        'y': $py,
+        'ops': (
+          if ($d > 0) { if ($pk = $k + 1) then [ '+', $new[$py + 1] ] else [ '-', $old[$px + 1] ] },
+          subsequence($old, $s?x - $equal + 1, $equal) ! [ '=', . ],
+          $s?ops
+        )
+      }
+    })?ops
+  )
+};
+
+(:~
+ : Follows a diagonal of the Myers algorithm as long as the items of both sequences are equal.
+ : @param $old old items
+ : @param $new new items
+ : @param $x position in the old items
+ : @param $y position in the new items
+ : @return position in the old items after the equal items
+ :)
+declare function snake(
+  $old as xs:string*,
+  $new as xs:string*,
+  $x as xs:integer,
+  $y as xs:integer
+) as xs:integer {
+  if ($old[$x + 1] = $new[$y + 1]) then snake($old, $new, $x + 1, $y + 1) else $x
+};
+
+(:~
+ : Renders a word-level diff of two blocks, with adjacent deleted and inserted words merged.
+ : @param $a old text
+ : @param $b new text
+ : @param $mode diff algorithm
+ : @return paragraph
+ :)
+declare function diff-words($a as xs:string, $b as xs:string, $mode as diff-mode) as element(p) {
+  <p>{
+    for tumbling window $w in edit-script(tokenize($a), tokenize($b), $mode)
+      start $s previous $p when not($s?1 = $p?1)
+    let $text := string-join($w ! ?2, ' ')
+    return (
+      switch ($s?1) {
+        case '-' return <del>{ $text }</del>
+        case '+' return <ins>{ $text }</ins>
+        default return $text
+      },
+      ' '
+    )
   }</p>
 };
 
@@ -199,12 +306,36 @@ declare function similar($a as xs:string, $b as xs:string) as xs:boolean {
 };
 
 (:~
- : Aligns old and new blocks, and renders deleted, inserted and changed blocks in document order.
+ : Compares old and new blocks, and renders deleted, inserted and changed blocks in document order.
  : @param $old old blocks
  : @param $new new blocks
+ : @param $mode diff algorithm
  : @return paragraphs
  :)
-declare function diff-blocks($old as xs:string*, $new as xs:string*) as element(p)* {
+declare function diff-blocks(
+  $old as xs:string*,
+  $new as xs:string*,
+  $mode as diff-mode
+) as element(p)* {
+  (: runs of deleted and inserted blocks between two unchanged ones :)
+  for tumbling window $w in edit-script($old, $new, $mode)
+    start $s when $s?1 != '='
+    end next $n when $n?1 = '='
+  return pair-blocks($w[?1 = '-'] ! ?2, $w[?1 = '+'] ! ?2, $mode)
+};
+
+(:~
+ : Pairs deleted and inserted blocks, and renders similar ones as changed blocks.
+ : @param $old deleted blocks
+ : @param $new inserted blocks
+ : @param $mode diff algorithm
+ : @return paragraphs
+ :)
+declare function pair-blocks(
+  $old as xs:string*,
+  $new as xs:string*,
+  $mode as diff-mode
+) as element(p)* {
   let $align := fn($s as alignment) as alignment {
     let $a := head($s?old)
     let $b := head($s?new)
@@ -212,7 +343,7 @@ declare function diff-blocks($old as xs:string*, $new as xs:string*) as element(
       case ($a = $b) return
         alignment(tail($s?old), tail($s?new), $s?result)
       case (exists($a) and exists($b) and similar($a, $b)) return
-        alignment(tail($s?old), tail($s?new), ($s?result, diff-words($a, $b)))
+        alignment(tail($s?old), tail($s?new), ($s?result, diff-words($a, $b, $mode)))
       (: no old block left, or it occurs later: the new block was inserted :)
       case (empty($a) or $a = tail($s?new) or (some $n in tail($s?new) satisfies similar($a, $n)))
       return
@@ -226,29 +357,33 @@ declare function diff-blocks($old as xs:string*, $new as xs:string*) as element(
 
 (:~
  : Compares two renderings of a specification.
- : @param $base directory with the renderings of the base branch
+ : @param $old sections of the base branch
+ : @param $new sections of the working tree
  : @param $path path to the rendering, relative to the web directory
+ : @param $mode diff algorithm
  : @return changed sections
  :)
-declare function diff-spec($base as xs:string, $path as xs:string) as element(div) {
-  let $old := parse-sections($base || $path)
-  let $new := parse-sections($WWW || $path)
-  let $sections := (
-    for $key in distinct-values((map:keys($new?sections), map:keys($old?sections)))
-    let $a := $old?sections($key)
-    let $b := $new?sections($key)
-    where not(deep-equal($a, $b))
-    let $anchor := $new?anchors($key)
-    return <section>
-      <h3>{
-        if ($anchor) then <a href='www/{ $path }#{ $anchor }'>{ $key }</a> else $key
-      }</h3>
-      { diff-blocks($a, $b) }
-    </section>
-  )
-  return <div>
+declare function diff-spec(
+  $old as spec-sections,
+  $new as spec-sections,
+  $path as xs:string,
+  $mode as diff-mode
+) as element(div) {
+  <div>
     <h1>{ $new?title }</h1>
-    { $sections }
+    {
+      for $key in distinct-values((map:keys($new?sections), map:keys($old?sections)))
+      let $a := $old?sections($key)
+      let $b := $new?sections($key)
+      where not(deep-equal($a, $b))
+      let $anchor := $new?anchors($key)
+      return <section>
+        <h3>{
+          if ($anchor) then <a href='www/{ $path }#{ $anchor }'>{ $key }</a> else $key
+        }</h3>
+        { diff-blocks($a, $b, $mode) }
+      </section>
+    }
   </div>
 };
 
@@ -262,15 +397,17 @@ return if (not($diff)) then (
   file:create-dir($CACHE),
   if (not(file:exists($base))) { build-base($commit, $base) },
   if (not((if (file:exists($STATE)) { file:read-text($STATE) }) = $state)) { build-specs($state) },
-  (: renderings that differ from the base branch :)
-  let $specs := (
+  (: renderings that differ from the base branch; each is parsed once for both diffs :)
+  let $parsed := (
     for $path in renderings()
     let $old := $base || $path
     where file:exists($old) and file:read-binary($old) != file:read-binary($WWW || $path)
-    return diff-spec($base, $path)
+    return { 'path': $path, 'old': parse-sections($old), 'new': parse-sections($WWW || $path) }
   )
+  for $mode in map:keys($OUTPUTS)
+  let $specs := $parsed ! diff-spec(?old, ?new, ?path, $mode)
   return (
-    file:write($OUT, <html>
+    file:write($OUTPUTS($mode), <html>
       <head>
         <title>Rendered diff</title>
         <link rel='stylesheet' href='../specifications/css/w3c-base.css'/>
@@ -288,7 +425,6 @@ return if (not($diff)) then (
         <p>{ $BASE } ({ substring($commit, 1, 9) }) → working tree</p>
       </body>
     </html>, { 'method': 'html' }),
-    $specs ! `{ h1 }: { count(section) } changed sections`,
-    `written: { $OUT }`
+    `written: { $OUTPUTS($mode) } ({ count($specs/section) } changed sections)`
   )
 )
