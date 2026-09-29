@@ -429,32 +429,45 @@
     </xsl:choose>
   </xsl:variable>
 
-  <span class="function">
-    <xsl:choose>
-      <xsl:when test="contains($fname, ':')">
-        <xsl:apply-templates/>
-      </xsl:when>
-      <xsl:otherwise>
+  <xsl:choose>
+    <!-- functions defined in other specifications: code font, link to the definition -->
+    <xsl:when test="contains($fname, ':') and not(starts-with($fname, 'dm:'))">
+      <xsl:apply-imports/>
+    </xsl:when>
+    <xsl:otherwise>
+      <xsl:variable name="local">
         <xsl:choose>
-          <xsl:when test="id(concat('dm-', $fname))">
-            <a>
-              <xsl:attribute name="href">
-                <xsl:call-template name="href.target">
-                  <xsl:with-param name="target" select="id(concat('dm-', $fname))"/>
-                </xsl:call-template>
-              </xsl:attribute>
-              <span class="prefix">dm:</span>
-              <xsl:apply-templates/>
-            </a>
+          <xsl:when test="starts-with($fname, 'dm:')">
+            <xsl:value-of select="substring-after($fname, 'dm:')"/>
           </xsl:when>
           <xsl:otherwise>
-            <span class="prefix">dm:</span>
-            <xsl:apply-templates/>
+            <xsl:value-of select="$fname"/>
           </xsl:otherwise>
         </xsl:choose>
-      </xsl:otherwise>
-    </xsl:choose>
-  </span>
+      </xsl:variable>
+      <span class="function">
+        <code>
+          <xsl:choose>
+            <xsl:when test="id(concat('dm-', $local))">
+              <a>
+                <xsl:attribute name="href">
+                  <xsl:call-template name="href.target">
+                    <xsl:with-param name="target" select="id(concat('dm-', $local))"/>
+                  </xsl:call-template>
+                </xsl:attribute>
+                <xsl:if test="$local = $fname"><span class="prefix">dm:</span></xsl:if>
+                <xsl:apply-templates/>
+              </a>
+            </xsl:when>
+            <xsl:otherwise>
+              <xsl:if test="$local = $fname"><span class="prefix">dm:</span></xsl:if>
+              <xsl:apply-templates/>
+            </xsl:otherwise>
+          </xsl:choose>
+        </code>
+      </span>
+    </xsl:otherwise>
+  </xsl:choose>
 </xsl:template>
 
 <xsl:template match="inform-div1">
