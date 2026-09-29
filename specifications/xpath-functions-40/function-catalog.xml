@@ -6190,6 +6190,9 @@ return normalize-unicode(concat($v1, $v2))</eg>
          <p>The whitespace characters are defined in the metasymbol S (Production 3) of <bibref
                ref="xml"/>.</p>
       </fos:rules>
+      <fos:equivalent style="xpath-expression">
+$value => trim-space() => replace('\s+', ' ')
+      </fos:equivalent>
       <fos:errors>
          <p>If no argument is supplied and the context value is
             <xtermref ref="dt-absent" spec="DM40">absent</xtermref>, a type error is raised
@@ -6255,6 +6258,88 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:changes>
          <fos:change issue="2279" PR="2286" date="2025-11-17"><p>The type of <code>$value</code>
             has been generalized to <code>xs:anyAtomicType?</code>.</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   <fos:function name="trim-space" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="trim-space" return-type="xs:string">
+            <fos:arg name="value" type="xs:anyAtomicType?"/>
+            <fos:arg name="options" type="map(*)?" default="{}" note="default-on-empty"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns <code>$value</code> with leading and/or trailing whitespace removed.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$value</code> is the empty sequence, the function returns a zero-length string.
+            Otherwise, the value is cast to an <code>xs:string</code>, and a new string is
+            constructed by stripping whitespace from its start, its end, or both.</p>
+         <p>The whitespace characters are <char>U+0020</char>, <char>U+0009</char>, <char>U+000D</char>, and <char>U+000A</char>.</p>
+         <p>The <code>$options</code> argument controls which whitespace is removed.
+            The <termref def="option-parameter-conventions"/> apply.</p>
+         <fos:options>
+            <fos:option key="side">
+               <fos:meaning>The side of the string from which whitespace is removed.</fos:meaning>
+               <fos:type>enum('start', 'end', 'both')</fos:type>
+               <fos:default>"both"</fos:default>
+            </fos:option>
+         </fos:options>
+      </fos:rules>
+      <fos:equivalent style="xpath-expression">
+let $pattern := {
+  'start': '^\s+',
+  'end': '\s+$',
+  'both': '^\s+|\s+$'
+}($options?side otherwise 'both')
+return replace(string($value), $pattern, '')
+      </fos:equivalent>
+      <fos:notes>
+         <p>Unlike <function>fn:normalize-space</function>, the function does not change whitespace
+            between other characters.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>trim-space("  Albert  Camus  ")</eg></fos:expression>
+               <fos:result>"Albert  Camus"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>trim-space("  Albert  Camus  ", { "side": "start" })</eg></fos:expression>
+               <fos:result>"Albert  Camus  "</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>trim-space("  Albert  Camus  ", { "side": "end" })</eg></fos:expression>
+               <fos:result>"  Albert  Camus"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>trim-space(" &#xA;&#x9; ")</eg></fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>trim-space(char(0xA0) || "x ")</eg></fos:expression>
+               <fos:result>char(0xA0) || "x"</fos:result>
+               <fos:postamble>A non-breaking space is not a whitespace character.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>trim-space(())</eg></fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="normalize-space"/>
+      <fos:see-also prefix="fn" name="pad-string"/>
+      <fos:changes>
+         <fos:change issue="2919" date="2026-09-27"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
    <fos:function name="normalize-unicode" prefix="fn">
@@ -7565,6 +7650,271 @@ return normalize-unicode(concat($v1, $v2))</eg>
       <fos:see-also prefix="fn" name="substring"/>
       <fos:see-also prefix="fn" name="tokenize"/>
    </fos:function>
+   <fos:function name="index-of-substring" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="index-of-substring" return-type="xs:integer*">
+            <fos:arg name="value" type="xs:string?"/>
+            <fos:arg name="substring" type="xs:string"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns the positions of all occurrences of <code>$substring</code> in
+            <code>$value</code>.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$value</code> is the empty sequence, it is interpreted as the zero-length
+            string.</p>
+         <p>The function returns the positions of the first <termref def="character">characters</termref>
+            of all occurrences of <code>$substring</code> in <code>$value</code>, in ascending
+            order. Positions are counted in characters, starting at one from the beginning of the
+            string. Strings are compared codepoint by codepoint.</p>
+         <p>If there is no occurrence, the function returns the empty sequence.</p>
+         <p>A zero-length <code>$substring</code> occurs at every position from one to
+            <code>string-length($value) + 1</code>.</p>
+      </fos:rules>
+      <fos:equivalent style="xpath-expression">
+let $coll := 'http://www.w3.org/2005/xpath-functions/collation/codepoint'
+return (1 to string-length($value) + 1)[
+  starts-with(substring($value, .), $substring, $coll)
+]
+      </fos:equivalent>
+      <fos:notes>
+         <p>Occurrences may overlap: every position at which <code>$substring</code> starts is
+            returned.</p>
+         <p>Unlike <function>fn:index-of</function>, which returns the positions of items
+            in a sequence that are equal to a given value, this function returns positions
+            within a string. The position of the first or last occurrence can be obtained with
+            <function>fn:head</function> or <function>fn:foot</function>.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>index-of-substring("banana", "an")</fos:expression>
+               <fos:result>2, 4</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>index-of-substring("banana", "a")</fos:expression>
+               <fos:result>2, 4, 6</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>index-of-substring("banana", "ana")</fos:expression>
+               <fos:result>2, 4</fos:result>
+               <fos:postamble>Occurrences may overlap.</fos:postamble>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>index-of-substring("banana", "x")</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>index-of-substring("abc", "")</fos:expression>
+               <fos:result>1, 2, 3, 4</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>foot(index-of-substring("2026-09-29", "-"))</fos:expression>
+               <fos:result>8</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="contains"/>
+      <fos:see-also prefix="fn" name="index-of"/>
+      <fos:see-also prefix="fn" name="substring-before"/>
+      <fos:changes>
+         <fos:change issue="2919" date="2026-09-27"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   <fos:function name="substring-before-last" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="substring-before-last" return-type="xs:string">
+            <fos:arg name="value" type="xs:string?"/>
+            <fos:arg name="substring" type="xs:string?"/>
+            <fos:arg name="collation" type="xs:string?" default="fn:default-collation()" note="default-on-empty"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property dependency="collations static-base-uri">context-dependent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns the part of <code>$value</code> that precedes the last occurrence of
+               <code>$substring</code>, taking collations into account.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$value</code> or <code>$substring</code> is the empty sequence, or
+            contains only ignorable collation units, it is interpreted as the zero-length
+            string.</p>
+         <p>If <code>$substring</code> is the zero-length string, then the function returns
+            the value of <code>$value</code>.</p>
+         <p>If <code>$value</code> does not contain a string that is equal to
+            <code>$substring</code>, then the function returns the zero-length string.</p>
+         <p>The collation used by this function is determined according to the rules in <specref
+               ref="choosing-a-collation"/>.</p>
+         <p>The function returns the substring of <code>$value</code> that precedes in
+            <code>$value</code> the last occurrence of a sequence of collation units
+            that provides a <termref def="dt-minimal-match.collation"/> to the collation units of
+            <code>$substring</code> according to the collation that is used.</p>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <rfc2119>may</rfc2119> be raised <errorref class="CH" code="0004"
+            /> if
+            the specified collation does not support collation units.</p>
+      </fos:errors>
+      <fos:notes>
+         <p>Occurrences of <code>$substring</code> may overlap. The last occurrence is the one
+            that starts last in <code>$value</code>.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-before-last("a/b/c", "/")</fos:expression>
+               <fos:result>"a/b"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-before-last("tattoo", "t")</fos:expression>
+               <fos:result>"tat"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-before-last("aaa", "aa")</fos:expression>
+               <fos:result>"a"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-before-last("tattoo", "x")</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-before-last("tattoo", "")</fos:expression>
+               <fos:result>"tattoo"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-before-last((), ())</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>substring-before-last(
+  "A-b-B-c",
+  "b",
+  "http://www.w3.org/2005/xpath-functions/collation/html-ascii-case-insensitive"
+)</eg></fos:expression>
+               <fos:result>"A-b-"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="substring-after-last"/>
+      <fos:see-also prefix="fn" name="substring-before"/>
+      <fos:changes>
+         <fos:change issue="2919" date="2026-09-27"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+   <fos:function name="substring-after-last" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="substring-after-last" return-type="xs:string">
+            <fos:arg name="value" type="xs:string?"/>
+            <fos:arg name="substring" type="xs:string?"/>
+            <fos:arg name="collation" type="xs:string?" default="fn:default-collation()" note="default-on-empty"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:properties>
+         <fos:property dependency="collations static-base-uri">context-dependent</fos:property>
+      </fos:properties>
+      <fos:summary>
+         <p>Returns the part of <code>$value</code> that follows the last occurrence of
+               <code>$substring</code>, taking collations into account.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$value</code> or <code>$substring</code> is the empty sequence, or
+            contains only ignorable collation units, it is interpreted as the zero-length
+            string.</p>
+         <p>If <code>$substring</code> is the zero-length string, then the function returns
+            the zero-length string.</p>
+         <p>If <code>$value</code> does not contain a string that is equal to
+            <code>$substring</code>, then the function returns the zero-length string.</p>
+         <p>The collation used by this function is determined according to the rules in <specref
+               ref="choosing-a-collation"/>.</p>
+         <p>The function returns the substring of <code>$value</code> that follows in
+            <code>$value</code> the last occurrence of a sequence of collation units
+            that provides a <termref def="dt-minimal-match.collation"/> to the collation units of
+            <code>$substring</code> according to the collation that is used.</p>
+      </fos:rules>
+      <fos:errors>
+         <p>A dynamic error <rfc2119>may</rfc2119> be raised <errorref class="CH" code="0004"
+            /> if
+            the specified collation does not support collation units.</p>
+      </fos:errors>
+      <fos:notes>
+         <p>Occurrences of <code>$substring</code> may overlap. The last occurrence is the one
+            that starts last in <code>$value</code>.</p>
+         <p>A zero-length <code>$substring</code> is regarded as occurring at the end of
+            <code>$value</code>, which is why the result is then the zero-length string, while
+            <function>fn:substring-after</function> returns <code>$value</code>.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-after-last("a/b/c", "/")</fos:expression>
+               <fos:result>"c"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-after-last("archive.tar.gz", ".")</fos:expression>
+               <fos:result>"gz"</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-after-last("aaa", "aa")</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-after-last("tattoo", "x")</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>substring-after-last("tattoo", "")</fos:expression>
+               <fos:result>""</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>substring-after-last(
+  "A-b-B-c",
+  "b",
+  "http://www.w3.org/2005/xpath-functions/collation/html-ascii-case-insensitive"
+)</eg></fos:expression>
+               <fos:result>"-c"</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="substring-after"/>
+      <fos:see-also prefix="fn" name="substring-before-last"/>
+      <fos:changes>
+         <fos:change issue="2919" date="2026-09-27"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
    <fos:function name="matches" prefix="fn">
       <fos:signatures>
          <fos:proto name="matches" return-type="xs:boolean">
@@ -8729,7 +9079,7 @@ return $regex?replace($title, fn { . + 1 })</eg></fos:expression>
       </fos:rules>
       <fos:equivalent style="xpath-expression">
 some $t in ($value ! tokenize(.))
-satisfies compare($t, replace($token, '^\s*|\s*$', ''), $collation) eq 0
+satisfies compare($t, trim-space($token), $collation) eq 0
       </fos:equivalent>
       <fos:notes>
          <p>Interior whitespace within <code>$token</code> will cause the function to return <code>false</code>,
@@ -9133,7 +9483,68 @@ satisfies compare($t, replace($token, '^\s*|\s*$', ''), $collation) eq 0
          <fos:change issue="959" PR="984" date="2024-02-06"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
-   
+   <fos:function name="duration-to-seconds" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="duration-to-seconds" return-type="xs:decimal?">
+            <fos:arg name="value" type="xs:dayTimeDuration?"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns the length of an <code>xs:dayTimeDuration</code> in seconds.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$value</code> is the empty sequence, the function returns the empty sequence.</p>
+         <p>Otherwise, the function returns the total number of seconds in <code>$value</code>,
+            including any fractional part. If <code>$value</code> is negative, the result is
+            negative.</p>
+      </fos:rules>
+      <fos:equivalent style="xpath-expression">
+$value div xs:dayTimeDuration('PT1S')
+      </fos:equivalent>
+      <fos:notes>
+         <p>The function is the inverse of <function>fn:seconds</function>: for any
+            <code>xs:dayTimeDuration</code> value <code>$d</code>,
+            <code>seconds(duration-to-seconds($d))</code> is equal to <code>$d</code>.</p>
+         <p>The result differs from that of <function>fn:seconds-from-duration</function>,
+            which only returns the seconds component of a duration.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>duration-to-seconds(xs:dayTimeDuration('PT1M30S'))</eg></fos:expression>
+               <fos:result>90</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>duration-to-seconds(xs:dayTimeDuration('P1DT0.5S'))</eg></fos:expression>
+               <fos:result>86400.5</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>duration-to-seconds(xs:dayTimeDuration('-PT1H30M'))</eg></fos:expression>
+               <fos:result>-5400</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression><eg>duration-to-seconds(
+  xs:dateTime('2024-01-31T12:00:00Z') -
+  xs:dateTime('1970-01-01T00:00:00Z')
+)</eg></fos:expression>
+               <fos:result>1706702400</fos:result>
+               <fos:postamble>The expression converts an <code>xs:dateTime</code> value to a Unix timestamp.</fos:postamble>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="seconds"/>
+      <fos:see-also prefix="fn" name="seconds-from-duration"/>
+      <fos:changes>
+         <fos:change issue="2919" date="2026-09-27"><p>New in 4.0</p></fos:change>
+      </fos:changes>
+   </fos:function>
+
    <fos:function name="years-from-duration" prefix="fn">
       <fos:signatures>
          <fos:proto name="years-from-duration" return-type="xs:integer?">
@@ -11429,6 +11840,74 @@ build-dateTime({ "year": 2007, "month": 5, "timezone": xs:dayTimeDuration("PT0S"
          </fos:example>
       </fos:examples>
       <fos:see-also prefix="fn" name="parts-of-dateTime"/>
+   </fos:function>
+   <fos:function name="days-in-month" prefix="fn">
+      <fos:signatures>
+         <fos:proto name="days-in-month" return-type="xs:integer?">
+            <fos:arg name="value" type="(xs:dateTime | xs:date | xs:gYearMonth)?"/>
+         </fos:proto>
+      </fos:signatures>
+      <fos:summary>
+         <p>Returns the number of days in the month of a given date.</p>
+      </fos:summary>
+      <fos:rules>
+         <p>If <code>$value</code> is the empty sequence, the function returns the empty sequence.</p>
+         <p>Otherwise, the function returns the number of days in the month identified by the
+            year and month components of the local value of <code>$value</code>: 28, 29, 30,
+            or 31. February has 29 days in a leap year, which is a year that is divisible by 4,
+            except for years that are divisible by 100 but not by 400.</p>
+      </fos:rules>
+      <fos:equivalent style="xpath-expression">
+let $parts := parts-of-dateTime($value)
+let $year := $parts?year
+let $leap := ($year mod 4 eq 0 and $year mod 100 ne 0) or $year mod 400 eq 0
+let $february := if ($leap) then 29 else 28
+return (31, $february, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)[$parts?month]
+      </fos:equivalent>
+      <fos:notes>
+         <p>The Gregorian calendar is applied to all years, including negative ones: as defined in
+            <bibref ref="xmlschema11-2"/>, the year <code>0000</code> is 1 BCE, and it is a
+            leap year.</p>
+         <p>The function can be used to test whether a year <code>$y</code> is a leap year:
+            <code>days-in-month(xs:gYearMonth(format-integer($y, '0000') || '-02')) eq 29</code>.</p>
+      </fos:notes>
+      <fos:examples>
+         <fos:example>
+            <fos:test>
+               <fos:expression>days-in-month(xs:date("2024-02-10"))</fos:expression>
+               <fos:result>29</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>days-in-month(xs:date("1900-02-10"))</fos:expression>
+               <fos:result>28</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>days-in-month(xs:dateTime("2000-02-29T12:00:00Z"))</fos:expression>
+               <fos:result>29</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>days-in-month(xs:gYearMonth("2026-04"))</fos:expression>
+               <fos:result>30</fos:result>
+            </fos:test>
+         </fos:example>
+         <fos:example>
+            <fos:test>
+               <fos:expression>days-in-month(())</fos:expression>
+               <fos:result>()</fos:result>
+            </fos:test>
+         </fos:example>
+      </fos:examples>
+      <fos:see-also prefix="fn" name="day-from-date"/>
+      <fos:see-also prefix="fn" name="parts-of-dateTime"/>
+      <fos:changes>
+         <fos:change issue="2919" date="2026-09-27"><p>New in 4.0</p></fos:change>
+      </fos:changes>
    </fos:function>
    <fos:function name="timezone-from-date" prefix="fn">
       <fos:signatures>
