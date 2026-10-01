@@ -10487,7 +10487,7 @@ and <code>version="1.0"</code> otherwise.</p>
             <div3 id="named-record-types">
                <head>Nominative Record Types</head>
                <changes>
-                  <change issue="1485" PR="1708" date="2025-01-16">
+                  <change issue="1485 2908" PR="1708 2934" date="2025-01-16">
                      Nominative record types are introduced.
                   </change>
                   <change issue="2365" PR="2413" date="2026-01-28">
@@ -10503,7 +10503,7 @@ and <code>version="1.0"</code> otherwise.</p>
                <?element xsl:record-type?>
                <?element xsl:field?>
                
-               <ednote><edtext>Schema change required to drop "xsl:field/@required" attribute</edtext></ednote>
+               <ednote><edtext>Schema changes required to drop "xsl:field/@required" attribute, add "static", etc</edtext></ednote>
                
                <p>An <elcode>xsl:record-type</elcode> declaration declares
                   a <xtermref spec="XP40" ref="dt-nominative-record-type"/>, allowing the record type
@@ -10513,7 +10513,7 @@ and <code>version="1.0"</code> otherwise.</p>
                   <p>The following example declares a nominative record type for complex numbers, 
                      and uses it in a variable
                      declaration and a function declaration.</p>
-                  <eg><![CDATA[<xsl:record-type name="cx:complex">
+                  <eg><![CDATA[<xsl:record-type name="cx:complex" constructor="yes">
     <xsl:field name="r" as="xs:double"/>
     <xsl:field name="i" as="xs:double"/>
 </xsl:record-type>
@@ -10536,109 +10536,157 @@ and <code>version="1.0"</code> otherwise.</p>
                      declaration are not distinct.</p>
                </error></p>
                
-               <!--<p><error spec="XT" class="SE" code="4051" type="static">
-                  <p>It is a <termref def="dt-static-error"/> 
-                     if an <elcode>xsl:field</elcode> element has a <code>default</code>
-                     attribute unless it specifies <code>required="no"</code>.</p>
-               </error></p>-->
+               
                
               <p>An <elcode>xsl:record-type</elcode> declaration has two effects:</p>
                
                <ulist>
-                  <item><p>In the same way as <elcode>xsl:item-type</elcode>, it defines
-                  a named item type in the static context, allowing the record type to
-                  be referenced by name anywhere an <code>ItemType</code> can appear,
-                  for example in the declarations of functions and variables. Unlike
-                  types declared in <elcode>xsl:item-type</elcode>, however,
-                  nominative record types can be recursive.</p></item>
-                  <item><p>An <elcode>xsl:record-type</elcode> declaration also
-                  implicitly defines a constructor function, of the same name,
-                  and adds this to the set of 
-                  <xtermref spec="XP40" ref="dt-statically-known-function-definitions"/>
+                  <item><p>It defines a <xtermref spec="XP40" ref="dt-nominative-record-type"/>, 
+                        whose name is added to the static context
+                  for the <termref def="dt-package"/></p></item>
+                  <item><p>It can optionally define a constructor function for the
+                  record type. This has the same name as the type; the function is added
+                  to the <xtermref spec="XP40" ref="dt-statically-known-function-definitions"/> 
                   in the static context.</p></item>
                </ulist>
                
-               <p>Because of its dual role, the name of an <elcode>xsl:record-type</elcode>
-               declaration must be valid both as an item type name and as a function name.
-               This means the name must be distinct from other type names and function names
-               in the static context. It also means that the name must be in a namespace.</p>
+               <p>The rules defining the item type that is declared, and the optional
+               constructor function, appear in the following sections.</p>
                
-               <p>Considered as an item type, the <elcode>xsl:record-type</elcode>
-               declaration is equivalent to an <elcode>xsl:item-type</elcode> declaration
-               formed by the following template rule, evaluated in the context of 
-               a namespace alias <code>&lt;xsl:namespace-alias stylesheet-prefix="t"
-               result-prefix="xsl"/></code>:</p>
+               <div4 id="id-nominative-type">
+                  <head>The Record Type</head>
                
-               <eg><![CDATA[<xsl:template match="xsl:record-type" expand-text="yes">
-   <t:item-type name="{@name}"
-                visibility="{@visibility otherwise 'private'}">
-     <xsl:attribute name="as">
-        <xsl:text>record(</xsl:text>
-        <xsl:for-each select="xsl:field" separator=", ">
-           {@name} as {@as otherwise 'item()*'}
-        </xsl:for-each>
-        <xsl:text>)</xsl:text>
-      </xsl:attribute>  
-   </t:item-type>
-</xsl:template>   
-]]></eg>
-               <p>This generated <elcode>xsl:item-type</elcode> declaration must
-               meet all the constraints placed on user-written 
-               <elcode>xsl:item-type</elcode> declarations, including the rule
-               requiring names to be unique, but not including the rule
-               disallowing recursive references.</p>
+               <p>A nominative record type defines a sequence of fields, corresponding
+               to the <elcode>xsl:field</elcode> children of the <elcode>xsl:record-type</elcode>
+               declaration. The properties of the fields are as follows:</p>
+                  
+                  <ulist>
+                     <item><p><term>Name</term>: This is defined by the <code>name</code>
+                     attribute. It can be any non-zero-length character string, unless 
+                     <code>constructor="yes"</code> is specified, in which case it must
+                     be a valid NCName.</p></item>
+                     <item><p><term>Type</term>: This is defined by the <code>as</code>
+                           attribute. The value is a sequence type, defining the
+                     permitted values for the field in record instances. If the <code>as</code>
+                     attribute is omitted, the field type is <code>item()*</code>.</p></item>
+                     <item><p><term>Initial Value</term>: This provides a default value
+                     for the field, which is used when records are constructed, whether
+                     by use of the constructor function, or by means of a coercion or cast.
+                     The initial value may be defined either using the <code>select</code>
+                     attribute, or using the contained sequence constructor; these are
+                     mutually exclusive. The initial value expression is evaluated in the
+                     same way as the value of a <termref def="dt-global-variable"/> declaration.
+                     It is a type error <errorref class="TY" code="0570"/> if the result cannot
+                      be coerced to the field type.
+                     Circular definitions are handled as described in <specref ref="id-circularity"/>.
+                     </p></item>
+                     <item><p><term>Static</term>: A static field is defined using
+                     the attribute value <code>static="yes"</code>. A static field must
+                     have an initializing expression (either a <code>select</code> attribute
+                     or a non-empty <termref def="dt-sequence-constructor"/>). The value of a
+                     static field will always be the result of the initial value expression.
+                     Static fields are particularly useful for defining 
+                     <xtermref spec="XP40" ref="dt-method">methods</xtermref>.</p></item>
+                  </ulist>
                
-               <p>For example, the declaration:</p>
+               
+               
+               <p>The name of an <elcode>xsl:record-type</elcode>
+               declaration must be valid as an item type name, 
+               which means the name must be distinct from other type names
+               in the static context.</p>
+                  
+                  <p>If <code>constructor="yes"</code> is specified, and
+                  some field has an initial value expression, then every subsequent field
+                  must also have an initial value expression.</p>
+               
+               <p>A record type declaration may refer directly or indirectly to itself if
+                  it satisfies the conditions defined in <xspecref spec="XP40" ref="id-recursive-record-tests"/>.
+               This allows types to be declared that match recursive data structures such as linked lists
+               and trees.</p>
+                  
+                  <p>A named record type with visibility <code>private</code> may be used in the definition of a 
+                  component (such as a variable, a function, a template, or another named record 
+                  type) that is itself public. Another package may reference such a component 
+                  even though it cannot reference the types used in its definition. The fact that the
+                  record type is private, however, means that it is impossible to
+                  override a variable or function that references the record type.</p>
+              
+               <p>The XSLT declaration:</p>
                
                <eg><![CDATA[<xsl:record-type name="cx:complex">
     <xsl:field name="r" as="xs:double"/>
     <xsl:field name="i" as="xs:double" default="0"/>
+    <xsl:field name="plus"
+               static="yes" 
+               as="fn(cx:complex, cx:complex) as cx:complex" 
+               default="cx:add($this, ?)"/>
 </xsl:record-type>]]></eg>
                
-               <p>produces the equivalent item type declaration:</p>
+               <p>is equivalent to the XQuery declaration:</p>
                
-               <eg><![CDATA[<xsl:item-type name="cx:complex"
-       as="record(r as xs:double, i as xs:double)"/>]]></eg>
+               <eg>
+declare record cx:complex(r as xs:double, 
+                          i as xs:double := 0,
+                          %static plus as fn(cx:complex, cx:complex) as cx:complex
+                                  := cx:add#2</eg>
                
-               <p>Considered as a function declaration, an <elcode>xsl:record-type</elcode>
-               declaration is equivalent to an <elcode>xsl:function</elcode> declaration
-               formed by the following template rule, evaluated in the context of 
-               a namespace alias <code>&lt;xsl:namespace-alias stylesheet-prefix="t"
-               result-prefix="xsl"/></code>:</p>
+               <p>Defining the method <code>plus</code> allows two complex numbers
+               to be added using the expression <code>$x?plus($y)</code> as an alternative
+               to the function call <code>cx:add($x, $y)</code>.</p>
                
-               <eg><![CDATA[<xsl:template match="xsl:record-type">
-    <t:function name="{@name}"
-                as="{@name}"
-                visibility="{(@visibility otherwise 'private')}">
                 
-             
-      
-      <!-- declare the parameters -->
-      <xsl:for-each select="xsl:field">
-         <t:param name="{@name}"
-                  required="{if (@default) then 'no' else 'yes'}"
-                  as="{@as}">
-            <xsl:if test="@default">
-               <xsl:attribute name="select" select="@default"/>
-            </xsl:if>   
-         </t:param>
-      </xsl:for-each>
-      
+               </div4>
+            <div4 id="id-constructors-for-record-types">
+               <head>Constructor Functions for Record Types</head>
             
-      <!-- function body: construct a map -->
-      <t:map duplicates="fn($first, $second){{$first}}">
-         <xsl:for-each select="xsl:field">
-             <t:map-entry key="'{@name}'" select="${@name}"/> 
-         </xsl:for-each>
-      </t:map>
-    </t:function>          
-</xsl:template>]]></eg>
+            
+               
+               <p>An <elcode>xsl:record-type</elcode> with <code>constructor="yes"</code>, 
+               generates an implicit <elcode>xsl:function</elcode> declaration.
+                  The function has the following properties:</p>
+               
+               <ulist>
+                  <item><p><term>Name</term>: the name of the function is the same as the
+                  name of the record type.</p></item>
+                  <item><p><term>Parameters</term>: there is one parameter for each
+                  non-static field in the record type, retaining order.</p>
+                     <ulist>
+                        <item><p>The parameter name
+                           is the same as the field name (it must be an NCName).</p></item>
+                        <item><p>The declared type of the parameter
+                           is the same as the declared type of the field.</p></item>
+                        <item><p>The default value for the parameter is defined
+                           by the initializing expression for the field. This expression
+                           is evaluated with an absent focus.</p></item>
+                     </ulist> 
+                  </item>
+                  <item><p><term>Return type</term>: the return type of the constructor
+                        function is the record type being declared (with no occurrence indicator).
+                  </p></item>
+                  <item><p><term>Function body</term>: The body of the function
+                  is an <elcode>xsl:map</elcode> instruction with one <elcode>xsl:map-entry</elcode>
+                  child for each field of the record type, in order. The value of the <code>key</code>
+                  attribute of the <elcode>xsl:map-entry</elcode> instruction is a string literal
+                  containing the field name. For non-static fields the <code>select</code> attribute
+                  of the <elcode>xsl:map-entry</elcode> instruction is a variable reference referring
+                  to the like-named function parameter. For static fields, the <elcode>xsl:map-entry</elcode>
+                  instruction has the same <code>select</code> attribute and/or sequence constructor
+                  as the corresponding <elcode>xsl:field</elcode> element.</p></item>
+                  <item><p><term>Visibility</term> the visibility of the constructor function is the same as
+                  the visibility of the <elcode>xsl:record-type</elcode> declaration.</p></item>
+               </ulist>
+               
                
                <p>For example, the declaration:</p>
                
                <eg><![CDATA[<xsl:record-type name="cx:complex">
     <xsl:field name="r" as="xs:double"/>
-    <xsl:field name="i" as="xs:double" default="0"/>
+    <xsl:field name="i" as="xs:double" select="0"/>
+    <xsl:field name="plus"
+               static="yes"
+               as="function(cx:complex, cx:complex) as cx:complex" 
+               select="cx:add#2"/>
 </xsl:record-type>]]></eg>
                
                <p>produces the equivalent function declaration:</p>
@@ -10649,6 +10697,7 @@ and <code>version="1.0"</code> otherwise.</p>
     <xsl:map>
        <xsl:map-entry key="'r'" select="$r"/>
        <xsl:map-entry key="'i'" select="$i"/>
+       <xsl:map-entry key="'plus'" select="cx:add#2"/>
     </xsl:map>
 </xsl:function>]]></eg>
                
@@ -10675,30 +10724,12 @@ and <code>version="1.0"</code> otherwise.</p>
                
                <p>If two <elcode>xsl:record-type</elcode> declarations in a <termref def="dt-package"/> have the same
                name, then the one with higher <termref def="dt-import-precedence"/> is used. </p>
-               <!--<p><error spec="XT" type="static" class="SE" code="4030">
-                  <p>It is a <termref def="dt-static-error">static error</termref> if a package contains two 
-                     <elcode>xsl:record-type</elcode>
-                     declarations having the same <termref def="dt-import-precedence">import
-                        precedence</termref>, unless there is another definition of the same
-                     record type with higher import precedence.</p>
-               </error></p>-->
-               <p>A record type declaration may refer directly or indirectly to itself if
-                  it satisfies the conditions defined in <xspecref spec="XP40" ref="id-recursive-record-tests"/>.
-               This allows types to be declared that match recursive data structures such as linked lists
-               and trees.</p>
-               <!--<p><error spec="XT" type="static" class="SE" code="4035">
-                  <p>It is a <termref def="dt-static-error">static error</termref> for an item type named
-                     <var>N</var> to contain in its <code>as</code> attribute a reference to <var>N</var>,
-                     or to an item type that references <var>N</var> directly or indirectly, unless it satisfies
-                     the conditions defined in <xspecref spec="XP40" ref="id-recursive-record-tests"/>.</p>
-               </error></p>-->
                
-               <p>A named record type with visibility <code>private</code> may be used in the definition of a 
-                  component (such as a variable, a function, a template, or another named record 
-                  type) that is itself public. Another package may reference such a component 
-                  even though it cannot reference the types used in its definition. The fact that the
-                  record type is private, however, means that it is impossible to
-                  override a variable or function that references the record type.</p>
+            </div4>
+               <div4 id="id-record-declaration-example">
+                  <head>Example of a Recursive Record Declaration</head>
+               
+               
                
                <example>
                   <head>Defining a Binary Tree</head>
@@ -10709,12 +10740,13 @@ and <code>version="1.0"</code> otherwise.</p>
                   that returns the maximum depth of the tree, by making recursive calls on its
                   subtrees.</p>
                   
-                  <eg><![CDATA[<xsl:record-type name="my:binary-tree">
+                  <eg><![CDATA[<xsl:record-type name="my:binary-tree" constructor="yes">
    <xsl:field name="left" as="my:binary-tree?"/>
    <xsl:field name="payload" as="item()*"/>
    <xsl:field name="right" as="my:binary-tree?"/>
    <xsl:field name="depth" as="fn(my:binary-tree) as xs:integer"
-      default="fn {1 + max((?left =?> depth(), ?right =?> depth())) otherwise 0)}"/>
+      static="yes"
+      select="fn {1 + max((?left =?> depth(), ?right =?> depth())) otherwise 0)}"/>
 </xsl:record-type>]]></eg>
                   
                   <p>Methods and method calls (using the operator <code>=?></code>) are described in
@@ -10740,8 +10772,8 @@ return $tree =?> depth()]]></eg>
                
                <p>A more detailed example that uses a recursive named record type
                appears in the following section.</p>
-            </div3>
-            <div3 id="id-atomic-set-example">
+            </div4>
+            <div4 id="id-atomic-set-example">
                <head>Example: Defining an Atomic Set</head>
                
                <p>This example demonstrates a library package that provides a new data type
@@ -10779,6 +10811,8 @@ return $tree =?> depth()]]></eg>
                </ulist>
                
                <p>Here is the implementation of the package.</p>
+               
+               <ednote><edtext>xsl:record is not defined in this version of the spec.</edtext></ednote>
                
                <eg><![CDATA[
 <xsl:package name="http://qt4cg.org/atomic-set"
@@ -10895,6 +10929,7 @@ return $tree =?> depth()]]></eg>
                   ]]></eg>
                
                <ednote><edtext><p>The example is not yet tested. </p></edtext></ednote>
+            </div4>
             </div3>
          </div2>
          <div2 id="defining-decimal-format">
