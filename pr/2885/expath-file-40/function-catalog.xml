@@ -260,8 +260,8 @@
         a new file will be created.</p>
       <p>
         The <code>$options</code> argument controls the way how <code>$value</code> is serialized.
-        The semantics are the same as for <xspecref spec="FO40" ref="func-serialize"/>.
-        In contrast to <code>fn:serialize</code>, the encoding stage will not be skipped by
+        The semantics are the same as for <function>fn:serialize</function>.
+        In contrast to <function>fn:serialize</function>, the encoding stage will not be skipped by
         this function.</p>
       <p>The function returns the empty sequence if the operation is successful.</p>
     </fos:rules>
@@ -291,7 +291,7 @@
     </fos:examples>
     <fos:changes>
       <fos:change issue="2016" PR="2077" date="2025-07-07">
-        <p><code>$options</code> can now be a map, in alignment with <code>fn:serialize</code>.</p>
+        <p><code>$options</code> can now be a map, in alignment with <function>fn:serialize</function>.</p>
       </fos:change>
     </fos:changes>
   </fos:function>
@@ -1098,9 +1098,7 @@ return file:read-text($path)
       <p>Returns the content of a file as a string.</p>
     </fos:summary>
     <fos:rules>
-      <p>Returns the content of a file in its string representation.
-        Newlines are normalized: Any <char>U+000D</char> character, optionally followed by
-        a <char>U+000A</char> character, is converted to a single <char>U+000A</char> character.</p>
+      <p>Returns the content of a file in its string representation.</p>
 
          <p>The <code>$options</code> argument, for backwards compatibility reasons, may be supplied
          either as a map, or as a string. Supplying a value <code>$S</code> that is not a map
@@ -1114,7 +1112,21 @@ return file:read-text($path)
                <fos:meaning>Defines the encoding of the resource, as described below.
                </fos:meaning>
                <fos:type>xs:string?</fos:type>
-               <fos:default>"UTF-8"</fos:default>
+               <fos:default>()</fos:default>
+            </fos:option>
+            <fos:option key="normalize-newlines">
+               <fos:meaning>Determines whether CR and CRLF character sequences
+                  are treated as equivalent to NL characters.</fos:meaning>
+               <fos:type>xs:boolean</fos:type>
+               <fos:default>true</fos:default>
+               <fos:values>
+                  <fos:value value="false">No normalization of line endings takes place.
+                  </fos:value>
+                  <fos:value value="true">The character <char>U+000D</char>
+                     and the character pair (<char>U+000D</char>, <char>U+000A</char>) are converted to the
+                     single character <char>U+000A</char>.
+                  </fos:value>
+               </fos:values>
             </fos:option>
             <fos:option key="fallback">
                <fos:meaning>
@@ -1129,13 +1141,15 @@ return file:read-text($path)
          </fos:options>
 
          <p>The effective encoding and the effective start position are determined by invoking
-           <xspecref spec="BIN40" ref="func-bin-infer-encoding"/> with the octets of the file
+           <function>bin:infer-encoding</function> with the octets of the file
            and the value of the <code>encoding</code> option. The content of the file is
            decoded with the effective encoding, starting at the effective start position.</p>
 
          <note>
            <p>As a consequence of these rules, encoding names are matched case-insensitively,
-             and a byte order mark at the start of the file is not included in the result.</p>
+             and a byte order mark at the start of the file is not included in the result.
+             If no encoding is supplied, the file is decoded as UTF-8 unless it starts with
+             a byte order mark.</p>
          </note>
     </fos:rules>
     <fos:errors>
@@ -1147,6 +1161,10 @@ return file:read-text($path)
       <p>
         <errorref spec="FILE40" code="unknown-encoding"/> is raised if the specified encoding
         is invalid or not supported by the implementation.</p>
+      <p>
+        <errorref spec="FILE40" code="io-error"/> is raised if the <code>fallback</code> option
+        is false and the file contains octets that cannot be decoded with the effective encoding,
+        or a character that is not a <xtermref spec="FO40" ref="dt-permitted-character"/>.</p>
       <p>
         <errorref spec="FILE40" code="io-error"/> is raised if any other error occurs.</p>
     </fos:errors>
@@ -1181,6 +1199,11 @@ return (
          <p>A fallback option is now provided to address characters that cannot be
          decoded or are not permitted.</p>
       </fos:change>
+      <fos:change issue="2928" date="2026-09-27">
+         <p>The <code>normalize-newlines</code> option has been added, and the
+         <code>encoding</code> option no longer defaults to UTF-8, so that a UTF-16 byte order
+         mark is recognized. Decoding errors are now described explicitly.</p>
+      </fos:change>
     </fos:changes>
   </fos:function>
 
@@ -1202,8 +1225,6 @@ return (
     <fos:rules>
       <p>Returns the contents of a file as a sequence of strings, separated at newline
         boundaries.</p>
-      <p>Any of the character sequences <char>U+000A</char>, <char>U+000D</char>, or
-         <char>U+000D</char> followed by <char>U+000A</char> is interpreted as newline.</p>
 
          <p>The <code>$options</code> argument, for backwards compatibility reasons, may be supplied
          either as a map, or as a string. Supplying a value <code>$S</code> that is not a map
@@ -1214,10 +1235,11 @@ return (
          
          <fos:options>
             <fos:option key="encoding">
-               <fos:meaning>Defines the encoding of the resource, as described below.
+               <fos:meaning>Defines the encoding of the file, following the rules of
+                  <function>file:read-text</function>.
                </fos:meaning>
                <fos:type>xs:string?</fos:type>
-               <fos:default>"UTF-8"</fos:default>
+               <fos:default>()</fos:default>
             </fos:option>
             <fos:option key="fallback">
                <fos:meaning>
@@ -1231,27 +1253,25 @@ return (
             </fos:option>
          </fos:options>
 
-         <p>The effective encoding and the effective start position are determined by invoking
-           <xspecref spec="BIN40" ref="func-bin-infer-encoding"/> with the octets of the file
-           and the value of the <code>encoding</code> option. The content of the file is
-           decoded with the effective encoding, starting at the effective start position.</p>
+         <p>The result of the function is the same as the result of the expression:</p>
 
-         <note>
-           <p>As a consequence of these rules, encoding names are matched case-insensitively,
-             and a byte order mark at the start of the file is not included in the result.</p>
-         </note>
+         <eg>let $text := file:read-text($file, map:put($options, 'normalize-newlines', true()))
+let $lines := tokenize($text, '\n')
+return $lines[not(position() = last() and . = '')]
+         </eg>
+
+         <p>The result is thus a sequence of strings containing the text of the file,
+            each string representing one line of text. Lines may be delimited by
+            any of the character sequences <char>U+000A</char>, <char>U+000D</char>, or
+            <char>U+000D</char> followed by <char>U+000A</char>.
+            Line ending characters are not
+            included in the returned strings. If there are two adjacent newline sequences, a
+            zero-length string will be returned to represent the empty line; but if the file
+            ends with a newline sequence, the result will be as if this final
+            line ending were not present.</p>
     </fos:rules>
     <fos:errors>
-      <p>
-        <errorref spec="FILE40" code="not-found"/> is raised if the specified path does not exist.</p>
-      <p>
-        <errorref spec="FILE40" code="is-dir"/> is raised if the specified path points to a
-        directory.</p>
-      <p>
-        <errorref spec="FILE40" code="unknown-encoding"/> is raised if the specified encoding
-        is invalid or not supported by the implementation.</p>
-      <p>
-        <errorref spec="FILE40" code="io-error"/> is raised if any other error occurs.</p>
+      <p>Error conditions are the same as for the <function>file:read-text</function> function.</p>
     </fos:errors>
     <fos:examples>
       <fos:example>
@@ -1275,6 +1295,11 @@ return (
       </fos:change>
       <fos:change issue="2460" PR="2510" date="2026-03-11">
          <p>The <code>$fallback</code> parameter has been integrated into the options map.</p>
+      </fos:change>
+      <fos:change issue="2928" date="2026-09-27">
+         <p>The <code>encoding</code> option no longer defaults to UTF-8, so that a UTF-16
+         byte order mark is recognized. The result is now defined by an equivalent expression,
+         in alignment with <function>fn:unparsed-text-lines</function>.</p>
       </fos:change>
     </fos:changes>
   </fos:function>
@@ -1300,8 +1325,8 @@ return (
         otherwise, it will be created.</p>
       <p>
         The <code>$options</code> argument controls the way how <code>$value</code> is serialized.
-        The semantics are the same as for <xspecref spec="FO40" ref="func-serialize"/>.
-        In contrast to <code>fn:serialize</code>, the encoding stage will not be skipped by
+        The semantics are the same as for <function>fn:serialize</function>.
+        In contrast to <function>fn:serialize</function>, the encoding stage will not be skipped by
         this function.</p>
       <p>The function returns the empty sequence if the operation is successful.</p>
     </fos:rules>
@@ -1346,7 +1371,7 @@ file:write(
     </fos:examples>
     <fos:changes>
       <fos:change issue="2016" PR="2077" date="2025-07-07">
-        <p><code>$options</code> can now be a map, in alignment with <code>fn:serialize</code>.</p>
+        <p><code>$options</code> can now be a map, in alignment with <function>fn:serialize</function>.</p>
       </fos:change>
     </fos:changes>
   </fos:function>
