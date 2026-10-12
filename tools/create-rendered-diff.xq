@@ -3,7 +3,7 @@
  : and writes an HTML page with the changed blocks per section.
  :
  : The sources of the master branch are restored temporarily while it is built;
- : its renderings are kept in the build directory and reused until the branch changes.
+ : its renderings are kept in the build directory and reused until its sources change.
  :
  : @author Christian Grün, BaseX 2026
  :)
@@ -13,17 +13,12 @@ declare namespace proc = 'http://basex.org/modules/proc';
 declare record spec-sections(title as xs:string, sections as map(*), anchors as map(*));
 (:~ Remaining old and new blocks, and the diff created so far. :)
 declare record alignment(old as xs:string*, new as xs:string*, result as element(p)*);
-(:~ Diff algorithm: shortest edit script (Myers), or common prefix and suffix. :)
-declare type diff-mode as enum('simple', 'words');
 
 declare variable $BASE := 'master';
 declare variable $SOURCES := ('specifications', 'style');
 declare variable $REPO := file:parent(file:base-dir());
 declare variable $WWW := $REPO || 'build/www/';
-declare variable $OUTPUTS := {
-  'simple': $REPO || 'build/rendered-diff.html',
-  'words' : $REPO || 'build/rendered-diff-words.html'
-};
+declare variable $OUTPUT := $REPO || 'build/rendered-diff.html';
 declare variable $CACHE := $REPO || 'build/rendered-diff/';
 declare variable $STATE := $CACHE || 'state.txt';
 declare variable $HEADINGS := ('h1', 'h2', 'h3', 'h4', 'h5', 'h6');
@@ -87,7 +82,7 @@ declare function renderings() as xs:string* {
 (:~
  : Renders all specifications from the base branch and keeps copies of the renderings.
  : @param $commit commit of the base branch
- : @param $base target directory, named after the commit
+ : @param $base target directory, named after the sources of the base branch
  : @return log messages
  :)
 declare function build-base($commit as xs:string, $base as xs:string) as xs:string* {
@@ -170,47 +165,12 @@ declare function block-text($block as element()) as xs:string {
 };
 
 (:~
- : Computes the edit script of two sequences with the given algorithm.
- : @param $old old items
- : @param $new new items
- : @param $mode diff algorithm
- : @return operations, each with a type ('=', '-' or '+') and an item
- :)
-declare function edit-script(
-  $old as xs:string*,
-  $new as xs:string*,
-  $mode as diff-mode
-) as array(xs:string)* {
-  if ($mode = 'words') then myers-script($old, $new) else affix-script($old, $new)
-};
-
-(:~
- : Computes an edit script in which the items between the common prefix and suffix are replaced.
- : @param $old old items
- : @param $new new items
- : @return operations, each with a type ('=', '-' or '+') and an item
- :)
-declare function affix-script($old as xs:string*, $new as xs:string*) as array(xs:string)* {
-  let $common := fn($c, $d) {
-    count(for $equal in for-each-pair($c, $d, op('=')) while $equal return $equal)
-  }
-  let $pre := $common($old, $new)
-  let $suf := min(($common(reverse($old), reverse($new)), count($old) - $pre, count($new) - $pre))
-  return (
-    subsequence($old, 1, $pre) ! [ '=', . ],
-    subsequence($old, $pre + 1, count($old) - $pre - $suf) ! [ '-', . ],
-    subsequence($new, $pre + 1, count($new) - $pre - $suf) ! [ '+', . ],
-    subsequence($old, count($old) - $suf + 1) ! [ '=', . ]
-  )
-};
-
-(:~
  : Computes the shortest edit script of two sequences with the Myers algorithm.
  : @param $old old items
  : @param $new new items
  : @return operations, each with a type ('=', '-' or '+') and an item
  :)
-declare function myers-script($old as xs:string*, $new as xs:string*) as array(xs:string)* {
+declare function edit-script($old as xs:string*, $new as xs:string*) as array(xs:string)* {
   let $n := count($old)
   let $m := count($new)
   (: for each number of differences, the furthest position in $old per diagonal (x - y) :)
@@ -274,12 +234,11 @@ declare function snake(
  : Renders a word-level diff of two blocks, with adjacent deleted and inserted words merged.
  : @param $a old text
  : @param $b new text
- : @param $mode diff algorithm
  : @return paragraph
  :)
-declare function diff-words($a as xs:string, $b as xs:string, $mode as diff-mode) as element(p) {
+declare function diff-words($a as xs:string, $b as xs:string) as element(p) {
   <p>{
-    for tumbling window $w in edit-script(tokenize($a), tokenize($b), $mode)
+    for tumbling window $w in edit-script(tokenize($a), tokenize($b))
       start $s previous $p when not($s?1 = $p?1)
     let $text := string-join($w ! ?2, ' ')
     return (
@@ -309,33 +268,23 @@ declare function similar($a as xs:string, $b as xs:string) as xs:boolean {
  : Compares old and new blocks, and renders deleted, inserted and changed blocks in document order.
  : @param $old old blocks
  : @param $new new blocks
- : @param $mode diff algorithm
  : @return paragraphs
  :)
-declare function diff-blocks(
-  $old as xs:string*,
-  $new as xs:string*,
-  $mode as diff-mode
-) as element(p)* {
+declare function diff-blocks($old as xs:string*, $new as xs:string*) as element(p)* {
   (: runs of deleted and inserted blocks between two unchanged ones :)
-  for tumbling window $w in edit-script($old, $new, $mode)
+  for tumbling window $w in edit-script($old, $new)
     start $s when $s?1 != '='
     end next $n when $n?1 = '='
-  return pair-blocks($w[?1 = '-'] ! ?2, $w[?1 = '+'] ! ?2, $mode)
+  return pair-blocks($w[?1 = '-'] ! ?2, $w[?1 = '+'] ! ?2)
 };
 
 (:~
  : Pairs deleted and inserted blocks, and renders similar ones as changed blocks.
  : @param $old deleted blocks
  : @param $new inserted blocks
- : @param $mode diff algorithm
  : @return paragraphs
  :)
-declare function pair-blocks(
-  $old as xs:string*,
-  $new as xs:string*,
-  $mode as diff-mode
-) as element(p)* {
+declare function pair-blocks($old as xs:string*, $new as xs:string*) as element(p)* {
   let $align := fn($s as alignment) as alignment {
     let $a := head($s?old)
     let $b := head($s?new)
@@ -343,7 +292,7 @@ declare function pair-blocks(
       case ($a = $b) return
         alignment(tail($s?old), tail($s?new), $s?result)
       case (exists($a) and exists($b) and similar($a, $b)) return
-        alignment(tail($s?old), tail($s?new), ($s?result, diff-words($a, $b, $mode)))
+        alignment(tail($s?old), tail($s?new), ($s?result, diff-words($a, $b)))
       (: no old block left, or it occurs later: the new block was inserted :)
       case (empty($a) or $a = tail($s?new) or (some $n in tail($s?new) satisfies similar($a, $n)))
       return
@@ -360,14 +309,12 @@ declare function pair-blocks(
  : @param $old sections of the base branch
  : @param $new sections of the working tree
  : @param $path path to the rendering, relative to the web directory
- : @param $mode diff algorithm
  : @return changed sections
  :)
 declare function diff-spec(
   $old as spec-sections,
   $new as spec-sections,
-  $path as xs:string,
-  $mode as diff-mode
+  $path as xs:string
 ) as element(div) {
   <div>
     <h1>{ $new?title }</h1>
@@ -381,7 +328,7 @@ declare function diff-spec(
         <h3>{
           if ($anchor) then <a href='www/{ $path }#{ $anchor }'>{ $key }</a> else $key
         }</h3>
-        { diff-blocks($a, $b, $mode) }
+        { diff-blocks($a, $b) }
       </section>
     }
   </div>
@@ -389,7 +336,9 @@ declare function diff-spec(
 
 let $commit := git(('rev-parse', $BASE)) => normalize-space()
 let $diff := git(('diff', $commit, '--', $SOURCES))
-let $base := `{ $CACHE }{ $commit }/`
+(: cache key: tree hashes of the sources, which only change if the sources do :)
+let $trees := git(('rev-parse', $SOURCES ! `{ $commit }:{ . }`))
+let $base := `{ $CACHE }{ lower-case(string(hash($trees, 'sha1'))) }/`
 let $state := $commit || $diff
 return if (not($diff)) then (
   `No changes compared to { $BASE }.`
@@ -397,17 +346,15 @@ return if (not($diff)) then (
   file:create-dir($CACHE),
   if (not(file:exists($base))) { build-base($commit, $base) },
   if (not((if (file:exists($STATE)) { file:read-text($STATE) }) = $state)) { build-specs($state) },
-  (: renderings that differ from the base branch; each is parsed once for both diffs :)
-  let $parsed := (
+  (: renderings that differ from the base branch :)
+  let $specs := (
     for $path in renderings()
     let $old := $base || $path
     where file:exists($old) and file:read-binary($old) != file:read-binary($WWW || $path)
-    return { 'path': $path, 'old': parse-sections($old), 'new': parse-sections($WWW || $path) }
+    return diff-spec(parse-sections($old), parse-sections($WWW || $path), $path)
   )
-  for $mode in map:keys($OUTPUTS)
-  let $specs := $parsed ! diff-spec(?old, ?new, ?path, $mode)
   return (
-    file:write($OUTPUTS($mode), <html>
+    file:write($OUTPUT, <html>
       <head>
         <title>Rendered diff</title>
         <link rel='stylesheet' href='../specifications/css/w3c-base.css'/>
@@ -425,6 +372,6 @@ return if (not($diff)) then (
         <p>{ $BASE } ({ substring($commit, 1, 9) }) → working tree</p>
       </body>
     </html>, { 'method': 'html' }),
-    `written: { $OUTPUTS($mode) } ({ count($specs/section) } changed sections)`
+    `written: { $OUTPUT } ({ count($specs/section) } changed sections)`
   )
 )
