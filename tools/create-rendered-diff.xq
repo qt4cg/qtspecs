@@ -9,8 +9,10 @@
  :)
 declare namespace proc = 'http://basex.org/modules/proc';
 
-(:~ Title, sections and heading anchors of a specification. :)
-declare record spec-sections(title as xs:string, sections as map(*), anchors as map(*));
+(:~ Heading, heading anchor and blocks of a section. :)
+declare record section(heading as xs:string, anchor as xs:string?, blocks as xs:string*);
+(:~ Title and sections of a specification, keyed by heading anchor or heading. :)
+declare record spec-sections(title as xs:string, sections as map(xs:string, section));
 (:~ Remaining old and new blocks, and the diff created so far. :)
 declare record alignment(old as xs:string*, new as xs:string*, result as element(p)*);
 
@@ -114,10 +116,10 @@ declare function build-base($commit as xs:string, $base as xs:string) as xs:stri
 };
 
 (:~
- : Returns the title of a specification, the text of all innermost blocks,
- : grouped by the heading that precedes them, and the anchors of the headings.
+ : Returns the title of a specification and the text of all innermost blocks,
+ : grouped by the heading that precedes them.
  : @param $path path to the HTML file
- : @return title, sections and anchors
+ : @return title and sections
  :)
 declare function parse-sections($path as xs:string) as spec-sections {
   let $doc := parse-html(file:read-text($path))
@@ -127,15 +129,12 @@ declare function parse-sections($path as xs:string) as spec-sections {
     map:merge(
       for tumbling window $w in $blocks
         start $h when local-name($h) = $HEADINGS
-      return map:entry(strip-number(block-text($h)), tail($w) ! block-text(.)[.]),
-      { 'duplicates': 'combine' }
-    ),
-    map:merge(
-      for $h in $blocks[local-name() = $HEADINGS]
-      let $id := ($h/@id, $h//*:a/@id)[1]
-      where $id
-      return map:entry(strip-number(block-text($h)), string($id)),
-      { 'duplicates': 'use-first' }
+      let $heading := strip-number(string-join(block-text($h), ' '))
+      let $anchor := ($h/@id, $h//*:a/@id)[1] ! string()
+      let $content := tail($w) ! block-text(.)
+      (: anchors are stable, whereas headings may contain generated text, such as dates :)
+      group by $key := $anchor otherwise $heading
+      return map:entry($key, section($heading[1], $anchor[1], $content))
     )
   )
 };
@@ -150,18 +149,27 @@ declare function strip-number($text as xs:string) as xs:string {
 };
 
 (:~
- : Returns the text of a block, without the section numbers of internal links.
+ : Returns the lines of a block (separated by line breaks in preformatted blocks, and by br elements), without the section numbers of internal links.
  : @param $block block
- : @return text
+ : @return lines
  :)
-declare function block-text($block as element()) as xs:string {
+declare function block-text($block as element()) as xs:string* {
+  let $pre := local-name($block) = 'pre'
   let $link := fn($node) { $node/ancestor-or-self::*:a[starts-with(@href, '#')] }
   let $nodes := $block/descendant::node()[
-    self::text()[empty($link(.))] or self::*[$link(.)[1] is .]
+    self::text()[empty($link(.))] or self::*:br[empty($link(.))] or self::*[$link(.)[1] is .]
   ]
-  return normalize-space(string-join(
-    $nodes ! (if (. instance of text()) then string() else strip-number(normalize-space()))
-  ))
+  let $text := string-join(
+    for $node in $nodes
+    return switch () {
+      case exists($node/self::*:br) return '&#xA;'
+      case $node instance of text() return (
+        if ($pre) then string($node) else translate($node, '&#xA;&#xD;', '  ')
+      )
+      default return strip-number(normalize-space($node))
+    }
+  )
+  return tokenize($text, '\r?\n') ! normalize-space()[.]
 };
 
 (:~
@@ -234,22 +242,21 @@ declare function snake(
  : Renders a word-level diff of two blocks, with adjacent deleted and inserted words merged.
  : @param $a old text
  : @param $b new text
- : @return paragraph
+ : @return strings and elements
  :)
-declare function diff-words($a as xs:string, $b as xs:string) as element(p) {
-  <p>{
-    for tumbling window $w in edit-script(tokenize($a), tokenize($b))
-      start $s previous $p when not($s?1 = $p?1)
-    let $text := string-join($w ! ?2, ' ')
-    return (
-      switch ($s?1) {
-        case '-' return <del>{ $text }</del>
-        case '+' return <ins>{ $text }</ins>
-        default return $text
-      },
-      ' '
-    )
-  }</p>
+declare function diff-words($a as xs:string, $b as xs:string) as item()* {
+  let $words := fn($text) { tokenize($text, '[\s&#xA0;]+')[.] }
+  for tumbling window $w in edit-script($words($a), $words($b))
+    start $s previous $p when not($s?1 = $p?1)
+  let $text := string-join($w ! ?2, ' ')
+  return (
+    switch ($s?1) {
+      case '-' return <del>{ $text }</del>
+      case '+' return <ins>{ $text }</ins>
+      default return $text
+    },
+    ' '
+  )
 };
 
 (:~
@@ -292,7 +299,7 @@ declare function pair-blocks($old as xs:string*, $new as xs:string*) as element(
       case ($a = $b) return
         alignment(tail($s?old), tail($s?new), $s?result)
       case (exists($a) and exists($b) and similar($a, $b)) return
-        alignment(tail($s?old), tail($s?new), ($s?result, diff-words($a, $b)))
+        alignment(tail($s?old), tail($s?new), ($s?result, <p>{ diff-words($a, $b) }</p>))
       (: no old block left, or it occurs later: the new block was inserted :)
       case (empty($a) or $a = tail($s?new) or (some $n in tail($s?new) satisfies similar($a, $n)))
       return
@@ -323,12 +330,13 @@ declare function diff-spec(
       let $a := $old?sections($key)
       let $b := $new?sections($key)
       where not(deep-equal($a, $b))
-      let $anchor := $new?anchors($key)
+      let $heading := if (exists($a) and exists($b) and $a?heading != $b?heading)
+        then diff-words($a?heading, $b?heading) else ($b, $a)[1]?heading
       return <section>
         <h3>{
-          if ($anchor) then <a href='www/{ $path }#{ $anchor }'>{ $key }</a> else $key
+          if ($b?anchor) then <a href='www/{ $path }#{ $b?anchor }'>{ $heading }</a> else $heading
         }</h3>
-        { diff-blocks($a, $b) }
+        { diff-blocks($a?blocks, $b?blocks) }
       </section>
     }
   </div>
