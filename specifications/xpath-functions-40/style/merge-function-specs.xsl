@@ -30,7 +30,7 @@
 	<!-- The order in which properties are reported -->
 	<xsl:variable name="property-order" as="xs:string+"
 		select="'nondeterministic', 'nondeterministic-wrt-ordering', 'variadic',
-			'context-dependent', 'focus-dependent'"/>
+			'context-dependent', 'focus-dependent', 'security-sensitive'"/>
 
 	<!-- Properties that are used by other stylesheets, but not reported in the specification -->
 	<xsl:variable name="silent-properties" as="xs:string+" select="'special-streaming-rules'"/>
@@ -187,11 +187,20 @@
 					<xsl:apply-templates select="$fspec/fos:rules/node()"/>
 				</def>
 			</gitem>
+			<xsl:if test="$fspec/fos:security">
+				<gitem>
+					<label>Security</label>
+					<def>
+						<xsl:copy-of select="$fspec/fos:security/(@diff, @at)"/>
+						<xsl:apply-templates select="$fspec/fos:security/node()"/>
+					</def>
+				</gitem>
+			</xsl:if>
 			<xsl:if test="$fspec/fos:equivalent">
 				<gitem>
 					<label>Formal Equivalent</label>
 					<def>
-						<xsl:copy-of select="$fspec/fos:eqivalent/(@diff, @at)"/>
+						<xsl:copy-of select="$fspec/fos:equivalent/(@diff, @at)"/>
 						<xsl:apply-templates select="$fspec/fos:equivalent"/>
 					</def>
 				</gitem>
