@@ -4281,7 +4281,7 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
       The rules for serializing atomic items have been revised and relaxed.
     </change>
     <change issue="2980" PR="2981" date="2026-10-13">
-      The <code>adaptive-mode</code> parameter selects between expression output and readable output.
+      The <code>adaptive-mode</code> parameter selects expression, readable, or binary output.
     </change>
   </changes>
 
@@ -4290,20 +4290,22 @@ into a human readable form, for example for the purposes of debugging query resu
 Any <termref diff="chg" at="2023-11-01" def="dt-input-value"/> can be serialized
 without raising a serialization error.</p>
 
-<p diff="add" at="2026-10-13">The <code>adaptive-mode</code> serialization parameter selects one of two modes:</p>
+<p diff="add" at="2026-10-13">The <code>adaptive-mode</code> serialization parameter selects one of three modes:</p>
 
 <ulist diff="add" at="2026-10-13">
   <item><p><code>expression</code> (the default): each item is serialized in the form of an
     expression in the host language that would construct that item.</p></item>
-  <item><p><code>readable</code>: see <specref ref="adaptive-readable"/>.</p></item>
+  <item><p><code>readable</code>: each item is serialized in a compact form that shows its content
+    (see <specref ref="adaptive-readable"/>).</p></item>
+  <item><p><code>binary</code>: as <code>readable</code>, but top-level binary items are output as octets
+    (see <specref ref="adaptive-readable"/>).</p></item>
 </ulist>
 
 <p>Sequence normalization is not performed for this output method.</p>
 
 <p>Each item in the supplied sequence is serialized individually as
 follows, with an occurrence of the chosen <code>item-separator</code>
-between successive items<phrase diff="add" at="2026-10-13"> (for the <code>readable</code> mode,
-see <specref ref="adaptive-readable"/>)</phrase>.</p>
+between successive items.</p>
 
 <ulist>
   
@@ -4349,12 +4351,10 @@ item</xtermref> is serialized as follows:</p>
 <item><p diff="chg" at="2026-10-13">An atomic item whose type annotation is <code>xs:string</code> is serialized as follows:</p>
   <olist>
     <item><p>A quotation mark or apostrophe is selected as a quote character.</p></item>
-    <item><p>Occurrences of the quote character within the value are doubled. It is
-       <termref def="impdef">implementation-defined</termref> whether ampersand characters
-       are emitted literally or encoded as <code>&amp;amp;</code>, as required by host languages
-       whose string literals cannot contain a literal ampersand.</p></item>
-    <item diff="add" at="2026-10-13"><p>Control characters other than tab are output as
-       character references.</p></item>
+    <item><p>Occurrences of the quote character within the value are doubled.</p></item>
+    <item diff="chg" at="2026-10-19"><p>If the string literals of the host language support character
+       references, ampersand characters are encoded as <code>&amp;amp;</code>, and control characters
+       other than tab are output as character references. Otherwise, these characters are output literally.</p></item>
     <item><p>The resulting value is enclosed by the selected quote character.</p></item>
     <item><p>The resulting value is serialized using the Text output method 
 described in <specref ref="text-output"/>.</p></item>
@@ -4485,6 +4485,10 @@ enclosed in quotation marks.</p>
 representation is ambiguous (for example tab or non-breaking-space) may be represented in the 
 form of an XML numeric character reference (for example <code>&amp;#x9;</code> or <code>&amp;#xa0;</code>)</p>
 
+<p diff="add" at="2026-10-19">Finally, encoding, as controlled by the <code>encoding</code> parameter,
+converts the resulting character sequence into an octet stream, as described for the encoding phase
+in <specref ref="serphases"/>.</p>
+
 <note><p diff="chg" at="2026-10-13">
 In many cases the serialization of an item conforms to the syntax of an XQuery expression whose result 
 is that item. There are exceptions, however. For example, the syntax will not be valid XQuery in the 
@@ -4543,9 +4547,9 @@ used and how they convey the information.
 </imp-dep-feature>
 
 <div2 id="adaptive-readable" diff="add" at="2026-10-13">
-<head>Adaptive Output Method: Readable Mode</head>
+<head>Adaptive Output Method: Readable and Binary Modes</head>
 
-<p>If the <code>adaptive-mode</code> parameter is set to <code>readable</code>, items are shown by their
+<p>If the <code>adaptive-mode</code> parameter is set to <code>readable</code> or <code>binary</code>, items are shown by their
 content, with as little syntax as possible. Only items whose kind could not be recognized otherwise
 (JNodes and QNames) are marked. The rules of the <code>expression</code> mode apply, with the following
 exceptions:</p>
@@ -4558,19 +4562,17 @@ exceptions:</p>
         <termref def="impdef">implementation-defined</termref> representation may be used instead).</p></item>
       <item><p>Any other item of the supplied sequence as its string value, using the Text output method
         described in <specref ref="text-output"/>.</p></item>
-      <item><p>Any other nested item as its string value, serialized by the rules for <code>xs:string</code>, with
-        ampersand characters encoded as <code>&amp;amp;</code>.</p></item>
+      <item><p>Any other nested item as its string value, serialized by the rules for <code>xs:string</code>.</p></item>
     </ulist>
     <p>For example, <code>(xs:date("2015-07-17"), [ xs:date("2015-07-17"), 1.0, true() ])</code> is serialized
     as <code>2015-07-17</code> and <code>["2015-07-17",1,true]</code>.</p></item>
-  <item><p>If an item of the supplied sequence is an instance of <code>xs:base64Binary</code> or <code>xs:hexBinary</code>,
-    and if the serialized result is not returned as a string (as it is by <code>fn:serialize</code>), it is
-    <termref def="impdef">implementation-defined</termref> whether the octets of the binary value are
-    output directly, without encoding.</p></item>
   <item><p>Document, element, text, comment, and processing instruction nodes are serialized using
     the XML output method described in <specref ref="xml-output"/>. An attribute or namespace node is
     serialized as if it had a containing element node, for example as <code>xsi:type="xs:integer"</code>
     or <code>xmlns:sns="http://example.com/sample-namespace"</code>.</p></item>
+  <item><p>In the <code>binary</code> mode, the encoding phase (<specref ref="serphases"/>) outputs the octets of an
+    <code>xs:base64Binary</code> or <code>xs:hexBinary</code> item of the supplied sequence instead of the
+    encoded characters of its string value. If the encoding phase is skipped, the string value is retained.</p></item>
 </ulist>
 
 <note><p>The output can be ambiguous: a string that contains the <code>item-separator</code> looks like
@@ -4590,7 +4592,7 @@ XML output method; and a nested <code>"2015-07-17"</code> may be a string or a d
 For some item types the Adaptive output method will delegate serialization to other output methods. 
 With the exception of the <code>byte-order-mark</code> serialization parameter, all serialization parameters, 
 if set, will be passed down to the serialization method that is applied to each item in the supplied sequence. 
-Only the <code>adaptive-mode</code>, <code>item-separator</code>, <code>byte-order-mark</code>, and <code>line-ending</code> parameters are directly applicable to the Adaptive output method.
+Only the <code>adaptive-mode</code>, <code>item-separator</code>, <code>byte-order-mark</code>, <phrase diff="add" at="2026-10-19"><code>encoding</code>, </phrase>and <code>line-ending</code> parameters are directly applicable to the Adaptive output method.
 </p>
 
 <div3 id="ADAPTIVE_ADAPTIVE-MODE" diff="add" at="2026-10-13">
@@ -4635,6 +4637,8 @@ Adaptive output method only as elsewhere specified.
 Adaptive output method. See
 <specref ref="serparam"/> for more information.
 </p>
+<p diff="add" at="2026-10-19">In the <code>binary</code> mode, no byte order mark is output before a leading
+<code>xs:base64Binary</code> or <code>xs:hexBinary</code> item.</p>
 <note><p>A byte order mark can appear only once in the serialized output.
 Therefore, this parameter does not get passed down to any delegated output method.</p></note>
 </div3>
@@ -4644,6 +4648,11 @@ Therefore, this parameter does not get passed down to any delegated output metho
     applicable to the Adaptive output method only as elsewhere specified.</p></div3>
   
 
+
+<div3 id="ADAPTIVE_ENCODING" diff="add" at="2026-10-19">
+<head>Adaptive Output Method: <code>encoding</code></head>
+<p>The <code>encoding</code> parameter is applicable to the Adaptive output method. See
+<specref ref="serphases"/> for more information.</p></div3>
 
 <div3 id="ADAPTIVE_LINE-ENDING" diff="add" at="2026-06-25">
   <head>Adaptive Output Method: <code>line-ending</code></head>
