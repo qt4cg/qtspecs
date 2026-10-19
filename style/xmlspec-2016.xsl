@@ -719,9 +719,8 @@
                         else ()"/>
   <xsl:variable name="FO40uri" select="'https://qt4cg.org/specifications/xpath-functions-40/'"/>
   <xsl:variable name="XT40uri" select="'https://qt4cg.org/specifications/xslt-40/'"/>
-  <!--<xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/expath-binary-40/'"/>-->
-  <xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/EXPath/binary-40/'"/>
-  <xsl:variable name="FILE40uri" select="'https://qt4cg.org/specifications/EXPath/file-40/'"/>
+  <xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/expath-binary-40/'"/>
+  <xsl:variable name="FILE40uri" select="'https://qt4cg.org/specifications/expath-file-40/'"/>
                                          
 
   <!-- Function: name of a function -->
