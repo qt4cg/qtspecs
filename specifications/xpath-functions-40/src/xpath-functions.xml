@@ -3543,6 +3543,9 @@ string conversion of the number as obtained above, and the appropriate <var>suff
                      Capturing groups can be named, using <code>(?&lt;<var>name</var>&gt;…)</code>, and a
                      named group can be referenced within the pattern by <code>\k&lt;<var>name</var>&gt;</code>.
                   </change>
+                  <change issue="2983" PR="2988" date="2026-10-20">
+                     The semantics of regular expressions are defined more formally and rigorously.
+                  </change>
                </changes>
                <p>The regular expression syntax used by these functions is defined in terms of
                         the regular expression syntax specified in XSD 1.1 (see <bibref ref="xmlschema11-2"/>), 
@@ -3599,6 +3602,14 @@ string conversion of the number as obtained above, and the appropriate <var>suff
                      is referred to as the <term>string value</term> of the segment.</p></item>
                      <item><p><termdef id="dt-end-position" term="end position">The <term>end position</term> 
                         of a segment is the start position of the segment plus its length.</termdef></p></item>
+                     <item><p><termdef id="dt-adjacent-segments" term="adjacent">Two distinct <termref def="dt-segment">segments</termref>
+                     are <term>adjacent</term> if the <termref def="dt-end-position"/> of the first is the same as the
+                     start position of the second.</termdef></p></item>
+                     <item><p><termdef id="dt-segment-concatenation" term="concatenation">The <term>concatenation</term> of two
+                              <termref def="dt-adjacent-segments">adjacent segments</termref> is the segment that has the
+                              same start position as the first, and the same <termref def="dt-end-position"/>
+                              as the second.</termdef></p></item>
+                     
                      
                   </ulist>
                   
@@ -3627,8 +3638,21 @@ string conversion of the number as obtained above, and the appropriate <var>suff
                      <ulist>
                         <item><p>The regular expression <code>"e"</code> matches one segment,
                         namely <code>2:1:"e"</code>.</p></item>
+                        <item><p>The regular expression <code>"ea"</code> matches one segment,
+                        namely <code>2:2:"ea"</code>. A regular expression consisting of
+                        two pieces (here <code>"e"</code> and <code>"a"</code>) matches a segment
+                        that is the <termref def="dt-segment-concatenation">concatenation</termref>
+                        of a segment that matches <code>"e"</code> and a segment that matches <code>"a"</code>.</p></item>
+                        <item><p>The regular expression <code>"^b"</code> matches one segment,
+                        namely <code>1:1:"b"</code>. This regular expression comprises two
+                        pieces (<code>"^"</code> and <code>"b"</code>); it therefore matches a segment
+                        that is the <termref def="dt-segment-concatenation">concatenation</termref>
+                        of a segment <code>1:0:""</code> that matches <code>"^"</code> and 
+                        a segment <code>1:1:"b"</code> that matches <code>"b"</code>.</p></item>
                         <item><p>The regular expression <code>"b|ea"</code> matches two segments,
-                        namely <code>1:1:"b"</code> and <code>2:2:"ea"</code>.</p></item>
+                        namely <code>1:1:"b"</code> and <code>2:2:"ea"</code>. A regular expression
+                        consisting of several branches matches the union of the segments matching
+                        each of the branches.</p></item>
                         <item><p>The regular expression <code>"[a-z]"</code> matches four segments,
                         namely <code>1:1:"b"</code>, <code>2:1:"e"</code>, <code>3:1:"a"</code>, and
                               <code>4:1:"d"</code>.</p></item>
@@ -3696,9 +3720,8 @@ string conversion of the number as obtained above, and the appropriate <var>suff
                      </item>
                   </ulist>
                   
-                  <note><p>Two segments can be adjacent: that is, the start position of one <termref def="dt-segment"/>
-                  can be equal to the <termref def="dt-end-position"/> of the previous segment. This is true even when
-                  the second segment is zero-length (the two segments are not considered to be overlapping, even
+                  <note><p>Two segments can be <termref def="dt-adjacent-segments">adjacent</termref> even when
+                  one of them is zero-length (the two segments are not considered to be overlapping, even
                   though they have the same <termref def="dt-end-position"/>). This means,
                   for example, that the regular expression <code>a*(?=x)</code> has two non-overlapping matches against
                   the string <code>aaax</code>, one at position 1 and the other at position 4.</p></note>
@@ -3714,32 +3737,27 @@ string conversion of the number as obtained above, and the appropriate <var>suff
                   This is defined recursively for each construct that may appear within a regular expression,
                   in terms of the outcome of applying its subexpressions.</p>                    
                  
-                  <p>For constructs defined in XSD 1.1 (<code>branch</code>, <code>piece</code>,
-                  <code>NormalChar</code>, <code>charClass</code>), XSD defines a set of strings
+                  <p>For constructs defined in XSD 1.1 (<code>regExp</code>, <code>branch</code>, <code>piece</code>,
+                  <code>atom</code>, <code>NormalChar</code>, <code>charClass</code>), XSD defines a set of strings
                   denoted by the construct. The corresponding semantics for this specification
                   are that the segments matched by such a construct are the segments whose string value
-                  is contained in this set.</p>
+                  is contained in this set. More specifically:</p>
                   
-                  <note>
-                     <p>For example, XSD 1.1 states that the choice expression <var>S | T</var> matches all
-                     strings in <var>L(S)</var> and all strings in <var>L(T)</var>. Using the formalism
-                     of this specification, this translates into a statement that the matching segments
-                     for <var>S | T</var> are the union of the matching segments of <var>S</var>
-                     and the matching segments of <var>T</var>.</p>
-                     <p>A more complex example: XSD 1.1 states that the <term>piece</term> <var>S+</var> matches
-                     all concatenations of one or more strings from <var>L(S)</var>. With our
-                     formalism, we state that the matching segments for <code>S+</code> are
-                     all segments that are concatenations of one or more adjacent segments each 
-                     of which matches <var>S</var>.
-                     For this purpose, two segments are adjacent if the end position of the first is the
-                     start position of the second, and the concatenation of two adjacent segments is the
-                     segment whose start position is the same as the first, and whose length is the sum
-                     of the two lengths.</p>
-                     <p>A <term>branch</term> <var>ST</var> comprising two subexpressions <var>S</var>
-                     and <var>T</var> matches every segment of the input string that is the concatenation
-                     of two adjacent segments <var>s</var> and <var>t</var> where <var>s</var>
-                     matches <var>S</var> and <var>t</var> matches <var>T</var>.</p>
-                  </note>
+                  <ulist>
+                     <item><p>A <term>regExp</term> matches the union of the segments matched
+                     by its branches.</p></item>
+                     <item><p>A <term>branch</term> matches any segment that is the concatenation 
+                           of a sequence of adjacent segments matched by its pieces (taken individually and in order).</p></item>
+                     <item><p>An <term>atom</term> followed by a quantifier matches the concatenation
+                     of a sequence of adjacent segments such that (a) the number of segments in the concatenation
+                     satisfies the numeric bounds of the quantifier, and (b) the atom matches each of the segments.</p></item>
+                     <item><p>A <term>NormalChar</term> matches a segment of length
+                     one whose string-value is the designated character.</p></item>
+                     <item><p>A <term>charClass</term> matches a segment of length
+                     one whose string-value is one of the designated characters.</p></item>
+                  </ulist>
+                  
+                  
                   
                   <note>
                      <p>Some specifications of regular expressions define the semantics procedurally, in terms
