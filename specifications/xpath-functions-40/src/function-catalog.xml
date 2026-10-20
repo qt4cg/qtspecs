@@ -36133,48 +36133,29 @@ return $array/descendant::jnode(*, array(*))[. > 25] =!> jvalue()</eg></fos:expr
       </fos:summary>
       <fos:rules>
          <p>The first item in the returned sequence is <code>$init</code>; the
-         second item is the result of <code>$initial-state => $step(1)</code>; the third item
-         is the result of <code>$initial-state => $step(1) => step(2)</code>, and so on.</p>
+         second item is the result of <code>$init => $step(1)</code>; the third item
+         is the result of <code>$init => $step(1) => $step(2)</code>; and so on.</p>
          
          <p>The <code>$step</code> function is called with two arguments, the current state, and
          the sequential position of the current state (starting at 1). The coercion rules allow
          an arity-1 function to be supplied if the second argument is not required.</p>
          
          <p>If the <code>$step</code> function returns an empty sequence, this marks the end
-         of the generated sequence. However, the generated sequence is potentially unbounded,
-         and the specification defines that certain operations on sequences are 
-            <termref def="dt-incremental-evaluation">incrementally evaluated</termref>,
-         ensuring that unbounded sequences can be processed without exhausting available resources.</p>
+         of the generated sequence. However, the generated sequence is potentially unbounded.</p>
          
          
             
       </fos:rules>
       
-      <fos:equivalent style="xquery-function">
-declare function generate(
-  $init   as item(),
-  $step as function(item(), xs:integer) as item()?
-) as item()* {
-  generate-helper($init, $step, 1)
-};
-declare %private function generate-helper (
-  $init   as item(),
-  $step as function(item(), xs:integer) as item()?,
-  $position as xs:integer
-) as item()* {
-  let $next := $step($init, $position)
-  while exists($next)
-  return ($next, generate-helper($next, $step, $position+1))
-};
-      </fos:equivalent>
+      
       <fos:notes>
-         <p>The evaluation technique used to implement pipelined operation is often called
-         <term>lazy evaluation</term>. This specification does not mandate any particular
-         implementation technique, it only requires that the evaluation of pipelined operations
-         is not constrained by available memory. For example, a processor with access to SIMD
-         hardware is free to take advantage of this. This has the practical implication that
-         an application cannot assume there will be zero lookahead in the pipeline, nor that
-         such lookahead will be error-free.</p>
+         <p>The function has the potential to generate an unbounded sequence. This is not necessarily an error:
+         implementations are expected to use incremental evaluation techniques which, at least in simple cases,
+         will ensure non-termination. For example, users can reasonably expect that the expression
+         <code>generate(1, fn{.+1})[1 to 100]</code> will deliver the first 100 positive integers and
+         then terminate. It might be unwise, however, to bind the expression <code>generate(1, fn{.+1})</code>
+         to a variable: some implementations might be able to handle this while others fail due to lack of
+         resources.</p>
          <p>The <function>generate</function> function delivers a sequence of items
          representing succesive states. There is no constraint on how states are represented; in many cases it will be useful
          to represent states as records with a method conventionally named <code>next</code> that delivers
@@ -36183,22 +36164,22 @@ declare %private function generate-helper (
          sequence, it can also be a convenient way of generating a finite sequence. For example,</p>
          <eg>generate(., fn{..})</eg>
          <p>returns the ancestors of a node, ending at the root of the containing tree.</p>
-         <p>An implementation is allowed to place limits on the number of items in a sequence. Even though
-         some operations are defined to be incrementally evaluated, there may be constraints such as a limit on the
+         <p>An implementation is allowed to place limits on the number of items in a sequence.
+         There may be constraints such as a limit on the
          size of the integer returned by <function>fn:position</function>.</p>
          <p>Operations that consume a sequence in its entirety should be avoided if the sequence
          might be unbounded. Examples of such operations include:</p>
          
          <ulist>
-            <item><p>Aggregation functions such as <function>count</function>, <function>sum</function>, 
-                  <function>string-join</function>, or <function>distinct-values</function>.</p></item>
-            <item><p>Reordering operations, such as <function>sort-by</function>, <function>reverse</function>,
-            the <code>permute</code> method of <function>random-number-generator</function>, or the
+            <item><p>Aggregation functions such as <function>fn:count</function>, <function>fn:sum</function>, 
+                  <function>fn:string-join</function>, or <function>fn:distinct-values</function>.</p></item>
+            <item><p>Reordering operations, such as <function>fn:sort-by</function>, <function>fn:reverse</function>,
+            the <code>permute</code> method of <function>fn:random-number-generator</function>, or the
             implicit sort into document order performed by the <code>/</code>, <code>union</code>,
             <code>intersect</code>, and <code>except</code> operators.</p></item>
-            <item><p>The function <function>last</function>.</p></item>
-            <item><p>Searching operations, such as predicates, <function>index-of</function>,
-            <function>filter</function>, and <function>some</function>,
+            <item><p>The function <function>fn:last</function>.</p></item>
+            <item><p>Searching operations, such as predicates, <function>fn:index-of</function>,
+            <function>fn:filter</function>, and <function>fn:some</function>,
                   unless the user has good reason to believe these will always find a match.</p></item>
             <item><p>Binding an unbounded sequence to a variable.</p></item>
          </ulist>
@@ -36206,13 +36187,14 @@ declare %private function generate-helper (
          <p>Using such operations on an unbounded sequence may result in catastrophic failure (for example, running out of memory),
          or in non-termination.</p>
          
-         <p>There are a number of ways of reliably processing a bounded subsequence of an unbounded input sequence:</p>
+         <p>Implementations are expected to enable processing a bounded subsequence of an unbounded input sequence
+            using constructs such as:</p>
          
          <ulist>
-            <item><p>Use of the functions <function>subsequence</function> or <function>slice</function>
+            <item><p>The functions <function>fn:subsequence</function> or <function>fn:slice</function>
             with a defined end point.</p></item>
             <item><p>Use of numeric predicates, for example <code>$in[100]</code> or <code>$in[1 to 100]</code>.</p></item>
-            <item><p>Use of the function <function>starts-with-subsequence</function>.</p></item>
+            <item><p>Use of the function <function>fn:starts-with-subsequence</function>.</p></item>
          </ulist>
       </fos:notes>
 
@@ -36226,16 +36208,11 @@ declare %private function generate-helper (
             or <code>sum</code>) will inevitably fail (either by running out of resources, or by failing
             to terminate). However, operations that only need access to the start of the sequence, for 
             example <code>generate(0, fn{.+2})[20]</code> will typically succeed, evaluating
-            the infinite sequence only as far as is needed to deliver a result. Such operations are guaranteed
-            to succeed if the operation in question is guaranteed to perform <termref def="dt-incremental-evaluation"/>
-            of its operand.</p>
-            <p>Some operations, such as:</p>
-            <eg>index-of(generate(0, fn{.+2}), $n)[1]</eg>
-            <p>may or may not succeed, depending on the actual content of the data (in this case, depending on whether
-            <code>$n</code> is odd or even).</p>
+            the infinite sequence only as far as is needed to deliver a result. </p>
+            
          </fos:example>
          <fos:example>
-            <p><emph>An infinite sequence of random doubles</emph></p>
+            <p><emph>A sequence of random doubles</emph></p>
             <p>The function call:</p>
             
            <eg>generate(random-number-generator($seed), fn{?next}) 
@@ -36247,7 +36224,7 @@ declare %private function generate-helper (
             to produce a new random number generator. The result of the call to <function>generate</function> 
             is thus an unbounded sequence of random number generators. The filter predicate <code>1 to 1000</code>
             then reduces this sequence to the first 1000 items: this works because a filter expression is
-            guaranteed to perform <termref def="dt-incremental-evaluation"/> of its base expression.
+            expected to perform incremental evaluation of its base expression.
             The final <code>? number</code> operation then extracts the number delivered by each of the 
             random number generator objects.
          </p>   
@@ -36320,7 +36297,7 @@ generate("S1", fn($state, $i) {
       </fos:examples>
       
       <fos:changes>
-         <fos:change issue="708" PR="2350" date="2025-12-17"><p>New in 4.0</p></fos:change>
+         <fos:change issue="708" PR="2350" date="2026-10-20"><p>New in 4.0</p></fos:change>
       </fos:changes>
    </fos:function>
    
