@@ -21,12 +21,12 @@
     xmlns:saxon="http://saxon.sf.net/"
     cdata-section-elements="assert-xml"/>
   
-  <xsl:param name="qt4tests-dir" static="yes" select="'../../../build/qt4tests/'"/>
+  <xsl:param name="qt4tests-dir" static="yes" select="'../build/qt4tests/'"/>
 
   <xsl:import-schema namespace="http://www.w3.org/xpath-functions/spec/namespace"
-    schema-location="../../xpath-functions-40/src/fos.xsd"/>
+    schema-location="../specifications/xpath-functions-40/src/fos.xsd"/>
   <xsl:import-schema namespace="http://www.w3.org/2005/xpath-functions"
-    schema-location="../../xpath-functions-40/src/xpath-functions.xsd"/>
+    schema-location="../specifications/xpath-functions-40/src/xpath-functions.xsd"/>
   <xsl:import-schema namespace="http://www.w3.org/2010/09/qt-fots-catalog"
     _schema-location="{$qt4tests-dir}catalog-schema.xsd"/>
   
