@@ -5,7 +5,7 @@
     version="3.0" expand-text="true">
     <!--<xsl:import href="../../../xpath-functions-40/style/xpath-functions.xsl"/>-->
 
-    <xsl:import href="../../style/expath-functions.xsl"/>
+    <xsl:import href="../../../style/expath-functions.xsl"/>
     
     <xsl:variable name="expath-catalog" select="doc('../src/function-catalog.xml')"/>
     
