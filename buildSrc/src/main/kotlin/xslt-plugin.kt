@@ -17,6 +17,7 @@ import javax.inject.Inject
 
 interface XsltExtension {
   abstract val project: Property<Project>
+  abstract val jvmArgs: ListProperty<String>
   abstract val configuration: Property<Configuration>
   abstract val debug: Property<Boolean>
   abstract val dtdValidate: Property<Boolean>
@@ -30,6 +31,9 @@ class XsltPlugin : Plugin<Project> {
     extension.debug.convention(false)
     extension.dtdValidate.convention(true)
     extension.defaultParameters.convention(emptyMap())
+    extension.jvmArgs.convention(
+        listOf("-Xmx4096m", "-Djdk.xml.totalEntitySizeLimit=0", "-Djdk.xml.maxGeneralEntitySizeLimit=0",
+               "-Djdk.xml.maxParameterEntitySizeLimit=0"))
   }
 }
 
@@ -107,6 +111,9 @@ abstract class XsltTransform @Inject constructor(private val ex: ExecOperations)
     }
 
     ex.javaexec {
+      if (xsltExt.jvmArgs.get().isNotEmpty()) {
+        jvmArgs(xsltExt.jvmArgs.get())
+      }
       classpath = cp
       mainClass.set(javaClass)
       args(argList)

@@ -65,6 +65,8 @@ configure<XsdValidateExtension> {
 
 defaultTasks("publish", "grammarExplorer")
 
+println("Building with Java version ${System.getProperty("java.version")}")
+
 tasks.register("publish") {
   dependsOn("publish-xpath-functions-40",
             "publish-xquery-40",

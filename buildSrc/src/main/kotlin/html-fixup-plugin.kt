@@ -6,6 +6,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
@@ -18,6 +19,7 @@ import javax.inject.Inject
 
 interface HtmlFixupExtension {
   abstract val project: Property<Project>
+  abstract val jvmArgs: ListProperty<String>
   abstract val configuration: Property<Configuration>
   abstract val debug: Property<Boolean>
   abstract val timestamp: Property<String>
@@ -29,6 +31,9 @@ class HtmlFixupPlugin : Plugin<Project> {
     extension.project.set(project)
     extension.debug.convention(false)
     extension.timestamp.convention(SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date()).toString())
+    extension.jvmArgs.convention(
+        listOf("-Xmx4096m", "-Djdk.xml.totalEntitySizeLimit=0", "-Djdk.xml.maxGeneralEntitySizeLimit=0",
+               "-Djdk.xml.maxParameterEntitySizeLimit=0"))
   }
 }
 
@@ -79,6 +84,9 @@ abstract class HtmlFixup @Inject constructor(private val ex: ExecOperations): De
     }
 
     ex.javaexec {
+      if (fixupExt.jvmArgs.get().isNotEmpty()) {
+        jvmArgs(fixupExt.jvmArgs.get())
+      }
       classpath = cp
       mainClass.set(javaClass)
       args(argList)

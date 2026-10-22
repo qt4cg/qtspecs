@@ -6,6 +6,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
@@ -18,6 +19,7 @@ import javax.inject.Inject
 
 interface DtdValidateExtension {
   abstract val project: Property<Project>
+  abstract val jvmArgs: ListProperty<String>
   abstract val configuration: Property<Configuration>
   abstract val debug: Property<Boolean>
 }
@@ -27,6 +29,9 @@ class DtdValidatePlugin : Plugin<Project> {
     val extension = project.extensions.create<DtdValidateExtension>("dtd-validate")
     extension.project.set(project)
     extension.debug.convention(false)
+    extension.jvmArgs.convention(
+        listOf("-Xmx4096m", "-Djdk.xml.totalEntitySizeLimit=0", "-Djdk.xml.maxGeneralEntitySizeLimit=0",
+               "-Djdk.xml.maxParameterEntitySizeLimit=0"))
   }
 }
 
@@ -71,6 +76,9 @@ abstract class DtdValidate @Inject constructor(private val ex: ExecOperations): 
     }
 
     ex.javaexec {
+      if (dtdExt.jvmArgs.get().isNotEmpty()) {
+        jvmArgs(dtdExt.jvmArgs.get())
+      }
       classpath = cp
       mainClass.set(javaClass)
       args(argList)

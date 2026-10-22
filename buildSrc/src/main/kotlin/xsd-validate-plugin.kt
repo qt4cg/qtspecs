@@ -19,6 +19,7 @@ import javax.inject.Inject
 
 interface XsdValidateExtension {
   abstract val project: Property<Project>
+  abstract val jvmArgs: ListProperty<String>
   abstract val configuration: Property<Configuration>
   abstract val debug: Property<Boolean>
 }
@@ -28,6 +29,9 @@ class XsdValidatePlugin : Plugin<Project> {
     val extension = project.extensions.create<XsdValidateExtension>("xsd-validate")
     extension.project.set(project)
     extension.debug.convention(false)
+    extension.jvmArgs.convention(
+        listOf("-Xmx4096m", "-Djdk.xml.totalEntitySizeLimit=0", "-Djdk.xml.maxGeneralEntitySizeLimit=0",
+               "-Djdk.xml.maxParameterEntitySizeLimit=0"))
   }
 }
 
@@ -90,6 +94,9 @@ abstract class XsdValidate @Inject constructor(private val ex: ExecOperations): 
     }
 
     ex.javaexec {
+      if (xsdExt.jvmArgs.get().isNotEmpty()) {
+        jvmArgs(xsdExt.jvmArgs.get())
+      }
       classpath = cp
       mainClass.set(javaClass)
       args(argList)
