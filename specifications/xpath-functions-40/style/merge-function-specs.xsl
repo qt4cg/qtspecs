@@ -7,6 +7,8 @@
 
 	<xsl:output method="xml" doctype-system="../../../schema/xsl-query.dtd"/>
 
+	<xsl:include href="../../../style/serialization-parameters.xsl"/>
+
 	<!-- This stylesheet expects to take xpath-functions.xml as its principal input,
      and to write xpath-functions-expanded.xml as its output. It takes a secondary
      input from function-catalog.xml -->
