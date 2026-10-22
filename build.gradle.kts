@@ -318,7 +318,7 @@ for (shortName in listOf("binary", "file")) {
       dtdValidate = false
     }
   } else {
-    tasks.register<XsltTransform>("${shortName}_generate_tests") {
+    tasks.register("${shortName}_generate_tests") {
       doLast {
         println("Cannot generate tests from specification; no Saxon license available.")
       }
