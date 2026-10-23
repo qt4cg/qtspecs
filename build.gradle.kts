@@ -355,6 +355,13 @@ tasks.register<Copy>("common_sources") {
 tasks.register<XsltTransform>("fo_merge") {
   dependsOn("common_sources", "saxon_config")
   description = "Expand the FO sources into a single XML file"
+
+  inputs.dir(layout.projectDirectory.dir("specifications/xpath-functions-40/src"))
+  inputs.dir(layout.projectDirectory.dir("specifications/xpath-functions-40/style"))
+  inputs.dir(layout.projectDirectory.dir("style"))
+  inputs.file(layout.projectDirectory.file(
+                  "specifications/xslt-xquery-serialization-40/src/serialization-parameters.xml"))
+
   source = layout.projectDirectory.file("specifications/xpath-functions-40/src/xpath-functions.xml")
   stylesheet = layout.projectDirectory.file("specifications/xpath-functions-40/style/merge-function-specs.xsl")
   result = layout.buildDirectory.file("expanded/xpath-functions-40/xpath-functions-40.xml")
@@ -467,6 +474,8 @@ tasks.register<XsltTransform>("_strip_xslt_grammar") {
   inputs.dir(layout.projectDirectory.dir("specifications/xquery-40/src"))
   inputs.dir(layout.projectDirectory.dir("specifications/xquery-40/style"))
   inputs.dir(layout.projectDirectory.dir("specifications/grammar-40"))
+  inputs.file(layout.projectDirectory.file(
+                  "specifications/xslt-xquery-serialization-40/src/serialization-parameters.xml"))
 
   source = layout.buildDirectory.file("grammar-40/xpath-grammar.xml")
   stylesheet = layout.projectDirectory.file("specifications/grammar-40/parser/strip.xsl")
@@ -688,6 +697,8 @@ for (shortName in listOf("xpath", "xquery")) {
     inputs.dir(layout.projectDirectory.dir("specifications/xquery-40/src"))
     inputs.dir(layout.projectDirectory.dir("specifications/xquery-40/style"))
     inputs.dir(layout.projectDirectory.dir("specifications/grammar-40"))
+    inputs.file(layout.projectDirectory.file(
+                    "specifications/xslt-xquery-serialization-40/src/serialization-parameters.xml"))
     description = "Preprocess to pull together source files for (only) this spec"
     source = layout.projectDirectory.file("specifications/xquery-40/src/${shortName}.xml")
     stylesheet = layout.projectDirectory.file("specifications/xquery-40/style/preprocess-xquery.xsl")
@@ -934,18 +945,26 @@ tasks.register("serialization_40") {
   description = "Build the XSLT/XQuery Serialization 4.0 specification"
 }
 
-tasks.register<DtdValidate>("_validate_serialization_xml") {
+tasks.register<XsltTransform>("serialization_merge") {
+  dependsOn("saxon_config")
+  description = "Expand the generated parts of the Serialization sources"
+  inputs.dir(layout.projectDirectory.dir("specifications/xslt-xquery-serialization-40"))
+  inputs.dir(layout.projectDirectory.dir("style"))
+
   source = layout.projectDirectory.file(
       "specifications/xslt-xquery-serialization-40/src/xslt-xquery-serialization.xml")
-  result = layout.buildDirectory.file("tmp/valid/serialization.marker")
+  stylesheet = layout.projectDirectory.file(
+      "specifications/xslt-xquery-serialization-40/style/merge-serialization.xsl")
+  result = layout.buildDirectory.file(
+      "expanded/xslt-xquery-serialization-40/xslt-xquery-serialization-40.xml")
 }
 
 tasks.register<XsltTransform>("serialization_xml") {
-  dependsOn("saxon_config", "_validate_serialization_xml")
+  dependsOn("serialization_merge", "saxon_config")
   group = "Spec XML"
   description = "Create the XML version of the specification"
-  source = layout.projectDirectory.file(
-      "specifications/xslt-xquery-serialization-40/src/xslt-xquery-serialization.xml")
+  source = layout.buildDirectory.file(
+      "expanded/xslt-xquery-serialization-40/xslt-xquery-serialization-40.xml")
   stylesheet = layout.projectDirectory.file("style/identity.xsl")
   result = layout.buildDirectory.file("www/xslt-xquery-serialization-40/xslt-xquery-serialization-40.xml")
   dtdValidate = false
@@ -953,8 +972,8 @@ tasks.register<XsltTransform>("serialization_xml") {
 
 tasks.register<XsltTransform>("_serialization_html") {
   dependsOn("serialization_xml", "setup_crossref_indexes", "saxon_config")
-  source = layout.projectDirectory.file(
-      "specifications/xslt-xquery-serialization-40/src/xslt-xquery-serialization.xml")
+  source = layout.buildDirectory.file(
+      "expanded/xslt-xquery-serialization-40/xslt-xquery-serialization-40.xml")
   stylesheet = layout.projectDirectory.file(
       "specifications/xslt-xquery-serialization-40/style/serialization.xsl")
   result = layout.buildDirectory.file("www/xslt-xquery-serialization-40/Overview.xml")
