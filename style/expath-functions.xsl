@@ -3,7 +3,7 @@
     xmlns:xs="http://www.w3.org/2001/XMLSchema"
     xmlns:math="http://www.w3.org/2005/xpath-functions/math" exclude-result-prefixes="xs math"
     version="3.0" expand-text="true">
-    <xsl:import href="../../xpath-functions-40/style/xpath-functions.xsl"/>
+    <xsl:import href="../specifications/xpath-functions-40/style/xpath-functions.xsl"/>
 
 
     <xsl:template name="finder"
@@ -146,7 +146,7 @@
         <xsl:variable name="spec">
             <xsl:choose>
                 <xsl:when test="@spec">
-                    <xsl:value-of select="@spec"/>
+                    <xsl:value-of select="replace(@spec, '40', '')"/>
                 </xsl:when>
                 <xsl:otherwise>
                     <xsl:value-of select="substring($default.specdoc,1,2)"/>

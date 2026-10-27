@@ -72,6 +72,7 @@
   </xsl:template>
 
   <xsl:include href="grammar2spec.xsl"/>
+  <xsl:include href="serialization-parameters.xsl"/>
   
   <xsl:template match="fascicle">
     <xsl:apply-templates/>
