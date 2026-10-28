@@ -7,6 +7,7 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
@@ -19,6 +20,7 @@ import javax.inject.Inject
 
 interface XsdValidateExtension {
   abstract val project: Property<Project>
+  abstract val buildDirectory: DirectoryProperty
   abstract val jvmArgs: ListProperty<String>
   abstract val configuration: Property<Configuration>
   abstract val debug: Property<Boolean>
@@ -28,6 +30,7 @@ class XsdValidatePlugin : Plugin<Project> {
   override fun apply(project: Project) {
     val extension = project.extensions.create<XsdValidateExtension>("xsd-validate")
     extension.project.set(project)
+    extension.buildDirectory.convention(project.layout.buildDirectory)
     extension.debug.convention(false)
     extension.jvmArgs.convention(
         listOf("-Xmx4096m", "-Djdk.xml.totalEntitySizeLimit=0", "-Djdk.xml.maxGeneralEntitySizeLimit=0",
@@ -69,6 +72,11 @@ abstract class XsdValidate @Inject constructor(private val ex: ExecOperations): 
     val javaClass = "com.saxonica.Validate"
 
     val argList = mutableListOf<String>()
+
+    val configXml = xsdExt.buildDirectory.file("config.xml").get().asFile
+    if (configXml.exists()) {
+      argList.add("-config:${configXml}")
+    }
 
     for (opt in options.get()) {
       argList.add(opt)

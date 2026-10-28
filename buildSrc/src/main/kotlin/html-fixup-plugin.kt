@@ -8,6 +8,7 @@ import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.*
 import org.gradle.api.tasks.Optional
@@ -23,12 +24,14 @@ interface HtmlFixupExtension {
   abstract val configuration: Property<Configuration>
   abstract val debug: Property<Boolean>
   abstract val timestamp: Property<String>
+  abstract val buildDirectory: DirectoryProperty
 }
 
 class HtmlFixupPlugin : Plugin<Project> {
   override fun apply(project: Project) {
     val extension = project.extensions.create<HtmlFixupExtension>("html-fixup")
     extension.project.set(project)
+    extension.buildDirectory.convention(project.layout.buildDirectory)
     extension.debug.convention(false)
     extension.timestamp.convention(SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(Date()).toString())
     extension.jvmArgs.convention(
@@ -62,6 +65,12 @@ abstract class HtmlFixup @Inject constructor(private val ex: ExecOperations): De
     val javaClass = "net.sf.saxon.Query"
 
     val argList = mutableListOf<String>()
+
+    val configXml = fixupExt.buildDirectory.file("config.xml").get().asFile
+    if (configXml.exists()) {
+      argList.add("-config:${configXml}")
+    }
+
     argList.add("-qs:.")
     argList.add("-s:${source.get()}")
     argList.add("-o:${result.get()}")

@@ -7,6 +7,7 @@ import org.gradle.api.Project
 import org.gradle.api.artifacts.Configuration
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
@@ -22,6 +23,7 @@ interface XsltExtension {
   abstract val debug: Property<Boolean>
   abstract val dtdValidate: Property<Boolean>
   abstract val defaultParameters: MapProperty<String,String>
+  abstract val buildDirectory: DirectoryProperty
 }
 
 class XsltPlugin : Plugin<Project> {
@@ -31,6 +33,7 @@ class XsltPlugin : Plugin<Project> {
     extension.debug.convention(false)
     extension.dtdValidate.convention(true)
     extension.defaultParameters.convention(emptyMap())
+    extension.buildDirectory.convention(project.layout.buildDirectory)
     extension.jvmArgs.convention(
         listOf("-Xmx4096m", "-Djdk.xml.totalEntitySizeLimit=0", "-Djdk.xml.maxGeneralEntitySizeLimit=0",
                "-Djdk.xml.maxParameterEntitySizeLimit=0"))
@@ -80,6 +83,11 @@ abstract class XsltTransform @Inject constructor(private val ex: ExecOperations)
 
     for (opt in options.get()) {
       argList.add(opt)
+    }
+
+    val configXml = xsltExt.buildDirectory.file("config.xml").get().asFile
+    if (configXml.exists()) {
+      argList.add("-config:${configXml}")
     }
 
     if (source.getOrNull() != null) {
