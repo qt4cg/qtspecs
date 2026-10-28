@@ -60,7 +60,7 @@ configure<DtdValidateExtension> {
 
 configure<XsdValidateExtension> {
   configuration = configurations["validate"]
-  debug = true
+  debug = false
 }
 
 defaultTasks("publish", "grammarExplorer")
@@ -328,14 +328,11 @@ for (shortName in listOf("binary", "file")) {
 
 // ============================================================
 
-tasks.register<JavaExec>("validate_xpath_functions_function_catalog") {
-  inputs.file(layout.projectDirectory.file("specifications/xpath-functions-40/src/fos.scm"))
-  inputs.file(layout.projectDirectory.file("specifications/xpath-functions-40/src/function-catalog.xml"))
-
-  classpath = configurations["transform"]
-  mainClass = "com.saxonica.Validate"
-  args("-xsd:${layout.projectDirectory.file("specifications/xpath-functions-40/src/fos.scm")}",
-       "-s:${layout.projectDirectory.file("specifications/xpath-functions-40/src/function-catalog.xml")}")
+tasks.register<XsdValidate>("validate_xpath_functions_function_catalog") {
+  dependsOn("saxon_config")
+  source = layout.projectDirectory.file("specifications/xpath-functions-40/src/function-catalog.xml")
+  schema = layout.projectDirectory.file("specifications/xpath-functions-40/src/fos.scm")
+  result = layout.buildDirectory.file("tmp/valid/xpath-functions.marker")
 }
 
 tasks.register("xpath_functions_40") {
@@ -1250,6 +1247,5 @@ tasks.register<XsdValidate>("updateSEF") {
   schema = layout.projectDirectory.file("specifications/xpath-functions-40/src/fos.xsd")
   result = layout.buildDirectory.file("tmp/valid/sef.marker")
   options = listOf(
-      "-config:${layout.buildDirectory.file("config.xml").get().asFile}",
       "-export:${layout.projectDirectory.file("specifications/xpath-functions-40/src/fos.scm")}")
 }
