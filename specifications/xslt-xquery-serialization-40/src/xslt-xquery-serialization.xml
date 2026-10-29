@@ -719,6 +719,9 @@ nodes.</p>
       Added the <code>csv-separator</code>, <code>csv-quote-character</code>, and
       <code>csv-header</code> parameters for CSV serialization.
     </change>
+    <change issue="2980" PR="2981" date="2026-10-13">
+      Added the <code>adaptive-mode</code> parameter for Adaptive serialization.
+    </change>
   </changes>
 <p>There are a number of parameters that influence how serialization
 is performed. <termref def="host-language">Host languages</termref> <rfc2119>MAY</rfc2119> allow users to specify any or all of these parameters, but
@@ -4277,24 +4280,25 @@ according to the <bibref ref="JSON-LINES"/> format, as described in <specref ref
     <change issue="2389" PR="2594" date="2026-04-27">
       The rules for serializing atomic items have been revised and relaxed.
     </change>
+    <change issue="2980" PR="2981" date="2026-10-13">
+      The <code>adaptive-mode</code> parameter selects typed or readable output.
+    </change>
   </changes>
 
   <p>The Adaptive output method serializes the <termref diff="chg" at="2023-11-01" def="dt-input-tree"/> 
-into a human readable form for the purposes of debugging query results.</p>
+into a human readable form, for example for the purposes of debugging query results.
+Any <termref diff="chg" at="2023-11-01" def="dt-input-value"/> can be serialized
+without raising a serialization error.</p>
 
-<p>The intention of this is to:</p>
+<p diff="add" at="2026-10-13">The <code>adaptive-mode</code> serialization parameter selects one of two modes:</p>
 
-<ulist>
-  <item><p>allow any <termref diff="chg" at="2023-11-01" def="dt-input-value"/> to be serialized 
-without raising a serialization error and</p></item>
-  <item><p>serialize it in the form of an expression in the host language that would
-    construct that item.</p></item>
+<ulist diff="add" at="2026-10-13">
+  <item><p><code>typed</code> (the default): each item is serialized in a form that reveals its type,
+    usually in the syntax of an XQuery expression that would construct that item.</p></item>
+  <item><p><code>readable</code>: each item is serialized in a compact form that shows its content
+    (see <specref ref="adaptive-readable"/>).</p></item>
 </ulist>
 
-<note><p>This is an aim rather than a requirement: the output is intended for human consumption,
-  and there is no guarantee that it can be parsed, or that parsing it recovers the original value.
-</p></note>
- 
 <p>Sequence normalization is not performed for this output method.</p>
 
 <p>Each item in the supplied sequence is serialized individually as
@@ -4321,18 +4325,18 @@ between successive items.</p>
     </ulist>
   </item>
 
-<item><p>A document, element, text, comment, or processing instruction
+<item><p>An element, comment, or processing instruction
 node is serialized using the XML
 output method described in <specref ref="xml-output"/>.</p></item>
 
-<item><p>An attribute or namespace <termref
-def="dt-node">node</termref> is serialized as if it had a containing
-element node.  For example an
-attribute node might be serialized as the string
-<code>xsi:type="xs:integer"</code>; a namespace node might be
-serialized as
-<code>xmlns:sns="http://example.com/sample-namespace"</code>.
-</p>
+<item diff="chg" at="2026-10-13"><p>A document, text, attribute, or namespace node is serialized in the format
+<code>document { <var>C</var> }</code>, <code>text { <var>S</var> }</code>,
+<code>attribute <var>N</var> { <var>S</var> }</code>, or <code>namespace <var>P</var> { <var>S</var> }</code>,
+where <var>C</var> is the adaptive serialization of the children, separated by commas,
+<var>S</var> is the adaptive serialization of the string value as an <code>xs:string</code>,
+<var>N</var> is the lexical QName of the attribute, and <var>P</var> is the namespace prefix (or <code>{ "" }</code> if the prefix is empty).
+For example, an attribute node might be serialized as
+<code>attribute xsi:type { "xs:integer" }</code>.</p>
 
 <note><p>This may result in output of QNames containing prefixes whose
 binding is not displayed.</p></note>
@@ -4341,15 +4345,13 @@ binding is not displayed.</p></note>
 <item><p>An <xtermref spec="XP40" ref="dt-atomic-item">atomic
 item</xtermref> is serialized as follows:</p>
 <ulist>
-<item><p>An instance of <code>xs:boolean</code> is serialized as <code>true()</code> or <code>false()</code>. </p></item>
-<item><p>An instance of <code>xs:string</code>, <code>xs:untypedAtomic</code>,
- or <code>xs:anyURI</code> is serialized as follows:</p>
+<item><p diff="chg" at="2026-10-13">An atomic item whose type annotation is <code>xs:boolean</code> is serialized as <code>true()</code> or <code>false()</code>. </p></item>
+<item><p diff="chg" at="2026-10-13">An atomic item whose type annotation is <code>xs:string</code> is serialized as follows:</p>
   <olist>
     <item><p>A quotation mark or apostrophe is selected as a quote character.</p></item>
-    <item><p>Occurrences of the quote character within the value are doubled. It is
-       <termref def="impdef">implementation-defined</termref> whether ampersand characters
-       are emitted literally or encoded as <code>&amp;amp;</code>, as required by host languages
-       whose string literals cannot contain a literal ampersand.</p></item>
+    <item><p>Occurrences of the quote character within the value are doubled.</p></item>
+    <item diff="chg" at="2026-10-19"><p>Ampersand characters are encoded as <code>&amp;amp;</code>, and control characters
+       other than tab are output as character references.</p></item>
     <item><p>The resulting value is enclosed by the selected quote character.</p></item>
     <item><p>The resulting value is serialized using the Text output method 
 described in <specref ref="text-output"/>.</p></item>
@@ -4357,11 +4359,13 @@ described in <specref ref="text-output"/>.</p></item>
 <note><p>The Text output method will apply character expansion and encoding rules to this
 string as specified by the serialization parameters.</p></note>
 </item>
-<item><p>An instance of <code>xs:integer</code> or <code>xs:decimal</code> is serialized by converting
-the value to a string using the <code>fn:string</code> function.</p></item>
-<item><p>An instance of <code>xs:double</code> or <code>xs:float</code> is serialized by converting 
-the value to a string using the <code>fn:string</code> function, or by using an
-<termref def="impdef">implementation-defined</termref> representation.</p></item>
+<item><p diff="chg" at="2026-10-13">An atomic item whose type annotation is <code>xs:integer</code> or <code>xs:decimal</code>
+is serialized by converting the value to a string using the <code>fn:string</code> function; for <code>xs:decimal</code>,
+<code>.0</code> is appended if the string contains no decimal point.</p></item>
+<item><p diff="chg" at="2026-10-13">An atomic item whose type annotation is <code>xs:double</code> and whose value is finite
+is serialized by converting the value to a string using the <code>fn:string</code> function, followed by <code>E0</code>
+if the string contains no exponent. An <termref def="impdef">implementation-defined</termref> representation of a
+double literal may be used instead.</p></item>
 <item><p>An instance of <code>xs:NOTATION</code> is serialized 
 as a URI-qualified name (that is, in the form <code>Q{uri}local</code>).</p>
 </item>
@@ -4405,12 +4409,12 @@ as a URI-qualified name (that is, in the form <code>Q{uri}local</code>).</p>
       (for example, <code>Q{http://uri.com}local</code>).</p></item>
   </ulist>
 </item>
-<item><p>An atomic item of any other type is serialized using the syntax of a constructor 
-function: <code>xs:TYPE("VALUE")</code> where <code>TYPE</code> is the name of the primitive 
-type, and <code>VALUE</code> is the result of applying the <code>fn:string</code> function.
- For example, <code>xs:date("2015-07-17")</code>.
- The resulting string is then serialized using the Text output method 
-described in <specref ref="text-output"/>.</p></item>
+<item><p diff="chg" at="2026-10-13">An atomic item of any other type is serialized using the syntax of a constructor
+function: <code>xs:TYPE(<var>S</var>)</code> where <code>TYPE</code> is the name of the type
+annotation of the item, and <var>S</var> is the result of applying the <code>fn:string</code> function,
+serialized as an <code>xs:string</code>.
+ For example, <code>xs:date("2015-07-17")</code>, <code>xs:dayTimeDuration("PT1H")</code>,
+ <code>xs:untypedAtomic("abc")</code>, or <code>xs:double("NaN")</code>.</p></item>
 </ulist>
 </item>
 
@@ -4468,13 +4472,6 @@ The following examples illustrate this rule:</p>
 
 </ulist>
 
-<p>When an <code>xs:string</code>, <code>xs:untypedAtomic</code>, or <code>xs:anyURI</code>
-item is serialized as an item of the sequence supplied to the serializer, rather than as a
-key or value nested within a map or array, it is <termref def="impdef">implementation-defined</termref>
-whether the enclosing quote characters are included; if they are omitted, the value is
-serialized using the Text output method without selecting or doubling a quote character. This
-allows the value to be copied without the surrounding quotation marks.</p>
-
 <p>Character maps are applied (a) when nodes are serialized using the XML 
 output method, and (b) to the serialized form of any <code>xs:string</code>,
 <code>xs:untypedAtomic</code>, or <code>xs:anyURI</code> value, whether or not it is
@@ -4484,12 +4481,19 @@ enclosed in quotation marks.</p>
 representation is ambiguous (for example tab or non-breaking-space) may be represented in the 
 form of an XML numeric character reference (for example <code>&amp;#x9;</code> or <code>&amp;#xa0;</code>)</p>
 
-<note><p>
+<p diff="add" at="2026-10-19">Finally, encoding, as controlled by the <code>encoding</code> parameter,
+converts the resulting character sequence into an octet stream, as described for the encoding phase
+in <specref ref="serphases"/>.</p>
+
+<note><p diff="chg" at="2026-10-13">
 In many cases the serialization of an item conforms to the syntax of an XQuery expression whose result 
 is that item. There are exceptions, however. For example, the syntax will not be valid XQuery in the 
-case of free-standing attribute or namespace nodes, or QName values, or anonymous functions; and where 
-it is valid XQuery, the result of evaluating the expression will not necessarily be identical to the 
-original: for example, the distinction between strings and untypedAtomic items is lost.
+case of JNodes with a parent, anonymous functions, or nodes with curly brackets in their text or attribute
+values; and where it is valid XQuery, the result of evaluating the expression will not necessarily be
+identical to the original: for example, node identity, type annotations of nodes, and whitespace-only
+text nodes are lost, and character maps may change the value.
+<phrase diff="add" at="2026-10-27">The output is also valid XPath unless it contains XQuery-only constructs such as
+node constructors, or strings with character references.</phrase>
 </p></note>
 
 <p>
@@ -4540,6 +4544,36 @@ def="impdep">implementation-dependent</termref> what hyperlinks are
 used and how they convey the information.
 </imp-dep-feature>
 
+<div2 id="adaptive-readable" diff="add" at="2026-10-13">
+<head>Adaptive Output Method: Readable Mode</head>
+
+<p>If the <code>adaptive-mode</code> parameter is set to <code>readable</code>, items are shown by their
+content, with as little syntax as possible. Only items whose kind could not be recognized otherwise
+(JNodes and QNames) are marked. The rules of the <code>typed</code> mode apply, with the following
+exceptions:</p>
+
+<ulist>
+  <item><p>An atomic item other than an instance of <code>xs:QName</code> is serialized as follows:</p>
+    <ulist>
+      <item><p>An instance of <code>xs:numeric</code> or <code>xs:boolean</code> by applying the
+        <code>fn:string</code> function (for <code>xs:double</code> and <code>xs:float</code>, an
+        <termref def="impdef">implementation-defined</termref> representation may be used instead).</p></item>
+      <item><p>Any other item of the supplied sequence as its string value, using the Text output method
+        described in <specref ref="text-output"/>.</p></item>
+      <item><p>Any other nested item as its string value, serialized by the rules for <code>xs:string</code>.</p></item>
+    </ulist>
+    <p>For example, <code>(xs:date("2015-07-17"), [ xs:date("2015-07-17"), 1.0, true() ])</code> is serialized
+    as <code>2015-07-17</code> and <code>["2015-07-17",1,true]</code>.</p></item>
+  <item><p>Document, element, text, comment, and processing instruction nodes are serialized using
+    the XML output method described in <specref ref="xml-output"/>. An attribute or namespace node is
+    serialized as if it had a containing element node, for example as <code>xsi:type="xs:integer"</code>
+    or <code>xmlns:sns="http://example.com/sample-namespace"</code>.</p></item>
+</ulist>
+
+<note><p>The output can be ambiguous: a string that contains the <code>item-separator</code> looks like
+several items; a text node looks like a string, unless the text contains characters that are escaped by the
+XML output method; and a nested <code>"2015-07-17"</code> may be a string or a date.</p></note>
+</div2>
 
 <div2 id="ADAPTIVE_PARAMS">
 <head>Serialization Parameters for the Adaptive Output Method</head>
@@ -4553,9 +4587,14 @@ used and how they convey the information.
 For some item types the Adaptive output method will delegate serialization to other output methods. 
 With the exception of the <code>byte-order-mark</code> serialization parameter, all serialization parameters, 
 if set, will be passed down to the serialization method that is applied to each item in the supplied sequence. 
-Only the <code>item-separator</code>, <code>byte-order-mark</code>, and <code>line-ending</code> parameters are directly applicable to the Adaptive output method.
+Only the <code>adaptive-mode</code>, <code>item-separator</code>, <code>byte-order-mark</code>, <phrase diff="add" at="2026-10-19"><code>encoding</code>, </phrase>and <code>line-ending</code> parameters are directly applicable to the Adaptive output method.
 </p>
 
+<div3 id="ADAPTIVE_ADAPTIVE-MODE" diff="add" at="2026-10-13">
+<head>Adaptive Output Method: <code>adaptive-mode</code></head>
+<p>The <code>adaptive-mode</code> parameter is applicable to the Adaptive output method.
+See <specref ref="adaptive-output"/> for more information.</p>
+</div3>
 
 
 <div3 id="ADAPTIVE_OMIT-XML-DECLARATION">
@@ -4602,6 +4641,11 @@ Therefore, this parameter does not get passed down to any delegated output metho
     applicable to the Adaptive output method only as elsewhere specified.</p></div3>
   
 
+
+<div3 id="ADAPTIVE_ENCODING" diff="add" at="2026-10-19">
+<head>Adaptive Output Method: <code>encoding</code></head>
+<p>The <code>encoding</code> parameter is applicable to the Adaptive output method. See
+<specref ref="serphases"/> for more information.</p></div3>
 
 <div3 id="ADAPTIVE_LINE-ENDING" diff="add" at="2026-06-25">
   <head>Adaptive Output Method: <code>line-ending</code></head>
@@ -4886,6 +4930,12 @@ the mechanism described in <specref ref="serparams-in-xdm-instance"/>.</p>
           <p>The output of QNames with the <specref ref="adaptive-output"/> has been adapted to
             reflect the new QName literal syntax: QName strings are now prefixed with
             the <code>#</code> character.</p>
+        </item>
+        <item diff="add" at="2026-10-13">
+          <p>With the <specref ref="adaptive-output"/>, atomic items are output with the name of their type annotation rather than the primitive type,
+            <code>xs:untypedAtomic</code> and <code>xs:anyURI</code> items with a constructor function,
+            decimals and doubles in the syntax of decimal and double literals, and document, text,
+            attribute and namespace nodes with computed constructors.</p>
         </item>
       </olist>
 
