@@ -10614,6 +10614,18 @@ declare record cx:complex(r as xs:double,
                <p>Defining the method <code>plus</code> allows two complex numbers
                to be added using the expression <code>$x?plus($y)</code> as an alternative
                to the function call <code>cx:add($x, $y)</code>.</p>
+                  
+               <p>The <code>where</code> attribute can be used to define an <xtermref spec="DM40" ref="dt-integrity-constraint"/>
+               for the record type. The value of the attribute is an XPath
+               expression, whose effective boolean value must always be true. A dynamic
+               error is raised if any operation (such as the constructor function, casting
+               or coercion, or a <code>but with</code> expression) attempts to construct
+               an instance of the record type for which the predicate evaluates to <code>false</code>,
+               or for which evaluation of the predicate raises an error. The expression is
+               evaluated with a singleton focus based on a map having the same entries (keys and values) as
+               the candidate instance of the record type.</p>
+                  
+               
                
                 
                </div4>
@@ -10792,8 +10804,7 @@ return $tree =?> depth()]]></eg>
                
                <p>Here is the implementation of the package.</p>
                
-               <ednote><edtext>xsl:record is not defined in this version of the spec.</edtext></ednote>
-               
+              
                <eg><![CDATA[
 <xsl:package name="http://qt4cg.org/atomic-set"
              package-version="1.0.0"
@@ -10812,98 +10823,103 @@ return $tree =?> depth()]]></eg>
       If $A and $B are instances of set:atomic-set, then they
       can be manipulated using methods including:
       
+      $A =?> values() - returns the items in $A, as a sequence
       $A =?> size() - returns the number of items in the set
       $A =?> empty() - returns true if the set is empty
       $A =?> contains($k) - determines whether $k is a member of the set
       $A =?> contains-all($B) - returns true if $B is a subset of $A
-      $A =?> values() - returns the items in $A, as a sequence
       $A =?> add($k) - returns a new atomic set containing an additional item
       $A =?> remove($k) - returns a new atomic set in which the given item is absent
       $A =?> union($B) - returns a new atomic set holding the union of $A and $B
       $A =?> intersect($B) - returns a new atomic set holding the intersection of $A and $B
       $A =?> except($B) - returns a new atomic set holding the difference of $A and $B
+      
+      The set cannot contain the value <code>NaN</code> (this is enforced by the constraint
+      in the <code>where</code> attribute).
    </xsl:note>
    
    <xsl:record-type name="set:atomic-set" 
-                    visibility="public">
+                    visibility="public"
+                    where="!map:contains(?_data, number('NaN'))">
+                    
       <xsl:field name="_data" 
                  as="map(xs:anyAtomicType, xs:boolean)"/>
-      <xsl:field name="size" 
-                 as="fn(set:atomic-set) as xs:integer"/>
-      <xsl:field name="empty" 
-                 as="fn(set:atomic-set) as xs:boolean"/>
-      <xsl:field name="contains" 
-                 as="fn(set:atomic-set, xs:anyAtomicType) as xs:boolean"/> 
-      <xsl:field name="contains-all" 
-                 as="fn(set:atomic-set, set:atomic-set) as xs:boolean"/> 
-      <xsl:field name="add" 
-                 as="fn(set:atomic-set, xs:anyAtomicType) as set:atomic-set"/> 
-      <xsl:field name="remove" 
-                 as="fn(set:atomic-set, xs:anyAtomicType) as set:atomic-set"/>
-      <xsl:field name="union" 
-                 as="fn(set:atomic-set, set:atomic-set) as set:atomic-set"/>
-      <xsl:field name="intersect" 
-                 as="fn(set:atomic-set, set:atomic-set) as set:atomic-set"/> 
-      <xsl:field name="except" 
-                 as="fn(set:atomic-set, set:atomic-set) as set:atomic-set"/> 
-   </xsl:record-type>
-   
-   <xsl:variable name="DATA" select="'_data'" visibility="private"/>
-   
-   <xsl:note>
-      The private function set:replaceData processes the internal map
-      by applying a supplied function, and returns a new atomic set
-      with the resulting internal map 
-   </xsl:note>
-   
-   <xsl:function name="set:replaceData" 
-                 visibility="private" 
-                 as="map(xs:anyAtomicType, xs:boolean)">
-      <xsl:param name="input" as="set:atomic-set"/>
-      <xsl:param name="update" as="fn(map(*)) as map(*)"/>
-      <xsl:sequence select="map:put($input, $DATA, $update($input?$DATA))"/>
-   </xsl:function>   
+                 
+      <xsl:field name="values"
+                 static="yes"
+                 select="fn($this as set:atomic-set) as xs:anyAtomicType 
+                           { map:keys($this?_data) }"/>
+                           
+      <xsl:field name="size"
+                 static="yes"
+                 select="fn($this as set:atomic-set) as xs:integer 
+                           { map:size($this?_data) }"/>
+                           
+      <xsl:field name="empty"
+                 static="yes"
+                 select="fn($this as set:atomic-set) as xs:boolean 
+                           { map:empty($this?_data) }"/>
+                           
+      <xsl:field name="contains"
+                 static="yes"
+                 select="fn($this as set:atomic-set, 
+                            $value as xs:anyAtomicType) as xs:boolean 
+                           { map:contains($this?_data, $value) }"/>
+                           
+      <xsl:field name="contains-all"
+                 static="yes"
+                 select="fn($this as set:atomic-set, 
+                            $other as set:atomic-set) as xs:boolean 
+                           { every($other =?> values(), map:contains($this?_data, ?)) }"/>
+                 
+      <xsl:field name="add"
+                 static="yes" 
+                 select="fn($this as set:atomic-set, 
+                            $value as xs:anyAtomicType) as set:atomic-set
+                         { $this but with {'_data': map:put(?_data, $value, true())} }"/>
+                 
+      <xsl:field name="remove"
+                 static="yes"  
+                 select="fn($this as set:atomic-set, 
+                            $value as xs:anyAtomicType) as set:atomic-set 
+                         { $this but with {'_data': map:remove(?_data, $value)} }"/>
+                         
+      <xsl:field name="union"
+                 static="yes" 
+                 select="fn($this as set:atomic-set, 
+                            $other as set:atomic-set) as set:atomic-set
+                         { $this but with {'_data': map:merge(($this?_data, $other?_data),
+                                                    {'duplicates': 'use-first'})} }"/>
+                                                    
+      <xsl:field name="intersect"
+                 static="yes" 
+                 select="fn($this as set:atomic-set, 
+                            $other as set:atomic-set) as set:atomic-set 
+                         { $this but with {'_data': map:filter(
+                                                        $this?_data, 
+                                                        map:contains($other?_data, ?))
+                                          } }"/>
+                                          
+      <xsl:field name="except"
+                 static="yes" 
+                 select="fn($this as set:atomic-set, 
+                            $other as set:atomic-set) as set:atomic-set 
+                         { $this but with {'_data': map:remove(
+                                                        $this?_data, 
+                                                        $other =?> values())
+                                          } }"/> 
+   </xsl:record-type>  
    
    <xsl:function name="set:build" as="set:atomic-set" visibility="public">
       <xsl:param name="values" as="xs:anyAtomicType*" default="()"/>
-      <xsl:record as="set:atomic-set"
-         _data=
-            "map:build($values, values:=true#0, {'duplicates': 'use-first'})"
-         size=
-            "fn($this as set:atomic-set) as xs:integer 
-                     { map:size($this?$DATA) }"
-         empty=
-            "fn($this as set:atomic-set) as xs:boolean 
-                     { map:empty($this?$DATA) }"
-         contains=
-            "fn($this as set:atomic-set, $value as xs:anyAtomicType) as xs:boolean 
-                     { map:contains($this?$DATA, $value) }"
-         contains-all=
-            "fn($this as set:atomic-set, $other as set:atomic-set) as xs:boolean 
-                     { every($other, map:contains($this?$DATA, ?)) }"
-         values=
-            "fn($this as set:atomic-set) as xs:anyAtomicType* 
-                     { keys($this?$DATA) }"
-         add=
-            "fn($this as set:atomic-set, $value as xs:anyAtomicType) as xs:anyAtomicType*
-                     { set:replaceData($this, map:put(?, $value, true())) }"
-         remove=
-            "fn($this as set:atomic-set, $value as xs:anyAtomicType) as xs:anyAtomicType* 
-                     { set:replaceData($this, map:remove(?, $value)) }"
-         union=
-            "fn($this as set:atomic-set, $other as set:atomic-set) as set:atomic-set 
-                     { set:replaceData($this, fn($m) {map:merge(($m, $other?$DATA),
-                                                    {'duplicates': 'use-first'})})
-                     }"
-         intersect=
-            "fn($this as set:atomic-set, $other as set:atomic-set) as set:atomic-set 
-                     { set:replaceData($this, map:filter(?, $other?contains)) }"
-         except=
-            "fn($this as set:atomic-set, $other as set:atomic-set) as set:atomic-set 
-                     { set:replaceData($this, map:remove(?, $other?values())) }"/>
-      
+      <xsl:select>
+         set:atomic-set(
+             map:build($values, 
+                       values := true#0, 
+                       options := {'duplicates': 'use-first'})
+         )
+      </xsl:select>
    </xsl:function>
-   
    
 </xsl:package>                  
                   ]]></eg>

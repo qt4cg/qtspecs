@@ -2309,6 +2309,14 @@ local:depth(doc("partlist.xml"))
             are constructed. It has no effect on the rules for determining whether a particular value is a valid instance
         of the type, and it does not affect the result of retrieval operations such as the lookup operator.</p></note>
       
+      <p>If a <code>where</code> clause is present, it defines an <xtermref spec="DM40" ref="dt-integrity-constraint"/> 
+        (see <specref ref="id-integrity-constraints"/>) that must be satisfied by all
+        instances of the record type. For example, the following declaration defines
+        a record in which neither of the two <code>xs:double</code> fields may be NaN:</p>
+      
+      <eg>declare record cx:complex(r as xs:double, i as xs:double := 0)
+           where not(is-NaN(?r)) and not(is-NaN(?i));</eg>
+      
     </div3>
     <div3 id="named-records-as-functions">
       <head>Constructor Functions for Labeled Record Types</head>
@@ -2473,17 +2481,17 @@ return $box =?> expand(2) =?> perimeter()</eg>
                <ulist>
                   <item><p>
                      <eg><![CDATA[declare variable $empty-set as set:atomic-set
-    := set:build(());]]></eg>
+    := set:of(());]]></eg>
                   </p></item>
                   
                   <item><p>
                      <eg><![CDATA[declare variable $evens as set:atomic-set
-    := set:build((1 to 100)[. mod 2 = 0]);]]></eg>
+    := set:of((1 to 100)[. mod 2 = 0]);]]></eg>
                   </p></item>
                   
                   <item><p>
                      <eg><![CDATA[declare variable $odds as set:atomic-set
-    := set:build((1 to 100)) =?> except($evens)]]></eg>
+    := set:of((1 to 100)) =?> except($evens)]]></eg>
                   </p></item>
                   
                   <item><p>
@@ -2494,10 +2502,11 @@ return $box =?> expand(2) =?> perimeter()</eg>
                   
                </ulist>
                
-               <p>Here is the implementation of the package. It makes extensive use of
+               <p>Here is the implementation of the library module. It makes extensive use of
                  <termref def="dt-method">methods</termref>, as described in <specref ref="id-methods"/>.</p>
                
                <eg><![CDATA[
+xquery version "4.0";
 module namespace set = "http://qt4cg.org/atomic-set";
    
    (:
@@ -2511,78 +2520,101 @@ module namespace set = "http://qt4cg.org/atomic-set";
       If $A and $B are instances of set:atomic-set, then they
       can be manipulated using methods including:
       
-      $A=?>size() - returns the number of items in the set
-      $A=?>empty() - returns true if the set is empty
-      $A=?>contains($k) - determines whether $k is a member of the set
-      $A=?>contains-all($B) - returns true if $B is a subset of $A
-      $A=?>values() - returns the items in $A, as a sequence
-      $A=?>add($k) - returns a new atomic set containing an additional item
-      $A=?>remove($k) - returns a new atomic set in which the given item is absent
-      $A=?>union($B) - returns a new atomic set holding the union of $A and $B
-      $A=?>intersect($B) - returns a new atomic set holding the intersection of $A and $B
-      $A=?>except($B) - returns a new atomic set holding the difference of $A and $B
+      $A =?> values() - returns the items in $A, as a sequence
+      $A =?> size() - returns the number of items in the set
+      $A =?> empty() - returns true if the set is empty
+      $A =?> contains($k) - determines whether $k is a member of the set
+      $A =?> contains-all($B) - returns true if $B is a subset of $A
+      $A =?> add($k) - returns a new atomic set containing an additional item
+      $A =?> remove($k) - returns a new atomic set in which the given item is absent
+      $A =?> union($B) - returns a new atomic set holding the union of $A and $B
+      $A =?> intersect($B) - returns a new atomic set holding the intersection of $A and $B
+      $A =?> except($B) - returns a new atomic set holding the difference of $A and $B
+      
+      The set is constrained so it cannot contain the value NaN.
    :)
    
    declare %public record set:atomic-set (
        _data        as map(xs:anyAtomicType, xs:boolean),
-       size         as fn($set as set:atomic-set) as xs:integer,
-       empty        as fn($set as set:atomic-set) as xs:boolean,
-       contains     as fn($set as set:atomic-set, $value as xs:anyAtomicType) as xs:boolean,
-       contains-all as fn($set as set:atomic-set, $value as set:atomic-set) as xs:boolean,
-       add          as fn($set as set:atomic-set, $item as xs:anyAtomicType) as set:atomic-set,
-       remove       as fn($set as set:atomic-set, $item as xs:anyAtomicType) as set:atomic-set,
-       union        as fn($set as set:atomic-set, $value as set:atomic-set) as set:atomic-set,
-       intersect    as fn($set as set:atomic-set, $value as set:atomic-set) as set:atomic-set,
-       except       as fn($set as set:atomic-set, $value as set:atomic-set) as set:atomic-set,
-       * );
+       %static values := 
+              fn($this as set:atomic-set) as xs:anyAtomicType* {
+                map:keys($this?_data) 
+              },
+              
+       %static size :=
+              fn($this as set:atomic-set) as xs:integer { 
+                map:size($this?_data) 
+              },
+              
+       %static empty :=
+              fn($this as set:atomic-set) as xs:boolean { 
+                map:empty($this?_data) 
+              },
+              
+       %static contains :=
+              fn($this as set:atomic-set,
+                 $value as xs:anyAtomicType) as xs:boolean { 
+                map:contains($this?_data, $value) 
+              },
+              
+       %static contains-all :=
+              fn($this as set:atomic-set, 
+                 $value as set:atomic-set) as xs:boolean {
+                every($value =?> values(), 
+                      map:contains($this?_data, ?)) 
+              },
+              
+       %static add := 
+              fn($this as set:atomic-set, 
+                 $value as xs:anyAtomicType) as set:atomic-set {
+                $this but with {'_data': map:put($this?_data, $value, true())} 
+              },
+              
+       %static remove :=
+              fn($this as set:atomic-set, 
+                 $value as xs:anyAtomicType) as set:atomic-set {
+                $this but with {'_data': map:remove($this?_data, $value)} 
+              },
+              
+       %static union :=        
+              fn($this as set:atomic-set, 
+                 $other as set:atomic-set) as set:atomic-set {
+                $this but with {'_data': map:merge(($this?_data, $other?_data),
+                                                    {'duplicates': 'use-first'})
+                               }
+              },
+              
+       %static intersect :=        
+              fn($this as set:atomic-set, 
+                 $other as set:atomic-set) as set:atomic-set {
+                $this but with {'_data': map:filter($this?_data, 
+                                                    map:contains($other?_data, ?))
+                               }
+              },
+              
+       %static except :=        
+              fn($this as set:atomic-set, 
+                 $other as set:atomic-set) as set:atomic-set {
+                $this but with {'_data': map:remove($this?_data, 
+                                                    $other =?> values())
+                               }
+              }       
+       
+   ) where not(map:contains(?_data, number('NaN')));
 
-   declare %private variable DATA := "'_data'"; 
    
-   (:
-      The private function set:replaceData processes the internal map
-      by applying a supplied function, and returns a new atomic set
-      with the resulting internal map 
-   :)
-   
-   declare %private function set:replaceData (
-       $input as set:atomic-set,
-       $update as fn(map(*)) as map(*)) as map(xs:anyAtomicType, xs:boolean) {
+   declare %public function set:of (
+         $values as xs:anyAtomicType* := ()
+       ) as set:atomic-set {
        
-       map:put($input, $DATA, $update($input?$DATA))
-   }
-   
-   declare %public function set:build (
-       $values as xs:anyAtomicType* := ()) {
-       
-       {
-         _data:
-             map:build($values, values:=true#0, {'duplicates': 'use-first'}),
-         size: fn($set as set:atomic-set) as xs:integer 
-                     { map:size($set?$DATA) },
-         empty: fn($set as set:atomic-set) as xs:boolean 
-                     { map:empty($set?$DATA) },
-         contains: fn($set as set:atomic-set, $value as xs:anyAtomicType) as xs:boolean 
-                     { map:contains($set?$DATA, $value) },
-         contains-all: fn($set as set:atomic-set, $other as set:atomic-set) as xs:boolean 
-                     { every($other, map:contains($set?$DATA, ?)) },
-         values: fn($set as set:atomic-set) as xs:anyAtomicType* 
-                     { keys($set?$DATA) }"
-         add: fn($set as set:atomic-set, $value as xs:anyAtomicType) as xs:anyAtomicType*
-                     { set:replaceData($set, map:put(?, $value, true())) },
-         remove: fn($set as set:atomic-set, $value as xs:anyAtomicType) as xs:anyAtomicType* 
-                     { set:replaceData($set, map:remove(?, $value)) },
-         union: fn($set as set:atomic-set, $other as set:atomic-set) as set:atomic-set 
-                     { set:replaceData($set, fn($this) {map:merge(($this, $other?$DATA),
-                                                    {'duplicates': 'use-first'})})
-                     },
-         intersect: fn($set as set:atomic-set, $other as set:atomic-set) as set:atomic-set 
-                     { set:replaceData($set, map:filter(?, $other?contains)) },
-         except: fn($set as set:atomic-set, $other as set:atomic-set) as set:atomic-set 
-                     { set:replaceData($set, map:remove(?, $other?values())) }
-      }
+       set:atomic-set(
+             map:build($values, 
+                       value := true#0, 
+                       options := {'duplicates': 'use-first'})
+       )
    };]]></eg>
                
-               <ednote><edtext>The example needs to be revisited.</edtext></ednote>
+               
             </div3>
     
     
