@@ -2208,6 +2208,9 @@ local:depth(doc("partlist.xml"))
       <change issue="2933" PR="3016" date="2026-11-03">
          Integrity constraints can be defined for labeled record types.
       </change>
+      <change issue="2567" date="2026-11-02">
+        A labeled record type can extend another labeled record type.
+      </change>
     </changes>
     <p>Although item type declarations, as described in <specref ref="id-item-type-declaration"/>, can be
     used to give names to record types as well as any other item type, 
@@ -2220,6 +2223,8 @@ local:depth(doc("partlist.xml"))
         used to create instances of the record type.</p></item>
       <item><p>A field in a labeled record type can be a function that has implicit access to
       the record on which it is defined, rather like methods in object-oriented languages.</p></item>
+      <item><p>A labeled record type can extend another labeled record type, inheriting its fields
+        and becoming a subtype of it.</p></item>
     </ulist>
     
     <p>The syntax is as follows:</p>
@@ -2364,7 +2369,9 @@ declare %public function cx:complex(
        other function declaration having the same name in the same static context.</p></item>
        <item><p>The order of field declarations determines the order of
        arguments in a call to the constructor function, as well as the order of entries
-       in the underlying map.</p></item>
+       in the underlying map.<phrase diff="add" at="issue2567"> For the constructor function, fields without
+       an initializing expression precede fields with an initializing expression; this only makes
+       a difference for a <termref def="dt-derived-record-type"/>.</phrase></p></item>
        <item><p>The names of the
        fields must be simple NCNames in no namespace; the names must not be written as string literals
          <errorref class="ST" code="0003"/>.</p>
@@ -2396,7 +2403,9 @@ declare %public function cx:complex(
          <termref def="dt-default-function-namespace-rule"/>, which searches no-namespace functions
          before the <termref def="dt-default-function-namespace"/>.</p></item>
        <item><p>The parameters of the function declaration are derived from the fields of the labeled record
-       declaration, in order, excluding any fields that are declared <code>static</code>.</p>
+       declaration, excluding any fields that are declared <code>static</code>: <phrase diff="chg" at="issue2567">first
+       the fields without an initializing expression, then the fields with an initializing expression,
+       each in order</phrase>.</p>
        <ulist>
          <item><p>The name of the parameter is the name of the field (always an NCName).</p></item>
          <item><p>The declared type of the parameter is the declared type of the field, defaulting to 
@@ -2426,6 +2435,106 @@ declare %public function cx:complex(
        
       
       
+    </div3>
+    <div3 id="id-record-extension" diff="add" at="issue2567">
+      <head>Extending Labeled Record Types</head>
+
+      <p><termdef id="dt-derived-record-type" term="derived record type">A labeled record type declared
+        with the keyword <code>extends</code> is a <term>derived record type</term>.</termdef>
+        <termdef id="dt-base-record-type" term="base record type">The <term>base record type</term> of a
+        derived record type is the record type identified by the <nt def="EQName">EQName</nt> that follows
+        the keyword.</termdef> The name is expanded using the <termref def="dt-default-type-namespace-rule"/>.
+        It must identify a <termref def="dt-labeled-record-type"/> in the static context
+        <errorref class="ST" code="0155"/>.</p>
+
+      <p>The fields of the derived record type are the fields of the base record type, in their declared order
+        (including fields that the base record type itself inherits), followed by the fields in the
+        declaration. All rules in <specref ref="id-named-record-types"/> that refer to the fields of a labeled record type,
+        including the requirement for distinct names and the derivation of the constructor function,
+        apply to this combined list, with two exceptions:</p>
+
+      <ulist>
+        <item><p>The rule that a field with an initializing expression must only be followed by fields
+          with an initializing expression <errorref class="ST" code="0148"/> applies to the fields in the
+          declaration only.</p></item>
+        <item><p>A field in the declaration may have the same name as a field of the base record type
+          if both fields are declared <code>%static</code>. The field then replaces the inherited field
+          at its position, and its initializing expression supplies the value of the field in instances
+          of the derived record type. If no type is declared for the field, it has the declared type
+          of the inherited field; otherwise, its declared type must be a subtype of the declared type of the
+          inherited field <errorref class="ST" code="0155"/>.</p></item>
+      </ulist>
+
+      <p>A labeled record type must not extend itself, either directly or
+        indirectly <errorref class="ST" code="0155"/>.</p>
+
+      <p>The derived record type is a <termref def="dt-subtype"/> of the base record type; see
+        <specref ref="id-item-subtype-labeled-records"/>. A record whose <termref def="dt-label"/>
+        is the derived record type can therefore be supplied wherever an instance of the base
+        record type is expected, and it keeps its label.</p>
+
+      <p>A map is only labeled as an instance of the derived record type if it
+        <termref def="dt-integrity-constraint-satisfied">satisfies</termref> the integrity constraints
+        of the derived record type and of all its base record types, directly or indirectly
+        (see <specref ref="id-integrity-constraints"/>).</p>
+
+      <p>For example, given the declarations:</p>
+
+      <eg>declare record geo:point(x as xs:double, y as xs:double);
+declare record geo:point3d extends geo:point(z as xs:double := 0);</eg>
+
+      <p>the constructor function of <code>geo:point3d</code> is equivalent to:</p>
+
+      <eg>declare function geo:point3d($x as xs:double,
+  $y as xs:double,
+  $z as xs:double := 0
+) as geo:point3d {
+  { "x": $x, "y": $y, "z": $z }
+};</eg>
+
+      <p>and the following expressions are all true:</p>
+
+      <eg>geo:point3d(1, 2) instance of geo:point3d
+geo:point3d(1, 2) instance of geo:point
+geo:point3d(1, 2)?z = 0
+not(geo:point(1, 2) instance of geo:point3d)</eg>
+
+      <p>A declaration that adds a field without an initializing expression:</p>
+
+      <eg>declare record geo:place extends geo:point3d(name as xs:string);</eg>
+
+      <p>results in a constructor function with the parameters <code>$x</code>, <code>$y</code>,
+        <code>$name</code> and <code>$z</code>, in this order, so that <code>geo:place(1, 2, "Origin")</code>
+        returns <code>{ "x": 1e0, "y": 2e0, "z": 0e0, "name": "Origin" }</code>, and
+        <code>geo:place(1, 2, "Origin", 5)</code> returns <code>{ "x": 1e0, "y": 2e0, "z": 5e0, "name": "Origin" }</code>:
+        the order of the arguments differs from the order of the entries.</p>
+
+      <p>A derived record type that declares no fields of its own, but an integrity constraint,
+        restricts the values of its base record type. With the declaration:</p>
+
+      <eg>declare record geo:unit-point extends geo:point() where ?x × ?x + ?y × ?y = 1;</eg>
+
+      <p>the call <code>geo:unit-point(0, 1)</code> returns a record that is an instance of both
+        <code>geo:unit-point</code> and <code>geo:point</code>, whereas <code>geo:unit-point(1, 1)</code>
+        fails.</p>
+
+      <p>Static fields are inherited along with all other fields. Redeclaring a static field allows
+        a <termref def="dt-method"/> to behave differently for records of the derived record type:</p>
+
+      <eg>declare record geo:shape(
+  %static area as fn(geo:shape) as xs:double := fn { 0 }
+);
+declare record geo:circle extends geo:shape(
+  radius as xs:double,
+  %static area := fn { math:pi() × ?radius × ?radius }
+);
+declare record geo:square extends geo:shape(
+  side as xs:double,
+  %static area := fn { ?side × ?side }
+);</eg>
+
+      <p>The expression <code>(geo:circle(1), geo:square(2)) =?> area()</code> returns
+        <code>(3.141592653589793e0, 4e0)</code>.</p>
     </div3>
     <div3 id="id-functions-as-fields">
       <head>Using Methods in Records</head>
