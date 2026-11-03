@@ -67,7 +67,7 @@ declare function gradle($args as xs:string*) as xs:string {
  :)
 declare function build-specs($state as xs:string) as xs:string {
   let $listing := gradle(('-q', 'tasks', '--all'))
-  let $log := gradle(matching-segments($listing, '^([\w_]+_html)(\s|$)', 'm') ! ?groups?1?value)
+  let $log := gradle(matching-segments($listing, '^([a-zA-Z][\w_]*_html)(\s|$)', 'm') ! ?groups?1?value)
   return (file:write-text($STATE, $state), 'built specifications')
 };
 

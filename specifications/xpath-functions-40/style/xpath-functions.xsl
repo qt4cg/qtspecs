@@ -511,6 +511,10 @@
       <xsl:when test="key('ids', concat('dt-', $name))">
         <xsl:value-of select="concat('dt-', $name)"/>
       </xsl:when>
+      <!-- record types are described in sections named after the record -->
+      <xsl:when test="ends-with($name, '-record') and key('ids', $name)">
+        <xsl:value-of select="$name"/>
+      </xsl:when>
     </xsl:choose>
   </xsl:variable>
   
