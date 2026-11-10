@@ -15690,7 +15690,8 @@ else $node
          <fos:proto name="update" return-type="(node() | map(*) | array(*))">
             <fos:arg name="value" type="(node() | map(*) | array(*))" usage="navigation"/>
             <fos:arg name="select" type="fn($node as node()) as node()*" usage="inspection"/>
-            <fos:arg name="replacement" type="item()*" default="()" usage="absorption"/>
+            <fos:arg name="actions" type="map(enum('value', 'rename', 'replace', 'before', 'after'), item()*)"
+               default="{ 'replace': () }" usage="absorption"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -15699,7 +15700,8 @@ else $node
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a copy of a tree in which selected nodes have been replaced.</p>
+         <p>Returns a copy of a tree in which selected nodes have been changed, renamed, replaced,
+            or deleted, or in which nodes have been inserted next to them.</p>
       </fos:summary>
       <fos:rules>
          <p>The result of the function is obtained as follows:</p>
@@ -15725,7 +15727,7 @@ else $node
                below for XNodes and for JNodes. <var>C</var> has no parent, so no navigation from
                it leads back to the tree of <var>N</var>.</p></item>
             <item><p>If <var>N</var> is not a selected node, the result is <var>C</var>.</p></item>
-            <item><p>Otherwise, the result is the <term>substitution sequence</term> for
+            <item><p>Otherwise, the result is obtained by applying the <term>actions</term> to
                <var>C</var>.</p></item>
          </olist>
 
@@ -15733,34 +15735,56 @@ else $node
             so a constructed node is never itself selected.</p></note>
 
          <note><p>Every node is processed exactly once, together with all of its attributes and
-            children, so the replacements made within one node are combined in a single step. Its
-            content is processed before the node itself, so a selected node is presented to
-            <code>$replacement</code> with its descendants already updated, and unrelated updates
-            can be combined in one call by testing that node.</p></note>
+            children, so the updates made within one node are combined in a single step. Its
+            content is processed before the node itself, so a selected node is presented to the
+            functions in <code>$actions</code> with its descendants already updated, and
+            unrelated updates can be combined in one call by testing that node.</p></note>
 
-         <p>The <term>substitution sequence</term> for a node <var>C</var> is obtained as follows.
-            If <code>$replacement</code> is a single function item that is neither a map nor an
-            array, it is coerced to the type <code>fn(node()) as item()*</code> and called with
-            <var>C</var> as its argument, and the result of that call is used; otherwise
-            <code>$replacement</code> itself is used.</p>
-
-         <p>Each item <var>J</var> of that sequence contributes zero or more replacement nodes: a
-            document node or a root JNode contributes copies of its children, any other node a copy
-            of itself, and any other item replaces the value of <var>C</var>. An empty substitution
-            sequence deletes the selected node, which is the effect of the default value of
-            <code>$replacement</code>.</p>
+         <p>The <term>actions</term> are the entries of <code>$actions</code>. If the value of an
+            action is a single function item that is neither a map nor an array, it is coerced to
+            the type <code>fn(node()) as item()*</code> and called with <var>C</var> as its
+            argument, and the result of that call is used instead.</p>
+         <p>A value <term>supplies</term> nodes as follows: a document node or a root JNode supplies
+            copies of its children, a map or an array the children of the root JNode that
+            <code>fn:jtree</code> returns for it, and any other node a copy of itself.</p>
+         <ulist>
+            <item><p><code>value</code>: the value of <var>C</var> is replaced, and its name or key
+               is retained.</p></item>
+            <item><p><code>rename</code>: the name of <var>C</var>, or its key, is replaced, and its
+               value is retained.</p></item>
+            <item><p><code>replace</code>: <var>C</var> is replaced by the nodes that the value
+               <term>supplies</term>.</p></item>
+            <item><p><code>before</code>, <code>after</code>: the nodes that the value supplies are
+               inserted before or after <var>C</var>.</p></item>
+         </ulist>
+         <p>The result is the sequence of nodes supplied by <code>before</code>, followed by the
+            nodes supplied by <code>replace</code> if that action is present, or otherwise by
+            <var>C</var> with the changes of <code>value</code> and <code>rename</code>, followed by
+            the nodes supplied by <code>after</code>. The default value of
+            <code>$actions</code> deletes the selected nodes.</p>
 
          <p><emph>XNodes.</emph> <var>C</var> is a copy of <var>N</var> whose attributes and
-            children are replaced by the nodes obtained for them. An item that replaces the value
-            of an element replaces its children with a single text node and retains its
-            attributes; for an attribute, text node, comment, or processing instruction, it
-            replaces the string value. A value supplied for a comment or a
-            processing instruction must satisfy the constraints that the data model places on
-            the content of such nodes.</p>
-         <note><p>Nodes contributed for the children of an element or document node are subject to
+            children are the nodes that take their place. The value of
+            <code>value</code> is atomized, and the string values of the resulting atomic items
+            are joined with a single space as separator. The resulting string replaces the children
+            of an element with a single text node, and its attributes are retained; for an
+            attribute, text node, comment, or processing instruction, it replaces the string
+            value.</p>
+         <p>The value of <code>rename</code> becomes the name of an element, an attribute, or a
+            processing instruction. The name of an attribute is assigned as in a computed attribute
+            constructor (see <xspecref spec="XP40" ref="id-computedAttributes"/>), and an attribute
+            that is named <code>xml:id</code> after the update is subject to <code>xml:id</code>
+            processing in the same way. If an element is
+            renamed, its
+            in-scope namespaces get a binding for the prefix and the namespace URI of its new name,
+            which replaces an existing binding of that prefix; if the new name has neither a prefix
+            nor a namespace URI, the binding for the default namespace is removed. An attribute
+            whose name uses a replaced binding is renamed with a different,
+            <termref def="implementation-dependent"/> prefix.</p>
+         <note><p>Nodes that take the place of the children of an element or document node are subject to
             the usual rules for element and document content: adjacent text nodes are merged, and a
-            text node whose content is a zero-length string is dropped. A substitution sequence that
-            contributes such a text node therefore leaves no node behind.</p></note>
+            text node whose content is a zero-length string is dropped. A text node that is changed
+            to a zero-length string therefore leaves no node behind.</p></note>
          <note><p>An element that receives attributes is subject to namespace fixup: a binding is
             added for the prefix and namespace of an attribute name, and an attribute whose prefix
             is already bound to another namespace URI is renamed with a different prefix. An
@@ -15769,35 +15793,33 @@ else $node
 
          <p><emph>JNodes.</emph> A JNode <var>C</var> retains the <term>·jkey·</term> property
             of <var>N</var>. Its <term>·jvalue·</term> property is rebuilt from the nodes
-            obtained for the children of <var>N</var>, in the order of those nodes: a map of their
+            that take the place of the children of <var>N</var>, in the order of those nodes: a map of their
             keys and values if <var>N</var> is a <xtermref spec="DM40" ref="dt-map-jnode"/>, an array
             of their values if it is an <xtermref spec="DM40" ref="dt-array-jnode"/>, and the
             sequence of their values if it is a <xtermref spec="DM40" ref="dt-sequence-jnode"/>. A
             <xtermref spec="DM40" ref="dt-leaf-jnode"/> has no children and retains the
-            <term>·jvalue·</term> property of <var>N</var>. If the <term>·jparent·</term> of <var>N</var> is a
-            <xtermref spec="DM40" ref="dt-map-jnode"/>, a map contributes its entries; if it is an
-            <xtermref spec="DM40" ref="dt-array-jnode"/>, an array contributes its members. Any other
-            item that replaces the value of <var>C</var> becomes the <term>·jvalue·</term> property
-            of the contributed node, including a map, an array, or a function item.</p>
+            <term>·jvalue·</term> property of <var>N</var>. The value of <code>value</code> becomes
+            the <term>·jvalue·</term> property of <var>C</var>, including a map, an array, or a
+            function item. The value of <code>rename</code> becomes its <term>·jkey·</term>
+            property.</p>
          <note><p>The kind of <var>C</var> follows from its value: deleting every entry of a map
             leaves an empty map, and deleting every member of an array an empty array, but a
             sequence that is reduced to a single item, or to none, is the value of a Leaf
             JNode.</p></note>
-         <note><p>A map within a map, or an array within an array, supplies children: this is how
-            an entry is renamed, and how one entry or member is replaced by several. To supply it as
-            a value instead, it is wrapped once more, as in
-            <code>{ jkey($n): { 'last': 'Phule' } }</code> or <code>[ [ 'Vandana', 'Shiva' ] ]</code>.
-            The same wrapping supplies a sequence, which no single item can denote:
-            <code>[ ('Vandana', 'Shiva') ]</code>. An item of a
-            <xtermref spec="DM40" ref="dt-sequence-jnode"/> has no such form; several nodes supplied
-            for it replace it by several items.</p></note>
+         <note><p>With <code>value</code>, a map or an array becomes the value of the selected
+            node; with <code>replace</code>, <code>before</code>, and <code>after</code>, it
+            supplies its entries or members:
+            <code>{ 'value': [ 'Vandana', 'Shiva' ] }</code> makes the array the value of the
+            selected node, whereas <code>{ 'replace': [ 'Vandana', 'Shiva' ] }</code> replaces an
+            array member with two members. A function item that is to become the value is
+            returned by another function: <code>{ 'value': fn { $f } }</code>.</p></note>
 
          <note><p>Because <var>C</var> has no <term>·jparent·</term>, it is not identical to
             <var>N</var>, even though it retains its <term>·jkey·</term>.</p></note>
 
          <p>The function constructs a new tree, and does not modify <code>$value</code>. Every XNode
-            in the result is a new node with its own identity, including XNodes that a substitution
-            sequence takes from another tree. An XNode that is contained in the
+            in the result is a new node with its own identity, including XNodes that an action
+            takes from another tree. An XNode that is contained in the
             <term>·jvalue·</term> of a JNode is not a node of the result, and is retained as it
             is. An XNode retains the type annotation of the node that
             it was constructed from if neither that node nor any of its attributes or descendants is
@@ -15810,27 +15832,39 @@ else $node
             steps. This excludes the <term>origin node</term> itself, namespace nodes, and the JNodes that the <code>item</code> axis returns for a
             <xtermref spec="DM40" ref="dt-leaf-jnode"/>: they have a parent, but are not children of
             it.</p>
-         <p>A dynamic error is raised <errorref class="UP" code="0004"/> if a replacement cannot
-            appear at the position that it is supplied for. For XNodes, an attribute must be
-            replaced by attributes, a child of an element or document node by XNodes that are
-            neither attributes nor namespace nodes, and the value of an XNode by an atomic item. For JNodes, a child of a
-            <xtermref spec="DM40" ref="dt-map-jnode"/> must be replaced by children of a Map JNode,
-            or by a map supplying its entries, and a child of an
-            <xtermref spec="DM40" ref="dt-array-jnode"/> by children of an Array JNode, or by an
-            array supplying its members. A JNode with no parent, such as the result of another call
-            of this function, is accepted in either position; its <term>·jkey·</term> is used where
-            the position requires one.</p>
-         <p>A dynamic error is raised <errorref class="UP" code="0004"/> if a substitution sequence
-            contains more than one item that replaces the value of the selected node.</p>
-         <p>A dynamic error is raised <errorref class="UP" code="0004"/> if the result would contain
-            two attributes of the same element with the same name, or two entries of the same map
-            with the same key.</p>
+         <p>A type error is raised <errorref spec="XP" class="TY" code="0004"/> if the value of
+            <code>rename</code> is not a single <code>xs:QName</code> for an XNode, or not a single
+            atomic item for a JNode.</p>
+         <p>A dynamic error is raised <errorref class="UP" code="0004"/> in the following
+            cases:</p>
+         <ulist>
+            <item><p><code>$actions</code> contains <code>replace</code> together with
+               <code>value</code> or <code>rename</code>.</p></item>
+            <item><p>The value of <code>replace</code>, <code>before</code>, or <code>after</code>
+               contains an item that is neither a node, a map, nor an array, or a supplied node
+               cannot appear at the position of the selected node. For XNodes, the nodes supplied
+               for an attribute must be attributes, and those supplied for a child of an element or
+               document node must be XNodes that are neither attributes nor namespace nodes. For
+               JNodes, the nodes supplied for a child of a <xtermref spec="DM40" ref="dt-map-jnode"/>
+               must be children of a Map JNode, and those supplied for a child of an
+               <xtermref spec="DM40" ref="dt-array-jnode"/> must be children of an Array JNode, and
+               those supplied for a child of a <xtermref spec="DM40" ref="dt-sequence-jnode"/> must
+               not be children of a Map JNode. A JNode with no parent, such as the result of another call of this
+               function, is accepted in either position; its <term>·jkey·</term> is used where the
+               position requires one.</p></item>
+            <item><p>A node is renamed that is neither an element, an attribute, a processing
+               instruction, nor a child of a <xtermref spec="DM40" ref="dt-map-jnode"/>, or the new
+               name is invalid: the name of an element or an attribute is subject to the same rules
+               as in computed constructors (see <xspecref spec="XP40" ref="id-computedElements"/>
+               and <xspecref spec="XP40" ref="id-computedAttributes"/>), and the name of a processing
+               instruction must have no namespace URI, and a local name other than
+               <code>xml</code> in any combination of upper and lower case.</p></item>
+            <item><p>The value of <code>value</code> does not satisfy the constraints that the data
+               model places on the content of a comment or a processing instruction.</p></item>
+            <item><p>The result would contain two attributes of the same element with the same name,
+               or two entries of the same map with the same key.</p></item>
+         </ulist>
       </fos:errors>
-      <fos:notes>
-         <p>Renaming is expressed as a replacement that reuses the value of the selected node, as in
-            <code>fn($n) { { 'authors': jvalue($n) } }</code> for a map entry, or
-            <code>fn($n) { &lt;items>{ $n/@*, $n/node() }&lt;/items> }</code> for an element.</p>
-      </fos:notes>
       <fos:examples>
          <fos:example>
             <fos:test>
@@ -15839,44 +15873,61 @@ else $node
 => update(fn { .//draft })
                </eg></fos:expression>
                <fos:result>{ "title": "Sojourner Truth" }</fos:result>
-               <fos:postamble>Selected nodes are deleted if no replacement is supplied.</fos:postamble>
+               <fos:postamble>Selected nodes are deleted if no actions are supplied.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
 { 'title': 'Ida Wells', 'price': 39 }
-=> update(fn { .//price }, fn { . * 2 })
+=> update(fn { .//price }, { 'value': fn { . * 2 } })
                </eg></fos:expression>
                <fos:result>{ "title": "Ida Wells", "price": 78 }</fos:result>
-               <fos:postamble>An atomic item replaces the value of the entry, and its key is
+               <fos:postamble>The value of the entry is replaced, and its key is
                   retained.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
-{ 'title': 'Angela Davis', 'price': 39 }
-=> update(fn { .//price }, fn { ., { 'curr': 'EUR' } })
-               </eg></fos:expression>
-               <fos:result>{ "title": "Angela Davis", "price": 39, "curr": "EUR" }</fos:result>
-               <fos:postamble>A replacement of several items inserts siblings.</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>
 { 'books': [ 'Audre Lorde' ] }
-=> update(fn { .//books }, fn { { 'authors': jvalue() } })
+=> update(fn { .//books }, { 'rename': 'authors' })
                </eg></fos:expression>
                <fos:result>{ "authors": [ "Audre Lorde" ] }</fos:result>
                <fos:postamble>The selected node is the child whose key is <code>books</code>, not
-                  the array. It is renamed by replacing it with a child that reuses its
-                  value.</fos:postamble>
+                  the array.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+{ 'price': 39 }
+=> update(
+  fn { .//price },
+  { 'rename': 'cost', 'value': fn { . * 2 } }
+)
+               </eg></fos:expression>
+               <fos:result>{ "cost": 78 }</fos:result>
+               <fos:postamble>Actions can be combined.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+{ 'a': 1, 'b': 2 }
+=> update(fn { * }, { 'rename': fn { upper-case(jkey()) } })
+               </eg></fos:expression>
+               <fos:result>{ "A": 1, "B": 2 }</fos:result>
+               <fos:postamble>The value of any action can be computed by a function.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
 [ 'Vandana Shiva' ]
-=> update(fn { * }, [ 'Vandana', 'Shiva' ])
+=> update(fn { * }, { 'replace': [ 'Vandana', 'Shiva' ] })
                </eg></fos:expression>
                <fos:result>[ "Vandana", "Shiva" ]</fos:result>
-               <fos:postamble>An array supplies all of its members in the same way, so one member is
-                  replaced by two. To supply it as a single member instead, it is wrapped once
-                  more: <code>[ [ 'Vandana', 'Shiva' ] ]</code>.</fos:postamble>
+               <fos:postamble>An array supplies its members, so one member is replaced by
+                  two.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+[ 'Vandana Shiva' ]
+=> update(fn { * }, { 'value': [ 'Vandana', 'Shiva' ] })
+               </eg></fos:expression>
+               <fos:result>[ [ "Vandana", "Shiva" ] ]</fos:result>
+               <fos:postamble>The array becomes the value of the member.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
@@ -15884,34 +15935,12 @@ let $person := { 'name': 'Wangari Maathai' }
 return update(
   $person,
   fn { .//name },
-  { 'first': 'Wangari', 'last': 'Maathai' }
+  { 'replace': { 'first': 'Wangari', 'last': 'Maathai' } }
 )
                </eg></fos:expression>
                <fos:result>{ "first": "Wangari", "last": "Maathai" }</fos:result>
-               <fos:postamble>A map supplies all of its entries, so one entry can be replaced by
+               <fos:postamble>A map supplies its entries, so one entry is replaced by
                   several.</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>
-let $persons := [ 'Fatima Mernissi', 'Nawal El Saadawi' ]
-return update(
-  $persons,
-  fn { .//1 },
-  { 'name': 'Fatima Mernissi' }
-)
-               </eg></fos:expression>
-               <fos:result>[ { "name": "Fatima Mernissi" }, "Nawal El Saadawi" ]</fos:result>
-               <fos:postamble>A map cannot supply members of an array, so it becomes the value of
-                  the member.</fos:postamble>
-            </fos:test>
-            <fos:test>
-               <fos:expression><eg>
-{ 'name': 'Ida Wells' }
-=> update(fn { .//name }, [ 'Ida', 'Wells' ])
-               </eg></fos:expression>
-               <fos:result>{ "name": [ "Ida", "Wells" ] }</fos:result>
-               <fos:postamble>Likewise, an array cannot supply entries of a map, so it becomes the
-                  value of the entry, and its key is retained.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
@@ -15919,25 +15948,25 @@ let $person := { 'name': 'Savitribai Phule' }
 return update(
   $person,
   fn { .//name },
-  fn { { jkey(): { 'first': 'Savitribai', 'last': 'Phule' } } }
+  { 'value': { 'first': 'Savitribai', 'last': 'Phule' } }
 )
                </eg></fos:expression>
                <fos:result>{ "name": { "first": "Savitribai", "last": "Phule" } }</fos:result>
-               <fos:postamble>A map that replaces an entry supplies entries, so the key is named to
-                  make it the value of the entry instead.</fos:postamble>
+               <fos:postamble>The map becomes the value of the entry.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
 { 'node': { 'node': { 'node': 123 } } }
-=> update(fn { .//node }, fn { { 'data': jvalue() } })
+=> update(fn { .//node }, { 'rename': 'data' })
                </eg></fos:expression>
                <fos:result>{ "data": { "data": { "data": 123 } } }</fos:result>
-               <fos:postamble>Nodes are replaced from the bottom up, so nested keys are renamed
+               <fos:postamble>Nodes are updated from the bottom up, so nested keys are renamed
                   by the same call.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
-update(jtree({ 'book': { 'year': 1987 } })/book, fn { ./year }, 1988)
+let $book := jtree({ 'book': { 'year': 1987 } })/book
+return update($book, fn { ./year }, { 'value': 1988 })
 ! (jkey(), jvalue())
                </eg></fos:expression>
                <fos:result>"book", { "year": 1988 }</fos:result>
@@ -15951,7 +15980,7 @@ update(jtree({ 'book': { 'year': 1987 } })/book, fn { ./year }, 1988)
 update(
   <item><price cur="EUR">39</price></item>,
   fn { ./price },
-  fn { . * 2 }
+  { 'value': fn { . * 2 } }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<item><price cur="EUR">78</price></item>]]></fos:result>
@@ -15971,66 +16000,91 @@ update(
 update(
   <item><price cur="EUR">39</price></item>,
   fn { ./price },
-  fn { . * 2, <currency>EUR</currency> }
+  { 'value': fn { . * 2 }, 'after': <currency>EUR</currency> }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<item><price cur="EUR">78</price><currency>EUR</currency></item>]]></fos:result>
-               <fos:postamble>A replacement of several items replaces the node and inserts
-                  siblings.</fos:postamble>
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
 update(
   <books><book id="1"><title/></book></books>,
   fn { ./book },
-  'Yosano Akiko'
+  { 'value': 'Yosano Akiko' }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<books><book id="1">Yosano Akiko</book></books>]]></fos:result>
-               <fos:postamble>An atomic item replaces the children of an element, but not its
+               <fos:postamble>The new value replaces the children of an element, but not its
                   attributes.</fos:postamble>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[
+update(<event days=""/>, fn { ./@days }, { 'value': ('Mon', 'Tue') })
+               ]]></eg></fos:expression>
+               <fos:result><![CDATA[<event days="Mon Tue"/>]]></fos:result>
+               <fos:postamble>The atomized items are joined with spaces.</fos:postamble>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[
+update(
+  <name><last>Parks</last></name>,
+  fn { ./last },
+  { 'before': <first>Rosa</first> }
+)
+               ]]></eg></fos:expression>
+               <fos:result><![CDATA[<name><first>Rosa</first><last>Parks</last></name>]]></fos:result>
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
 update(
   document { <page><page/></page> },
   fn { .//page },
-  fn { <section>{ node() }</section> }
+  { 'rename': #section }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<section><section/></section>]]></fos:result>
-               <fos:postamble>The same applies to elements: the outer one is presented to the
-                  replacement with the inner one already renamed.</fos:postamble>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[
+update(
+  <a b="1"/>,
+  fn { ./@b },
+  { 'rename': QName('urn:x', 'x:b') }
+)
+               ]]></eg></fos:expression>
+               <fos:result><![CDATA[<a xmlns:x="urn:x" x:b="1"/>]]></fos:result>
+               <fos:postamble>A binding is added for the namespace of the new
+                  name.</fos:postamble>
+            </fos:test>
+            <fos:test spec="XQuery">
+               <fos:expression><eg><![CDATA[
+update(
+  <p:a xmlns:p="u1"><p:b/></p:a>,
+  fn { ./*:b },
+  { 'rename': QName('u2', 'p:b') }
+)
+               ]]></eg></fos:expression>
+               <fos:result><![CDATA[<p:a xmlns:p="u1"><p:b xmlns:p="u2"/></p:a>]]></fos:result>
+               <fos:postamble>The binding of the prefix is replaced for the renamed
+                  element.</fos:postamble>
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
 update(
   <book><author/></book>,
   fn { ./author },
-  document { <first/>, <last/> }
+  { 'replace': document { <first/>, <last/> } }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<book><first/><last/></book>]]></fos:result>
-               <fos:postamble>A document node contributes its children.</fos:postamble>
-            </fos:test>
-            <fos:test spec="XQuery">
-               <fos:expression><eg><![CDATA[
-update(
-  <authors><author/><author/></authors>,
-  fn { ./author },
-  <name/>
-)
-               ]]></eg></fos:expression>
-               <fos:result><![CDATA[<authors><name/><name/></authors>]]></fos:result>
-               <fos:postamble>A replacement that is not a single function item is used as it
-                  stands, for every selected node.</fos:postamble>
+               <fos:postamble>A document node supplies its children.</fos:postamble>
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
 update(
   <doc xmlns:p="u"><page><p:name/></page></doc>/page,
   fn { .//*:name },
-  'Ida Wells'
+  { 'value': 'Ida Wells' }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<page xmlns:p="u"><p:name>Ida Wells</p:name></page>]]></fos:result>
@@ -16039,7 +16093,7 @@ update(
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
-update(<a><b/></a>, fn { .//b }, <b/>)
+update(<a><b/></a>, fn { .//b }, { 'replace': <b/> })
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<a><b/></a>]]></fos:result>
                <fos:postamble>A constructed node is never selected itself, even if it matches
@@ -16050,7 +16104,7 @@ update(<a><b/></a>, fn { .//b }, <b/>)
 update(
   <book><draft/><note/></book>,
   fn { ./(draft | note) },
-  fn { if (self::draft) { <final/> } }
+  { 'replace': fn { if (self::draft) { <final/> } } }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<book><final/></book>]]></fos:result>

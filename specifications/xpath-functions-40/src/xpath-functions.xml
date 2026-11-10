@@ -552,6 +552,9 @@ Michael Sperberg-McQueen (1954–2024).</p>
                For the functions defined in this specification, where two functions have the same name and different arity,
                they also have closely related behavior, so they are defined in the same section of this document.</p>
             
+            <p><termdef id="dt-variadic" term="variadic">The function <function>fn:concat</function>
+                  is defined to be <term>variadic</term>: it accepts any number of arguments. No other function
+                  has this property.</termdef></p>
               
          </div2>
          <div2 id="func-signatures">
@@ -660,6 +663,12 @@ Michael Sperberg-McQueen (1954–2024).</p>
                   when the argument <code>$collation</code> is absent or empty depends on collations
                   whether or not a collation is supplied. Where the properties of a function do depend
                   on the arity of the call, the omitted argument is named explicitly.</p>
+               
+               <p>Some functions, while classified as <termref def="dt-deterministic"/>, have options
+               that enable non-deterministic behavior; for example the <function>fn:doc</function> 
+               function has an option <code>stable</code> allowing the requirement for deterministic
+               behavior to be relaxed. The headline properties given for the function do not take
+               such variations into account.</p>
             </div3>
 
             <div3 id="id-function-signatures-rules">
@@ -947,6 +956,297 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
 
    </div3>
          </div2>
+         
+         <div2 id="properties-of-functions">
+               <head>Properties of functions</head>
+               
+               <p>This section is concerned with the question of whether two calls on a function, with the same arguments, may
+               produce different results.</p>
+               
+               <p diff="add" at="2023-03-12">In this section the term <term>function</term>, unless otherwise specified,
+               applies equally to <xtermref spec="XP40" ref="dt-function-definition">function definitions</xtermref>
+               (which can be the target of a static function call) and <xtermref spec="DM40" ref="dt-function-item">function items</xtermref>
+               (which can be the target of a dynamic function call).</p>
+               
+               <p><termdef id="execution-scope" term="execution scope">An <term>execution scope</term> is a sequence of
+                  calls to the function library during which certain aspects of the state are required to remain invariant.
+                  For example, two calls to <function>fn:current-dateTime</function> within the same execution scope will return the same result.
+                  The execution scope is defined by the host language that invokes the function library.</termdef>
+                  In XSLT, for example, any two function calls executed during
+                  the same transformation are in the same execution scope (except that static expressions, such as those used in
+                  <code>use-when</code> attributes, are in a separate execution scope).
+                  </p>
+            
+            <div3 id="id-function-equivalence">
+               <head>Function equivalence</head>
+            
+               <p>It is sometimes necessary to determine whether two function items are equivalent: that is, whether
+               they effectively represent the same function.</p>
+               
+               <p>We start by defining what it means for two function calls to 
+                  return the same result:</p>
+               
+               <p><termdef id="dt-identical" term="identical" diff="chg" at="2026-07-20">Two values <code>$V1</code> and <code>$V2</code> are
+                  defined to be <term>identical</term> if they contain the same number of items and the items are pairwise identical. Two items are identical
+                  if and only if one of the following conditions applies:</termdef></p>
+                  
+              
+               
+               <olist>
+                  <item><p>Both items are atomic items, of precisely the same type, and the values are equal as defined using the <code>eq</code> operator,
+                     using the Unicode codepoint collation when comparing strings.</p></item>
+                  <item><p>Both items are nodes, and represent the same node.</p></item>
+                  <item><p>Both items are maps, both maps have the same number of entries, 
+                     and for every entry <var>E1</var> in the first map there is an entry <var>E2</var> in the second map such 
+                     that the keys of <var>E1</var> and <var>E2</var> are <termref def="dt-same-key">the same key</termref>, 
+                     and the corresponding values <var>V1</var> and <var>V2</var> are <termref def="dt-identical"/>.</p></item>
+                  <item><p>Both items are arrays, both arrays have the same number of members, and the members
+                     are pairwise <termref def="dt-identical"/>.</p></item>
+                  <item><p diff="chg" at="2026-08-19">Both items are function items, neither is a map or array,
+                     and they are <termref def="dt-function-equivalent">equivalent</termref>.</p></item>
+               </olist>
+  
+               <p>We then use this concept in a definition of function equivalence:</p>
+               
+               <p diff="add" at="2026-08-19"><termdef id="dt-function-equivalent" term="equivalent">Two
+                  function items <code>$F1</code> and <code>$F2</code> that are neither maps nor arrays are
+                  <term>equivalent</term> if either of the following applies:</termdef></p>
+
+               <olist diff="add" at="2026-08-19">
+                  <item><p><code>$F1</code> and <code>$F2</code> have both of the following:</p>
+                     <olist>
+                        <item><p>the same <term>static form</term>: the abstract syntax of the expression from which the
+                           function item was constructed (for a function supplied by the processor or implemented in
+                           external code, a reference to that implementation), compared ignoring the function’s name and
+                           annotations, up to the renaming of bound variables, and ignoring any optimizations the
+                           processor may have applied; and</p></item>
+                        <item><p>the same captured context (see <xspecref spec="DM40" ref="function-items"/>): the
+                           nonlocal variable bindings, the focus, and the static context captured when the function item
+                           was created. Two function items need agree only on the parts of the captured context on which
+                           the result of calling them depends, and captured variable values are compared using
+                           deep-equal.</p></item>
+                     </olist>
+                  </item>
+                  <item><p>It is <termref def="implementation-dependent"/> whether the processor additionally treats
+                     <code>$F1</code> and <code>$F2</code> as equivalent by establishing that calls on them with
+                     pairwise deep-equal argument lists always return deep-equal results.</p></item>
+               </olist>
+
+               <p diff="add" at="2026-08-19">Maps and arrays are compared by their content;
+                  see <function>fn:deep-equal</function>.</p>
+
+               <p diff="add" at="2026-08-19">For example, applying the first rule and without any further optimizations:</p>
+
+               <ulist diff="add" at="2026-08-19">
+                  <item><p><code>true#0</code> and <code>true#0</code> are equivalent: both references identify the
+                     same function.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn($y) {  $y  }</code> are equivalent: they differ only
+                     in the name of a bound variable and in whitespace.</p></item>
+                  <item><p>The two function items in <code>let $n := &lt;a/&gt; return (fn() { $n }, fn() { $n })</code>
+                     are equivalent: they have the same static form and the same captured context.</p></item>
+                  <item><p><code>fn() { error() }</code> and <code>fn() { error() }</code> are equivalent: they have
+                     the same static form; they are compared without being called.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn($x) { $x + 1 }</code> are not equivalent: they can
+                     return different results.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn($x, $y) { $x }</code> are not equivalent: they have
+                     different arity.</p></item>
+                  <item><p>The two function items in <code>(let $n := 1 return fn() { $n }, let $m := 2 return fn()
+                     { $m })</code> are not equivalent: their captured context differs.</p></item>
+                  <item><p>The two function items in <code>for $x in (1, 2) return fn() { $x }</code> are not
+                     equivalent: they have the same static form but a different captured context (a different value of
+                     <code>$x</code>).</p></item>
+                  <item><p>The two function items in <code>(&lt;a/&gt;, &lt;b/&gt;) ! fn:name#0</code> are not equivalent:
+                     <code>fn:name#0</code> is context-dependent, so each captures a different context node.</p></item>
+               </ulist>
+
+               <p diff="add" at="2026-08-19">Whether the two function items in each of the following pairs are
+                  equivalent is <termref def="implementation-dependent"/>. In every case they always return equal
+                  results, so the second rule permits a processor to treat them as equivalent; but their static forms
+                  differ, so no processor is required to do so:</p>
+
+               <ulist diff="add" at="2026-08-19">
+                  <item><p><code>fn($x) { $x + $x }</code> and <code>fn($x) { 2 * $x }</code>: the two functions are
+                     equal by an arithmetic identity that a processor may or may not recognize.</p></item>
+                  <item><p><code>fn() { 1 + 1 }</code> and <code>fn() { 2 }</code>: a processor that folds constants
+                     may treat the two bodies as equal.</p></item>
+                  <item><p><code>fn($x) { $x }</code> and <code>fn:identity#1</code>: both compute the identity
+                     function, but one is written inline and the other is a reference to a built-in function.</p></item>
+                  <item><p><code>fn { . + 1 }</code> and <code>fn($n) { $n + 1 }</code>: both add one to their
+                     argument, but one uses the context-item shorthand and the other a named parameter.</p></item>
+               </ulist>
+            </div3>
+            
+            <div3 id="context-dependencies">
+               <head>Context dependencies</head>
+           
+
+               <p>Some functions produce results that depend not only on their explicit arguments,
+                  but also on the static and dynamic context.</p>
+
+               <p><termdef id="dt-context-dependent" term="context-dependent">A 
+                  <phrase diff="chg" at="2023-03-12"><xtermref spec="XP40" ref="dt-function-definition">function definition</xtermref></phrase> 
+                  may have  the property of being <term>context-dependent</term>: the result of such a
+               function depends on the values of properties in the static and dynamic
+               evaluation context <phrase diff="add" at="2023-03-12">of the caller</phrase>
+                  as well as on the actual supplied arguments (if any). <phrase diff="chg" at="issue1459">A function definition may
+               be context-dependent when an optional argument is omitted, and context-independent
+               when it is supplied: for example <function>fn:name#0</function> is context-dependent
+                  while <function>fn:name#1</function> is context-independent. If the default value of
+                  an argument is also used when an empty sequence is supplied, the dependency applies
+                  at every arity.</phrase></termdef></p>
+               
+               <p><termdef id="dt-context-independent" term="context-independent">A 
+                  <phrase diff="chg" at="2023-03-12"><xtermref spec="XP40" ref="dt-function-definition">function definition</xtermref></phrase> 
+                  that is not <termref def="dt-context-dependent">context-dependent</termref> is called 
+                  <term>context-independent</term>.</termdef></p>
+               
+               <p diff="add" at="2023-03-12">The main categories of context-dependent functions are:</p>
+               
+               <ulist diff="add" at="2023-03-12">
+                  <item><p>Functions that explicitly deliver the value of a component of the static or dynamic context,
+                  for example <function>fn:static-base-uri</function>, <function>fn:default-collation</function>,
+                  <function>fn:position</function>, or <function>fn:last</function>.</p></item>
+                  <item><p>Functions with an optional parameter whose default value is taken from the static
+                     or dynamic context of the caller, usually either the context value (for example, <function>fn:node-name</function>)
+                     or the default collation (for example, <function>fn:index-of</function>).</p></item>
+                  <item><p>Functions that use the static context of the caller to expand or disambiguate
+                  the values of supplied arguments: for example <function>fn:doc</function> expands its first
+                  argument using the static base URI of the caller, and <code>xs:QName</code> expands its first argument
+                  using the in-scope namespaces of the caller.</p></item>
+               </ulist>
+               
+               <p><termdef id="dt-focus-dependent" term="focus-dependent">A function is <term>focus-dependent</term>
+                  if its result depends on the <xtermref ref="dt-focus" spec="XP40">focus</xtermref>
+                  (that is, the context item, position, or size) 
+                  <phrase diff="add" at="2023-03-12">of the caller</phrase>.</termdef></p>
+               <p><termdef id="dt-focus-independent" term="focus-dependent">A function that
+                  is not <termref def="dt-focus-dependent">focus-dependent</termref> is called
+                  <term>focus-independent</term>.</termdef></p>
+
+           
+               <note diff="add" at="2023-03-12">
+                  <p>Some functions depend on aspects of the dynamic context that remain invariant
+                  within an <termref def="execution-scope"/>, such as the implicit timezone.
+                  Formally this is treated in the same way as any other context dependency, but
+                  internally, the implementation may be able to take advantage of the fact that the
+                  value is invariant.</p>
+               </note>
+               
+               <note diff="add" at="2023-03-12">
+                  <p>User-defined functions in XQuery and XSLT may depend on the static context
+                     of the function definition (for example, the in-scope namespaces) and also in a limited
+                     way on the dynamic context (for example, the values of global variables).
+                     However, the only way they can depend on the static or dynamic context
+                     of the caller — which is what concerns us here — is by defining optional
+                     parameters whose default values depend on the focus.</p>
+               </note>
+                  
+               <note diff="add" at="2023-09-05">
+               <p>Because the focus is a specific part of the dynamic context, all 
+                  <termref def="dt-focus-dependent">focus-dependent</termref> functions are also
+                  <termref def="dt-context-dependent">context-dependent</termref>. A
+                  <termref def="dt-context-dependent">context-dependent</termref> function, however,
+                  may be either <termref def="dt-focus-dependent">focus-dependent</termref> or
+                     <termref def="dt-focus-independent">focus-independent</termref>.</p>
+               </note>
+               
+
+               
+               <p>A <phrase diff="chg" at="2023-03-12">function definition</phrase> that is context-dependent 
+                  can be used as <phrase diff="add" at="2023-03-12">the target of</phrase> a named
+               function reference, can be partially applied, and can be found using <function>fn:function-lookup</function>. 
+               The principle in such cases is that the static context used for the function evaluation
+               is taken from the static context of the named function reference, partial function application, or the call
+               on <function>fn:function-lookup</function>; and the dynamic context for the function evaluation is taken from the dynamic
+               context of the evaluation of the named function reference, partial function application, or the call
+               of <function>fn:function-lookup</function>. <phrase diff="add" at="2023-03-12">These constructs all deliver a 
+                  <xtermref spec="DM40" ref="dt-function-item">function item</xtermref>
+                  having a <term>captured context</term> based on the static and dynamic
+                  context of the construct that created the function item. This captured context forms 
+               part of the closure of the function item.</phrase></p>
+               
+               <p>The result of a dynamic call to a function item never 
+                  depends on the static or dynamic context of the dynamic function call, only (where relevant) 
+                  on the captured context held within the function item itself.</p>
+              
+               
+               
+               <p>The <function>fn:function-lookup</function> function is a special case because it is
+               potentially dependent on everything in the static and dynamic context. This is because the static and dynamic
+               context of the call to <function>fn:function-lookup</function> 
+                  <phrase diff="chg" at="2023-03-12">form the captured context of the
+               function item</phrase> that <function>fn:function-lookup</function> returns.</p>
+               
+               
+            </div3>
+            <div3 id="id-determinism">
+               <head>Determinism</head>
+           
+               
+               <p><termdef id="dt-deterministic" term="deterministic">A function that is guaranteed to produce <termref def="dt-identical">identical</termref> results 
+                  from repeated calls within a single <termref def="execution-scope">execution scope</termref>
+               if the explicit and implicit arguments are identical is referred to as
+               <term>deterministic</term>.</termdef></p>
+               
+               <p><termdef id="dt-nondeterministic" term="nondeterministic">A function that is not
+                  <termref def="dt-deterministic">deterministic</termref> is referred to as <term>nondeterministic</term>.</termdef></p>
+               
+               <p>All functions defined in this specification are <termref def="dt-deterministic">deterministic</termref> unless otherwise stated.
+               Exceptions include the following:</p>
+               
+               <ulist>
+               <item><p><termdef id="dt-nondeterministic-wrt-ordering" term="nondeterministic with respect to ordering"><phrase diff="chg" at="issue1459">Some 
+                  functions (such as <function>fn:unordered</function>) produce their results in an
+                  <termref def="implementation-defined">implementation-defined</termref> or 
+                  <termref def="implementation-dependent">implementation-dependent</termref> order,
+                  and two calls with the same arguments are not guaranteed to produce the results
+                  in the same order. These functions are
+               said to be <term>nondeterministic with respect to ordering</term>.</phrase></termdef></p>
+               <note diff="add" at="issue1459"><p>A function whose result order is not defined by this specification
+                  is not for that reason <termref def="dt-nondeterministic">nondeterministic</termref>. For example,
+                  the order of the entries in the map returned by <function>fn:in-scope-namespaces</function>
+                  is <termref def="implementation-dependent">implementation-dependent</termref>, but because the
+                  function is <termref def="dt-deterministic">deterministic</termref>, repeated calls within one
+                  <termref def="execution-scope">execution scope</termref> deliver the entries in the same
+                  order.</p></note></item>
+               
+               <item><p>Some functions (such as <function>fn:analyze-string</function>,
+                  <function>fn:parse-xml</function>, <function>fn:parse-xml-fragment</function>, 
+                  <function>fn:parse-html</function>, <function>fn:json-to-xml</function>, and
+                  <function>fn:csv-to-xml</function>)
+                  construct a tree of nodes to
+               represent their results. There is no guarantee that repeated calls with the same
+               arguments will return the same identical node (in the sense of the <code>is</code>
+               operator). However, if non-identical nodes are returned, their content will be the
+               same in the sense of the <function>fn:deep-equal</function> function. Such a function is said 
+               to be <term>nondeterministic with respect to node identity</term>.</p></item>
+               
+               <item><p>Some functions (such as <function>fn:doc</function> and 
+                  <function>fn:collection</function>) create new nodes by reading external
+               documents. Such functions are guaranteed to be <termref def="dt-deterministic">deterministic</termref>
+               by default (some such functions have an option <code>"stable":false()</code> that makes 
+               them nondeterministic as a user option, and implementations <rfc2119>may</rfc2119>
+               also provide configuration options to change the default).</p></item>
+                  
+                  <item><p>Some functions (such as <function>fn:trace</function> and 
+                        <function>fn:message</function>, or <function>fn:deep-equal</function>
+                  with the <code>debug</code> option enabled, produce output intended
+                  for diagnostic and instrumentation purposes. The form and destination of this output
+                  is <termref def="implementation-dependent">implementation-dependent</termref>,
+                  and the function is regarded as deterministic on the assumption that
+                  the diagnostic output has no substantial consequences.</p></item>
+               
+               </ulist>
+               
+               <p>Where the results of a function are described as being (to a greater or lesser
+                  extent) <termref def="implementation-defined">implementation-defined</termref> or 
+                  <termref def="implementation-dependent">implementation-dependent</termref>, this does not by
+               itself remove the requirement that the results should be deterministic: that is, that
+               repeated calls with the same explicit and implicit arguments <rfc2119>must</rfc2119> return
+               identical results.</p>
+               
+            </div3> 
+         </div2>      
 
 
          <div2 id="terminology">
@@ -1132,274 +1432,7 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                
                
             </div3>
-            <div3 id="properties-of-functions">
-               <head>Properties of functions</head>
-               
-               <p>This section is concerned with the question of whether two calls on a function, with the same arguments, may
-               produce different results.</p>
-               
-               <p diff="add" at="2023-03-12">In this section the term <term>function</term>, unless otherwise specified,
-               applies equally to <xtermref spec="XP40" ref="dt-function-definition">function definitions</xtermref>
-               (which can be the target of a static function call) and <xtermref spec="DM40" ref="dt-function-item">function items</xtermref>
-               (which can be the target of a dynamic function call).</p>
-               
-               <p><termdef id="execution-scope" term="execution scope">An <term>execution scope</term> is a sequence of
-                  calls to the function library during which certain aspects of the state are required to remain invariant.
-                  For example, two calls to <function>fn:current-dateTime</function> within the same execution scope will return the same result.
-                  The execution scope is defined by the host language that invokes the function library.</termdef>
-                  In XSLT, for example, any two function calls executed during
-                  the same transformation are in the same execution scope (except that static expressions, such as those used in
-                  <code>use-when</code> attributes, are in a separate execution scope).
-                  </p>
-               
-               <p>The following definition explains more precisely what it means for two function calls to return the same result:</p>
-               
-               <p><termdef id="dt-identical" term="identical" diff="chg" at="2026-07-20">Two values <code>$V1</code> and <code>$V2</code> are
-                  defined to be <term>identical</term> if they contain the same number of items and the items are pairwise identical. Two items are identical
-                  if and only if one of the following conditions applies:</termdef></p>
-                  
-              
-               
-               <olist>
-                  <item><p>Both items are atomic items, of precisely the same type, and the values are equal as defined using the <code>eq</code> operator,
-                     using the Unicode codepoint collation when comparing strings.</p></item>
-                  <item><p>Both items are nodes, and represent the same node.</p></item>
-                  <item><p>Both items are maps, both maps have the same number of entries, 
-                     and for every entry <var>E1</var> in the first map there is an entry <var>E2</var> in the second map such 
-                     that the keys of <var>E1</var> and <var>E2</var> are <termref def="dt-same-key">the same key</termref>, 
-                     and the corresponding values <var>V1</var> and <var>V2</var> are <termref def="dt-identical"/>.</p></item>
-                  <item><p>Both items are arrays, both arrays have the same number of members, and the members
-                     are pairwise <termref def="dt-identical"/>.</p></item>
-                  <item><p diff="chg" at="2026-08-19">Both items are function items, neither is a map or array,
-                     and they are <termref def="dt-function-equivalent">equivalent</termref>.</p></item>
-               </olist>
-  
-               
-               <p diff="add" at="2026-08-19"><termdef id="dt-function-equivalent" term="equivalent">Two
-                  function items <code>$F1</code> and <code>$F2</code> that are neither maps nor arrays are
-                  <term>equivalent</term> if either of the following applies:</termdef></p>
-
-               <olist diff="add" at="2026-08-19">
-                  <item><p><code>$F1</code> and <code>$F2</code> have both of the following:</p>
-                     <olist>
-                        <item><p>the same <term>static form</term>: the abstract syntax of the expression from which the
-                           function item was constructed (for a function supplied by the processor or implemented in
-                           external code, a reference to that implementation), compared ignoring the function’s name and
-                           annotations, up to the renaming of bound variables, and ignoring any optimizations the
-                           processor may have applied; and</p></item>
-                        <item><p>the same captured context (see <xspecref spec="DM40" ref="function-items"/>): the
-                           nonlocal variable bindings, the focus, and the static context captured when the function item
-                           was created. Two function items need agree only on the parts of the captured context on which
-                           the result of calling them depends, and captured variable values are compared using
-                           deep-equal.</p></item>
-                     </olist>
-                  </item>
-                  <item><p>It is <termref def="implementation-dependent"/> whether the processor additionally treats
-                     <code>$F1</code> and <code>$F2</code> as equivalent by establishing that calls on them with
-                     pairwise deep-equal argument lists always return deep-equal results.</p></item>
-               </olist>
-
-               <p diff="add" at="2026-08-19">Maps and arrays are compared by their content;
-                  see <function>fn:deep-equal</function>.</p>
-
-               <p diff="add" at="2026-08-19">For example, applying the first rule and without any further optimizations:</p>
-
-               <ulist diff="add" at="2026-08-19">
-                  <item><p><code>true#0</code> and <code>true#0</code> are equivalent: both references identify the
-                     same function.</p></item>
-                  <item><p><code>fn($x) { $x }</code> and <code>fn($y) {  $y  }</code> are equivalent: they differ only
-                     in the name of a bound variable and in whitespace.</p></item>
-                  <item><p>The two function items in <code>let $n := &lt;a/&gt; return (fn() { $n }, fn() { $n })</code>
-                     are equivalent: they have the same static form and the same captured context.</p></item>
-                  <item><p><code>fn() { error() }</code> and <code>fn() { error() }</code> are equivalent: they have
-                     the same static form; they are compared without being called.</p></item>
-                  <item><p><code>fn($x) { $x }</code> and <code>fn($x) { $x + 1 }</code> are not equivalent: they can
-                     return different results.</p></item>
-                  <item><p><code>fn($x) { $x }</code> and <code>fn($x, $y) { $x }</code> are not equivalent: they have
-                     different arity.</p></item>
-                  <item><p>The two function items in <code>(let $n := 1 return fn() { $n }, let $m := 2 return fn()
-                     { $m })</code> are not equivalent: their captured context differs.</p></item>
-                  <item><p>The two function items in <code>for $x in (1, 2) return fn() { $x }</code> are not
-                     equivalent: they have the same static form but a different captured context (a different value of
-                     <code>$x</code>).</p></item>
-                  <item><p>The two function items in <code>(&lt;a/&gt;, &lt;b/&gt;) ! fn:name#0</code> are not equivalent:
-                     <code>fn:name#0</code> is context-dependent, so each captures a different context node.</p></item>
-               </ulist>
-
-               <p diff="add" at="2026-08-19">Whether the two function items in each of the following pairs are
-                  equivalent is <termref def="implementation-dependent"/>. In every case they always return equal
-                  results, so the second rule permits a processor to treat them as equivalent; but their static forms
-                  differ, so no processor is required to do so:</p>
-
-               <ulist diff="add" at="2026-08-19">
-                  <item><p><code>fn($x) { $x + $x }</code> and <code>fn($x) { 2 * $x }</code>: the two functions are
-                     equal by an arithmetic identity that a processor may or may not recognize.</p></item>
-                  <item><p><code>fn() { 1 + 1 }</code> and <code>fn() { 2 }</code>: a processor that folds constants
-                     may treat the two bodies as equal.</p></item>
-                  <item><p><code>fn($x) { $x }</code> and <code>fn:identity#1</code>: both compute the identity
-                     function, but one is written inline and the other is a reference to a built-in function.</p></item>
-                  <item><p><code>fn { . + 1 }</code> and <code>fn($n) { $n + 1 }</code>: both add one to their
-                     argument, but one uses the context-item shorthand and the other a named parameter.</p></item>
-               </ulist>
-
-               <p>Some functions produce results that depend not only on their explicit arguments,
-                  but also on the static and dynamic context.</p>
-
-               <p><termdef id="dt-context-dependent" term="context-dependent">A 
-                  <phrase diff="chg" at="2023-03-12"><xtermref spec="XP40" ref="dt-function-definition">function definition</xtermref></phrase> 
-                  may have  the property of being <term>context-dependent</term>: the result of such a
-               function depends on the values of properties in the static and dynamic
-               evaluation context <phrase diff="add" at="2023-03-12">of the caller</phrase>
-                  as well as on the actual supplied arguments (if any). <phrase diff="chg" at="issue1459">A function definition may
-               be context-dependent when an optional argument is omitted, and context-independent
-               when it is supplied: for example <function>fn:name#0</function> is context-dependent
-                  while <function>fn:name#1</function> is context-independent. If the default value of
-                  an argument is also used when an empty sequence is supplied, the dependency applies
-                  at every arity.</phrase></termdef></p>
-               
-               <p><termdef id="dt-context-independent" term="context-independent">A 
-                  <phrase diff="chg" at="2023-03-12"><xtermref spec="XP40" ref="dt-function-definition">function definition</xtermref></phrase> 
-                  that is not <termref def="dt-context-dependent">context-dependent</termref> is called 
-                  <term>context-independent</term>.</termdef></p>
-               
-               <p diff="add" at="2023-03-12">The main categories of context-dependent functions are:</p>
-               
-               <ulist diff="add" at="2023-03-12">
-                  <item><p>Functions that explicitly deliver the value of a component of the static or dynamic context,
-                  for example <function>fn:static-base-uri</function>, <function>fn:default-collation</function>,
-                  <function>fn:position</function>, or <function>fn:last</function>.</p></item>
-                  <item><p>Functions with an optional parameter whose default value is taken from the static
-                     or dynamic context of the caller, usually either the context value (for example, <function>fn:node-name</function>)
-                     or the default collation (for example, <function>fn:index-of</function>).</p></item>
-                  <item><p>Functions that use the static context of the caller to expand or disambiguate
-                  the values of supplied arguments: for example <function>fn:doc</function> expands its first
-                  argument using the static base URI of the caller, and <code>xs:QName</code> expands its first argument
-                  using the in-scope namespaces of the caller.</p></item>
-               </ulist>
-               
-               <p><termdef id="dt-focus-dependent" term="focus-dependent">A function is <term>focus-dependent</term>
-                  if its result depends on the <xtermref ref="dt-focus" spec="XP40">focus</xtermref>
-                  (that is, the context item, position, or size) 
-                  <phrase diff="add" at="2023-03-12">of the caller</phrase>.</termdef></p>
-               <p><termdef id="dt-focus-independent" term="focus-dependent">A function that
-                  is not <termref def="dt-focus-dependent">focus-dependent</termref> is called
-                  <term>focus-independent</term>.</termdef></p>
-
-           
-               <note diff="add" at="2023-03-12">
-                  <p>Some functions depend on aspects of the dynamic context that remain invariant
-                  within an <termref def="execution-scope"/>, such as the implicit timezone.
-                  Formally this is treated in the same way as any other context dependency, but
-                  internally, the implementation may be able to take advantage of the fact that the
-                  value is invariant.</p>
-               </note>
-               
-               <note diff="add" at="2023-03-12">
-                  <p>User-defined functions in XQuery and XSLT may depend on the static context
-                     of the function definition (for example, the in-scope namespaces) and also in a limited
-                     way on the dynamic context (for example, the values of global variables).
-                     However, the only way they can depend on the static or dynamic context
-                     of the caller — which is what concerns us here — is by defining optional
-                     parameters whose default values depend on the focus.</p>
-               </note>
-                  
-               <note diff="add" at="2023-09-05">
-               <p>Because the focus is a specific part of the dynamic context, all 
-                  <termref def="dt-focus-dependent">focus-dependent</termref> functions are also
-                  <termref def="dt-context-dependent">context-dependent</termref>. A
-                  <termref def="dt-context-dependent">context-dependent</termref> function, however,
-                  may be either <termref def="dt-focus-dependent">focus-dependent</termref> or
-                     <termref def="dt-focus-independent">focus-independent</termref>.</p>
-               </note>
-               
-
-               
-               <p>A <phrase diff="chg" at="2023-03-12">function definition</phrase> that is context-dependent 
-                  can be used as <phrase diff="add" at="2023-03-12">the target of</phrase> a named
-               function reference, can be partially applied, and can be found using <function>fn:function-lookup</function>. 
-               The principle in such cases is that the static context used for the function evaluation
-               is taken from the static context of the named function reference, partial function application, or the call
-               on <function>fn:function-lookup</function>; and the dynamic context for the function evaluation is taken from the dynamic
-               context of the evaluation of the named function reference, partial function application, or the call
-               of <function>fn:function-lookup</function>. <phrase diff="add" at="2023-03-12">These constructs all deliver a 
-                  <xtermref spec="DM40" ref="dt-function-item">function item</xtermref>
-                  having a <term>captured context</term> based on the static and dynamic
-                  context of the construct that created the function item. This captured context forms 
-               part of the closure of the function item.</phrase></p>
-               
-               <p>The result of a dynamic call to a function item never 
-                  depends on the static or dynamic context of the dynamic function call, only (where relevant) 
-                  on the captured context held within the function item itself.</p>
-              
-               
-               
-               <p>The <function>fn:function-lookup</function> function is a special case because it is
-               potentially dependent on everything in the static and dynamic context. This is because the static and dynamic
-               context of the call to <function>fn:function-lookup</function> 
-                  <phrase diff="chg" at="2023-03-12">form the captured context of the
-               function item</phrase> that <function>fn:function-lookup</function> returns.</p>
-               
-               
-               
-               
-               <p><termdef id="dt-deterministic" term="deterministic">A function that is guaranteed to produce <termref def="dt-identical">identical</termref> results 
-                  from repeated calls within a single <termref def="execution-scope">execution scope</termref>
-               if the explicit and implicit arguments are identical is referred to as
-               <term>deterministic</term>.</termdef></p>
-               
-               <p><termdef id="dt-nondeterministic" term="nondeterministic">A function that is not
-                  <termref def="dt-deterministic">deterministic</termref> is referred to as <term>nondeterministic</term>.</termdef></p>
-               
-               <p>All functions defined in this specification are <termref def="dt-deterministic">deterministic</termref> unless otherwise stated.
-               Exceptions include the following:</p>
-               
-               <ulist>
-               <item><p><termdef id="dt-nondeterministic-wrt-ordering" term="nondeterministic with respect to ordering"><phrase diff="chg" at="issue1459">Some 
-                  functions (such as <function>fn:unordered</function>) produce their results in an
-                  <termref def="implementation-defined">implementation-defined</termref> or 
-                  <termref def="implementation-dependent">implementation-dependent</termref> order,
-                  and two calls with the same arguments are not guaranteed to produce the results
-                  in the same order. These functions are
-               said to be <term>nondeterministic with respect to ordering</term>.</phrase></termdef></p>
-               <note diff="add" at="issue1459"><p>A function whose result order is not defined by this specification
-                  is not for that reason <termref def="dt-nondeterministic">nondeterministic</termref>. For example,
-                  the order of the entries in the map returned by <function>fn:in-scope-namespaces</function>
-                  is <termref def="implementation-dependent">implementation-dependent</termref>, but because the
-                  function is <termref def="dt-deterministic">deterministic</termref>, repeated calls within one
-                  <termref def="execution-scope">execution scope</termref> deliver the entries in the same
-                  order.</p></note></item>
-               
-               <item><p>Some functions (such as <function>fn:analyze-string</function>,
-                  <function>fn:parse-xml</function>, <function>fn:parse-xml-fragment</function>, 
-                  <function>fn:parse-html</function>, <function>fn:json-to-xml</function>, and
-                  <function>fn:csv-to-xml</function>)
-                  construct a tree of nodes to
-               represent their results. There is no guarantee that repeated calls with the same
-               arguments will return the same identical node (in the sense of the <code>is</code>
-               operator). However, if non-identical nodes are returned, their content will be the
-               same in the sense of the <function>fn:deep-equal</function> function. Such a function is said 
-               to be <term>nondeterministic with respect to node identity</term>.</p></item>
-               
-               <item><p>Some functions (such as <function>fn:doc</function> and 
-                  <function>fn:collection</function>) create new nodes by reading external
-               documents. Such functions are guaranteed to be <termref def="dt-deterministic">deterministic</termref>
-               by default (some such functions have an option <code>"stable":false()</code> that makes 
-               them nondeterministic as a user option, and implementations <rfc2119>may</rfc2119>
-               also provide configuration options to change the default).</p></item>
-               
-               </ulist>
-               
-               <p>Where the results of a function are described as being (to a greater or lesser
-                  extent) <termref def="implementation-defined">implementation-defined</termref> or 
-                  <termref def="implementation-dependent">implementation-dependent</termref>, this does not by
-               itself remove the requirement that the results should be deterministic: that is, that
-               repeated calls with the same explicit and implicit arguments <rfc2119>must</rfc2119> return
-               identical results.</p>
-               
-               <p><termdef id="dt-variadic" term="variadic">The function <function>fn:concat</function>
-                  is defined to be <term>variadic</term>: it accepts any number of arguments. No other function
-                  has this property.</termdef></p>
-            </div3>           
+                 
          </div2>
       </div1>
       
@@ -15568,12 +15601,15 @@ ISBN 0 521 77752 6.</bibl>
                   a node that cannot be reached from the origin node by one or more attribute and
                   child steps.</p>
             </error>
-            <error class="UP" code="0004" label="Invalid replacement." type="dynamic"
+            <error class="UP" code="0004" label="Invalid update." type="dynamic"
                diff="add" at="A">
-               <p>Raised by <function>fn:update</function> if a replacement contains more than one
-                  item that replaces the value of the selected node, if it cannot appear at the
-                  position of the node that it replaces, or if it would produce two attributes with
-                  the same name or two entries of the same map with the same key.</p>
+               <p>Raised by <function>fn:update</function> if actions are combined that exclude
+                  each other, if an item supplies no nodes or a supplied node cannot appear at the
+                  position of the selected node,
+                  if a node cannot be renamed or its new name is invalid, if a new value is invalid
+                  for a comment or a processing instruction, or if the result would
+                  contain two attributes with the same name or two entries of the same map with the
+                  same key.</p>
             </error>
             <error class="UT" code="1170" label="Invalid URI reference."
                type="dynamic">
