@@ -2042,6 +2042,9 @@ comparison or arithmetic operation. The implicit timezone is an  <termref def="d
             access permissions), and it might take account of other criteria, for example imposing
             limits on the size or other characteristics of the resources accessed.</p>
             </note>
+            <p>If the <termref def="dt-resource-allow-list"/> is empty, then a processor may statically
+         reject any stylesheet or query that uses affected constructs (for example, a call on
+         the <function>fn:doc</function> function).</p>
             <p>The <termref def="dt-trusted"/> property is established when execution begins:</p>
             <olist>
                <item>
@@ -2085,7 +2088,7 @@ comparison or arithmetic operation. The implicit timezone is an  <termref def="d
                allow-list.</p>
                </item>
             </olist>
-            <p>Consequently, the <code nobreak="false">trust-external</code> option refines, but never widens, the
+            <p>Consequently, the <code nobreak="false">trust-external</code> option restricts, but never widens, the
             permissions granted by the trust level: an untrusted call can never gain access to an
             external resource by setting <code nobreak="false">trust-external</code> to <code nobreak="false">true</code>. The
             combined effect is summarized below.</p>
@@ -2129,10 +2132,15 @@ comparison or arithmetic operation. The implicit timezone is an  <termref def="d
                   </tr>
                </tbody>
             </table>
-            <p>In general, when an application requests access to an external resource which is
-         not available because the application is untrusted, the processor <rfc2119>should</rfc2119> behave
-         in the same way as if the resource did not exist. However, the processor <rfc2119>may</rfc2119>
-         choose to disclose in its diagnostics why the request was unsuccessful.</p>
+            <p>These specifications define specific error codes (see <errorref spec="FO" class="DC" code="0016"/>
+            for use when access to a resource
+            is denied for security reasons. However, in an environment where malicious access is
+            a perceived risk, processors <rfc2119>may</rfc2119> instead choose to raise errors 
+            that reveal less information:
+            perhaps a indicating only that a resource does not exist, or even
+            reporting merely that the supplied stylesheet or query cannot be processed.
+            A processor <rfc2119>may</rfc2119> also choose to disable catching of security-related errors using try/catch
+            expressions.</p>
             <p>A processor <rfc2119>may</rfc2119> (but is not <rfc2119>required</rfc2119> to)
             limit an application’s consumption of resources such as CPU cycles
          and memory when the application is untrusted.</p>
@@ -5609,6 +5617,7 @@ name.</p>
                   </change>
                   <change issue="2908" PR="2934 2972" date="2026-09-27">A distinction is made between simple record types
                   and labeled record types.</change>
+                  <change issue="2567" date="2026-11-02">A labeled record type can extend another labeled record type.</change>
                </changes>
                <p>
                   <termdef id="dt-record-type" term="record type">A <term>record type</term>
@@ -5870,6 +5879,12 @@ name.</p>
                            operator (see <specref ref="id-with-expression"/>).</p>
                      </item>
                   </ulist>
+                  <note diff="add" at="issue2567">
+                     <p>The label of a record may be a type that extends
+                  the static type of the expression that delivers it, and that declares additional fields.
+                  A lookup with a key that is not declared in the static type can therefore only be rejected statically
+                  if no such type exists.</p>
+                  </note>
                   <p>Rules defining whether one labeled record type is a <termref def="dt-subtype"/> of another
                   are given in <specref ref="id-item-subtype-labeled-records"/>.</p>
                   <div5 id="id-recursive-record-tests" diff="add" at="issue295">
@@ -8035,13 +8050,10 @@ declare record Particle (
                   <head>Subtyping of Labeled Record Types</head>
                   <p>This section describes how references to <termref def="dt-labeled-record-type">labeled record types</termref>
                   are handled when evaluating the subtype relationship.</p>
-                  <p>A labeled record type cannot be a subtype of any other labeled record type.</p>
-                  <ednote>
-                     <edtext>There is a proposal to change this by allowing one labeled record type to
-                  be explicitly derived from another.</edtext>
-                  </ednote>
-                  <p>A labeled record type is, however, a subtype of a <termref def="dt-simple-record-type"/>
-                  with the same field names and types.</p>
+                  <p diff="chg" at="issue2567">A labeled record type is a subtype of another labeled record type
+                  only if it is declared to extend it, directly or indirectly.
+                  It is never a subtype of a <termref def="dt-simple-record-type"/>, as records of a type that
+                  extends it may have additional fields; an individual record can still match a simple record type.</p>
                   <p>The rules are therefore defined as follows:</p>
                   <ulist>
                      <item>
@@ -8092,19 +8104,9 @@ declare record Particle (
                         <p>If <var>A</var> and <var>B</var> are both references to labeled record types, then
                         <var>A</var> ⊆ <var>B</var> is true if and only if 
                         <var>A</var> and <var>B</var>
-                        are references to the same labeled record type. (They are the same type only if they are
-                        declared in the same record type declaration.)</p>
-                     </item>
-                     <item>
-                        <p>If <var>A</var> is a reference to a labeled record type and <var>B</var>
-                           is a <termref def="dt-simple-record-type"/>, then
-                        <var>A</var> ⊆ <var>B</var> is true if <var>A</var> and <var>B</var>
-                        define the same fields with the same names and the same types.</p>
-                        <note>
-                           <p>The transitivity rules ensure that <var>A</var> is also a subtype
-                        of a simple record type whose field types are supertypes of the types
-                        defined in <var>A</var>.</p>
-                        </note>
+                        are references to the same labeled record type (they are the same type only if they are
+                        declared in the same record type declaration)<phrase diff="add" at="issue2567">, or
+                        <var>A</var> is declared to extend <var>B</var>, directly or indirectly</phrase>.</p>
                      </item>
                   </ulist>
                   <example>
@@ -8125,21 +8127,21 @@ declare record person(
                         </item>
                         <item>
                            <p>
-                              <code nobreak="false">person ⊆ record(first, last, middle)</code>
-                           </p>
-                        </item>
-                        <item>
-                           <p>
-                              <code nobreak="false">person ⊆ record(first, middle as xs:string*, last as xs:anyAtomicType)</code>
-                           </p>
-                        </item>
-                        <item>
-                           <p>
                               <code nobreak="false">person ⊆ record(*)</code>
                            </p>
                         </item>
+                        <item>
+                           <p>
+                              <code nobreak="false">person ⊆ map(xs:string, item()*)</code>
+                           </p>
+                        </item>
+                        <item>
+                           <p>
+                              <code nobreak="false">person ⊈ record(first, middle, last)</code>
+                           </p>
+                        </item>
                      </ulist>
-                     <p>The second and third examples are true because of the transitivity rules.</p>
+                     <p>The third example is true because of the transitivity rules.</p>
                   </example>
                </div4>
             </div3>
@@ -8169,6 +8171,9 @@ declare record person(
                <change issue="1862 2972" PR="1874" date="2025-03-25">
                   The coercion rules now reorder the entries in a map when the required type is a labeled record type
                   (but not when it is a simple record type).
+               </change>
+               <change issue="2567" date="2026-11-02">
+                  A record whose label extends the required labeled record type is not converted.
                </change>
             </changes>
             <p diff="chg" at="2022-11-17">
@@ -8695,7 +8700,12 @@ declare record person(
                   </item>
                   <item diff="add" at="A">
                      <p>If <var>R</var> is the name of a <termref def="dt-labeled-record-type"/>,
-                        and <var>J</var> is a map, then <var>J</var> is converted
+                        and <var>J</var> is a map, then <phrase diff="add" at="issue2567">
+                           <var>J</var> is used
+                        unchanged if its <termref def="dt-label"/> is <var>R</var> or a type that extends <var>R</var>,
+                        directly or indirectly.
+                        Otherwise,</phrase>
+                        <var>J</var> is converted
                         to a new <termref def="dt-record"/>
                         <var>N</var> as follows:</p>
                      <olist>
@@ -9021,10 +9031,9 @@ declare record person(
                      <item>
                         <p>When function coercion is applied to a map or an array, the resulting function is not
            a map or array, and cannot be used as such. For example, the expression </p>
-                        <eg xml:space="preserve">let $f as fn(xs:integer) as xs:boolean := { 0: false(), 1: true() }
-return $f?0</eg>
+                        <eg xml:space="preserve">({ 0: false(), 1: true() } coerce as fn(xs:integer) as xs:boolean)?0</eg>
                         <p>raises a type error, because a lookup expression requires the left hand
-           operand to be a map or array, and <code nobreak="false">$f</code> is neither.</p>
+           operand to be a map or array, and the coerced function is neither.</p>
                      </item>
                      <item>
                         <p>When function types are used as alternatives in a <termref def="dt-choice-item-type"/>,
@@ -12860,27 +12869,84 @@ return $incrementors[2](4)</eg>
                   (with <var>N</var> as the context value, its position in <var>S1</var> as the context 
                   position, and the length of <var>S1</var> as the context size) for an evaluation 
                   of <var>E2</var>, as described in  <specref ref="eval_context"/>. The result of evaluating <var>E2</var> depends on which of two interpretations applies:</p>
-                     <ulist>
+                     <olist>
                         <item>
                            <p>
-                              <termdef id="dt-selector-interpretation" term="selector interpretation">If <var>N</var>
-                           is a JNode and <var>E2</var> is <emph>not</emph> a <termref def="dt-navigational"/> expression,
-                           then the <term>selector interpretation</term> applies: <var>E2</var> is interpreted as the
-                           <nt def="prod-xpath40-DynamicNodeTest">DynamicNodeTest<!--$spec = xpath40--></nt>
-                                 <code nobreak="false">{ <var>E2</var> }</code> on the child axis,
-                           as described in <specref ref="id-selectors-for-JNodes"/>. Expression <var>E2</var> is thus
-                           evaluated with an absent focus, and the result is those children of <var>N</var> whose
-                           <term>·jkey·</term> property matches its value.</termdef>
+                              <termdef id="dt-navigational-interpretation" term="navigational interpretation">The
+                           <term>navigational interpretation</term> of a path expression 
+                                 <code nobreak="false">
+                                    <var>E1</var>/<var>E2</var>
+                                 </code> 
+                                 evaluates <var>E2</var> once for
+                                 each item <var>N</var> in <var>E1</var>, with <var>N</var> 
+                                 supplying the <termref def="dt-focus"/>.</termdef>
                            </p>
+                           <p>The <termref def="dt-navigational-interpretation"/> is used if either or both
+                               of the following conditions are true:</p>
+                           <olist>
+                              <item>
+                                 <p>
+                                    <var>N</var> is an XNode.</p>
+                              </item>
+                              <item>
+                                 <p>
+                                    <var>E2</var> is a <termref def="dt-navigational"/> expression.</p>
+                              </item>
+                           </olist>
+                           <note>
+                              <p>This applies whether or not the result of <var>E2</var> actually depends
+                           on the <termref def="dt-focus"/>.</p>
+                           </note>
+                           <p>For example, the <termref def="dt-navigational-interpretation"/> applies to expressions
+                              such as <code nobreak="false">$c/dateOfBirth</code>, <code nobreak="false">$c/*</code>, and <code nobreak="false">$c/(x | y)</code>regardless
+                              whether <code nobreak="false">$c</code> is an <code nobreak="false">XNode</code> or <code nobreak="false">JNode</code>
+                              The <termref def="dt-navigational-interpretation"/> also applies to expressions
+                              such as <code nobreak="false">$n/name()</code> provided that <code nobreak="false">$n</code> is an XNode.</p>
                         </item>
                         <item>
                            <p>
-                              <termdef id="dt-navigational-interpretation" term="navigational interpretation">In all
-                           other cases the <term>navigational interpretation</term> applies: <var>E2</var> is evaluated
-                           directly, with <var>N</var> supplying the focus.</termdef>
+                              <termdef id="dt-selector-interpretation" term="selector interpretation">The 
+                                 <term>selector interpretation</term> of a path expression 
+                                 <code nobreak="false">
+                                    <var>E1</var>/<var>E2</var>
+                                 </code> evaluates <var>E2</var> 
+                                 with an absent <termref def="dt-focus"/>, and uses the result to select
+                                 from the children of <var>E1</var>.</termdef>
                            </p>
+                           <p>The <termref def="dt-selector-interpretation"/> is used when both the following
+                                 conditions are true:</p>
+                           <olist>
+                              <item>
+                                 <p>
+                                    <var>N</var> (a node selected by <var>E1</var>) is a JNode.</p>
+                              </item>
+                              <item>
+                                 <p>
+                                    <var>E2</var> is <emph>not</emph> a <termref def="dt-navigational"/> 
+                                       expression.</p>
+                              </item>
+                           </olist>
+                           <p>Under the <termref def="dt-selector-interpretation"/>, expression <var>E2</var>
+                                 is interpreted in the same way as the expression <code nobreak="false">child::{ <var>E2</var> }</code>:
+                                 that is, it applies a <nt def="prod-xpath40-DynamicNodeTest">DynamicNodeTest<!--$spec = xpath40--></nt> to the JNodes
+                                 on the child axis of <var>N</var>. The dynamic node test is evaluated as described
+                                 in <specref ref="id-selectors-for-JNodes"/>.</p>
+                           <p>In summary, this means that <var>E2</var> is evaluated with an absent <termref def="dt-focus"/>;
+                                 the result is atomized to give a sequence <var>K</var> of atomic items; and the final result
+                                 includes those children of <var>N</var> whose <term>·jkey·</term> property is equal
+                                 to some item in <var>K</var>.</p>
+                           <p>For example, the <termref def="dt-selector-interpretation"/> applies to expressions
+                              such as <code nobreak="false">$c/4</code>, <code nobreak="false">$c/"date of birth"</code>, or <code nobreak="false">$c/($x+1)</code>, assuming in each
+                              case that <code nobreak="false">$c</code> is a map, array, or JNode.</p>
+                           <note>
+                              <p>It is permitted (though not recommended) for <var>E2</var> 
+                              to evaluate to a sequence that includes
+                              both XNodes and JNodes, and in this case it is possible for the 
+                              <termref def="dt-navigational-interpretation"/> to apply to some selected nodes,
+                              and the <termref def="dt-selector-interpretation"/> to apply to others.</p>
+                           </note>
                         </item>
-                     </ulist>
+                     </olist>
                   </item>
                   <item>
                      <p>The sequences resulting from all the evaluations of <var>E2</var>
@@ -12941,6 +13007,15 @@ return $incrementors[2](4)</eg>
                   detects it. In <code nobreak="false">$x/data()</code>, where <code nobreak="false">$x</code> is declared as <code nobreak="false">item()*</code>,
                   no error is raised statically; a type error is raised at evaluation time if <code nobreak="false">$x</code>
                   delivers JNodes.</p>
+               </note>
+               <note>
+                  <p>Consider the expression <code nobreak="false">$N//product/(price - discount)</code>. If <code nobreak="false">$N</code> is an XNode,
+                  the navigational interpretation applies, and the expression is equivalent to 
+                  <code nobreak="false">$N/product/(child::price - child::discount)</code>, which returns the discounted price
+                     of each product. If <code nobreak="false">$N</code> is a JNode, however, the selector
+                  interpretation applies. The expression <code nobreak="false">(price - discount)</code> is therefore evaluated
+                  with an absent focus, which fails with a dynamic error. To achieve the required effect,
+                  write <code nobreak="false">$N//product/(?price - ?discount)</code>.</p>
                </note>
                <div4 id="effect-of-slash-with-xnodes">
                   <head>Effect of <code nobreak="false">/</code> with XNodes</head>
@@ -20048,13 +20123,12 @@ return { $persons/*/* }
                      </item>
                      <item>
                         <p>The following expression:</p>
-                        <eg xml:space="preserve">let $r as record(x, y) := { 'x': 12, 'y': 13 }
-return $r?z</eg>
-                        <p>returns the empty sequence, because <code nobreak="false">$r</code> is a map with no entry
+                        <eg xml:space="preserve">({ 'x': 12, 'y': 13 } coerce as record(x, y))?z</eg>
+                        <p>returns the empty sequence, because the coerced value is a map with no entry
                      for the key <code nobreak="false">"z"</code>. Since the key specifier does not match any of the 
                      fields in the record type <code nobreak="false">record(x, y)</code>, the lookup is <termref def="dt-implausible"/>,
                      and a processor may report a static error (see <specref ref="id-implausible-expressions"/>). 
-                     If the variable is declared with a <termref def="dt-labeled-record-type"/> instead, 
+                     If the value is coerced to a <termref def="dt-labeled-record-type"/> instead,
                            the lookup raises a type error <errorref spec="XP" class="TY" code="0004"/>.</p>
                      </item>
                   </ulist>
@@ -20224,8 +20298,7 @@ return $r?z</eg>
             it has an appropriate <term>·jvalue·</term>.</p>
                <p>If <var>R</var> is the label of the left-hand operand, then the effect
             of the expression <code nobreak="false">$A but with $B</code> is equivalent to:</p>
-               <eg xml:space="preserve">let $temp as <var>R</var> := map:merge(($A, $B), { 'duplicates': 'use-last' })
-return $temp</eg>
+               <eg xml:space="preserve">map:merge(($A, $B), { 'duplicates': 'use-last' }) coerce as <var>R</var></eg>
                <p>That is: the values of the two operands are merged as maps, with the value from the second
             operand taking precedence in the case of duplicates; the result is then coerced to the record
             type defined by the <termref def="dt-label"/> of the first operand, raising a type error if the result
@@ -20419,7 +20492,9 @@ return $map?<var>N</var>($map, <var>X</var>, <var>Y</var>, ...)</eg>
                      exposed.</p>
                      </item>
                      <item>
-                        <p>There is no class hierarchy, and no inheritance or overriding.</p>
+                        <p diff="chg" at="issue2567">Inheritance is limited to labeled record types: a labeled record type
+                        can extend a single other labeled record type, inheriting its fields (including its methods)
+                        and redeclaring its static fields.</p>
                      </item>
                      <item>
                         <p>Methods within a map can be removed or replaced in the same way as
@@ -20811,7 +20886,7 @@ and raises a <termref def="dt-type-error">type error</termref> for another:</p>
             <p>
 The <code nobreak="false">instance
 of</code>, <code nobreak="false">cast</code>, <code nobreak="false">castable</code>,
-and <code nobreak="false">treat</code> expressions are used to test whether a value
+<code nobreak="false">treat</code>, and <code nobreak="false">coerce</code> expressions are used to test whether a value
 conforms to a given type or to convert it to an instance of a given
 type.
 </p>
@@ -20827,7 +20902,7 @@ type.
                   <prod id="doc-xpath40-InstanceofExpr-TreatExpr">
                      <lhs>TreatExpr</lhs>
                      <rhs>
-                        <nt def="prod-xpath40-CastableExpr">CastableExpr<!--$idref_lang_part = xpath40- --></nt>  ("treat"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
+                        <nt def="prod-xpath40-CoerceExpr">CoerceExpr<!--$idref_lang_part = xpath40- --></nt>  ("treat"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="doc-xpath40-InstanceofExpr-SequenceType">
@@ -21693,13 +21768,13 @@ usa:zipcode?)</code>.</p>
                   <prod id="doc-xpath40-TreatExpr">
                      <lhs>TreatExpr</lhs>
                      <rhs>
-                        <nt def="prod-xpath40-CastableExpr">CastableExpr<!--$idref_lang_part = xpath40- --></nt>  ("treat"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
+                        <nt def="prod-xpath40-CoerceExpr">CoerceExpr<!--$idref_lang_part = xpath40- --></nt>  ("treat"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
                   </prod>
 
-                  <prod id="doc-xpath40-TreatExpr-CastableExpr">
-                     <lhs>CastableExpr</lhs>
+                  <prod id="doc-xpath40-TreatExpr-CoerceExpr">
+                     <lhs>CoerceExpr</lhs>
                      <rhs>
-                        <nt def="prod-xpath40-CastExpr">CastExpr<!--$idref_lang_part = xpath40- --></nt>  ("castable"  "as"  <nt def="prod-xpath40-CastTarget">CastTarget<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
+                        <nt def="prod-xpath40-CastableExpr">CastableExpr<!--$idref_lang_part = xpath40- --></nt>  ("coerce"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="doc-xpath40-TreatExpr-SequenceType">
@@ -21752,6 +21827,60 @@ raised <errorref class="DY" code="0050"/>.</p>
              the error statically in the case of an expression (such as <code nobreak="false">3 treat as xs:string</code>)
              which can never succeed. However, the error code remains unchanged, for compatibility.</p>
                </note>
+            </div3>
+            <div3 id="id-coerce">
+               <head>Coerce</head>
+               <changes>
+                  <change issue="3043" date="2026-11-04">The <code nobreak="false">coerce as</code> expression applies
+               the coercion rules explicitly.</change>
+               </changes>
+               <scrap headstyle="show">
+                  <prod id="doc-xpath40-CoerceExpr">
+                     <lhs>CoerceExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xpath40-CastableExpr">CastableExpr<!--$idref_lang_part = xpath40- --></nt>  ("coerce"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
+                  </prod>
+
+                  <prod id="doc-xpath40-CoerceExpr-CastableExpr">
+                     <lhs>CastableExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xpath40-CastExpr">CastExpr<!--$idref_lang_part = xpath40- --></nt>  ("castable"  "as"  <nt def="prod-xpath40-CastTarget">CastTarget<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
+                  </prod>
+
+                  <prod id="doc-xpath40-CoerceExpr-SequenceType">
+                     <lhs>SequenceType</lhs>
+                     <rhs>("empty-sequence"  "("  ")")<br/>|  (<nt def="prod-xpath40-ItemType">ItemType<!--$idref_lang_part = xpath40- --></nt>
+                        <nt def="prod-xpath40-OccurrenceIndicator">OccurrenceIndicator<!--$idref_lang_part = xpath40- --></nt>?)</rhs>
+                  </prod>
+               </scrap>
+               <p>The expression <code nobreak="false">
+                     <var>E</var> coerce as <var>T</var>
+                  </code>
+            evaluates the subexpression <var>E</var> to produce a value <var>V</var>,
+            and then converts <var>V</var> to the <termref def="dt-sequence-type"/>
+                  <var>T</var>
+            by applying the <termref def="dt-coercion-rules"/>. The result of the expression is the
+            converted value; if <var>V</var> cannot be converted, a type error is raised.</p>
+               <p>The result of the expression is equivalent to:</p>
+               <eg xml:space="preserve">let $V as <var>T</var> := <var>E</var>
+return $V</eg>
+               <ulist>
+                  <item>
+                     <p>
+                        <code role="parse-test" nobreak="false">{ 'a': 1 } coerce as record(a as xs:double)</code>
+                  returns <code nobreak="false">{ 'a': 1.0e0 }</code>.</p>
+                  </item>
+                  <item>
+                     <p>
+                        <code role="parse-test" nobreak="false">(1, 2) coerce as xs:double+</code>
+                  returns <code nobreak="false">(1.0e0, 2.0e0)</code>.</p>
+                  </item>
+                  <item>
+                     <p>
+                        <code role="parse-test" nobreak="false">{ 'b': 1 } coerce as record(a)</code>
+                  raises a type error <errorref class="TY" code="0004"/>.</p>
+                  </item>
+               </ulist>
             </div3>
          </div2>
          <div2 id="id-pipeline-operator">
@@ -22523,6 +22652,12 @@ return string-join($chopped, '; ')
                   <prod id="prod-xpath40-ChoiceItemType">
                      <lhs>ChoiceItemType</lhs>
                      <rhs>"("  (<nt def="prod-xpath40-ItemType">ItemType<!--$idref_lang_part = xpath40- --></nt> ++ "|")  ")"</rhs>
+                  </prod>
+
+                  <prod id="prod-xpath40-CoerceExpr">
+                     <lhs>CoerceExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xpath40-CastableExpr">CastableExpr<!--$idref_lang_part = xpath40- --></nt>  ("coerce"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="prod-xpath40-CommentNodeType">
@@ -23329,7 +23464,7 @@ return string-join($chopped, '; ')
                   <prod id="prod-xpath40-TreatExpr">
                      <lhs>TreatExpr</lhs>
                      <rhs>
-                        <nt def="prod-xpath40-CastableExpr">CastableExpr<!--$idref_lang_part = xpath40- --></nt>  ("treat"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
+                        <nt def="prod-xpath40-CoerceExpr">CoerceExpr<!--$idref_lang_part = xpath40- --></nt>  ("treat"  "as"  <nt def="prod-xpath40-SequenceType">SequenceType<!--$idref_lang_part = xpath40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="prod-xpath40-TypedArrayType">
@@ -23891,6 +24026,7 @@ return string-join($chopped, '; ')
                      <code>cast</code>
                      <code>castable</code>
                      <code>child</code>
+                     <code>coerce</code>
                      <code>comment</code>
                      <code>declare</code>
                      <code>default</code>
@@ -24387,6 +24523,7 @@ return string-join($chopped, '; ')
                      <code>cast</code>
                      <code>castable</code>
                      <code>child</code>
+                     <code>coerce</code>
                      <code>comment</code>
                      <code>declare</code>
                      <code>default</code>
@@ -24821,54 +24958,61 @@ return string-join($chopped, '; ')
                   <tr>
                      <td rowspan="1" colspan="1">16</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xpath40-CastableExpr">castable as<!--$spec = xpath40--></nt>
+                        <nt def="doc-xpath40-CoerceExpr">coerce as<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">NA</td>
                   </tr>
                   <tr>
                      <td rowspan="1" colspan="1">17</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xpath40-CastExpr">cast as<!--$spec = xpath40--></nt>
+                        <nt def="doc-xpath40-CastableExpr">castable as<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">NA</td>
                   </tr>
                   <tr>
                      <td rowspan="1" colspan="1">18</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xpath40-PipelineExpr">-&gt;<!--$spec = xpath40--></nt>
+                        <nt def="doc-xpath40-CastExpr">cast as<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">NA</td>
                   </tr>
                   <tr>
                      <td rowspan="1" colspan="1">19</td>
                      <td rowspan="1" colspan="1">
+                        <nt def="doc-xpath40-PipelineExpr">-&gt;<!--$spec = xpath40--></nt>
+                     </td>
+                     <td rowspan="1" colspan="1">NA</td>
+                  </tr>
+                  <tr>
+                     <td rowspan="1" colspan="1">20</td>
+                     <td rowspan="1" colspan="1">
                         <nt def="doc-xpath40-ArrowExpr">=&gt;, =!&gt;<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">20</td>
+                     <td rowspan="1" colspan="1">21</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xpath40-UnaryExpr">-, + (unary)<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">right-to-left</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">21</td>
+                     <td rowspan="1" colspan="1">22</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xpath40-SimpleMapExpr">!<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">22</td>
+                     <td rowspan="1" colspan="1">23</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xpath40-PathExpr">/, //<!--$spec = xpath40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">23</td>
+                     <td rowspan="1" colspan="1">24</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xpath40-Predicate">a[b]<!--$spec = xpath40--></nt>, <nt def="prod-xpath40-Lookup">a?b<!--$spec = xpath40--></nt>,
             <nt def="doc-xpath40-DynamicFunctionCall">a(b)<!--$spec = xpath40--></nt>, <nt def="doc-xpath40-MethodCall">=?&gt;<!--$spec = xpath40--></nt>
@@ -24876,7 +25020,7 @@ return string-join($chopped, '; ')
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">24</td>
+                     <td rowspan="1" colspan="1">25</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xpath40-UnaryLookup">? (unary)<!--$spec = xpath40--></nt>
                      </td>

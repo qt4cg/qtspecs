@@ -2181,6 +2181,9 @@ comparison or arithmetic operation. The implicit timezone is an  <termref def="d
             access permissions), and it might take account of other criteria, for example imposing
             limits on the size or other characteristics of the resources accessed.</p>
             </note>
+            <p>If the <termref def="dt-resource-allow-list"/> is empty, then a processor may statically
+         reject any stylesheet or query that uses affected constructs (for example, a call on
+         the <function>fn:doc</function> function).</p>
             <p>The <termref def="dt-trusted"/> property is established when execution begins:</p>
             <olist>
                <item>
@@ -2224,7 +2227,7 @@ comparison or arithmetic operation. The implicit timezone is an  <termref def="d
                allow-list.</p>
                </item>
             </olist>
-            <p>Consequently, the <code nobreak="false">trust-external</code> option refines, but never widens, the
+            <p>Consequently, the <code nobreak="false">trust-external</code> option restricts, but never widens, the
             permissions granted by the trust level: an untrusted call can never gain access to an
             external resource by setting <code nobreak="false">trust-external</code> to <code nobreak="false">true</code>. The
             combined effect is summarized below.</p>
@@ -2268,10 +2271,15 @@ comparison or arithmetic operation. The implicit timezone is an  <termref def="d
                   </tr>
                </tbody>
             </table>
-            <p>In general, when an application requests access to an external resource which is
-         not available because the application is untrusted, the processor <rfc2119>should</rfc2119> behave
-         in the same way as if the resource did not exist. However, the processor <rfc2119>may</rfc2119>
-         choose to disclose in its diagnostics why the request was unsuccessful.</p>
+            <p>These specifications define specific error codes (see <errorref spec="FO" class="DC" code="0016"/>
+            for use when access to a resource
+            is denied for security reasons. However, in an environment where malicious access is
+            a perceived risk, processors <rfc2119>may</rfc2119> instead choose to raise errors 
+            that reveal less information:
+            perhaps a indicating only that a resource does not exist, or even
+            reporting merely that the supplied stylesheet or query cannot be processed.
+            A processor <rfc2119>may</rfc2119> also choose to disable catching of security-related errors using try/catch
+            expressions.</p>
             <p>A processor <rfc2119>may</rfc2119> (but is not <rfc2119>required</rfc2119> to)
             limit an application’s consumption of resources such as CPU cycles
          and memory when the application is untrusted.</p>
@@ -5925,6 +5933,7 @@ name.</p>
                   </change>
                   <change issue="2908" PR="2934 2972" date="2026-09-27">A distinction is made between simple record types
                   and labeled record types.</change>
+                  <change issue="2567" date="2026-11-02">A labeled record type can extend another labeled record type.</change>
                </changes>
                <p>
                   <termdef id="dt-record-type" term="record type">A <term>record type</term>
@@ -6193,6 +6202,12 @@ name.</p>
                            operator (see <specref ref="id-with-expression"/>).</p>
                      </item>
                   </ulist>
+                  <note diff="add" at="issue2567">
+                     <p>The label of a record may be a type that extends
+                  the static type of the expression that delivers it, and that declares additional fields.
+                  A lookup with a key that is not declared in the static type can therefore only be rejected statically
+                  if no such type exists.</p>
+                  </note>
                   <p>Rules defining whether one labeled record type is a <termref def="dt-subtype"/> of another
                   are given in <specref ref="id-item-subtype-labeled-records"/>.</p>
                   <div5 id="id-recursive-record-tests" diff="add" at="issue295">
@@ -8382,13 +8397,10 @@ declare record Particle (
                   <head>Subtyping of Labeled Record Types</head>
                   <p>This section describes how references to <termref def="dt-labeled-record-type">labeled record types</termref>
                   are handled when evaluating the subtype relationship.</p>
-                  <p>A labeled record type cannot be a subtype of any other labeled record type.</p>
-                  <ednote>
-                     <edtext>There is a proposal to change this by allowing one labeled record type to
-                  be explicitly derived from another.</edtext>
-                  </ednote>
-                  <p>A labeled record type is, however, a subtype of a <termref def="dt-simple-record-type"/>
-                  with the same field names and types.</p>
+                  <p diff="chg" at="issue2567">A labeled record type is a subtype of another labeled record type
+                  only if it is declared to extend it, directly or indirectly<phrase role="xquery"> (see <specref ref="id-record-extension"/>)</phrase>.
+                  It is never a subtype of a <termref def="dt-simple-record-type"/>, as records of a type that
+                  extends it may have additional fields; an individual record can still match a simple record type.</p>
                   <p>The rules are therefore defined as follows:</p>
                   <ulist>
                      <item>
@@ -8439,19 +8451,11 @@ declare record Particle (
                         <p>If <var>A</var> and <var>B</var> are both references to labeled record types, then
                         <var>A</var> ⊆ <var>B</var> is true if and only if 
                         <var>A</var> and <var>B</var>
-                        are references to the same labeled record type. (They are the same type only if they are
-                        declared in the same record type declaration.)</p>
-                     </item>
-                     <item>
-                        <p>If <var>A</var> is a reference to a labeled record type and <var>B</var>
-                           is a <termref def="dt-simple-record-type"/>, then
-                        <var>A</var> ⊆ <var>B</var> is true if <var>A</var> and <var>B</var>
-                        define the same fields with the same names and the same types.</p>
-                        <note>
-                           <p>The transitivity rules ensure that <var>A</var> is also a subtype
-                        of a simple record type whose field types are supertypes of the types
-                        defined in <var>A</var>.</p>
-                        </note>
+                        are references to the same labeled record type (they are the same type only if they are
+                        declared in the same record type declaration)<phrase diff="add" at="issue2567">, or
+                        <var>A</var> is declared to extend <var>B</var>, directly or indirectly<phrase role="xquery">
+                        (see <specref ref="id-record-extension"/>)</phrase>
+                           </phrase>.</p>
                      </item>
                   </ulist>
                   <example>
@@ -8472,21 +8476,21 @@ declare record person(
                         </item>
                         <item>
                            <p>
-                              <code nobreak="false">person ⊆ record(first, last, middle)</code>
-                           </p>
-                        </item>
-                        <item>
-                           <p>
-                              <code nobreak="false">person ⊆ record(first, middle as xs:string*, last as xs:anyAtomicType)</code>
-                           </p>
-                        </item>
-                        <item>
-                           <p>
                               <code nobreak="false">person ⊆ record(*)</code>
                            </p>
                         </item>
+                        <item>
+                           <p>
+                              <code nobreak="false">person ⊆ map(xs:string, item()*)</code>
+                           </p>
+                        </item>
+                        <item>
+                           <p>
+                              <code nobreak="false">person ⊈ record(first, middle, last)</code>
+                           </p>
+                        </item>
                      </ulist>
-                     <p>The second and third examples are true because of the transitivity rules.</p>
+                     <p>The third example is true because of the transitivity rules.</p>
                   </example>
                </div4>
             </div3>
@@ -8562,6 +8566,9 @@ declare record person(
                <change issue="1862 2972" PR="1874" date="2025-03-25">
                   The coercion rules now reorder the entries in a map when the required type is a labeled record type
                   (but not when it is a simple record type).
+               </change>
+               <change issue="2567" date="2026-11-02">
+                  A record whose label extends the required labeled record type is not converted.
                </change>
             </changes>
             <p diff="chg" at="2022-11-17">
@@ -9041,7 +9048,12 @@ declare record person(
                   </item>
                   <item diff="add" at="A">
                      <p>If <var>R</var> is the name of a <termref def="dt-labeled-record-type"/>,
-                        and <var>J</var> is a map, then <var>J</var> is converted
+                        and <var>J</var> is a map, then <phrase diff="add" at="issue2567">
+                           <var>J</var> is used
+                        unchanged if its <termref def="dt-label"/> is <var>R</var> or a type that extends <var>R</var>,
+                        directly or indirectly.
+                        Otherwise,</phrase>
+                        <var>J</var> is converted
                         to a new <termref def="dt-record"/>
                         <var>N</var> as follows:</p>
                      <olist>
@@ -9367,10 +9379,9 @@ declare record person(
                      <item>
                         <p>When function coercion is applied to a map or an array, the resulting function is not
            a map or array, and cannot be used as such. For example, the expression </p>
-                        <eg xml:space="preserve">let $f as fn(xs:integer) as xs:boolean := { 0: false(), 1: true() }
-return $f?0</eg>
+                        <eg xml:space="preserve">({ 0: false(), 1: true() } coerce as fn(xs:integer) as xs:boolean)?0</eg>
                         <p>raises a type error, because a lookup expression requires the left hand
-           operand to be a map or array, and <code nobreak="false">$f</code> is neither.</p>
+           operand to be a map or array, and the coerced function is neither.</p>
                      </item>
                      <item>
                         <p>When function types are used as alternatives in a <termref def="dt-choice-item-type"/>,
@@ -13233,27 +13244,84 @@ return $incrementors[2](4)</eg>
                   (with <var>N</var> as the context value, its position in <var>S1</var> as the context 
                   position, and the length of <var>S1</var> as the context size) for an evaluation 
                   of <var>E2</var>, as described in  <specref ref="eval_context"/>. The result of evaluating <var>E2</var> depends on which of two interpretations applies:</p>
-                     <ulist>
+                     <olist>
                         <item>
                            <p>
-                              <termdef id="dt-selector-interpretation" term="selector interpretation">If <var>N</var>
-                           is a JNode and <var>E2</var> is <emph>not</emph> a <termref def="dt-navigational"/> expression,
-                           then the <term>selector interpretation</term> applies: <var>E2</var> is interpreted as the
-                           <nt def="prod-xquery40-DynamicNodeTest">DynamicNodeTest<!--$spec = xquery40--></nt>
-                                 <code nobreak="false">{ <var>E2</var> }</code> on the child axis,
-                           as described in <specref ref="id-selectors-for-JNodes"/>. Expression <var>E2</var> is thus
-                           evaluated with an absent focus, and the result is those children of <var>N</var> whose
-                           <term>·jkey·</term> property matches its value.</termdef>
+                              <termdef id="dt-navigational-interpretation" term="navigational interpretation">The
+                           <term>navigational interpretation</term> of a path expression 
+                                 <code nobreak="false">
+                                    <var>E1</var>/<var>E2</var>
+                                 </code> 
+                                 evaluates <var>E2</var> once for
+                                 each item <var>N</var> in <var>E1</var>, with <var>N</var> 
+                                 supplying the <termref def="dt-focus"/>.</termdef>
                            </p>
+                           <p>The <termref def="dt-navigational-interpretation"/> is used if either or both
+                               of the following conditions are true:</p>
+                           <olist>
+                              <item>
+                                 <p>
+                                    <var>N</var> is an XNode.</p>
+                              </item>
+                              <item>
+                                 <p>
+                                    <var>E2</var> is a <termref def="dt-navigational"/> expression.</p>
+                              </item>
+                           </olist>
+                           <note>
+                              <p>This applies whether or not the result of <var>E2</var> actually depends
+                           on the <termref def="dt-focus"/>.</p>
+                           </note>
+                           <p>For example, the <termref def="dt-navigational-interpretation"/> applies to expressions
+                              such as <code nobreak="false">$c/dateOfBirth</code>, <code nobreak="false">$c/*</code>, and <code nobreak="false">$c/(x | y)</code>regardless
+                              whether <code nobreak="false">$c</code> is an <code nobreak="false">XNode</code> or <code nobreak="false">JNode</code>
+                              The <termref def="dt-navigational-interpretation"/> also applies to expressions
+                              such as <code nobreak="false">$n/name()</code> provided that <code nobreak="false">$n</code> is an XNode.</p>
                         </item>
                         <item>
                            <p>
-                              <termdef id="dt-navigational-interpretation" term="navigational interpretation">In all
-                           other cases the <term>navigational interpretation</term> applies: <var>E2</var> is evaluated
-                           directly, with <var>N</var> supplying the focus.</termdef>
+                              <termdef id="dt-selector-interpretation" term="selector interpretation">The 
+                                 <term>selector interpretation</term> of a path expression 
+                                 <code nobreak="false">
+                                    <var>E1</var>/<var>E2</var>
+                                 </code> evaluates <var>E2</var> 
+                                 with an absent <termref def="dt-focus"/>, and uses the result to select
+                                 from the children of <var>E1</var>.</termdef>
                            </p>
+                           <p>The <termref def="dt-selector-interpretation"/> is used when both the following
+                                 conditions are true:</p>
+                           <olist>
+                              <item>
+                                 <p>
+                                    <var>N</var> (a node selected by <var>E1</var>) is a JNode.</p>
+                              </item>
+                              <item>
+                                 <p>
+                                    <var>E2</var> is <emph>not</emph> a <termref def="dt-navigational"/> 
+                                       expression.</p>
+                              </item>
+                           </olist>
+                           <p>Under the <termref def="dt-selector-interpretation"/>, expression <var>E2</var>
+                                 is interpreted in the same way as the expression <code nobreak="false">child::{ <var>E2</var> }</code>:
+                                 that is, it applies a <nt def="prod-xquery40-DynamicNodeTest">DynamicNodeTest<!--$spec = xquery40--></nt> to the JNodes
+                                 on the child axis of <var>N</var>. The dynamic node test is evaluated as described
+                                 in <specref ref="id-selectors-for-JNodes"/>.</p>
+                           <p>In summary, this means that <var>E2</var> is evaluated with an absent <termref def="dt-focus"/>;
+                                 the result is atomized to give a sequence <var>K</var> of atomic items; and the final result
+                                 includes those children of <var>N</var> whose <term>·jkey·</term> property is equal
+                                 to some item in <var>K</var>.</p>
+                           <p>For example, the <termref def="dt-selector-interpretation"/> applies to expressions
+                              such as <code nobreak="false">$c/4</code>, <code nobreak="false">$c/"date of birth"</code>, or <code nobreak="false">$c/($x+1)</code>, assuming in each
+                              case that <code nobreak="false">$c</code> is a map, array, or JNode.</p>
+                           <note>
+                              <p>It is permitted (though not recommended) for <var>E2</var> 
+                              to evaluate to a sequence that includes
+                              both XNodes and JNodes, and in this case it is possible for the 
+                              <termref def="dt-navigational-interpretation"/> to apply to some selected nodes,
+                              and the <termref def="dt-selector-interpretation"/> to apply to others.</p>
+                           </note>
                         </item>
-                     </ulist>
+                     </olist>
                   </item>
                   <item>
                      <p>The sequences resulting from all the evaluations of <var>E2</var>
@@ -13314,6 +13382,15 @@ return $incrementors[2](4)</eg>
                   detects it. In <code nobreak="false">$x/data()</code>, where <code nobreak="false">$x</code> is declared as <code nobreak="false">item()*</code>,
                   no error is raised statically; a type error is raised at evaluation time if <code nobreak="false">$x</code>
                   delivers JNodes.</p>
+               </note>
+               <note>
+                  <p>Consider the expression <code nobreak="false">$N//product/(price - discount)</code>. If <code nobreak="false">$N</code> is an XNode,
+                  the navigational interpretation applies, and the expression is equivalent to 
+                  <code nobreak="false">$N/product/(child::price - child::discount)</code>, which returns the discounted price
+                     of each product. If <code nobreak="false">$N</code> is a JNode, however, the selector
+                  interpretation applies. The expression <code nobreak="false">(price - discount)</code> is therefore evaluated
+                  with an absent focus, which fails with a dynamic error. To achieve the required effect,
+                  write <code nobreak="false">$N//product/(?price - ?discount)</code>.</p>
                </note>
                <div4 id="effect-of-slash-with-xnodes">
                   <head>Effect of <code nobreak="false">/</code> with XNodes</head>
@@ -23201,13 +23278,12 @@ return { $persons/*/* }
                      </item>
                      <item>
                         <p>The following expression:</p>
-                        <eg xml:space="preserve">let $r as record(x, y) := { 'x': 12, 'y': 13 }
-return $r?z</eg>
-                        <p>returns the empty sequence, because <code nobreak="false">$r</code> is a map with no entry
+                        <eg xml:space="preserve">({ 'x': 12, 'y': 13 } coerce as record(x, y))?z</eg>
+                        <p>returns the empty sequence, because the coerced value is a map with no entry
                      for the key <code nobreak="false">"z"</code>. Since the key specifier does not match any of the 
                      fields in the record type <code nobreak="false">record(x, y)</code>, the lookup is <termref def="dt-implausible"/>,
                      and a processor may report a static error (see <specref ref="id-implausible-expressions"/>). 
-                     If the variable is declared with a <termref def="dt-labeled-record-type"/> instead, 
+                     If the value is coerced to a <termref def="dt-labeled-record-type"/> instead,
                            the lookup raises a type error <errorref spec="XP" class="TY" code="0004"/>.</p>
                      </item>
                   </ulist>
@@ -23377,8 +23453,7 @@ return $r?z</eg>
             it has an appropriate <term>·jvalue·</term>.</p>
                <p>If <var>R</var> is the label of the left-hand operand, then the effect
             of the expression <code nobreak="false">$A but with $B</code> is equivalent to:</p>
-               <eg xml:space="preserve">let $temp as <var>R</var> := map:merge(($A, $B), { 'duplicates': 'use-last' })
-return $temp</eg>
+               <eg xml:space="preserve">map:merge(($A, $B), { 'duplicates': 'use-last' }) coerce as <var>R</var></eg>
                <p>That is: the values of the two operands are merged as maps, with the value from the second
             operand taking precedence in the case of duplicates; the result is then coerced to the record
             type defined by the <termref def="dt-label"/> of the first operand, raising a type error if the result
@@ -23574,7 +23649,10 @@ return $map?<var>N</var>($map, <var>X</var>, <var>Y</var>, ...)</eg>
                      exposed.</p>
                      </item>
                      <item>
-                        <p>There is no class hierarchy, and no inheritance or overriding.</p>
+                        <p diff="chg" at="issue2567">Inheritance is limited to labeled record types: a labeled record type
+                        can extend a single other labeled record type, inheriting its fields (including its methods)
+                        and redeclaring its static fields<phrase role="xquery">; see <specref ref="id-record-extension"/>
+                           </phrase>.</p>
                      </item>
                      <item>
                         <p>Methods within a map can be removed or replaced in the same way as
@@ -24542,7 +24620,7 @@ return try {
             <p>
 The <code nobreak="false">instance
 of</code>, <code nobreak="false">cast</code>, <code nobreak="false">castable</code>,
-and <code nobreak="false">treat</code> expressions are used to test whether a value
+<code nobreak="false">treat</code>, and <code nobreak="false">coerce</code> expressions are used to test whether a value
 conforms to a given type or to convert it to an instance of a given
 type.
 </p>
@@ -24558,7 +24636,7 @@ type.
                   <prod id="doc-xquery40-InstanceofExpr-TreatExpr">
                      <lhs>TreatExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-CastableExpr">CastableExpr<!--$idref_lang_part = xquery40- --></nt>  ("treat"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                        <nt def="prod-xquery40-CoerceExpr">CoerceExpr<!--$idref_lang_part = xquery40- --></nt>  ("treat"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="doc-xquery40-InstanceofExpr-SequenceType">
@@ -25302,6 +25380,11 @@ input expression is called the <term>input type</term>. </p>
                   cause a type error.</p></note>-->
                   <p>For example, <code nobreak="false">{ "first": "John", "middle": "Ignatius", "last": "Smith" } cast as record(title, first, last)</code> returns 
                   <code nobreak="false">{ "first": "John", "last": "Smith", "title": () }</code>.</p>
+                  <note diff="add" at="issue2567" role="xquery">
+                     <p>Casting a record to a labeled record type that its
+                  label extends (see <specref ref="id-record-extension"/>) creates a new record of the target
+                  type: the additional fields are discarded. Coercion, by contrast, returns such a record unchanged.</p>
+                  </note>
                </div4>
             </div3>
             <div3 id="id-castable">
@@ -25583,13 +25666,13 @@ usa:zipcode?)</code>.</p>
                   <prod id="doc-xquery40-TreatExpr">
                      <lhs>TreatExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-CastableExpr">CastableExpr<!--$idref_lang_part = xquery40- --></nt>  ("treat"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                        <nt def="prod-xquery40-CoerceExpr">CoerceExpr<!--$idref_lang_part = xquery40- --></nt>  ("treat"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
-                  <prod id="doc-xquery40-TreatExpr-CastableExpr">
-                     <lhs>CastableExpr</lhs>
+                  <prod id="doc-xquery40-TreatExpr-CoerceExpr">
+                     <lhs>CoerceExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-CastExpr">CastExpr<!--$idref_lang_part = xquery40- --></nt>  ("castable"  "as"  <nt def="prod-xquery40-CastTarget">CastTarget<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                        <nt def="prod-xquery40-CastableExpr">CastableExpr<!--$idref_lang_part = xquery40- --></nt>  ("coerce"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="doc-xquery40-TreatExpr-SequenceType">
@@ -25642,6 +25725,60 @@ raised <errorref class="DY" code="0050"/>.</p>
              the error statically in the case of an expression (such as <code nobreak="false">3 treat as xs:string</code>)
              which can never succeed. However, the error code remains unchanged, for compatibility.</p>
                </note>
+            </div3>
+            <div3 id="id-coerce">
+               <head>Coerce</head>
+               <changes>
+                  <change issue="3043" date="2026-11-04">The <code nobreak="false">coerce as</code> expression applies
+               the coercion rules explicitly.</change>
+               </changes>
+               <scrap headstyle="show">
+                  <prod id="doc-xquery40-CoerceExpr">
+                     <lhs>CoerceExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xquery40-CastableExpr">CastableExpr<!--$idref_lang_part = xquery40- --></nt>  ("coerce"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                  </prod>
+
+                  <prod id="doc-xquery40-CoerceExpr-CastableExpr">
+                     <lhs>CastableExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xquery40-CastExpr">CastExpr<!--$idref_lang_part = xquery40- --></nt>  ("castable"  "as"  <nt def="prod-xquery40-CastTarget">CastTarget<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                  </prod>
+
+                  <prod id="doc-xquery40-CoerceExpr-SequenceType">
+                     <lhs>SequenceType</lhs>
+                     <rhs>("empty-sequence"  "("  ")")<br/>|  (<nt def="prod-xquery40-ItemType">ItemType<!--$idref_lang_part = xquery40- --></nt>
+                        <nt def="prod-xquery40-OccurrenceIndicator">OccurrenceIndicator<!--$idref_lang_part = xquery40- --></nt>?)</rhs>
+                  </prod>
+               </scrap>
+               <p>The expression <code nobreak="false">
+                     <var>E</var> coerce as <var>T</var>
+                  </code>
+            evaluates the subexpression <var>E</var> to produce a value <var>V</var>,
+            and then converts <var>V</var> to the <termref def="dt-sequence-type"/>
+                  <var>T</var>
+            by applying the <termref def="dt-coercion-rules"/>. The result of the expression is the
+            converted value; if <var>V</var> cannot be converted, a type error is raised.</p>
+               <p>The result of the expression is equivalent to:</p>
+               <eg xml:space="preserve">let $V as <var>T</var> := <var>E</var>
+return $V</eg>
+               <ulist>
+                  <item>
+                     <p>
+                        <code role="parse-test" nobreak="false">{ 'a': 1 } coerce as record(a as xs:double)</code>
+                  returns <code nobreak="false">{ 'a': 1.0e0 }</code>.</p>
+                  </item>
+                  <item>
+                     <p>
+                        <code role="parse-test" nobreak="false">(1, 2) coerce as xs:double+</code>
+                  returns <code nobreak="false">(1.0e0, 2.0e0)</code>.</p>
+                  </item>
+                  <item>
+                     <p>
+                        <code role="parse-test" nobreak="false">{ 'b': 1 } coerce as record(a)</code>
+                  raises a type error <errorref class="TY" code="0004"/>.</p>
+                  </item>
+               </ulist>
             </div3>
          </div2>
          <div2 id="id-pipeline-operator">
@@ -26673,7 +26810,7 @@ raise a <termref def="dt-static-error">static error</termref>.</p>
 
             <prod id="doc-xquery40-Module-LabeledRecordTypeDecl">
                <lhs>LabeledRecordTypeDecl</lhs>
-               <rhs>"declare"  <nt def="prod-xquery40-Annotation">Annotation<!--$idref_lang_part = xquery40- --></nt>*  "record"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>  "("  (<nt def="prod-xquery40-LabeledFieldDecl">LabeledFieldDecl<!--$idref_lang_part = xquery40- --></nt> ** ",")  ")"  ("where"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+               <rhs>"declare"  <nt def="prod-xquery40-Annotation">Annotation<!--$idref_lang_part = xquery40- --></nt>*  "record"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>  ("extends"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>)?  "("  (<nt def="prod-xquery40-LabeledFieldDecl">LabeledFieldDecl<!--$idref_lang_part = xquery40- --></nt> ** ",")  ")"  ("where"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
             </prod>
 
             <prod id="doc-xquery40-Module-OptionDecl">
@@ -27035,6 +27172,8 @@ raise a <termref def="dt-static-error">static error</termref>.</p>
         URI</termref> property is <xtermref spec="DM40" ref="dt-absent"/>, any attempt to use its
       value to <termref def="dt-resolve-relative-uri">resolve a relative URI reference</termref>
       will result in an error <errorref class="ST" code="0001"/>. </p>
+            <p>For security reasons a processor <rfc2119>may</rfc2119> restrict the ability of a 
+      query to define an arbitrary static base URI.</p>
          </div2>
          <div2 id="id-construction-declaration">
             <head>Construction Declaration</head>
@@ -29037,6 +29176,9 @@ local:depth(doc("partlist.xml"))
                <change issue="2933" PR="3016" date="2026-11-03">
          Integrity constraints can be defined for labeled record types.
       </change>
+               <change issue="2567" date="2026-11-02">
+        A labeled record type can extend another labeled record type.
+      </change>
             </changes>
             <p>Although item type declarations, as described in <specref ref="id-item-type-declaration"/>, can be
     used to give names to record types as well as any other item type, 
@@ -29054,12 +29196,16 @@ local:depth(doc("partlist.xml"))
                   <p>A field in a labeled record type can be a function that has implicit access to
       the record on which it is defined, rather like methods in object-oriented languages.</p>
                </item>
+               <item>
+                  <p>A labeled record type can extend another labeled record type, inheriting its fields
+        and becoming a subtype of it.</p>
+               </item>
             </ulist>
             <p>The syntax is as follows:</p>
             <scrap headstyle="show">
                <prod id="doc-xquery40-LabeledRecordTypeDecl">
                   <lhs>LabeledRecordTypeDecl</lhs>
-                  <rhs>"declare"  <nt def="prod-xquery40-Annotation">Annotation<!--$idref_lang_part = xquery40- --></nt>*  "record"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>  "("  (<nt def="prod-xquery40-LabeledFieldDecl">LabeledFieldDecl<!--$idref_lang_part = xquery40- --></nt> ** ",")  ")"  ("where"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                  <rhs>"declare"  <nt def="prod-xquery40-Annotation">Annotation<!--$idref_lang_part = xquery40- --></nt>*  "record"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>  ("extends"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>)?  "("  (<nt def="prod-xquery40-LabeledFieldDecl">LabeledFieldDecl<!--$idref_lang_part = xquery40- --></nt> ** ",")  ")"  ("where"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                </prod>
 
                <prod id="doc-xquery40-LabeledRecordTypeDecl-Annotation">
@@ -29218,6 +29364,7 @@ declare %public function cx:complex(
                   <item>
                      <p>The order of field declarations determines the order of
        arguments in a call to the constructor function, as well as the order of entries
+
        in the underlying map.</p>
                   </item>
                   <item>
@@ -29285,6 +29432,90 @@ declare %public function cx:complex(
          error may be raised statically or dynamically.</p>
                   </item>
                </ulist>
+            </div3>
+            <div3 id="id-record-extension" diff="add" at="issue2567">
+               <head>Extending Labeled Record Types</head>
+               <p>
+                  <termdef id="dt-derived-record-type" term="derived record type">A labeled record type declared
+        with the keyword <code nobreak="false">extends</code> is a <term>derived record type</term>.</termdef>
+                  <termdef id="dt-base-record-type" term="base record type">The <term>base record type</term> of a
+        derived record type is the record type identified by the <nt def="doc-xquery40-EQName">EQName<!--$spec = xquery40--></nt> that follows
+        the keyword.</termdef> The name is expanded using the <termref def="dt-default-type-namespace-rule"/>.
+        It must identify a <termref def="dt-labeled-record-type"/> in the static context
+        <errorref class="ST" code="0155"/>.</p>
+               <p>The fields of the derived record type are the fields of the base record type, in their declared order
+        (including fields that the base record type itself inherits), followed by the fields in the
+        declaration. All rules in <specref ref="id-named-record-types"/> that refer to the fields of a labeled record type,
+        including the requirement for distinct names and the derivation of the constructor function,
+        apply to this combined list, with two exceptions:</p>
+               <ulist>
+                  <item>
+                     <p>The rule that a field with an initializing expression must only be followed by fields
+          with an initializing expression <errorref class="ST" code="0148"/> applies to the fields in the
+          declaration only.</p>
+                  </item>
+                  <item>
+                     <p>A field in the declaration may have the same name as a field of the base record type
+          if both fields are declared <code nobreak="false">%static</code>. The field then replaces the inherited field
+          at its position, and its initializing expression supplies the value of the field in instances
+          of the derived record type. If no type is declared for the field, it has the declared type
+          of the inherited field; otherwise, its declared type must be a subtype of the declared type of the
+          inherited field <errorref class="ST" code="0155"/>.</p>
+                  </item>
+               </ulist>
+               <p>A labeled record type must not extend itself, either directly or
+        indirectly <errorref class="ST" code="0155"/>.</p>
+               <p>The derived record type is a <termref def="dt-subtype"/> of the base record type; see
+        <specref ref="id-item-subtype-labeled-records"/>. A record whose <termref def="dt-label"/>
+        is the derived record type can therefore be supplied wherever an instance of the base
+        record type is expected, and it keeps its label.</p>
+               <p>A map is only labeled as an instance of the derived record type if it
+        <termref def="dt-integrity-constraint-satisfied">satisfies</termref> the integrity constraints
+        of the derived record type and of all its base record types, directly or indirectly
+        (see <specref ref="id-integrity-constraints"/>).</p>
+               <p>For example, given the declarations:</p>
+               <eg xml:space="preserve">declare record geo:point(x as xs:double, y as xs:double);
+declare record geo:point3d extends geo:point(z as xs:double := 0);</eg>
+               <p>the constructor function of <code nobreak="false">geo:point3d</code> is equivalent to:</p>
+               <eg xml:space="preserve">declare function geo:point3d($x as xs:double,
+  $y as xs:double,
+  $z as xs:double := 0
+) as geo:point3d {
+  { "x": $x, "y": $y, "z": $z }
+};</eg>
+               <p>and the following expressions are all true:</p>
+               <eg xml:space="preserve">geo:point3d(1, 2) instance of geo:point3d
+geo:point3d(1, 2) instance of geo:point
+geo:point3d(1, 2)?z = 0
+not(geo:point(1, 2) instance of geo:point3d)</eg>
+               <p>A declaration that adds a field without an initializing expression:</p>
+               <eg xml:space="preserve">declare record geo:place extends geo:point3d(name as xs:string);</eg>
+               <p>results in a constructor function with the parameters <code nobreak="false">$x</code>, <code nobreak="false">$y</code>,
+        <code nobreak="false">$name</code> and <code nobreak="false">$z</code>, in this order, so that <code nobreak="false">geo:place(1, 2, "Origin")</code>
+        returns <code nobreak="false">{ "x": 1e0, "y": 2e0, "z": 0e0, "name": "Origin" }</code>, and
+        <code nobreak="false">geo:place(1, 2, "Origin", 5)</code> returns <code nobreak="false">{ "x": 1e0, "y": 2e0, "z": 5e0, "name": "Origin" }</code>:
+        the order of the arguments differs from the order of the entries.</p>
+               <p>A derived record type that declares no fields of its own, but an integrity constraint,
+        restricts the values of its base record type. With the declaration:</p>
+               <eg xml:space="preserve">declare record geo:unit-point extends geo:point() where ?x × ?x + ?y × ?y = 1;</eg>
+               <p>the call <code nobreak="false">geo:unit-point(0, 1)</code> returns a record that is an instance of both
+        <code nobreak="false">geo:unit-point</code> and <code nobreak="false">geo:point</code>, whereas <code nobreak="false">geo:unit-point(1, 1)</code>
+        fails.</p>
+               <p>Static fields are inherited along with all other fields. Redeclaring a static field allows
+        a <termref def="dt-method"/> to behave differently for records of the derived record type:</p>
+               <eg xml:space="preserve">declare record geo:shape(
+  %static area as fn(geo:shape) as xs:double := fn { 0 }
+);
+declare record geo:circle extends geo:shape(
+  radius as xs:double,
+  %static area := fn { math:pi() × ?radius × ?radius }
+);
+declare record geo:square extends geo:shape(
+  side as xs:double,
+  %static area := fn { ?side × ?side }
+);</eg>
+               <p>The expression <code nobreak="false">(geo:circle(1), geo:square(2)) =?&gt; area()</code> returns
+        <code nobreak="false">(3.141592653589793e0, 4e0)</code>.</p>
             </div3>
             <div3 id="id-functions-as-fields">
                <head>Using Methods in Records</head>
@@ -30381,6 +30612,12 @@ parent. </p>
                      <rhs>"("  (<nt def="prod-xquery40-ItemType">ItemType<!--$idref_lang_part = xquery40- --></nt> ++ "|")  ")"</rhs>
                   </prod>
 
+                  <prod id="prod-xquery40-CoerceExpr">
+                     <lhs>CoerceExpr</lhs>
+                     <rhs>
+                        <nt def="prod-xquery40-CastableExpr">CastableExpr<!--$idref_lang_part = xquery40- --></nt>  ("coerce"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                  </prod>
+
                   <prod id="prod-xquery40-CommentNodeType">
                      <lhs>CommentNodeType</lhs>
                      <rhs>"comment"  "("  ")"</rhs>
@@ -30965,7 +31202,7 @@ parent. </p>
 
                   <prod id="prod-xquery40-LabeledRecordTypeDecl">
                      <lhs>LabeledRecordTypeDecl</lhs>
-                     <rhs>"declare"  <nt def="prod-xquery40-Annotation">Annotation<!--$idref_lang_part = xquery40- --></nt>*  "record"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>  "("  (<nt def="prod-xquery40-LabeledFieldDecl">LabeledFieldDecl<!--$idref_lang_part = xquery40- --></nt> ** ",")  ")"  ("where"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                     <rhs>"declare"  <nt def="prod-xquery40-Annotation">Annotation<!--$idref_lang_part = xquery40- --></nt>*  "record"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>  ("extends"  <nt def="prod-xquery40-EQName">EQName<!--$idref_lang_part = xquery40- --></nt>)?  "("  (<nt def="prod-xquery40-LabeledFieldDecl">LabeledFieldDecl<!--$idref_lang_part = xquery40- --></nt> ** ",")  ")"  ("where"  <nt def="prod-xquery40-ExprSingle">ExprSingle<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-LetArrayBinding">
@@ -31629,7 +31866,7 @@ parent. </p>
                   <prod id="prod-xquery40-TreatExpr">
                      <lhs>TreatExpr</lhs>
                      <rhs>
-                        <nt def="prod-xquery40-CastableExpr">CastableExpr<!--$idref_lang_part = xquery40- --></nt>  ("treat"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
+                        <nt def="prod-xquery40-CoerceExpr">CoerceExpr<!--$idref_lang_part = xquery40- --></nt>  ("treat"  "as"  <nt def="prod-xquery40-SequenceType">SequenceType<!--$idref_lang_part = xquery40- --></nt>)?</rhs>
                   </prod>
 
                   <prod id="prod-xquery40-TryCatchExpr">
@@ -32411,6 +32648,7 @@ parent. </p>
                      <code>castable</code>
                      <code>catch</code>
                      <code>child</code>
+                     <code>coerce</code>
                      <code>collation</code>
                      <code>comment</code>
                      <code>construction</code>
@@ -32439,6 +32677,7 @@ parent. </p>
                      <code>every</code>
                      <code>except</code>
                      <code>exponent-separator</code>
+                     <code>extends</code>
                      <code>external</code>
                      <code>false</code>
                      <code>finally</code>
@@ -33129,6 +33368,7 @@ parent. </p>
                      <code>castable</code>
                      <code>catch</code>
                      <code>child</code>
+                     <code>coerce</code>
                      <code>collation</code>
                      <code>comment</code>
                      <code>construction</code>
@@ -33157,6 +33397,7 @@ parent. </p>
                      <code>every</code>
                      <code>except</code>
                      <code>exponent-separator</code>
+                     <code>extends</code>
                      <code>external</code>
                      <code>false</code>
                      <code>finally</code>
@@ -33620,54 +33861,61 @@ parent. </p>
                   <tr>
                      <td rowspan="1" colspan="1">16</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xquery40-CastableExpr">castable as<!--$spec = xquery40--></nt>
+                        <nt def="doc-xquery40-CoerceExpr">coerce as<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">NA</td>
                   </tr>
                   <tr>
                      <td rowspan="1" colspan="1">17</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xquery40-CastExpr">cast as<!--$spec = xquery40--></nt>
+                        <nt def="doc-xquery40-CastableExpr">castable as<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">NA</td>
                   </tr>
                   <tr>
                      <td rowspan="1" colspan="1">18</td>
                      <td rowspan="1" colspan="1">
-                        <nt def="doc-xquery40-PipelineExpr">-&gt;<!--$spec = xquery40--></nt>
+                        <nt def="doc-xquery40-CastExpr">cast as<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">NA</td>
                   </tr>
                   <tr>
                      <td rowspan="1" colspan="1">19</td>
                      <td rowspan="1" colspan="1">
+                        <nt def="doc-xquery40-PipelineExpr">-&gt;<!--$spec = xquery40--></nt>
+                     </td>
+                     <td rowspan="1" colspan="1">NA</td>
+                  </tr>
+                  <tr>
+                     <td rowspan="1" colspan="1">20</td>
+                     <td rowspan="1" colspan="1">
                         <nt def="doc-xquery40-ArrowExpr">=&gt;, =!&gt;<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">20</td>
+                     <td rowspan="1" colspan="1">21</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xquery40-UnaryExpr">-, + (unary)<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">right-to-left</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">21</td>
+                     <td rowspan="1" colspan="1">22</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xquery40-SimpleMapExpr">!<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">22</td>
+                     <td rowspan="1" colspan="1">23</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xquery40-PathExpr">/, //<!--$spec = xquery40--></nt>
                      </td>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">23</td>
+                     <td rowspan="1" colspan="1">24</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xquery40-Predicate">a[b]<!--$spec = xquery40--></nt>, <nt def="prod-xquery40-Lookup">a?b<!--$spec = xquery40--></nt>,
             <nt def="doc-xquery40-DynamicFunctionCall">a(b)<!--$spec = xquery40--></nt>, <nt def="doc-xquery40-MethodCall">=?&gt;<!--$spec = xquery40--></nt>
@@ -33675,7 +33923,7 @@ parent. </p>
                      <td rowspan="1" colspan="1">left-to-right</td>
                   </tr>
                   <tr>
-                     <td rowspan="1" colspan="1">24</td>
+                     <td rowspan="1" colspan="1">25</td>
                      <td rowspan="1" colspan="1">
                         <nt def="doc-xquery40-UnaryLookup">? (unary)<!--$spec = xquery40--></nt>
                      </td>
@@ -35946,202 +36194,18 @@ It is a static error if the name of a feature in
                <p>It is a <termref def="dt-static-error">static error</termref> 
             if a <nt def="prod-xquery40-URIQualifiedName">URIQualifiedName<!--$spec = xquery40--></nt> includes a prefix but no URI.</p>
             </error>
+            <error spec="XQ"
+                   role="xquery"
+                   code="0155"
+                   class="ST"
+                   type="static">
+               <p>It is a <termref def="dt-static-error">static error</termref> if the name following
+            <code nobreak="false">extends</code> in a labeled record declaration does not identify a
+            <termref def="dt-labeled-record-type"/>, if a labeled record type extends itself,
+            directly or indirectly, or if the declared type of a redeclared static field is not
+            a subtype of the declared type of the inherited field.</p>
+            </error>
          </error-list>
-      </div1>
-      <div1 role="xquery" id="id-mime-type">
-         <head>The <code nobreak="false">application/xquery</code> Media Type</head>
-         <p>This Appendix 
-
-    specifies the media type for XQuery Version 1.0.  XQuery is a language for querying over
-
-    collections of data from XML data sources, as specified in the main body of this document. This media type is being 
-
-submitted to the IESG (Internet Engineering Steering Group)
-
-for review, approval, and registration with IANA (Internet Assigned Numbers
-
-Authority.)</p>
-         <div2 id="id-mime-type-intro">
-            <head>Introduction</head>
-            <p>
-
-	This document, found at
-
-	<loc xmlns:xlink="http://www.w3.org/1999/xlink"
-                    href="http://www.w3.org/TR/xquery/"
-                    role="xquery"
-                    xlink:type="simple"
-                    xlink:show="replace"
-                    xlink:actuate="onRequest">http://www.w3.org/TR/xquery/</loc>,
-
-	together with its normative references,  defines the language XQuery Version 1.0.  This Appendix
-
-      provides information about the <code nobreak="false">application/xquery</code> media type,
-
-      which is intended to be used for transmitting queries written in the
-
-      XQuery language.</p>
-            <p>This document was prepared by members of the W3C XML Query Working
-
-      Group.  Please send comments to public-qt-comments@w3.org,
-
-      a public mailing list with archives at
-
-      <loc xmlns:xlink="http://www.w3.org/1999/xlink"
-                    href="http://lists.w3.org/Archives/Public/public-qt-comments"
-                    xlink:type="simple"
-                    xlink:show="replace"
-                    xlink:actuate="onRequest">http://lists.w3.org/Archives/Public/public-qt-comments</loc>.</p>
-         </div2>
-         <div2 id="id-registration-of-mime-type">
-            <head>Registration of MIME Media Type <code nobreak="false">application/xquery</code>
-            </head>
-            <p>MIME media type name:  <code nobreak="false">application</code>
-            </p>
-            <p>MIME subtype name:    <code nobreak="false">xquery</code>
-            </p>
-            <p>Required parameters:  none</p>
-            <p>Optional parameters: none</p>
-            <p>The syntax of XQuery is expressed in Unicode but may be written
-
-	with any Unicode-compatible character encoding, including UTF-8 or
-
-	UTF-16, or transported as US-ASCII or ISO-8859-1 with Unicode
-
-	characters outside the range of the given encoding represented using
-
-	an XML-style <code nobreak="false">&amp;#xddd;</code> syntax.</p>
-            <div3 id="id-interoperability-considerations">
-               <head>Interoperability Considerations</head>
-               <p>None known.</p>
-            </div3>
-            <div3 id="id-applications-of-media-type">
-               <head>Applications Using this Media Type</head>
-               <p>The public
-
-	  <loc xmlns:xlink="http://www.w3.org/1999/xlink"
-                       href="http://www.w3.org/XML/Query/"
-                       xlink:type="simple"
-                       xlink:show="replace"
-                       xlink:actuate="onRequest">XQuery Web page</loc>
-
-	  lists more than two dozen implementations of the XQuery language,
-
-	  both proprietary and open source.</p>
-               <p>This <phrase diff="del" at="2014-12-05">new</phrase> media
-	type is <phrase diff="del" at="2014-12-05">being</phrase>
-	registered to allow for deployment of XQuery on the World Wide
-	Web.</p>
-            </div3>
-            <div3 id="id-file-extensions">
-               <head>File Extensions</head>
-               <p>The most common file extensions in use for XQuery are
-
-	  <code nobreak="false">.xq</code> and <code nobreak="false">.xquery</code>.</p>
-               <p>The appropriate Macintosh file type code is <code nobreak="false">TEXT</code>.</p>
-            </div3>
-            <div3 id="id-intended-usage">
-               <head>Intended Usage</head>
-               <p>The intended usage of this media type is for interchange
-
-	of XQuery expressions.</p>
-            </div3>
-            <div3 id="id-author-change-controller">
-               <head>Author/Change Controller</head>
-               <p>XQuery was produced by, and is maintained by, the World Wide Web
-
-	Consortium’s XML Query Working Group.  The W3C has change
-
-	control over this specification.</p>
-            </div3>
-         </div2>
-         <div2 id="xquery-mime-encoding">
-            <head>Encoding Considerations</head>
-            <p>For use with transports that are not 8-bit clean, quoted-printable
-
-    encoding is recommended since the XQuery syntax itself uses the
-
-    US-ASCII-compatible subset of Unicode.</p>
-            <p>An XQuery document may contain an <termref def="dt-encoding-declaration">encoding 
-
-declaration</termref> as part of its <termref def="dt-version-declaration">version declaration</termref>:</p>
-            <eg role="frag-prolog-parse-test" xml:space="preserve">xquery version "3.1" encoding "utf-8";</eg>
-         </div2>
-         <div2 id="xquery-mime-recognizing">
-            <head>Recognizing XQuery Files</head>
-            <p>An XQuery file may have the string <code nobreak="false">xquery version "V.V"</code> near the
-
-    beginning of the document, where <code nobreak="false">"V.V"</code> is a version number.
-
-    Currently the version number, if present, must be <code nobreak="false">"1.0"</code>
-               <phrase diff="add" at="2014-12-05">, <code nobreak="false">"3.0"</code>, or <code nobreak="false">"3.1"</code>
-               </phrase>.</p>
-         </div2>
-         <div2 id="id-charset-default-rules">
-            <head>Charset Default Rules</head>
-            <p>XQuery documents use the Unicode character set and, by default, the UTF-8 encoding.</p>
-         </div2>
-         <div2 id="id-security-considerations">
-            <head>Security Considerations</head>
-            <p>Queries written in XQuery may cause arbitrary URIs or IRIs to be
-
-    dereferenced.  Therefore, the security issues of <bibref ref="RFC3987"/> Section 8 should be considered.
-
-    In addition, the contents of resources identified by  <code nobreak="false">file:</code> URIs can in some cases be
-
-    accessed, processed and returned as results. XQuery expressions can invoke any of the functions defined in
-
-<bibref ref="xpath-functions-40"/>. For example, the
-
-<code nobreak="false">fn:doc()</code> and <code nobreak="false">fn:doc-available()</code> functions  allow local filesystem probes as well as
-
-access to any URI-defined resource accessible from the system
-
-evaluating the XQuery expression.
-
-<phrase diff="add" at="bug 30027">
-The <code nobreak="false">fn:transform()</code> function allows calls to URI-identified
-XSLT transformations which may in turn call external extension functions
-and access or write to the file system. The <code nobreak="false">fn:transform()</code> function
-should be sandboxed or disabled if untrusted queries are run.
-</phrase>
-            </p>
-            <p>XQuery is a full declarative programming language, and supports
-
-user-defined functions, external function libraries (modules)
-
-referenced by URI, and system-specific “native” functions.</p>
-            <p>Arbitrary recursion is possible, as is arbitrarily large
-
-memory usage, and implementations may place limits on CPU
-
-and memory usage, as well as restricting access to system-defined
-
-functions.
-
-</p>
-            <p diff="del" at="2014-12-05">The XML Query Working group is working on a facility to
-
-    allow XQuery expressions to create and update 
-
-    persistent data.  Untrusted queries should not be given write
-
-    access to data.</p>
-            <p diff="add" at="2014-12-05">
-      The optional XQuery Update Facility allows XQuery expressions to
-      create and update persistent data, potentially including writing
-      to arbitrary locations on the local filesystem as well as to
-      remote URIs. Untrusted queries should not be given write access
-      to data.
-    </p>
-            <p>Furthermore, because the XQuery language permits extensions, 
-
-    it is possible that <code nobreak="false">application/xquery</code>
-
-    may describe content that has
-
-    security implications beyond those described here.</p>
-         </div2>
       </div1>
       <inform-div1 id="id-glossary">
          <head>Glossary</head>
