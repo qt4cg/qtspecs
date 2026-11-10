@@ -61,7 +61,7 @@ declare function gradle($args as xs:string*) as xs:string {
 };
 
 (:~
- : Renders all specifications (gradle tasks named *_html) and records the state of the sources.
+ : Renders all specifications (public gradle tasks named *_html) and records the state of the sources.
  : @param $state state of the sources
  : @return log message
  :)
