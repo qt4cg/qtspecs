@@ -5609,6 +5609,7 @@ name.</p>
                   </change>
                   <change issue="2908" PR="2934 2972" date="2026-09-27">A distinction is made between simple record types
                   and labeled record types.</change>
+                  <change issue="2567" date="2026-11-02">A labeled record type can extend another labeled record type.</change>
                </changes>
                <p>
                   <termdef id="dt-record-type" term="record type">A <term>record type</term>
@@ -5866,6 +5867,12 @@ name.</p>
                            operator (see <specref ref="id-with-expression"/>).</p>
                      </item>
                   </ulist>
+                  <note diff="add" at="issue2567">
+                     <p>The label of a record may be a type that extends
+                  the static type of the expression that delivers it, and that declares additional fields.
+                  A lookup with a key that is not declared in the static type can therefore only be rejected statically
+                  if no such type exists.</p>
+                  </note>
                   <p>Rules defining whether one labeled record type is a <termref def="dt-subtype"/> of another
                   are given in <specref ref="id-item-subtype-labeled-records"/>.</p>
                   <div5 id="id-recursive-record-tests" diff="add" at="issue295">
@@ -8031,13 +8038,10 @@ declare record Particle (
                   <head>Subtyping of Labeled Record Types</head>
                   <p>This section describes how references to <termref def="dt-labeled-record-type">labeled record types</termref>
                   are handled when evaluating the subtype relationship.</p>
-                  <p>A labeled record type cannot be a subtype of any other labeled record type.</p>
-                  <ednote>
-                     <edtext>There is a proposal to change this by allowing one labeled record type to
-                  be explicitly derived from another.</edtext>
-                  </ednote>
-                  <p>A labeled record type is, however, a subtype of a <termref def="dt-simple-record-type"/>
-                  with the same field names and types.</p>
+                  <p diff="chg" at="issue2567">A labeled record type is a subtype of another labeled record type
+                  only if it is declared to extend it, directly or indirectly.
+                  It is never a subtype of a <termref def="dt-simple-record-type"/>, as records of a type that
+                  extends it may have additional fields; an individual record can still match a simple record type.</p>
                   <p>The rules are therefore defined as follows:</p>
                   <ulist>
                      <item>
@@ -8088,19 +8092,9 @@ declare record Particle (
                         <p>If <var>A</var> and <var>B</var> are both references to labeled record types, then
                         <var>A</var> ⊆ <var>B</var> is true if and only if 
                         <var>A</var> and <var>B</var>
-                        are references to the same labeled record type. (They are the same type only if they are
-                        declared in the same record type declaration.)</p>
-                     </item>
-                     <item>
-                        <p>If <var>A</var> is a reference to a labeled record type and <var>B</var>
-                           is a <termref def="dt-simple-record-type"/>, then
-                        <var>A</var> ⊆ <var>B</var> is true if <var>A</var> and <var>B</var>
-                        define the same fields with the same names and the same types.</p>
-                        <note>
-                           <p>The transitivity rules ensure that <var>A</var> is also a subtype
-                        of a simple record type whose field types are supertypes of the types
-                        defined in <var>A</var>.</p>
-                        </note>
+                        are references to the same labeled record type (they are the same type only if they are
+                        declared in the same record type declaration)<phrase diff="add" at="issue2567">, or
+                        <var>A</var> is declared to extend <var>B</var>, directly or indirectly</phrase>.</p>
                      </item>
                   </ulist>
                   <example>
@@ -8121,21 +8115,21 @@ declare record person(
                         </item>
                         <item>
                            <p>
-                              <code nobreak="false">person ⊆ record(first, last, middle)</code>
-                           </p>
-                        </item>
-                        <item>
-                           <p>
-                              <code nobreak="false">person ⊆ record(first, middle as xs:string*, last as xs:anyAtomicType)</code>
-                           </p>
-                        </item>
-                        <item>
-                           <p>
                               <code nobreak="false">person ⊆ record(*)</code>
                            </p>
                         </item>
+                        <item>
+                           <p>
+                              <code nobreak="false">person ⊆ map(xs:string, item()*)</code>
+                           </p>
+                        </item>
+                        <item>
+                           <p>
+                              <code nobreak="false">person ⊈ record(first, middle, last)</code>
+                           </p>
+                        </item>
                      </ulist>
-                     <p>The second and third examples are true because of the transitivity rules.</p>
+                     <p>The third example is true because of the transitivity rules.</p>
                   </example>
                </div4>
             </div3>
@@ -8165,6 +8159,9 @@ declare record person(
                <change issue="1862 2972" PR="1874" date="2025-03-25">
                   The coercion rules now reorder the entries in a map when the required type is a labeled record type
                   (but not when it is a simple record type).
+               </change>
+               <change issue="2567" date="2026-11-02">
+                  A record whose label extends the required labeled record type is not converted.
                </change>
             </changes>
             <p diff="chg" at="2022-11-17">
@@ -8691,7 +8688,12 @@ declare record person(
                   </item>
                   <item diff="add" at="A">
                      <p>If <var>R</var> is the name of a <termref def="dt-labeled-record-type"/>,
-                        and <var>J</var> is a map, then <var>J</var> is converted
+                        and <var>J</var> is a map, then <phrase diff="add" at="issue2567">
+                           <var>J</var> is used
+                        unchanged if its <termref def="dt-label"/> is <var>R</var> or a type that extends <var>R</var>,
+                        directly or indirectly.
+                        Otherwise,</phrase>
+                        <var>J</var> is converted
                         to a new <termref def="dt-record"/>
                         <var>N</var> as follows:</p>
                      <olist>
@@ -20478,7 +20480,9 @@ return $map?<var>N</var>($map, <var>X</var>, <var>Y</var>, ...)</eg>
                      exposed.</p>
                      </item>
                      <item>
-                        <p>There is no class hierarchy, and no inheritance or overriding.</p>
+                        <p diff="chg" at="issue2567">Inheritance is limited to labeled record types: a labeled record type
+                        can extend a single other labeled record type, inheriting its fields (including its methods)
+                        and redeclaring its static fields.</p>
                      </item>
                      <item>
                         <p>Methods within a map can be removed or replaced in the same way as
