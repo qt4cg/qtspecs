@@ -15690,8 +15690,9 @@ else $node
          <fos:proto name="update" return-type="(node() | map(*) | array(*))">
             <fos:arg name="value" type="(node() | map(*) | array(*))" usage="navigation"/>
             <fos:arg name="select" type="fn($node as node()) as node()*" usage="inspection"/>
-            <fos:arg name="actions" type="map(enum('value', 'rename', 'replace', 'before', 'after'), item()*)"
-               default="{ 'replace': () }" usage="absorption"/>
+            <fos:arg name="actions"
+               type="map(enum('delete', 'replace', 'replace-value', 'rename', 'insert-before', 'insert-after'), item()*)"
+               usage="absorption"/>
          </fos:proto>
       </fos:signatures>
       <fos:properties>
@@ -15700,166 +15701,63 @@ else $node
          <fos:property>focus-independent</fos:property>
       </fos:properties>
       <fos:summary>
-         <p>Returns a copy of a tree in which selected nodes have been changed, renamed, replaced,
-            or deleted, or in which nodes have been inserted next to them.</p>
+         <p>Returns a copy of a tree in which selected nodes have been deleted, replaced, renamed,
+            or given new content, or in which nodes have been inserted next to them.</p>
       </fos:summary>
       <fos:rules>
-         <p>The result of the function is obtained as follows:</p>
+         <p>The function updates a tree as described in <specref ref="updating-nodes"/>. The
+            result is obtained as follows:</p>
          <olist>
-            <item><p>The <term>origin node</term> is <code>$value</code> if it is a node, and
-               the result of calling <code>fn:jtree($value)</code> otherwise.</p></item>
-            <item><p>The <term>selected nodes</term> are the nodes returned by a single call of
-               <code>$select</code> with the origin node as its argument.</p></item>
-            <item><p>The origin node is <term>processed</term>, giving a node <var>R</var>.
-               The origin node is never a selected node.</p></item>
-            <item><p>If <code>$value</code> is a node, the result is <var>R</var>; otherwise it
-               is the <term>·jvalue·</term> property of <var>R</var>, a map or an array of the
-               same kind.</p></item>
+            <item><p>The <termref def="dt-origin-node"/> is <code>$value</code> if it is a node,
+               and the result of calling <code>fn:jtree($value)</code> otherwise.</p></item>
+            <item><p>The <termref def="dt-selected-node">selected nodes</termref> are the nodes that
+               are returned by calling <code>$select</code> with the origin node.</p></item>
+            <item><p>The origin node is <termref def="dt-update-processing">processed</termref>
+               with the <termref def="dt-update-action">actions</termref> in
+               <code>$actions</code>, giving a single node <var>R</var>.</p></item>
+            <item><p>If <code>$value</code> is a node, the result is <var>R</var>. Otherwise, the
+               result is the <term>·jvalue·</term> of <var>R</var>.</p></item>
          </olist>
-
-         <p><term>Processing</term> is a recursive operation. A node <var>N</var> is processed
-            as follows:</p>
-         <olist>
-            <item><p>The attributes and the children of <var>N</var> are themselves processed,
-               giving the sequences of nodes that take their place.</p></item>
-            <item><p>A node <var>C</var> is constructed from <var>N</var> and those sequences.
-               It has the same node kind as <var>N</var>; the properties that it retains are given
-               below for XNodes and for JNodes. <var>C</var> has no parent, so no navigation from
-               it leads back to the tree of <var>N</var>.</p></item>
-            <item><p>If <var>N</var> is not a selected node, the result is <var>C</var>.</p></item>
-            <item><p>Otherwise, the result is obtained by applying the <term>actions</term> to
-               <var>C</var>.</p></item>
-         </olist>
-
-         <note><p>The <term>selected nodes</term> are determined before any node is constructed,
-            so a constructed node is never itself selected.</p></note>
-
-         <note><p>Every node is processed exactly once, together with all of its attributes and
-            children, so the updates made within one node are combined in a single step. Its
-            content is processed before the node itself, so a selected node is presented to the
-            functions in <code>$actions</code> with its descendants already updated, and
-            unrelated updates can be combined in one call by testing that node.</p></note>
-
-         <p>The <term>actions</term> are the entries of <code>$actions</code>. If the value of an
-            action is a single function item that is neither a map nor an array, it is coerced to
-            the type <code>fn(node()) as item()*</code> and called with <var>C</var> as its
-            argument, and the result of that call is used instead.</p>
-         <p>A value <term>supplies</term> nodes as follows: a document node or a root JNode supplies
-            copies of its children, a map or an array the children of the root JNode that
-            <code>fn:jtree</code> returns for it, and any other node a copy of itself.</p>
-         <ulist>
-            <item><p><code>value</code>: the value of <var>C</var> is replaced, and its name or key
-               is retained.</p></item>
-            <item><p><code>rename</code>: the name of <var>C</var>, or its key, is replaced, and its
-               value is retained.</p></item>
-            <item><p><code>replace</code>: <var>C</var> is replaced by the nodes that the value
-               <term>supplies</term>.</p></item>
-            <item><p><code>before</code>, <code>after</code>: the nodes that the value supplies are
-               inserted before or after <var>C</var>.</p></item>
-         </ulist>
-         <p>The result is the sequence of nodes supplied by <code>before</code>, followed by the
-            nodes supplied by <code>replace</code> if that action is present, or otherwise by
-            <var>C</var> with the changes of <code>value</code> and <code>rename</code>, followed by
-            the nodes supplied by <code>after</code>. The default value of
-            <code>$actions</code> deletes the selected nodes.</p>
-
-         <p><emph>XNodes.</emph> <var>C</var> is a copy of <var>N</var> whose attributes and
-            children are the nodes that take their place. The value of
-            <code>value</code> is atomized, and the string values of the resulting atomic items
-            are joined with a single space as separator. The resulting string replaces the children
-            of an element with a single text node, and its attributes are retained; for an
-            attribute, text node, comment, or processing instruction, it replaces the string
-            value.</p>
-         <p>The value of <code>rename</code> becomes the name of an element, an attribute, or a
-            processing instruction. The name of an attribute is assigned as in a computed attribute
-            constructor (see <xspecref spec="XP40" ref="id-computedAttributes"/>), and an attribute
-            that is named <code>xml:id</code> after the update is subject to <code>xml:id</code>
-            processing in the same way. If an element is
-            renamed, its
-            in-scope namespaces get a binding for the prefix and the namespace URI of its new name,
-            which replaces an existing binding of that prefix; if the new name has neither a prefix
-            nor a namespace URI, the binding for the default namespace is removed. An attribute
-            whose name uses a replaced binding is renamed with a different,
-            <termref def="implementation-dependent"/> prefix.</p>
-         <note><p>Nodes that take the place of the children of an element or document node are subject to
-            the usual rules for element and document content: adjacent text nodes are merged, and a
-            text node whose content is a zero-length string is dropped. A text node that is changed
-            to a zero-length string therefore leaves no node behind.</p></note>
-         <note><p>An element that receives attributes is subject to namespace fixup: a binding is
-            added for the prefix and namespace of an attribute name, and an attribute whose prefix
-            is already bound to another namespace URI is renamed with a different prefix. An
-            attribute taken from another tree can therefore appear under a different prefix, as
-            <var>C</var> is a copy of <var>N</var>.</p></note>
-
-         <p><emph>JNodes.</emph> A JNode <var>C</var> retains the <term>·jkey·</term> property
-            of <var>N</var>. Its <term>·jvalue·</term> property is rebuilt from the nodes
-            that take the place of the children of <var>N</var>, in the order of those nodes: a map of their
-            keys and values if <var>N</var> is a <xtermref spec="DM40" ref="dt-map-jnode"/>, an array
-            of their values if it is an <xtermref spec="DM40" ref="dt-array-jnode"/>, and the
-            sequence of their values if it is a <xtermref spec="DM40" ref="dt-sequence-jnode"/>. A
-            <xtermref spec="DM40" ref="dt-leaf-jnode"/> has no children and retains the
-            <term>·jvalue·</term> property of <var>N</var>. The value of <code>value</code> becomes
-            the <term>·jvalue·</term> property of <var>C</var>, including a map, an array, or a
-            function item. The value of <code>rename</code> becomes its <term>·jkey·</term>
-            property.</p>
-         <note><p>The kind of <var>C</var> follows from its value: deleting every entry of a map
-            leaves an empty map, and deleting every member of an array an empty array, but a
-            sequence that is reduced to a single item, or to none, is the value of a Leaf
-            JNode.</p></note>
-         <note><p>With <code>value</code>, a map or an array becomes the value of the selected
-            node; with <code>replace</code>, <code>before</code>, and <code>after</code>, it
-            supplies its entries or members:
-            <code>{ 'value': [ 'Vandana', 'Shiva' ] }</code> makes the array the value of the
-            selected node, whereas <code>{ 'replace': [ 'Vandana', 'Shiva' ] }</code> replaces an
-            array member with two members. A function item that is to become the value is
-            returned by another function: <code>{ 'value': fn { $f } }</code>.</p></note>
-
-         <note><p>Because <var>C</var> has no <term>·jparent·</term>, it is not identical to
-            <var>N</var>, even though it retains its <term>·jkey·</term>.</p></note>
-
-         <p>The function constructs a new tree, and does not modify <code>$value</code>. Every XNode
-            in the result is a new node with its own identity, including XNodes that an action
-            takes from another tree. An XNode that is contained in the
-            <term>·jvalue·</term> of a JNode is not a node of the result, and is retained as it
-            is. An XNode retains the type annotation of the node that
-            it was constructed from if neither that node nor any of its attributes or descendants is
-            a selected node; every other XNode in the result is untyped, as with any constructed
-            node.</p>
       </fos:rules>
       <fos:errors>
          <p>A dynamic error is raised <errorref class="UP" code="0003"/> if a selected node cannot
-            be reached from the <term>origin node</term> by one or more attribute and child
-            steps. This excludes the <term>origin node</term> itself, namespace nodes, and the JNodes that the <code>item</code> axis returns for a
-            <xtermref spec="DM40" ref="dt-leaf-jnode"/>: they have a parent, but are not children of
-            it.</p>
-         <p>A type error is raised <errorref spec="XP" class="TY" code="0004"/> if the value of
-            <code>rename</code> is not a single <code>xs:QName</code> for an XNode, or not a single
+            be reached from the <termref def="dt-origin-node"/> by one or more steps on the child
+            or attribute axis. This excludes the origin node itself, namespace nodes, and the
+            JNodes that the <code>item</code> axis returns for a
+            <xtermref spec="DM40" ref="dt-leaf-jnode"/>.</p>
+         <p>A type error is raised <errorref spec="XP" class="TY" code="0004"/> if the
+            <termref def="dt-update-operand"/> of <code>rename</code> is not a single <code>xs:QName</code> for an XNode, or not a single
             atomic item for a JNode.</p>
          <p>A dynamic error is raised <errorref class="UP" code="0004"/> in the following
             cases:</p>
          <ulist>
-            <item><p><code>$actions</code> contains <code>replace</code> together with
-               <code>value</code> or <code>rename</code>.</p></item>
-            <item><p>The value of <code>replace</code>, <code>before</code>, or <code>after</code>
-               contains an item that is neither a node, a map, nor an array, or a supplied node
-               cannot appear at the position of the selected node. For XNodes, the nodes supplied
-               for an attribute must be attributes, and those supplied for a child of an element or
-               document node must be XNodes that are neither attributes nor namespace nodes. For
-               JNodes, the nodes supplied for a child of a <xtermref spec="DM40" ref="dt-map-jnode"/>
-               must be children of a Map JNode, and those supplied for a child of an
-               <xtermref spec="DM40" ref="dt-array-jnode"/> must be children of an Array JNode, and
-               those supplied for a child of a <xtermref spec="DM40" ref="dt-sequence-jnode"/> must
+            <item><p><code>$actions</code> is empty.</p></item>
+            <item><p><code>$actions</code> contains <code>delete</code> together with
+               <code>replace</code>, or <code>delete</code> or <code>replace</code> together with
+               <code>replace-value</code> or <code>rename</code>.</p></item>
+            <item><p>The operand of <code>delete</code> is not an empty sequence.</p></item>
+            <item><p>The operand of <code>replace</code>, <code>insert-before</code>, or
+               <code>insert-after</code> contains an item that is neither a node, a map, nor an
+               array, or a <termref def="dt-update-contribute">contributed</termref> node
+               cannot appear at the position of the selected node. For XNodes, the nodes contributed
+               for an attribute must be attributes, and those contributed for a child of an element
+               or document node must be XNodes that are neither attributes nor namespace nodes. For
+               JNodes, the nodes contributed for a child of a
+               <xtermref spec="DM40" ref="dt-map-jnode"/> must be children of a Map JNode, and those
+               contributed for a child of an <xtermref spec="DM40" ref="dt-array-jnode"/> must be
+               children of an Array JNode, and those contributed for a child of a
+               <xtermref spec="DM40" ref="dt-sequence-jnode"/> must
                not be children of a Map JNode. A JNode with no parent, such as the result of another call of this
                function, is accepted in either position; its <term>·jkey·</term> is used where the
                position requires one.</p></item>
             <item><p>A node is renamed that is neither an element, an attribute, a processing
                instruction, nor a child of a <xtermref spec="DM40" ref="dt-map-jnode"/>, or the new
                name is invalid: the name of an element or an attribute is subject to the same rules
-               as in computed constructors (see <xspecref spec="XP40" ref="id-computedElements"/>
-               and <xspecref spec="XP40" ref="id-computedAttributes"/>), and the name of a processing
+               as in computed constructors (see <xspecref spec="XQ40" ref="id-computedElements"/>
+               and <xspecref spec="XQ40" ref="id-computedAttributes"/>), and the name of a processing
                instruction must have no namespace URI, and a local name other than
                <code>xml</code> in any combination of upper and lower case.</p></item>
-            <item><p>The value of <code>value</code> does not satisfy the constraints that the data
+            <item><p>The operand of <code>replace-value</code> does not satisfy the constraints that the data
                model places on the content of a comment or a processing instruction.</p></item>
             <item><p>The result would contain two attributes of the same element with the same name,
                or two entries of the same map with the same key.</p></item>
@@ -15870,15 +15768,22 @@ else $node
             <fos:test>
                <fos:expression><eg>
 { 'title': 'Sojourner Truth', 'draft': true() }
-=> update(fn { .//draft })
+=> update(fn { .//draft }, { 'delete': () })
                </eg></fos:expression>
                <fos:result>{ "title": "Sojourner Truth" }</fos:result>
-               <fos:postamble>Selected nodes are deleted if no actions are supplied.</fos:postamble>
+            </fos:test>
+            <fos:test>
+               <fos:expression><eg>
+[ 'Rachel Carson', 'draft', 'Silent Spring' ]
+=> update(fn { *[. = 'draft'] }, { 'delete': (), 'insert-after': [ 'final' ] })
+               </eg></fos:expression>
+               <fos:result>[ "Rachel Carson", "final", "Silent Spring" ]</fos:result>
+               <fos:postamble>A deleted node can be followed by inserted nodes.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
 { 'title': 'Ida Wells', 'price': 39 }
-=> update(fn { .//price }, { 'value': fn { . * 2 } })
+=> update(fn { .//price }, { 'replace-value': fn { . * 2 } })
                </eg></fos:expression>
                <fos:result>{ "title": "Ida Wells", "price": 78 }</fos:result>
                <fos:postamble>The value of the entry is replaced, and its key is
@@ -15898,7 +15803,7 @@ else $node
 { 'price': 39 }
 => update(
   fn { .//price },
-  { 'rename': 'cost', 'value': fn { . * 2 } }
+  { 'rename': 'cost', 'replace-value': fn { . * 2 } }
 )
                </eg></fos:expression>
                <fos:result>{ "cost": 78 }</fos:result>
@@ -15910,7 +15815,7 @@ else $node
 => update(fn { * }, { 'rename': fn { upper-case(jkey()) } })
                </eg></fos:expression>
                <fos:result>{ "A": 1, "B": 2 }</fos:result>
-               <fos:postamble>The value of any action can be computed by a function.</fos:postamble>
+               <fos:postamble>The operand of any action can be computed by a function.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
@@ -15918,13 +15823,13 @@ else $node
 => update(fn { * }, { 'replace': [ 'Vandana', 'Shiva' ] })
                </eg></fos:expression>
                <fos:result>[ "Vandana", "Shiva" ]</fos:result>
-               <fos:postamble>An array supplies its members, so one member is replaced by
+               <fos:postamble>An array contributes its members, so one member is replaced by
                   two.</fos:postamble>
             </fos:test>
             <fos:test>
                <fos:expression><eg>
 [ 'Vandana Shiva' ]
-=> update(fn { * }, { 'value': [ 'Vandana', 'Shiva' ] })
+=> update(fn { * }, { 'replace-value': [ 'Vandana', 'Shiva' ] })
                </eg></fos:expression>
                <fos:result>[ [ "Vandana", "Shiva" ] ]</fos:result>
                <fos:postamble>The array becomes the value of the member.</fos:postamble>
@@ -15939,7 +15844,7 @@ return update(
 )
                </eg></fos:expression>
                <fos:result>{ "first": "Wangari", "last": "Maathai" }</fos:result>
-               <fos:postamble>A map supplies its entries, so one entry is replaced by
+               <fos:postamble>A map contributes its entries, so one entry is replaced by
                   several.</fos:postamble>
             </fos:test>
             <fos:test>
@@ -15948,7 +15853,7 @@ let $person := { 'name': 'Savitribai Phule' }
 return update(
   $person,
   fn { .//name },
-  { 'value': { 'first': 'Savitribai', 'last': 'Phule' } }
+  { 'replace-value': { 'first': 'Savitribai', 'last': 'Phule' } }
 )
                </eg></fos:expression>
                <fos:result>{ "name": { "first": "Savitribai", "last": "Phule" } }</fos:result>
@@ -15966,7 +15871,7 @@ return update(
             <fos:test>
                <fos:expression><eg>
 let $book := jtree({ 'book': { 'year': 1987 } })/book
-return update($book, fn { ./year }, { 'value': 1988 })
+return update($book, fn { ./year }, { 'replace-value': 1988 })
 ! (jkey(), jvalue())
                </eg></fos:expression>
                <fos:result>"book", { "year": 1988 }</fos:result>
@@ -15980,7 +15885,7 @@ return update($book, fn { ./year }, { 'value': 1988 })
 update(
   <item><price cur="EUR">39</price></item>,
   fn { ./price },
-  { 'value': fn { . * 2 } }
+  { 'replace-value': fn { . * 2 } }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<item><price cur="EUR">78</price></item>]]></fos:result>
@@ -15990,7 +15895,8 @@ update(
                <fos:expression><eg><![CDATA[
 update(
   <book draft="true"><title>Malala Yousafzai</title></book>,
-  fn { .//@draft }
+  fn { .//@draft },
+  { 'delete': () }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<book><title>Malala Yousafzai</title></book>]]></fos:result>
@@ -16000,7 +15906,7 @@ update(
 update(
   <item><price cur="EUR">39</price></item>,
   fn { ./price },
-  { 'value': fn { . * 2 }, 'after': <currency>EUR</currency> }
+  { 'replace-value': fn { . * 2 }, 'insert-after': <currency>EUR</currency> }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<item><price cur="EUR">78</price><currency>EUR</currency></item>]]></fos:result>
@@ -16010,7 +15916,7 @@ update(
 update(
   <books><book id="1"><title/></book></books>,
   fn { ./book },
-  { 'value': 'Yosano Akiko' }
+  { 'replace-value': 'Yosano Akiko' }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<books><book id="1">Yosano Akiko</book></books>]]></fos:result>
@@ -16019,7 +15925,7 @@ update(
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
-update(<event days=""/>, fn { ./@days }, { 'value': ('Mon', 'Tue') })
+update(<event days=""/>, fn { ./@days }, { 'replace-value': ('Mon', 'Tue') })
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<event days="Mon Tue"/>]]></fos:result>
                <fos:postamble>The atomized items are joined with spaces.</fos:postamble>
@@ -16029,7 +15935,7 @@ update(<event days=""/>, fn { ./@days }, { 'value': ('Mon', 'Tue') })
 update(
   <name><last>Parks</last></name>,
   fn { ./last },
-  { 'before': <first>Rosa</first> }
+  { 'insert-before': <first>Rosa</first> }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<name><first>Rosa</first><last>Parks</last></name>]]></fos:result>
@@ -16077,14 +15983,14 @@ update(
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<book><first/><last/></book>]]></fos:result>
-               <fos:postamble>A document node supplies its children.</fos:postamble>
+               <fos:postamble>A document node contributes its children.</fos:postamble>
             </fos:test>
             <fos:test spec="XQuery">
                <fos:expression><eg><![CDATA[
 update(
   <doc xmlns:p="u"><page><p:name/></page></doc>/page,
   fn { .//*:name },
-  { 'value': 'Ida Wells' }
+  { 'replace-value': 'Ida Wells' }
 )
                ]]></eg></fos:expression>
                <fos:result><![CDATA[<page xmlns:p="u"><p:name>Ida Wells</p:name></page>]]></fos:result>
