@@ -1055,7 +1055,7 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                   function items that are neither maps nor arrays are
                   <term>equivalent</term> if the processor can establish that all calls of the two function items
                      supplying <termref def="dt-identical"/> arguments will return <termref def="dt-identical"/> 
-                     results.</termdef></p>
+                     results, or equivalent results in the case where the function is not <termref def="dt-deterministic"/>.</termdef></p>
                
                <p>Processors are free to use their own algorithms to establish function equivalence, but
                as a minimum, all processors must recognize two function items as equivalent if both the following
@@ -1063,22 +1063,64 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
 
                
                   <olist>
-                     <item><p>The two function items have the same <term>static form</term>: that is, they are
-                     expressed using the same sequence of lexical tokens.</p></item>
-                     <item><p>The two function items have the same captured context (see <xspecref spec="DM40" ref="function-items"/>).</p></item>
+                     <item><p>The two function items have the same <term>originating form</term>.</p>
+                        <p>This condition is satisfied if any of the following apply:</p>
+                        <olist>
+                           <item><p>Both function items originate from the evaluation of named function references
+                              using the same function name and arity, with both function names being resolved
+                              to the same function declaration.
+                           </p>
+                           <p>If the function in question is one that is defined in this specification and
+                           is not listed as being <termref def="dt-context-dependent"/>, then two named function references
+                           with the same name and arity return <termref def="dt-function-equivalent"/> functions even if
+                           there are differences in the static or dynamic context.</p>
+                           </item>
+                           <item><p>Both function items originate from the evaluation of inline function expressions,
+                              where the two inline function expressions are defined using the same sequence
+                              of lexical tokens, ignoring any difference in function annotations.
+                           </p>
+                              <note><p>Two inline function items may be lexically identical but nevertheless distinct
+                              because of differences in the captured context: for example namespace prefixes may be resolved
+                              differently, or the values of variables referenced from the function body
+                              may be different.</p></note>
+               
+                           </item>
+                           <item><p>Both function items originate from static partial function applications bound to
+                              the same function declaration, with <termref def="dt-identical"/> bound arguments.
+                           </p></item>
+                           <item><p>Both function items originate from dynamic partial function applications bound to
+                              <termref def="dt-function-equivalent"/> function items, with the <termref def="dt-identical"/> bound 
+                                  arguments.
+                           </p></item>
+                           <item><p>Both function items originate from calls to <function>fn:function-lookup</function>
+                                 with the same supplied arguments.
+                           </p></item>
+                           
+                        </olist>
+                     </item>
+                     <item><p>The two function items have the same captured context (see <xspecref spec="DM40" ref="function-items"/>).</p>
+                           <p>In comparing the captured context of two function items, it is <rfc2119>recommended</rfc2119>
+                              that processors should ignore differences that have no bearing on the result of 
+                              evaluating the function. However, the specification does not define in detail
+                              what parts of the context every expression depends upon, so in principle,
+                              processors are free to treat all differences as significant.</p>
+                     </item>
                   </olist>
                
-               <p>For example, the following expressions must return true for all processors:</p>
+               <p>These rules mean that the following expressions must return true for all processors:</p>
                
                <ulist>
                   <item><p><code>deep-equal(count#1, count#1)</code></p></item>
                   <item><p><code>deep-equal(fn{.+1}, fn{.+1})</code></p></item>
                   <item><p><code>deep-equal(fn { . + 1 }, fn{.+1})</code></p></item>
+                  <item><p><code>deep-equal(fn{element #a {}}, fn{element #a {}})</code></p></item>
                   <item><p><code>deep-equal(contains(?, 'e'), contains(?, 'e'))</code></p></item>
+                  <item><p><code>deep-equal(substring(?, 6), substring(?, 3×2))</code></p></item>
                   <item><p><code>deep-equal($x, $x)</code> (for any value of <code>$x</code>)</p></item>
                   <item><p><code>let $x := count#1 return deep-equal($x, count#1)</code></p></item>
                   <item><p><code>deep-equal(position#0, position#0)</code></p></item>
                   <item><p><code>deep-equal($x / name#0, $x ! name#0)</code></p></item>
+                  <item><p><code>deep-equal(%one fn{@a}, %two fn{@a})</code></p></item>
                </ulist>
                
                <p>The following expressions return false for all processors, because the two functions
@@ -1093,9 +1135,9 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                </ulist>
                
                <p>The following expressions may return true with some processors and false with others;
-               in each case the two functions produce the same results for all argument values, but they do not
+               in each case the two functions being compared produce the same results for all argument values, but they do not
                satisfy the minimum conditions that all processors are required to recognize, because they
-               differ either in their static form, or in their captured context:</p>
+               differ either in their originating form, or in their captured context:</p>
                
                <ulist>
                   <item><p><code>deep-equal(count#1, count(?))</code></p></item>
@@ -1113,6 +1155,12 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                   <item><p><code>deep-equal(23 -> name#1, 24 -> name#1)</code></p></item>
                   <item><p><code>deep-equal(let $n := 1 return fn{$n + 1}, let $m := 1 return fn{$m + 1})</code></p></item>
                   <item><p><code>deep-equal(count#1, function-lookup(#fn:count, 1))</code></p></item>
+                  <item><p>In XQuery:</p>
+                     <eg>
+declare function f($x) {$x + 1};
+declare function g($x) {$x + 1};
+deep-equal(f#1, g#1)</eg>
+                  </item>
                </ulist>
                
                <note>
@@ -1127,6 +1175,21 @@ This includes all the built-in datatypes defined in <bibref ref="xmlschema-2"/>.
                      not depend upon.</p></item>
                   </ulist>
                </note>
+               
+              
+               <p>For function items other than those originated using one of the constructs listed above,
+               there is no originating form, and equivalence in general is <termref def="implementation-dependent"/>.
+               In some cases the specification of a particular function defines additional constraints. For
+               example, the specification of the <function>fn:atomic-type-annotation</function> function dictates
+               that if two atomic values have the same type annotation, then the records returned by calls
+               on <function>fn:atomic-type-annotation</function> must be deep-equal, which implies that the function
+               items contained in the fields of these records (such as the <code>constructor</code> field) must
+               be <termref def="dt-function-equivalent"/>.</p>
+               
+               <p>In the absence of an explicit statement such as this, it is <termref def="implementation-dependent"/>
+               whether two function items returned in the results of calls to a system function are
+               recognized as being <termref def="dt-function-equivalent"/>.</p>
+               
                
 
 
