@@ -2977,36 +2977,61 @@ An error that can be detected during the static analysis phase, and is not a typ
             <p>
                <termdef id="dt-dynamic-error" term="dynamic error"
                      >A <term>dynamic
-error</term> is an error that
-must be detected during the dynamic evaluation phase and may be detected
-during the static analysis phase.</termdef>
+error</term> is an error detected during the dynamic evaluation phase.</termdef>
 Numeric overflow is an example of a <termref
                      def="dt-dynamic-error">dynamic error</termref>.
+               Although expressions may be eagerly evaluated during static analysis
+               (a trivial example is the expression <code>-1</code>, which is
+               technically a unary operator applied to a numeric literal),
+               dynamic errors <rfc2119>must not</rfc2119> be raised during static analysis unless it
+               can be shown that the expression will always be evaluated, regardless
+               of the input data.
             </p>
             <p>
                <termdef id="dt-type-error" term="type error"
                      >A <term>type
 error</term> may be raised during the static analysis phase or the dynamic evaluation phase.
-During the static analysis phase, a <termref
-                     def="dt-type-error">type error</termref> occurs
-when the <termref
-                     def="dt-static-type"
-                     >static type</termref> of an expression does not match the expected type
-of the context in which the expression occurs.
+During static analysis, a <termref
+                     def="dt-type-error">type error</termref> <rfc2119>may</rfc2119> be raised
+if the inferred <termref def="dt-static-type"
+                     >static type</termref> of an expression does not match the type required
+by the syntactic construct in which the expression occurs.
 During the dynamic evaluation phase, a <termref
-                     def="dt-type-error">type error</termref> occurs
-when the <termref
-                     def="dt-dynamic-type"
-                  >dynamic type</termref> of a value does not match the expected type of
-the context in which the value occurs.</termdef>
+                     def="dt-type-error">type error</termref> <rfc2119>must</rfc2119> be raised
+when the result of evaluating an expression does not match the type required by
+the syntactic construct in which the expression occurs.</termdef>
             </p>
+            
+            <note><p>Static analysis may indicate that evaluation of an expression will
+            always fail with a dynamic error. The most obvious example of this is when
+            there is an explicit call to the <function>fn:error</function> function; but
+            it can also arise, for example, if there is a call to a function such as 
+            <function>fn:matches</function> passing an invalid regular expression. In both
+            these cases static analysis can infer the type <code>xs:error</code> for the
+            construct. The type <code>xs:error</code> is a type that has no instances
+            (not even the empty sequence). Because it has an empty value space (which
+            is a subset of every other value space) <code>xs:error</code> is a subtype
+            of every other type, which means that a call on <function>fn:error</function> is
+            always valid regardless of the required type.</p>
+            
+            <p>The rule allowing type errors to be raised during static analysis applies
+            when the inferred static type of an expression is not a subtype of the required
+            type, and when its value space is disjoint with the value space of the required
+            type (meaning that the result of the expression will never be an instance of the
+            required type). This condition can never arise when the inferred type
+            is <code>xs:error</code>, because this is always a subtype of the required type.
+            Dynamic errors, even if they are found during static analysis, are therefore 
+            never reported during static analysis; they are only raised if and when the
+            failing expression is actually evaluated.</p>
+            </note>
+            
+            
 
             <p>The outcome of the <termref def="dt-static-analysis"
                   >static analysis
 phase</termref> is either success or one or more <termref
                   def="dt-type-error">type errors</termref>, <termref def="dt-static-error"
-                  >static errors</termref>, or statically detected <termref def="dt-dynamic-error"
-                  >dynamic errors</termref>. The result of the <termref def="dt-dynamic-evaluation"
+                  >static errors</termref>. The result of the <termref def="dt-dynamic-evaluation"
                   >dynamic evaluation
 phase</termref> is either a result value, a <termref
                   def="dt-type-error">type
@@ -3024,10 +3049,7 @@ analysis phase</termref> that <phrase
                   role="xquery">a <nt def="QueryBody">QueryBody</nt>
                </phrase>
                <phrase role="xpath"
-                  >an XPath expression</phrase>, if evaluated, would necessarily
-raise a <termref
-                  def="dt-dynamic-error"
-                  >dynamic error</termref> or that an expression, if evaluated, would necessarily raise a <termref
+                  >an XPath expression</phrase>, if evaluated, would necessarily raise a <termref
                   def="dt-type-error"
                   >type error</termref>, the implementation may (but is not required to) report that
 error during the <termref
@@ -3121,7 +3143,7 @@ numbers or sizes of various objects.
 
                <item>
                   <p>
-                     <code>YY</code> denotes the error category, using the following encoding:</p>
+                     <code>YY</code> indicates the error category:</p>
                   <ulist>
 
                      <item>
@@ -3139,6 +3161,8 @@ numbers or sizes of various objects.
                            <code>TY</code> denotes a type error.</p>
                      </item>
                   </ulist>
+                  <p>Note, however, that some errors have been recategorized as the specification
+                  has evolved, meaning that these codes are not always applied rigidly.</p>
                </item>
 
                <item>
@@ -3170,10 +3194,10 @@ error, the implementation may choose to return the value or raise
 the dynamic error (see <specref
                   ref="id-errors-and-opt"
                   />).  For example, the logical expression
-<code>expr1 and expr2</code> may return the value <code>false</code>
-if either operand returns <code>false</code>,
-or may raise a dynamic error if either operand raises a dynamic
-error.</p>
+<code>("a", 1) = ("a", 2)</code> may return the value <code>true</code>
+because the operands include a pair of items that compare equal,
+or it may raise a dynamic error because the operands include a pair
+of items that are incomparable.</p>
             <p> If more than one operand of an expression raises
 an error, the
 implementation may choose which error is raised by the expression.
@@ -3247,7 +3271,11 @@ error, providing a QName that identifies the error, a descriptive string, and a 
             <p>The effect of these rules is that the processor is free to stop examining further items in a sequence as soon as it can establish that further items would not affect the result except possibly by causing an error. For example, the processor may return <code>true</code> as the result of the expression <code
                   role="parse-test"
                >S1 = S2</code> as soon as it finds a pair of equal values from the two sequences.</p>
-            <p>Another consequence of these rules is that where none of the items in a sequence contributes to the result of an expression, the processor is not obliged to evaluate any part of the sequence. Again, however, the processor cannot dispense with a required cardinality check: if the empty sequence is not permitted in the relevant context, then the processor must ensure that the operand is not the empty sequence.</p>
+            <p>Another consequence of these rules is that where none of the items in a sequence contributes 
+               to the result of an expression, the processor is not obliged to evaluate any part of the 
+               sequence. Again, however, the processor cannot dispense with a required cardinality check: 
+               if the empty sequence is not permitted in the relevant context, then the processor must 
+               ensure that the operand is not the empty sequence.</p>
             <p>Examples:</p>
 
 
@@ -3270,6 +3298,13 @@ result of the <termref
                         >path expression</termref>, without searching for another <code>product</code> node that
 would raise an error because it has an <code>id</code> child whose value is not an integer.</p>
                   <eg role="parse-test"><![CDATA[//product[id = 47]]]></eg>
+               </item>
+               <item>
+                  <p>In the following example, the processor can establish statically, by type
+                     analysis, that the result must be either true or a dynamic error:</p>
+                  <eg role="parse-test"><![CDATA[matches("X", $regex) instance of xs:boolean]]></eg>
+                  <p>The processor is therefore allowed to assume the result <code>true</code>,
+                  without actually checking that <code>$regex</code> is a valid regular expression.</p>
                </item>
             </ulist>
 
@@ -3328,6 +3363,10 @@ would raise an error because it has an <code>id</code> child whose value is not 
                 The static errors in this specification are defined
                 for the original expression, and must be preserved if
                 the expression is rewritten.</p>
+                  
+                <p>For example, the expression <code>true() and $debug</code>
+                raises a static error if there is no in-scope variable named
+                <code>$debug</code>, even though the variable reference is redundant.</p>
                </item>
                
                <item>
@@ -3521,9 +3560,11 @@ would raise an error because it has an <code>id</code> child whose value is not 
                is the empty sequence, in which case the result of <function>fn:round</function> will also be
                the empty sequence; it is therefore highly likely that the expression was written in error.</p></item>
                   
-               <item><p><code>parse-csv($input)?column-names</code>. The signature of the <code>parse-csv</code>
-               function declares its return type as <code>record(columns, rows)</code>. There is no field in this
-               record named <code>column-names</code>, and therefore the lookup expression will always
+               <item><p><code>in-scope-namespaces($input)?42</code>. 
+                     The signature of the <function>in-scope-namespaces</function>
+               function declares its return type as <code>map((xs:NCName | enum('')), xs:anyURI)</code>.
+               The value <code>42</code> does not satisfy the key type <code>(xs:NCName | enum(''))</code>, 
+                     and therefore the lookup expression will always
                return the empty sequence. Again, there is no good reason that a user would write this,
                so it is likely that it was written in error.</p></item>
             </ulist>
@@ -6874,19 +6915,29 @@ declare record Particle (
                   It was defined in XML Schema in the interests of making the type system complete and closed, 
                   and it is also available in <?inject language?> for similar reasons.</p>
                
+               <p>The type <code>xs:error</code> arises most commonly as the inferred type of the expression
+               <code>fn:error()</code>, and of any other expression that always raises a dynamic error rather
+               than returning a value.</p>
+               
+               
                <note>
-                  <p>Even though it cannot occur in an instance, <code>xs:error</code> is a valid type name in a sequence type. The
+                  <p>Even though it has no instances, <code>xs:error</code> is a valid type name in a sequence type. The
                      practical uses of <code>xs:error</code> as a sequence type are limited, but they do exist. For instance, an error-handling function that always raises a dynamic error 
                      never returns a value, so <code>xs:error</code> is a good choice for the return type of the function.</p>
                   
-                  <p>The semantics of <code>xs:error</code> are well defined as a consequence of the fact that <code>xs:error</code> is defined as a union type with
+                  <p>The semantics of <code>xs:error</code> are well defined as a consequence of the 
+                     fact that <code>xs:error</code> is defined as a union type with
                      no member types. For example:</p>
                   
                   <ulist>
                      <item>
                         <p>
                            <code role="parse-test"
-                              >$x instance of xs:error</code> always returns <code>false</code>, regardless of the value of <code>$x</code>.</p>
+                              >$x instance of xs:error</code> always returns <code>false</code>, 
+                           provided that evaluation of <code>$x</code> is successful; but if evaluation of
+                        <code>$x</code> raises a dynamic error, then the result of the expression
+                        is either <code>false</code> or a dynamic error. The result <code>false</code>
+                        is allowed under the rules for <specref ref="id-errors-and-opt"/>.</p>
                      </item>
                      <item>
                         <p>
@@ -6900,17 +6951,23 @@ declare record Particle (
                            <code role="parse-test">$x cast as xs:error?</code> raises a <termref
                               def="dt-dynamic-error">dynamic error</termref>
                            <xerrorref spec="FO40" class="RG" code="0001"
-                           /> if <code>exists($x)</code> returns <code>true</code>, and evaluates to the empty sequence if <code>empty($x)</code> returns <code>true</code>.</p>
+                           /> if <code>exists($x)</code> returns <code>true</code>, 
+                           and evaluates to the empty sequence if <code>empty($x)</code> 
+                           returns <code>true</code>.</p>
                      </item>
                      <item>
                         <p>
                            <code role="parse-test"
-                              >xs:error($x)</code> has the same semantics as <code>$x cast as xs:error?</code> (see the previous bullet point)</p>
+                              >xs:error($x)</code> has the same semantics as 
+                           <code>$x cast as xs:error?</code> (see the previous bullet point)</p>
                      </item>
                      <item>
                         <p>
                            <code role="parse-test"
-                              >$x castable as xs:error</code> evaluates to <code>false</code>, regardless of the value of <code>$x</code>.</p>
+                              >$x castable as xs:error</code> evaluates to 
+                           <code>false</code>, regardless of the value of <code>$x</code> (but
+                           if evaluation of <code>$x</code> raises an error, then the expression
+                           may raise an error).</p>
                      </item>
                      <item>
                         <p>
@@ -6925,11 +6982,14 @@ declare record Particle (
                               >let $x as xs:error := 1 return 2</code>  raises a <termref
                                  def="dt-type-error">type error</termref>
                            <errorref code="0004" class="TY"
-                           />, which can be raised statically or dynamically, and need not be raised if the variable <code>$x</code> is never evaluated by the query processor.</p>
+                           />, which can be raised statically or dynamically, 
+                           and need not be raised if the variable <code>$x</code> 
+                           is never evaluated by the query processor.</p>
                      </item>
                      <item role="xquery">
                         <p>
-                           <code>declare function ns:f($arg as xs:error) {...};</code> is a valid function declaration, but it always  raises a <termref
+                           <code>declare function ns:f($arg as xs:error) {...};</code> is a valid function 
+                           declaration, but it always  raises a <termref
                               def="dt-type-error">type error</termref>
                            <errorref code="0004" class="TY"/> if the function is called.</p>
                      </item>
