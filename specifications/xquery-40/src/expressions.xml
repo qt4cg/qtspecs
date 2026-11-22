@@ -6676,6 +6676,10 @@ declare record Particle (
                         <change issue="2933" PR="3016" date="2026-11-03">
                            Integrity constraints can be defined for labeled record types.
                         </change>
+                        <change issue="3102" date="2026-11-22">
+                           A violated integrity constraint raises a dynamic error rather than a type error;
+                           errors raised by the predicate are passed on.
+                        </change>
                      </changes>
                      <p>Object-oriented languages typically ensure the integrity of data through encapsulation: constructors
                      and methods contain procedural code to verify that all attempts to create or modify an object leave it
@@ -6684,8 +6688,9 @@ declare record Particle (
                      declaratively. An integrity constraint is a predicate (written as an <?inject language?> expression)
                      which must be satisfied for all instances of the record type. Any attempt to construct an instance,
                      whether by using a constructor function, or by coercion or casting, or by using the <code>but with</code>
-                     operator, fails with a dynamic error if the predicate evaluates to false, or if evaluation of the
-                     predicate fails.</p>
+                     operator, fails with a dynamic error <errorref class="DY" code="0156"/> if the
+                     <termref def="dt-ebv"/> of the predicate is false. If evaluation of the predicate
+                     raises an error, that error is raised.</p>
                      
                      <p><termdef id="dt-integrity-constraint-satisfied" term="satisfied">A map 
                            <var>M</var> <term>satisfies</term> the integrity constraint for
@@ -6697,9 +6702,9 @@ declare record Particle (
                      <p>The predicate is evaluated with a <termref def="dt-singleton-focus"/> 
                            set to a map item whose entries (keys and values)
                      correspond to the entries in the candidate instance.</p>
-                     <p>If the predicate evaluates to false, or if it has no
-                     effective boolean value, or if evaluation fails for any other reason, then the 
-                     constraint is not satisfied.</p></note>
+                     <p>If the predicate has no effective boolean value, the error raised when computing it
+                     <xerrorref spec="FO40" class="RG" code="0006"/> is raised, rather than
+                     <errorref class="DY" code="0156"/>.</p></note>
                      <p>For example, the predicate <code>string-length(?isbn) = (10, 13)</code> constrains the <code>?isbn</code>
                      field of a record to have a length that is either ten or thirteen characters.</p>
                      <p>The predicate does not need to be evaluated in order to determine whether a value is an instance
@@ -8714,19 +8719,21 @@ declare record person(
                      <olist>
                         <item><p>The <termref def="dt-label"/> of <var>N</var> is <var>R</var>.</p></item>
                         <item><p>For every field declaration <var>F</var> in <var>R</var>
-                        that is declared <code>static</code>, 
+                        that is declared <code>%fixed</code>,
                               <var>N</var> contains an entry (key/value pair) as follows:</p>
                             <olist>
                                <item><p>If <var>J</var> contains an entry <var>E</var> with the <termref def="dt-same-key"/>
-                              value as the name of <var>F</var>, and if <var>J</var> is not already an instance
-                                     of <var>R</var>, then a type error is raised
+                              value as the name of <var>F</var>, and if <var>J</var> is not an instance
+                                     of <phrase role="xquery">a <termref def="dt-base-record-type"/> of</phrase>
+                                     <var>R</var><phrase role="xquery">, directly or indirectly</phrase>,
+                                     then a type error is raised
                                    <errorref class="TY" code="0004"/>.</p></item>
-                               <item><p>Otherwise, an entry whose key is the name of <var>F</var> 
+                               <item><p>Otherwise, an entry whose key is the name of <var>F</var>
                                      and whose associated value is the result of evaluating the initializing
-                                     expression of <var>F</var>.</p></item>
+                                     expression of <var>F</var>, coerced to the declared type of <var>F</var>.</p></item>
                             </olist>
                         </item>
-                        <item><p>For every field declaration <var>F</var> in <var>R</var> that is not declared <code>static</code>,
+                        <item><p>For every field declaration <var>F</var> in <var>R</var> that is not declared <code>%fixed</code>,
                         <var>N</var> contains an entry (key/value pair) as follows:</p>
                            <olist>
                               <item><p>If <var>J</var> contains an entry <var>E</var> with the <termref def="dt-same-key"/>
@@ -8736,20 +8743,23 @@ declare record person(
                               by applying these coercion rules recursively.</p></item>
                               <item><p>Otherwise (if <var>J</var> contains no such entry),
                               an entry whose key is the name of <var>F</var> and whose
-                              associated value is the default value <var>F</var>. The default
-                                    value for a field is the result of evaluating the intializing
-                                    expression if supplied, or the empty sequence otherwise; a type error occurs
-                              if the default value does not match the declared type of <var>F</var>.</p></item>
+                              associated value is the default value of <var>F</var>. The default
+                                    value for a field is the result of evaluating the initializing
+                                    expression if supplied, coerced to the declared type of <var>F</var>,
+                                    or the empty sequence otherwise; a type error occurs
+                              if the default value is not an instance of the declared type of <var>F</var>.</p></item>
                            </olist>
                         </item>
                         <item><p>If <var>J</var> contains an entry whose key does not match the name of
                         any field declared in <var>R</var>, a type error is raised
                         <errorref class="TY" code="0004"/>.</p></item>
-                        <item><p>If <var>R</var> defines an <xtermref spec="DM40" ref="dt-integrity-constraint"/> 
+                        <item><p>If <var>R</var><phrase role="xquery"> or any of its
+                              <termref def="dt-base-record-type">base record types</termref>, directly or indirectly,</phrase>
+                              defines an <xtermref spec="DM40" ref="dt-integrity-constraint"/>
                               (see <specref ref="id-integrity-constraints"/>)
-                              then the constraint must be <termref def="dt-integrity-constraint-satisfied"/>, 
-                              otherwise a type error is raised
-                        <errorref class="TY" code="0004"/>.</p></item>
+                              then the constraint must be <termref def="dt-integrity-constraint-satisfied"/>,
+                              otherwise a dynamic error is raised
+                        <errorref class="DY" code="0156"/>.</p></item>
                         <item><p>The order of entries in <var>N</var> corresponds to the order
                         of field declarations in <var>R</var>.</p>
                         </item>
@@ -23416,19 +23426,24 @@ return { $persons/*/* }
             <p>If <var>R</var> is the label of the left-hand operand, then the effect
             of the expression <code>$A but with $B</code> is equivalent to:</p>
             
-            <eg>map:merge(($A, $B), { 'duplicates': 'use-last' }) coerce as <var>R</var></eg>
-            
+            <eg>map:merge((map:remove($A, <var>FF</var>), $B), { 'duplicates': 'use-last' }) coerce as <var>R</var></eg>
+
+            <p>where <var>FF</var> is the sequence of the names of the fields of <var>R</var> that are
+            declared <code>%fixed</code>.</p>
+
             <p>That is: the values of the two operands are merged as maps, with the value from the second
-            operand taking precedence in the case of duplicates; the result is then coerced to the record
+            operand taking precedence in the case of duplicates, and with the fixed fields of the first operand
+            removed; the result is then coerced to the record
             type defined by the <termref def="dt-label"/> of the first operand, raising a type error if the result
             cannot be coerced to this record type.
             </p>
             
             <p>If <var>R</var> is a <termref def="dt-labeled-record-type"/>
-               that defines an <xtermref spec="DM40" ref="dt-integrity-constraint"/> (see <specref ref="id-integrity-constraints"/>)
-                     then the constraint must be <termref def="dt-integrity-constraint-satisfied"/> 
-               by the resulting record, otherwise a type error is raised
-               <errorref class="TY" code="0004"/>.</p>
+               that defines<phrase role="xquery">, or has a <termref def="dt-base-record-type"/> that defines,
+               directly or indirectly,</phrase> an <xtermref spec="DM40" ref="dt-integrity-constraint"/> (see <specref ref="id-integrity-constraints"/>)
+                     then the constraint must be <termref def="dt-integrity-constraint-satisfied"/>
+               by the resulting record, otherwise a dynamic error is raised
+               <errorref class="DY" code="0156"/>.</p>
             
             <p>In effect this means that the keys and values supplied in <var>$B</var> must be
             appropriate for a record of type <var>R</var>; if not, a type error 
@@ -23440,7 +23455,9 @@ return { $persons/*/* }
          
             <p>The above rules ensure that the <code>but with</code> expression cannot be used
             to override the value of a field in a <termref def="dt-labeled-record-type"/>
-             that is declared as <code>%fixed</code>.</p>
+             that is declared as <code>%fixed</code>: such a field is supplied by the coercion rules,
+             and a type error <errorref class="TY" code="0004"/> is raised if <var>$B</var> contains
+             an entry for it.</p>
             
             <note>
                <p>Given a record type with an <xtermref spec="DM40" ref="dt-integrity-constraint"/>, for example (in XQuery):</p>
@@ -25135,7 +25152,7 @@ input expression is called the <term>input type</term>. </p>
                      
                      <p>Records are maps, so <var>M0</var> may be a record.</p></item>
                   
-                  <item><p>A new map <var>M1</var>is created from <var>M0</var> as follows:</p>
+                  <item><p>A new map <var>M1</var> is created from <var>M0</var> as follows:</p>
 
                   <p>For each field <var>F</var> in the definition of the target record type, 
                      if <var>K0</var> is the name of the field (as a string)
@@ -25150,9 +25167,10 @@ input expression is called the <term>input type</term>. </p>
                               <item><p diff="chg" at="issue3057">If the target record type is a <termref def="dt-labeled-record-type"/>
                               and <var>F</var> is declared <code>%fixed</code>:</p>
                                  <ulist>
-                                    <item><p>If <var>M0</var> is an instance of the target record type, then the result
-                                    of evaluating the initializing expression of <var>F</var> and coercing it to the
-                                    required type <var>ST</var>;</p></item>
+                                    <item><p>If <var>M0</var> is an instance of the target record type<phrase role="xquery">
+                                    or of one of its <termref def="dt-base-record-type">base record types</termref>,
+                                    directly or indirectly</phrase>, then the result of evaluating the initializing
+                                    expression of <var>F</var> and coercing it to the required type <var>ST</var>;</p></item>
                                     <item><p>Otherwise, a type error <errorref class="TY" code="0004"/> is raised.</p></item>
                                  </ulist>
                               </item>
@@ -25176,13 +25194,14 @@ input expression is called the <term>input type</term>. </p>
                   </item>
 
                   <item><p>If the target record type is a <termref def="dt-labeled-record-type"/>
-                        that defines an <xtermref spec="DM40" ref="dt-integrity-constraint"/> (see <specref ref="id-integrity-constraints"/>)
-                              then the constraint must be <termref def="dt-integrity-constraint-satisfied"/>, 
-                        otherwise a type error is raised
-                        <errorref class="TY" code="0004"/>.</p></item>
+                        that defines<phrase role="xquery">, or has a <termref def="dt-base-record-type"/> that defines,
+                        directly or indirectly,</phrase> an <xtermref spec="DM40" ref="dt-integrity-constraint"/> (see <specref ref="id-integrity-constraints"/>)
+                              then the constraint must be <termref def="dt-integrity-constraint-satisfied"/>,
+                        otherwise a dynamic error is raised
+                        <errorref class="DY" code="0156"/>.</p></item>
 
                   <item><p>If the target record type is a <termref def="dt-labeled-record-type"/>,
-                  <var>R1</var> is labeled with that record type. Otherwise, <var>R1</var>
+                  <var>M1</var> is labeled with that record type. Otherwise, <var>M1</var>
                   is a map without a label: the entries for fields whose names are keys in <var>M0</var>
                   appear in the order of these keys in <var>M0</var>, even if their values have been cast,
                   followed by the entries for the remaining fields in the order of their declarations.</p></item>

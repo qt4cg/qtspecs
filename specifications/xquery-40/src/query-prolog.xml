@@ -2371,7 +2371,7 @@ declare %public function cx:complex(
        <item><p>The generated constructor function must not have an arity range that overlaps the arity range of any
        other function declaration having the same name in the same static context.</p></item>
        <item><p>The order of field declarations determines the order of
-       arguments in a call to the constructor function, as well as the order of entries
+       arguments in a call to the constructor function (see below), as well as the order of entries
 
        in the underlying map.</p></item>
        
@@ -2401,7 +2401,12 @@ declare %public function cx:complex(
          <termref def="dt-default-function-namespace-rule"/>, which searches no-namespace functions
          before the <termref def="dt-default-function-namespace"/>.</p></item>
        <item><p>The parameters of the function declaration are derived from the fields of the labeled record
-       declaration, in order, excluding any fields that are declared <code>%fixed</code>.</p>
+       declaration, excluding any fields that are declared <code>%fixed</code>: first the fields that have
+       no initializing expression, then the fields that have one, each in their declared order.</p>
+       <note><p>For a record type that does not extend another record type, the parameters therefore appear
+       in the order of the fields (see <errorref class="ST" code="0148"/>). For a
+       <termref def="dt-derived-record-type"/>, the order may differ; see
+       <specref ref="id-record-extension"/>.</p></note>
 
        <ulist>
          <item><p>The name of the parameter is the name of the field (always an NCName).</p></item>
@@ -2416,14 +2421,17 @@ declare %public function cx:complex(
            with no occurrence indicator.</p></item>
        <item><p>The body of the function is equivalent to 
          a <nt def="MapConstructor">MapConstructor</nt>
-           containing one <nt def="MapConstructorEntry">MapConstructorEntry</nt> for each non-static 
-           field of the record type,
+           containing one <nt def="MapConstructorEntry">MapConstructorEntry</nt> for each non-fixed
+           field of the record type, in their declared order,
            in the form <code>"<var>N</var>": $<var>N</var></code>, where <var>N</var> is the field name.
        The map that results from evaluation of this expression is implicitly coerced to the result
        type of the constructor function, that is, to the record type being declared.</p>
          <p>If any supplied parameter or initializing expression delivers a value that cannot be coerced
          to the required type of the relevant field, a type error is raised in the normal way. The type
          error may be raised statically or dynamically.</p>
+         <p>If the resulting record does not <termref def="dt-integrity-constraint-satisfied">satisfy</termref>
+         the <xtermref spec="DM40" ref="dt-integrity-constraint"/> of the record type, a dynamic error is raised
+         <errorref class="DY" code="0156"/>.</p>
        </item>  
  
  
@@ -2446,14 +2454,17 @@ declare %public function cx:complex(
 
       <p>The fields of the derived record type are the fields of the base record type, in their declared order
         (including fields that the base record type itself inherits), followed by the fields in the
-        declaration. All rules in <specref ref="id-named-record-types"/> that refer to the fields of a labeled record type,
-        including the requirement for distinct names and the derivation of the constructor function,
-        apply to this combined list, with two exceptions:</p>
+        declaration. All rules that refer to the fields of a labeled record type,
+        including the requirement for distinct names, the derivation of the constructor function
+        (see <specref ref="id-named-record-types"/>), the <termref def="dt-coercion-rules"/>, and the rules
+        for casting (see <specref ref="casting-to-record"/>), apply to this combined list, with two exceptions:</p>
 
       <ulist>
         <item><p>The rule that a field with an initializing expression must only be followed by fields
           with an initializing expression <errorref class="ST" code="0148"/> applies to the fields in the
-          declaration only.</p></item>
+          declaration only. If a field without an initializing expression follows an inherited field
+          with an initializing expression, the parameters of the constructor function appear in a different
+          order than the fields; see <specref ref="named-records-as-functions"/>.</p></item>
         <item><p>A field in the declaration may have the same name as a field of the base record type
           if both fields are declared <code>%fixed</code>. The field then replaces the inherited field
           at its position, and its initializing expression supplies the value of the field in instances
@@ -2513,7 +2524,9 @@ not(geo:point(1, 2) instance of geo:point3d)</eg>
 
       <p>the call <code>geo:unit-point(0, 1)</code> returns a record that is an instance of both
         <code>geo:unit-point</code> and <code>geo:point</code>, whereas <code>geo:unit-point(1, 1)</code>
-        fails.</p>
+        fails with a dynamic error <errorref class="DY" code="0156"/>. The error can be caught:
+        <code>try { geo:unit-point(1, 1) } catch err:XPDY0156 { 'invalid' }</code> returns
+        <code>"invalid"</code>.</p>
 
       <p>Fixed fields are inherited along with all other fields. Redeclaring a fixed field allows
         a <termref def="dt-method"/> to behave differently for records of the derived record type:</p>
@@ -2532,6 +2545,13 @@ declare record geo:square extends geo:shape(
 
       <p>The expression <code>(geo:circle(1), geo:square(2)) =?> area()</code> returns
         <code>(3.141592653589793e0, 4e0)</code>.</p>
+
+      <p>Coercing a record to a base record type returns it unchanged, whereas casting creates a
+        record of the base type with the values of its fixed fields:
+        <code>(geo:circle(1) coerce as geo:shape) =?> area()</code> returns
+        <code>3.141592653589793e0</code>, and <code>(geo:circle(1) cast as geo:shape) =?> area()</code>
+        returns <code>0e0</code>. Conversely, a record of a base record type can be coerced or cast to a
+        derived record type; the fixed fields of the result then take the values of the derived record type.</p>
     </div3>
     <div3 id="id-functions-as-fields">
       <head>Using Methods in Records</head>
