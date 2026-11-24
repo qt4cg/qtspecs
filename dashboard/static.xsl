@@ -177,7 +177,10 @@
                         <xsl:for-each select="distinct-values($files/@spec)">
                           <xsl:variable name="dir" select="."/>
                           <xsl:for-each select="$changed-files">
-                            <xsl:if test="contains(., '/'||$dir||'/')">yes</xsl:if>
+                            <xsl:if test="contains(., '/'||$dir||'/')
+                                          or (contains(., '/expath-file/') and $dir = 'expath-file-40')
+                                          or (contains(., '/expath-binary/') and $dir = 'expath-binary-40')"
+                                    >yes</xsl:if>
                           </xsl:for-each>
                         </xsl:for-each>
                       </xsl:variable>
