@@ -7026,11 +7026,164 @@ correctly in all browsers, depending on the system configuration.</emph></p>-->
 
          <div2 id="updating-nodes" diff="add" at="A">
             <head>Updating nodes</head>
-            <p>The function in this section returns a copy of a tree in which selected nodes have
-               been replaced by other nodes, by new values, or by nothing at all. It operates on
-               XNodes and on JNodes alike, so the same function updates an XML document and a tree
-               of maps and arrays.</p>
+            <p>The function <function>fn:update</function> returns an updated copy of an XML tree,
+               or of a map or an array; the supplied value is never modified. For example, the following call
+               doubles every price in <code>$books</code>, whether <code>$books</code> is an XML
+               document or a map:</p>
+            <eg>update($books, fn { .//price }, { 'replace-value': fn { . * 2 } })</eg>
+            <p>The second argument, <code>$select</code>, selects the nodes to be updated; the third
+               argument, <code>$actions</code>, specifies how they are updated.</p>
             <?local-function-index?>
+
+            <div3 id="update-processing">
+               <head>Processing model</head>
+               <p><termdef id="dt-origin-node" term="origin node">The <term>origin node</term> is the
+                  node at which an update starts; it is the root of the subtree that is
+                  updated.</termdef></p>
+               <p><termdef id="dt-selected-node" term="selected node">The <term>selected nodes</term>
+                  are the attributes and descendants of the origin node that are to be
+                  updated.</termdef> They are determined
+                  before any node is constructed.</p>
+               <p><termdef id="dt-update-processing" term="processing">A node <var>N</var> is
+                  <term>processed</term> as follows:</termdef></p>
+               <olist>
+                  <item><p>The attributes of <var>N</var> are processed, and the resulting nodes, in
+                     order, are the <termdef id="dt-new-attributes" term="new attributes"><term>new
+                     attributes</term> of <var>N</var></termdef>. Likewise, the children of
+                     <var>N</var> are processed, and the resulting nodes are the
+                     <termdef id="dt-new-children" term="new children"><term>new children</term> of
+                     <var>N</var></termdef>.</p></item>
+                  <item><p>A node <var>C</var> is constructed from <var>N</var> and its
+                     <termref def="dt-new-attributes"/> and <termref def="dt-new-children"/>, as
+                     described in <specref ref="update-xnodes"/> and <specref ref="update-jnodes"/>.
+                     <var>C</var> has no parent, so no navigation from it leads back to the tree of
+                     <var>N</var>.</p></item>
+                  <item><p>If <var>N</var> is not a <termref def="dt-selected-node"/>, the result is
+                     <var>C</var>. Otherwise, the result is the sequence of nodes that take the place
+                     of <var>N</var>, as determined by applying the
+                     <termref def="dt-update-action">actions</termref> to <var>C</var> (see
+                     <specref ref="update-actions"/>).</p></item>
+               </olist>
+               <p>The tree is thus updated from the bottom up: when the actions are applied to
+                  <var>C</var>, its descendants have already been updated. The nodes that result from
+                  the actions are not processed again.</p>
+               <note><p>As the selected nodes are known in advance, an implementation need not
+                  construct a new node for every node of the tree. It can determine the selected
+                  nodes and their ancestors first, copy each subtree without a selected node in a
+                  single step, and rebuild only the nodes on the paths from the origin node to the
+                  selected nodes. For JNodes, an unchanged subtree need not be copied at all: the
+                  maps and arrays that it represents are retained as they are.</p></note>
+            </div3>
+
+            <div3 id="update-actions">
+               <head>Actions</head>
+               <p><termdef id="dt-update-action" term="action">The <term>actions</term> are the
+                  entries of the <code>$actions</code> map. Each action describes how a selected node
+                  is updated, or which nodes are inserted next to it.</termdef> In this section,
+                  <var>N</var> is a selected node, and <var>C</var> is the node constructed from it
+                  (see <specref ref="update-processing"/>).</p>
+               <p><termdef id="dt-update-operand" term="operand">The <term>operand</term> of an
+                  action is the value of its entry, unless that value is a single function item that
+                  is neither a map nor an array: in that case, the function is coerced to the type
+                  <code>fn(node()) as item()*</code> (see
+                  <xtermref spec="XP40" ref="dt-coercion-rules"/>) and called with <var>C</var>, and
+                  the operand is the result of the call.</termdef> Operands are determined and
+                  checked separately for each selected node; if no node is selected, the errors that
+                  an invalid operand would cause are not raised.</p>
+               <p><termdef id="dt-update-contribute" term="contribute">The nodes that an operand
+                  <term>contributes</term> are obtained from its items in order: a document node or a
+                  root JNode contributes its children; a map or an array contributes the children of
+                  the root JNode that <function>fn:jtree</function> returns for it; any other node
+                  contributes itself. XNodes are contributed as copies.</termdef></p>
+               <p>The following actions are available:</p>
+               <ulist>
+                  <item><p><code>delete</code>: <var>N</var> is deleted.</p></item>
+                  <item><p><code>replace</code>: <var>N</var> is replaced by the nodes that the
+                     operand <termref def="dt-update-contribute">contributes</termref>.</p></item>
+                  <item><p><code>replace-value</code>: the children (elements), the string value
+                     (other XNodes), or the <term>·jvalue·</term> (JNodes) of <var>C</var> is replaced
+                     by the operand, as described in <specref ref="update-xnodes"/> and
+                     <specref ref="update-jnodes"/>.</p></item>
+                  <item><p><code>rename</code>: the name (XNodes) or the <term>·jkey·</term> (JNodes)
+                     of <var>C</var> is replaced by the operand.</p></item>
+                  <item><p><code>insert-before</code>, <code>insert-after</code>: the nodes that the
+                     operand contributes are inserted before or after <var>N</var>.</p></item>
+               </ulist>
+               <p>The nodes that take the place of <var>N</var> are, in order:</p>
+               <olist>
+                  <item><p>the nodes contributed by <code>insert-before</code>;</p></item>
+                  <item><p>no node if <code>delete</code> is present, the nodes contributed by
+                     <code>replace</code> if that action is present, and <var>C</var>, changed by
+                     <code>replace-value</code> and <code>rename</code>, otherwise;</p></item>
+                  <item><p>the nodes contributed by <code>insert-after</code>.</p></item>
+               </olist>
+               <p>The actions <code>delete</code> and <code>replace</code> cannot be combined with
+                  each other or with <code>replace-value</code> and <code>rename</code>, and the
+                  operand of <code>delete</code> must be empty
+                  <errorref class="UP" code="0004"/>.</p>
+            </div3>
+
+            <div3 id="update-xnodes">
+               <head>Updating XNodes</head>
+               <p>If <var>N</var> is an XNode, <var>C</var> has the node kind, the name, the
+                  in-scope namespaces, and, unless it is an element or a document node, the string
+                  value of <var>N</var>. As in element constructors (see
+                  <xspecref spec="XQ40" ref="id-content"/>), adjacent text nodes among the children of
+                  <var>C</var> are merged, and text nodes whose content is a zero-length string are
+                  dropped. Also as in element constructors, a binding for the prefix and the namespace
+                  URI of each attribute name is added to the in-scope namespaces of <var>C</var>; an
+                  attribute whose prefix is already bound to another namespace URI receives a
+                  different, <termref def="implementation-dependent"/> prefix.</p>
+               <p>With <code>replace-value</code>, the operand is atomized, and the string values of
+                  the resulting atomic items are joined with a single space as separator. The
+                  children of an element are replaced by a text node with the resulting string, or by
+                  no node if the string is empty; the attributes of the element are retained. For any
+                  other XNode, the resulting string replaces the string value.</p>
+               <p>With <code>rename</code>, the operand becomes the name of an element, an attribute,
+                  or a processing instruction. The name of an attribute, including the special
+                  treatment of <code>xml:id</code>, is assigned as in a computed attribute
+                  constructor (see <xspecref spec="XQ40" ref="id-computedAttributes"/>). If an
+                  element is renamed, its
+                  in-scope namespaces get a binding for the prefix and the namespace URI of its new
+                  name, which replaces an existing binding of that prefix; if the new name has
+                  neither a prefix nor a namespace URI, the binding for the default namespace is
+                  removed. An attribute whose name uses a replaced binding receives a different,
+                  <termref def="implementation-dependent"/> prefix.</p>
+               <p>Every XNode in the result is a new node with its own identity, including XNodes
+                  that an action takes from another tree. An XNode retains the type annotation of
+                  the node that it was constructed from if neither that node nor any of its
+                  attributes or descendants is a selected node; every other XNode in the result is
+                  untyped, as with any constructed node.</p>
+            </div3>
+
+            <div3 id="update-jnodes">
+               <head>Updating JNodes</head>
+               <p>If <var>N</var> is a JNode, <var>C</var> has the <term>·jkey·</term> of
+                  <var>N</var>. Its <term>·jvalue·</term> is built from the <termref def="dt-new-children"/> of
+                  <var>N</var>, in order: a map from the <term>·jkey·</term> to the
+                  <term>·jvalue·</term> of each of these nodes if <var>N</var> is a
+                  <xtermref spec="DM40" ref="dt-map-jnode"/>, an array of their
+                  <term>·jvalue·</term> properties if it is an
+                  <xtermref spec="DM40" ref="dt-array-jnode"/>, and the sequence-concatenation of
+                  their <term>·jvalue·</term> properties if it is a
+                  <xtermref spec="DM40" ref="dt-sequence-jnode"/>. A
+                  <xtermref spec="DM40" ref="dt-leaf-jnode"/> has no children, and its
+                  <term>·jvalue·</term> is retained. XNodes that are contained in a
+                  <term>·jvalue·</term> are not processed, and are retained as they are.</p>
+               <p>With <code>replace-value</code>, the operand can be any sequence, including a map,
+                  an array, or a function item.</p>
+               <note><p>With <code>replace-value</code>, a map or an array becomes the
+                  <term>·jvalue·</term> of <var>C</var>; with <code>replace</code>,
+                  <code>insert-before</code>, and <code>insert-after</code>, it contributes its
+                  entries or members. A function item that is to become the <term>·jvalue·</term> is
+                  returned by another function: <code>{ 'replace-value': fn { $f } }</code>.</p></note>
+               <note><p>Whether <var>C</var> is a Map, Array, Sequence, or Leaf JNode depends on its
+                  <term>·jvalue·</term>, not on <var>N</var>: deleting every entry of a map leaves an
+                  empty map, and deleting every member of an array leaves an empty array, but a
+                  sequence that is reduced to a single item, or to none, is the
+                  <term>·jvalue·</term> of a Leaf JNode.</p></note>
+            </div3>
+
             <div3 id="func-update">
                <head><?function fn:update?></head>
             </div3>
@@ -15799,18 +15952,13 @@ ISBN 0 521 77752 6.</bibl>
             <error class="UP" code="0003" label="Selected node does not belong to the supplied value."
                type="dynamic" diff="add" at="A">
                <p>Raised by <function>fn:update</function> if the <code>$select</code> function returns
-                  a node that cannot be reached from the origin node by one or more attribute and
-                  child steps.</p>
+                  a node that cannot be reached from the origin node by one or more steps on the
+                  child or attribute axis.</p>
             </error>
             <error class="UP" code="0004" label="Invalid update." type="dynamic"
                diff="add" at="A">
-               <p>Raised by <function>fn:update</function> if actions are combined that exclude
-                  each other, if an item supplies no nodes or a supplied node cannot appear at the
-                  position of the selected node,
-                  if a node cannot be renamed or its new name is invalid, if a new value is invalid
-                  for a comment or a processing instruction, or if the result would
-                  contain two attributes with the same name or two entries of the same map with the
-                  same key.</p>
+               <p>Raised by <function>fn:update</function> if the supplied actions are invalid or
+                  cannot be applied to a selected node.</p>
             </error>
             <error class="UT" code="1170" label="Invalid URI reference."
                type="dynamic">
