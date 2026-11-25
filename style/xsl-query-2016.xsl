@@ -1090,6 +1090,9 @@
       <xsl:when test="contains(/spec/header/title, '3.0') or contains(/spec/header/version, '3.0')">
         <xsl:value-of select="'30'"/>
       </xsl:when>
+      <xsl:when test="contains(/spec/header/title, '4.0') or contains(/spec/header/version, '4.0')">
+        <xsl:value-of select="'40'"/>
+      </xsl:when>
       <xsl:otherwise>
         <xsl:value-of select="''"/>
       </xsl:otherwise>

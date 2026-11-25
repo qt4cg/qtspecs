@@ -51,7 +51,8 @@ abstract class Redirect @Inject constructor(private val ex: ExecOperations): Def
     stream.println("<!DOCTYPE html>")
     stream.println("<html xmlns='http://www.w3.org/1999/xhtml'>")
     stream.println("<head>");
-    stream.println("<meta http-equiv='refresh' content='0; url=Overview.html' />");
+    stream.println("<script>location.replace('Overview.html' + location.hash);</script>");
+    stream.println("<noscript><meta http-equiv='refresh' content='0; url=Overview.html' /></noscript>");
     stream.println("</head>");
     stream.println("<body>");
     stream.println("<p>See <a href='Overview.html'>Overview</a>.</p>");

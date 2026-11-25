@@ -238,7 +238,7 @@ for (shortName in listOf("binary", "file")) {
     result = layout.buildDirectory.file("etc/${specName}.xml")
     parameters = mapOf(
         "specdoc" to specName,
-        "uri" to "https://qt4cg.org/specifications/expath-${shortName}-40/")
+        "uri" to "https://qt4cg.org/specifications/expath-${shortName}-40/Overview.html")
     dtdValidate = false
   }
 
@@ -1102,7 +1102,7 @@ tasks.register<XsltTransform>("etc_DM40") {
   result = layout.buildDirectory.file("etc/DM40.xml")
   parameters = mapOf(
       "specdoc" to "DM",
-      "uri" to "https://qt4cg.org/specifications/xpath-datamodel-40/")
+      "uri" to "https://qt4cg.org/specifications/xpath-datamodel-40/Overview.html")
   dtdValidate = false
 }
 
@@ -1115,7 +1115,7 @@ tasks.register<XsltTransform>("etc_FO40") {
   result = layout.buildDirectory.file("etc/FO40.xml")
   parameters = mapOf(
       "specdoc" to "FO",
-      "uri" to "https://qt4cg.org/specifications/xpath-functions-40/")
+      "uri" to "https://qt4cg.org/specifications/xpath-functions-40/Overview.html")
   dtdValidate = false
 }
 
@@ -1151,7 +1151,7 @@ tasks.register<XsltTransform>("etc_XT40") {
   result = layout.buildDirectory.file("etc/XT40.xml")
   parameters = mapOf(
       "specdoc" to "XQXP", // FIXME: really? "XQXP"?
-      "uri" to "https://qt4cg.org/specifications/xslt-40/")
+      "uri" to "https://qt4cg.org/specifications/xslt-40/Overview.html")
   dtdValidate = false
 }
 
@@ -1163,7 +1163,7 @@ tasks.register<XsltTransform>("etc_SG40") {
   result = layout.buildDirectory.file("etc/SG40.xml")
   parameters = mapOf(
       "specdoc" to "STRM",
-      "uri" to "https://qt4cg.org/specifications/xslt-streaming-40/")
+      "uri" to "https://qt4cg.org/specifications/xslt-streaming-40/Overview.html")
   dtdValidate = false
 }
 
@@ -1176,7 +1176,7 @@ tasks.register<XsltTransform>("etc_SE40") {
   result = layout.buildDirectory.file("etc/SE40.xml")
   parameters = mapOf(
       "specdoc" to "SE",
-      "uri" to "https://qt4cg.org/specifications/xslt-xquery-serialization-40/")
+      "uri" to "https://qt4cg.org/specifications/xslt-xquery-serialization-40/Overview.html")
   dtdValidate = false
 }
 
