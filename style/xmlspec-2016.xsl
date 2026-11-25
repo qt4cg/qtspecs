@@ -717,10 +717,10 @@
                 select="if (doc-available('../build/etc/database.xml'))
                         then doc('../build/etc/database.xml')
                         else ()"/>
-  <xsl:variable name="FO40uri" select="'https://qt4cg.org/specifications/xpath-functions-40/'"/>
-  <xsl:variable name="XT40uri" select="'https://qt4cg.org/specifications/xslt-40/'"/>
-  <xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/expath-binary-40/'"/>
-  <xsl:variable name="FILE40uri" select="'https://qt4cg.org/specifications/expath-file-40/'"/>
+  <xsl:variable name="FO40uri" select="'https://qt4cg.org/specifications/xpath-functions-40/Overview.html'"/>
+  <xsl:variable name="XT40uri" select="'https://qt4cg.org/specifications/xslt-40/Overview.html'"/>
+  <xsl:variable name="BIN40uri" select="'https://qt4cg.org/specifications/expath-binary-40/Overview.html'"/>
+  <xsl:variable name="FILE40uri" select="'https://qt4cg.org/specifications/expath-file-40/Overview.html'"/>
                                          
 
   <!-- Function: name of a function -->
@@ -783,7 +783,7 @@
         <xsl:variable name="spec" select="tokenize($target-uri, '/')[last() - 1]"/>
         <xsl:variable name="same-spec"
                       select="contains(base-uri(.), '/'||$spec||'/')"/>
-        <a href="{if ($same-spec) then '' else $target-uri||'Overview.html'}#{$id-prefix}{$name}">
+        <a href="{if ($same-spec) then '' else $target-uri}#{$id-prefix}{$name}">
           <code>
             <xsl:apply-templates/>
           </code>
